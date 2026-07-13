@@ -25,7 +25,7 @@ Four dispatch models, in the order you'll meet them:
 
 | Loop | What fires the shift | Where it lives |
 |---|---|---|
-| **Time-based** | A schedule — cron, launchd, any clock | The workhorse. Start here: one worker, one cadence |
+| **Time-based** | A schedule — cron, your OS's scheduler, any clock | The workhorse. Start here: one worker, one cadence |
 | **Turn-based** | The shift itself — take another pass while budget remains and the queue shrinks | Inside a shift (multi-pass with a no-progress stop) |
 | **Goal-based** | The **store**, not the loop: a big goal decomposes into an epic → slices → follow-ups; each shift picks the next slice | In your tickets. No loop holds the goal in memory — crash-proof by construction |
 | **Proactive** | An event — a ticket entering a lane triggers a dispatch instead of waiting for the clock | The orchestrator's territory; until then, clocks are plenty |
