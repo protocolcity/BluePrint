@@ -29,7 +29,7 @@ npm test         # link checker + recipe front-matter validation
 
 | Worker | Vendor CLI | May claim | Contract |
 |---|---|---|---|
-| `claude-recipes` | `claude -p` | `lane:claude-recipes` tickets | `workers/claude-recipes/PROTOCOL.md` |
+| `claude-recipes` | `claude -p` | `lane:claude-recipes` tickets | `workers/claude-recipes/CONTRACT.md` |
 
 ## Citizen gates (local)
 

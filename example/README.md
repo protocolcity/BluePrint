@@ -13,7 +13,7 @@ riverside/                    ← city root
     ├── CLAUDE.md             ← vendor pointer (@AGENTS.md)
     └── workers/
         └── claude-recipes/
-            ├── PROTOCOL.md   ← L2 employment contract
+            ├── CONTRACT.md   ← L2 employment contract
             └── prompt.md     ← L3 shift instructions
 ```
 

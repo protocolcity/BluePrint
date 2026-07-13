@@ -40,7 +40,7 @@ automatically on push", "prototype, nothing depends on it".}}
 
 | Worker | Vendor CLI | May claim | Contract |
 |---|---|---|---|
-| `{{WORKER_ID}}` | {{CLI}} | `lane:{{WORKER_ID}}` tickets | `workers/{{WORKER_ID}}/PROTOCOL.md` |
+| `{{WORKER_ID}}` | {{CLI}} | `lane:{{WORKER_ID}}` tickets | `workers/{{WORKER_ID}}/CONTRACT.md` |
 
 <!-- No workers yet? Delete the table, keep the heading, write "Citizen
      sessions only for now." Still compliant — law first, workforce later. -->

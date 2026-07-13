@@ -28,6 +28,21 @@ did this?", no rules that live in one vendor's config format.
 | **Citizens** | The humans. Bots execute; humans govern — citizens hold the taste, the gates, and the final word. |
 | **Laws** | The rules, always written as readable files, one owner per rule. If it isn't in an `.md`, it isn't law. |
 
+**Reserved words — one word, one meaning, city-wide.** Vocabulary debt
+compounds: a word that means two things in the docs eventually means two
+things in the code, and that rename costs a migration. So the Charter
+reserves its nouns:
+
+| Word | Means exactly this | The file |
+|---|---|---|
+| **law** | any binding rule file | `AGENTS.md` (L0/L1) |
+| **charter** | this spec | `CHARTER.md` |
+| **contract** | one worker's law | `CONTRACT.md` (L2) |
+| **prompt** | one worker's shift brief | `prompt.md` (L3) |
+| **protocol** | the desk's own rulebook — nothing else | the store's protocol doc |
+
+When you add a concept, give it a fresh word; never overload a reserved one.
+
 ## 2. The three layers
 
 Every piece of a working city belongs to exactly one layer:
@@ -50,7 +65,7 @@ loosen them.
 |---|---|---|---|
 | **L0** | City law | `AGENTS.md` at the city root | every neighborhood and worker |
 | **L1** | Neighborhood law | `AGENTS.md` at each neighborhood root | everyone working in that neighborhood |
-| **L2** | Employment contract | one `PROTOCOL.md` per worker | that worker, every dispatch |
+| **L2** | Employment contract | one `CONTRACT.md` per worker | that worker, every dispatch |
 | **L3** | Shift instructions | one `prompt.md` per worker | that worker, this dispatch |
 
 **The vendor-pointer rule:** the canonical law file is always `AGENTS.md`.

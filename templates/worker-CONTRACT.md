@@ -1,7 +1,7 @@
 # {{WORKER_ID}} — Employment Contract (L2)
 
 <!-- One file per worker, conventionally at
-     <neighborhood>/workers/{{WORKER_ID}}/PROTOCOL.md. This binds the worker
+     <neighborhood>/workers/{{WORKER_ID}}/CONTRACT.md. This binds the worker
      on EVERY dispatch. Fill, trim, delete comments. -->
 
 ## Identity

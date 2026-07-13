@@ -29,14 +29,14 @@ doubt, don't charter it; neighborhoods are earned (Charter §8.6).
 
 ## Step 1 — write city law (L0)
 
-Copy [`templates/L0-AGENTS.md`](templates/L0-AGENTS.md) to your city root as
+Copy [`templates/city-AGENTS.md`](templates/city-AGENTS.md) to your city root as
 `AGENTS.md`. The registry table — every neighborhood, its folder, its ticket
 prefix — is the heart of it. *(City of one: skip to Step 2; your one file
 carries both levels.)*
 
 ## Step 2 — charter your first neighborhood (L1)
 
-Copy [`templates/L1-AGENTS.md`](templates/L1-AGENTS.md) into **one** project
+Copy [`templates/neighborhood-AGENTS.md`](templates/neighborhood-AGENTS.md) into **one** project
 as `AGENTS.md`. The section that pays for itself first is **no-go zones** —
 what agents must never touch. Add the vendor pointers
 ([`templates/vendor-pointers.md`](templates/vendor-pointers.md)). Don't
@@ -52,9 +52,9 @@ moves by ticket, not memory.
 ## Step 4 — employ your first worker (L2 + L3)
 
 Pick one vendor CLI. Create `workers/<worker-id>/` in the neighborhood and
-fill in [`templates/L2-PROTOCOL.md`](templates/L2-PROTOCOL.md) (the
+fill in [`templates/worker-CONTRACT.md`](templates/worker-CONTRACT.md) (the
 contract: lane, never-touch list, procedure, stop rules) and
-[`templates/L3-prompt.md`](templates/L3-prompt.md) (the shift brief).
+[`templates/worker-prompt.md`](templates/worker-prompt.md) (the shift brief).
 Register the identity at the desk, label one ticket `lane:<worker-id>`, and
 run a shift by hand — paste the prompt into the CLI and watch it claim,
 work, verify, close out. Scheduling can come later; by-hand dispatch is a
