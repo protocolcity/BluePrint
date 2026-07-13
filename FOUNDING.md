@@ -73,3 +73,6 @@ You're a city when, for each chartered neighborhood (Charter §4):
 Add a worker when the queue demands it, a law when a mistake teaches you
 one, a neighborhood when a project earns one. A filled worked example —
 city root, one neighborhood, one worker — lives in [`example/`](example/).
+
+Founded? [RUNNING.md](RUNNING.md) is day two: the loops, the five citizen
+duties, and the flywheel that keeps work moving.
