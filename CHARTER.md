@@ -34,7 +34,7 @@ Every piece of a working city belongs to exactly one layer:
 
 | Layer | Owns | Reference implementation |
 |---|---|---|
-| **Store** | The work — tickets, claims, signed authors, audit trail | [WorkLane](https://github.com/protocolcity/worklane) |
+| **Store** | The work — tickets, claims, signed authors, audit trail | [WorkLane](https://github.com/protocolcity/ProtocolCity-WorkLane) |
 | **Orchestrator** | The workers — identities, schedules, dispatch, budgets | *(spec forthcoming; today: your scheduler + §6)* |
 | **Workplace** | The code the workers act on | your repos |
 
