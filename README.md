@@ -28,6 +28,9 @@ The Blueprint gives you the map.**
 |---|---|
 | [**CHARTER.md**](CHARTER.md) | The spec: definitions, the three layers, the four levels of law, the compliance test, and the founding path |
 | [**MANIFESTO.md**](MANIFESTO.md) | Why the city exists — what we believe and the wager we're making |
+| [**FOUNDING.md**](FOUNDING.md) | The walkthrough: find your neighborhoods, copy the templates, pass the compliance test — an afternoon, start to finish |
+| [**templates/**](templates/) | Fill-in-the-blank law files for all four levels, plus vendor pointers |
+| [**example/**](example/) | Riverside — a complete minimal city (one root, one neighborhood, one worker), every template filled in |
 
 ## The short version
 
@@ -43,8 +46,10 @@ A project is protocol-compliant when three things are true:
 2. **Its work is ticketed** — a store at the desk, explicit scope.
 3. **Its workers sign** — every action carries a registered identity.
 
-Start with one neighborhood, one worker, one law — the full founding path is
-in the [Charter](CHARTER.md).
+Start with one neighborhood, one worker, one law —
+[FOUNDING.md](FOUNDING.md) walks you through it, and there's nothing to
+install: adopting the Blueprint is copying [templates](templates/) and
+filling them in.
 
 ## Status
 

@@ -58,6 +58,11 @@ Vendor-specific files are pointers, never content — e.g. `CLAUDE.md`
 containing only `@AGENTS.md`, `GROK.md` as a symlink. One law, every vendor
 reads it.
 
+**The city of one:** a single-project city merges L0 and L1 — one
+`AGENTS.md` serves as both city and neighborhood law until a second
+neighborhood exists. Split them the day the registry gains its second row;
+most cities start here.
+
 **Minimum contents:**
 
 - **L0 (city law):** the neighborhood registry (what exists, where, its ticket
