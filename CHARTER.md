@@ -40,6 +40,7 @@ reserves its nouns:
 | **contract** | one worker's law | `CONTRACT.md` (L2) |
 | **prompt** | one worker's shift brief | `prompt.md` (L3) |
 | **protocol** | the desk's own rulebook — nothing else | the store's protocol doc |
+| **blueprint** | the whole shipped kit (charter + manifesto + guides + forms + example) — never a single file | this repo |
 
 When you add a concept, give it a fresh word; never overload a reserved one.
 
