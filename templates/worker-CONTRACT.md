@@ -34,8 +34,9 @@
    ticket touched, by explicit path (never `add -A` in a shared checkout).
 3. **Verify** — run `{{TEST_COMMAND}}`; a claim of "done" without a
    verification line is not done.
-4. **Close out** — comment: what was done, how it was verified, links
-   (commits), follow-ups filed as new tickets.
+4. **Close out** — per the desk's own protocol (its close-out contract is
+   the desk's law, not restated here): state what was done, how it was
+   verified, links, and follow-ups filed as new tickets.
 
 ## Stop rules
 
