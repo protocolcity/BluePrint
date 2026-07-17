@@ -19,7 +19,7 @@ chat windows. The Blueprint is the opposite bet: coordination as a protocol —
 files, tickets, and signed work — durable, auditable, human-readable, and
 owned by you.
 
-**WorkLane gives you the desk. The orchestrator gives you the workforce.
+**WorkLane gives you the desk. WorkForce gives you the workforce.
 The Blueprint gives you the map.**
 
 ## What's inside
@@ -44,7 +44,7 @@ levels, from city-wide law down to a single worker's shift instructions.
 A project is protocol-compliant when three things are true:
 
 1. **Its law is written** — an `AGENTS.md` at its root.
-2. **Its work is ticketed** — a store at the desk, explicit scope.
+2. **Its work is ticketed** — filed at the desk, explicit scope.
 3. **Its workers sign** — every action carries a registered identity.
 
 Start with one neighborhood, one worker, one law —

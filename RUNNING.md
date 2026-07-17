@@ -4,15 +4,15 @@
 citizen actually operates once the city exists — and, just as important,
 what you never have to touch because it runs itself.
 
-## The frame: dumb loops, smart store
+## The frame: dumb loops, smart Desk
 
 Most agent systems build clever long-running loops that hold goals in
 memory — and lose everything when the loop dies. A city inverts that:
-**shifts are stateless, the desk is the memory.** Every dispatch wakes up,
-asks the desk "what's ready for me?", does one slice, writes everything
-back — claims, comments, close-outs, follow-ups — and exits. Work keeps
-going not because anything runs forever, but because the queue persists
-between shifts.
+**shifts are stateless, the Desk is the memory.** Every dispatch
+wakes up, asks the desk "what's ready for me?", does one slice, writes
+everything back — claims, comments, close-outs, follow-ups — and exits.
+Work keeps going not because anything runs forever, but because the
+**ledger** persists between shifts.
 
 The corollary is the economics: an empty queue costs nothing (shifts skip
 cleanly), and a queue that stops shrinking stops being worked (no-progress
@@ -27,8 +27,8 @@ Four dispatch models, in the order you'll meet them:
 |---|---|---|
 | **Time-based** | A schedule — cron, your OS's scheduler, any clock | The workhorse. Start here: one worker, one cadence |
 | **Turn-based** | The shift itself — take another pass while budget remains and the queue shrinks | Inside a shift (multi-pass with a no-progress stop) |
-| **Goal-based** | The **store**, not the loop: a big goal decomposes into an epic → slices → follow-ups; each shift picks the next slice | In your tickets. No loop holds the goal in memory — crash-proof by construction |
-| **Proactive** | An event — a ticket entering a lane triggers a dispatch instead of waiting for the clock | The orchestrator's territory; until then, clocks are plenty |
+| **Goal-based** | The **ledger**, not the loop: a big goal decomposes into an epic → slices → follow-ups; each shift picks the next slice | In your tickets. No loop holds the goal in memory — crash-proof by construction |
+| **Proactive** | An event — a ticket entering a lane triggers a dispatch instead of waiting for the clock | **Dispatch** territory (powered by WorkForce when installed); until then, clocks are plenty |
 
 A citizen dispatching a worker by hand is also a loop — the slowest and
 most legitimate one. Every city starts there.
@@ -71,17 +71,44 @@ idles for pennies (skips are cheap); when *you* step away, nothing breaks —
 prepared work stalls at your gates, shifts log clean skips, and the whole
 operation waits, legible, for the next sweep.
 
+## When a worker hits a wall — the vendor-limit playbook
+
+Sooner or later a vendor meter runs dry mid-employment: a balance
+exhausts (402), a rate window closes (429), a subscription lapses. The
+machinery is built for this — the runner records a truthful failed shift
+and keeps firing cheap, claims stay safe, nothing corrupts. The *account*
+is yours to fix, so the playbook is a citizen duty:
+
+1. **Read the vendor's actual words.** The worker's ledger/log holds the
+   real error; the board only knows "err". Diagnose from the log, never
+   from the lamp.
+2. **File the decision the moment you see it**, labeled for your own
+   attention — it lands in your brief and the
+   incident can't get lost between sessions.
+3. **Pick one of three**, in rising order of effort: **top up / wait**
+   (the worker self-heals on its next fire — zero changes); **bench**
+   (flip the roster schedule to an informational string so the clock
+   stops firing it; relabel or hold its queue); **re-staff** (point the
+   role's runtime at another installed vendor — roles are named by
+   function, so the identity and its history survive the swap).
+4. **Verify with one clean shift, then close with evidence.** A manual
+   dispatch from the Workers dashboard beats waiting for the cron; the
+   close-out cites the clean ledger line.
+
+Prevention is staffing, not vigilance: spread roles across the vendors
+you have, so one dry meter idles a lane, never the city.
+
 ## Growing pains, in order
 
 - **Queue stays deep for weeks** → add a worker to that lane, or split the
-  neighborhood's store.
+  neighborhood's ledger.
 - **Two workers touch the same files** → tighten lanes in their contracts;
   add a workspace guard to the runner.
 - **You can't remember what's running** → you need the board (rota, health,
-  last signed activity). Until there's a product for it, a shell script
-  over your scheduler and ledgers is lawful.
+  last signed activity) — City Hall / Dispatch chrome when you have it.
+  Until then, a shell script over your scheduler and ledgers is lawful.
 - **The law stops matching reality** → schedule the doc-audit patrol; one
   owner per rule, demote copies to pointers.
 - **A second machine or a teammate arrives** → you've outgrown this
-  document; that's orchestrator territory, and the city's files move with
-  you either way.
+  document; that's **Dispatch** territory (multi-machine / scheduled
+  workforce), and the city's files move with you either way.

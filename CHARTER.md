@@ -33,7 +33,7 @@ compounds: a word that means two things in the docs eventually means two
 things in the code, and that rename costs a migration. So the Charter
 reserves its nouns:
 
-| Word | Means exactly this | The file |
+| Word | Means exactly this | Where it lives |
 |---|---|---|
 | **law** | any binding rule file | `AGENTS.md` (L0/L1) |
 | **charter** | this spec | `CHARTER.md` |
@@ -41,8 +41,19 @@ reserves its nouns:
 | **prompt** | one worker's shift brief | `prompt.md` (L3) |
 | **protocol** | the desk's own rulebook — nothing else | the store's protocol doc |
 | **blueprint** | the whole shipped kit (charter + manifesto + guides + forms + example) — never a single file | this repo |
+| **worker** | an employed agent: a registered identity with a contract and a schedule | `CONTRACT.md` + the store's identity registry |
+| **roster** | the registry of employed workers — who exists, their kind, their schedule | the store's identity registry |
+| **ticket** | one unit of filed work; work moves only by ticket | the store |
+| **dashboard** | a rendered read-only view of city state (work, workers, projects) | — (rendered from the store + roster; not a file) |
 
 When you add a concept, give it a fresh word; never overload a reserved one.
+
+**The legibility test — a filename says what the file is.** A stranger
+navigating the tree cold can tell what a file is from its name alone. This binds
+every file the protocol tells you to create and everything a founding tool
+generates. Prefer plain industry words (`CONTRACT.md`, `ARCHITECTURE.md`,
+`roster.json`) over evocative ones; the civic metaphor (city, neighborhood,
+desk) is brand voice, never a filename.
 
 ## 2. The three layers
 
@@ -70,9 +81,16 @@ loosen them.
 | **L3** | Shift instructions | one `prompt.md` per worker | that worker, this dispatch |
 
 **The vendor-pointer rule:** the canonical law file is always `AGENTS.md`.
-Vendor-specific files are pointers, never content — e.g. `CLAUDE.md`
-containing only `@AGENTS.md`, `GROK.md` as a symlink. One law, every vendor
-reads it.
+Vendor-specific files (`CLAUDE.md`, `GROK.md`, …) are **optional** — add them
+only when a vendor CLI needs its own filename. When present, they must be
+thin pointers, never content — e.g. `CLAUDE.md` containing only `@AGENTS.md`,
+`GROK.md` as a symlink. One law, every vendor reads it. Founding tools do
+not plant vendor pointers by default.
+
+**The perimeter registry:** cross-cabinet grants live at city-root
+`PERIMETER.md` (L0 only). Cabinets (L1) use the implicit home default;
+contracts (L2) and prompts (L3) may promise scope but do not own the
+registry. See WIDTH LAW prose in `docs/specs/CITY_EDGES.md`.
 
 **The city of one:** a single-project city merges L0 and L1 — one
 `AGENTS.md` serves as both city and neighborhood law until a second
@@ -101,7 +119,7 @@ A project is a neighborhood — protocol-compliant — when three things are tru
 
 1. **Its law is written.** An `AGENTS.md` at its root says what it is and how
    to work in it.
-2. **Its work is ticketed.** It has a store at the desk; work moves by ticket
+2. **Its work is ticketed.** Its work is filed at the desk; work moves by ticket
    with explicit scope.
 3. **Its workers sign.** Every agent action — ticket, comment, commit —
    carries a registered identity.
@@ -146,7 +164,7 @@ and how it was verified.
 1. **Pick your city root** — the folder or org your projects live under.
 2. **Write L0** — city law at the root: registry, scoping rule, boundaries.
 3. **Charter each neighborhood** — an L1 `AGENTS.md` per project (start with
-   one). Add vendor pointers.
+   one). Optionally add vendor pointers if a CLI needs its own filename.
 4. **Stand up the desk** — install a store (e.g. WorkLane), create one
    ticket store per neighborhood, file your first real tickets.
 5. **Employ your first worker** — one vendor CLI, one registered identity,

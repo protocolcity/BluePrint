@@ -46,7 +46,8 @@ Anything below is prepared by workers but shipped only by a citizen:
 - Deleting anything that can't be regenerated
 <!-- Add your own. Err on the side of gating; ungate by evidence. -->
 
-## Vendor pointers
+## Vendor pointers (optional)
 
 The canonical law file at every level is `AGENTS.md`. Vendor files are
-pointers, never content — see `templates/vendor-pointers.md`.
+optional thin pointers when a CLI needs its own filename — see
+`templates/vendor-pointers.md`.

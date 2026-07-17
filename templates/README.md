@@ -7,10 +7,13 @@ the guidance comments.
 | Template | Copy to | As |
 |---|---|---|
 | [`city-AGENTS.md`](city-AGENTS.md) | your city root | `AGENTS.md` |
+| [`PERIMETER.md`](PERIMETER.md) | city root (next to `AGENTS.md`) | `PERIMETER.md` (L0 cross-cabinet grants) |
+| [`OFFICE_PERIMETER.md`](OFFICE_PERIMETER.md) | *(alias)* → use `PERIMETER.md` | legacy name |
+| [`CITY_EDGES.md`](CITY_EDGES.md) | *(alias)* → use `PERIMETER.md` | legacy name for older FOUNDING paths |
 | [`neighborhood-AGENTS.md`](neighborhood-AGENTS.md) | each neighborhood root | `AGENTS.md` |
 | [`worker-CONTRACT.md`](worker-CONTRACT.md) | `<neighborhood>/workers/<worker-id>/` | `CONTRACT.md` |
 | [`worker-prompt.md`](worker-prompt.md) | `<neighborhood>/workers/<worker-id>/` | `prompt.md` |
-| [`vendor-pointers.md`](vendor-pointers.md) | (instructions, not a law file) | — |
+| [`vendor-pointers.md`](vendor-pointers.md) | (optional instructions, not a law file) | — |
 
 Start with [FOUNDING.md](../FOUNDING.md) — it walks you through which of
 these you need and in what order. A **city of one** (single project) starts
