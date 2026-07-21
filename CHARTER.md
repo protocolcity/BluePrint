@@ -158,6 +158,9 @@ and how it was verified.
    read the law, start working.
 4. **The protocol is open; the services are premium.**
 5. **Every folder has a purpose.**
+6. **Every path resolves.** Any path, link, or cross-reference in law,
+   documentation, or a founding template must name a file that exists. A
+   broken link in law is a compliance gap, not a documentation gap.
 
 ## 8. Founding a city — the new-citizen path
 
@@ -173,3 +176,105 @@ and how it was verified.
 6. **Grow by evidence** — add workers when the queue demands it, laws when a
    mistake teaches you one, neighborhoods when a project earns one. The city
    is legible at every size.
+
+---
+
+## 9. The authority tiers
+
+*(Full doctrine: [The Covenant](COVENANT.md) — ratified 2026-07-16)*
+
+Three tiers govern every session in a founded city:
+
+| Tier | Authority | Signs as | Tray relationship |
+|---|---|---|---|
+| **Citizen** | The human — ultimate authority; source of all gates and final calls | Themselves | Owns the tray |
+| **Hand** | A surface the citizen acts through; carries the citizen's full authority for the session | The citizen (shared identity) | Never files into the tray — a hand IS the citizen the tray waits for |
+| **Worker** | An employed agent: own registered identity, own L2 contract, own schedule | Its registered identity (not the citizen's) | Files into the tray at its authority ceiling; never self-authorizes above it |
+
+**The test:** whose authority does the session run under — not what model is
+running in it.
+
+See [The Covenant](COVENANT.md) for the full doctrine, the hand shutdown
+protocol, and team extension mechanics.
+
+## 10. The five-event grammar
+
+*(Ratified 2026-07-16)*
+
+Exactly five events define the state space of a working city. All motion in
+a city's surfaces derives from one of them; no motion is invented outside
+this grammar.
+
+| Event | Meaning |
+|---|---|
+| **Filed** | A ticket entered the desk |
+| **Claimed** | A worker took ownership of a ticket |
+| **Signed** | A worker closed out a ticket — work verified, desk comment posted |
+| **Worker arrives** | A scheduled worker started a shift |
+| **Worker leaves** | A scheduled worker's shift ended |
+
+**Two-motions law:** every rendered motion wears exactly one of two signals —
+a receipt (it happened) or a clock (it is happening now). No motion without
+a signal; no signal without a motion.
+
+Future richer renderings of these events require no protocol-layer change.
+Adding a new event requires a founding-level amendment to this section.
+
+## 11. The truth layer
+
+*(Ratified 2026-07-16)*
+
+Every city has two layers — truth and skin — and only the truth layer is
+invariant.
+
+**Truth words** speak the filesystem and the protocol. They are the
+identifiers that code, APIs, and specifications use:
+
+| Truth word | What it names |
+|---|---|
+| Root folder | The city root — wherever city law lives |
+| Managed folder | A folder with a governing `AGENTS.md` |
+| Unmanaged folder | A folder without a governing `AGENTS.md` |
+| Ticket | One unit of work at the desk |
+| Worker | An employed agent: registered, contracted, scheduled |
+| You | The signed-in citizen — viewer-relative |
+| The five events | Filed, claimed, signed, worker arrives, worker leaves |
+
+**Skin words** are the rendered labels a city's surfaces show to citizens.
+Any analogy — a city, a studio, a lab — may replace the default skin by
+providing a truth-to-skin mapping. The protocol layer does not change with
+the skin.
+
+**Registry keys speak truth.** A skin rename is a skin-layer change and
+never requires a data migration.
+
+## 12. Output-landing convention
+
+*(Ratified 2026-07-16; promoted from L1 to L0)*
+
+Work output in any neighborhood lands in exactly one of three buckets:
+
+| Bucket | Contents | Storage |
+|---|---|---|
+| **Runtime evidence** | Logs, run artifacts, generated HTML, ephemeral build output | Gitignored; never versioned. Canonical directory name: `local/` (neighborhoods may use a project-specific name). |
+| **Work products** | Research, audits, doc patches, ADRs — anything a citizen reviews in git history | Versioned under `docs/` |
+| **Claims about work** | Close-out statements, verification notes, follow-up filings | On the desk (store close-out comment); never a committed file |
+
+No bucket is optional. A worker that commits a close-out statement to a
+versioned file, or versions ephemeral logs, is non-compliant with this law.
+
+## 13. Suite architecture — pages and engines
+
+*(Ratified 2026-07-16)*
+
+From the citizen's seat, a founded city has one installed entry point — the
+blueprint suite — and every product in the city manifests as a page within
+it. Adding a product means adding a page link to the suite, not creating a
+new entry point.
+
+From the code's seat, products remain separate ships: engine packages the
+suite depends on, never vendored or absorbed. This boundary carries
+standalone engine use, independent export seams, and separate licensing.
+
+**The law in two sentences: pages belong to the suite. Engines belong to
+products.**
