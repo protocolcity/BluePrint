@@ -1,12 +1,33 @@
 # 🏙️ ProtocolCity-BluePrint
 
-**The blueprint for running your own city of AI agents.**
+> **Pre-release (0.1.x).** The roof of the **ProtocolCity** suite —
+> [WorkLane](https://github.com/protocolcity/ProtocolCity-WorkLane) (desk) ·
+> [WorkForce](https://github.com/protocolcity/ProtocolCity-WorkForce) (roster) ·
+> this BluePrint (map + suite CLI). Expect sharp edges; file issues.
 
-Protocol City is a specification for organizing a workspace — any workspace —
-so that humans and AI agents from any vendor can build together, in parallel,
-accountably. It is paper, not software: it tells you which files and folders
-to create, what they must say, and the rules that make them work together.
-You can adopt it with nothing but a text editor.
+**The blueprint for running your own city of AI agents** — and the installable
+suite that makes Map · Desk · Roster real on a laptop.
+
+## Install the suite (recommended)
+
+```bash
+brew install protocolcity/tap/protocolcity
+protocolcity found ~/my-city
+protocolcity serve --with-engines
+# → http://127.0.0.1:8801/  (Map · Desk · Roster)
+```
+
+That one formula installs the BluePrint CLI and pulls WorkLane + WorkForce
+from PyPI. Product source repos stay separate; install does not require cloning
+them.
+
+Or: `pip install protocolcity protocolcity-worklane protocolcity-workforce`
+
+## Spec + paper
+
+Protocol City is also a **specification** for organizing a workspace so humans
+and AI agents from any vendor can build together, in parallel, accountably.
+You can adopt the paper path with a text editor and the templates below.
 
 > Every bot is a worker, every `.md` is a law, and every contributor becomes
 > a citizen.
@@ -54,9 +75,10 @@ filling them in.
 
 ## Status
 
-v0.1 draft. The Blueprint is extracted from a working city: one operator,
-one machine, multiple products, agents from four vendors, real money in
-production. Expect the spec to sharpen as more cities are founded.
+**v0.1.x pre-release.** Install path (Homebrew / PyPI) is live. Suite UX is
+still sharpening. The Blueprint is extracted from a working city: one operator,
+one machine, multiple products, agents from several vendors. Expect the spec
+and the shell to move quickly.
 
 ## License
 
