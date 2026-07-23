@@ -1,32 +1,35 @@
-# PERIMETER — cross-cabinet grants
+# PERIMETER — cross-project grants
 
-<!-- Copy this file to the city root (next to AGENTS.md) as PERIMETER.md.
-     Fill the registry when two cabinets truly share a boundary. Delete these
-     guidance comments. Legacy names still accepted if present:
-     OFFICE_PERIMETER.md, CITY_EDGES.md (at city root only). -->
+<!-- Copy this file to the workspace root (next to AGENTS.md) as PERIMETER.md.
+     Fill the registry when two projects truly share a boundary. Delete
+     these guidance comments. Legacy names still accepted if present:
+     OFFICE_PERIMETER.md, CITY_EDGES.md (at workspace root only). -->
 
-**Owner of truth:** this file (Office / city root).
-**Nature:** versioned law + machine-readable table — **not** a discovery
-heuristic. The lens never infers edges from imports, git remotes, or the
+**Owner of truth:** this file (workspace root).
+**Nature:** versioned instructions + machine-readable table — **not** a discovery
+heuristic. The Explorer never infers edges from imports, git remotes, or the
 filesystem.
 
-**System definition:** an Office = a folder + a roster + a perimeter registry.
-**Level:** L0 only — cabinets (L1) use the implicit home default; worker
+**System definition:** a workspace = a folder + agents + a perimeter registry.
+**Level:** L0 only — projects (L1) use the implicit home default; agent
 contracts (L2) and prompts (L3) may promise scope but do not own this registry.
+
+**Vocab:** the L1 unit is a **project**. Do not call it a "cabinet" or
+"neighborhood" in install copy.
 
 ---
 
 ## THE WIDTH LAW
 
-**Edges render only from this registry.** Every drawn connection on the map
-cites a row of law here. An Office with every possible line drawn is
-spaghetti; one with only its ratified lines drawn is a map of the law.
+**Edges render only from this registry.** Every drawn connection on Explorer
+cites a row here. A workspace with every possible line drawn is spaghetti;
+one with only its ratified lines drawn is a map of the grants.
 
 | Rule | Meaning |
 |---|---|
-| **Declare, never infer** | The lens does not invent connections from code, git, adjacency, or URLs. |
+| **Declare, never infer** | Do not invent connections from code, git, adjacency, or URLs. |
 | **Cite the law** | Each edge carries a one-line rule and an owner path. |
-| **Add a row to draw a line** | Citizen-ratified table row — never a map-side heuristic. |
+| **Add a row to draw a line** | You-ratified table row — never a map-side heuristic. |
 | **Skip if absent** | If a named endpoint is not on the scene, that edge is skipped silently. |
 
 ---
@@ -35,15 +38,15 @@ spaghetti; one with only its ratified lines drawn is a map of the law.
 
 ### THE IMPLICIT DEFAULT
 
-**Every worker and every cabinet reads and writes its own folder.**
+**Every agent and every project reads and writes its own folder.**
 That home scope needs no registry row. Registry rows are the **only**
 extensions or restrictions beyond this default. An empty table below is a
-valid founding: sovereign cabinets, no cross-grants, no drawn edges.
+valid founding: sovereign projects, no cross-grants, no drawn edges.
 
-### Law, not enforcement
+### Instructions, not enforcement
 
-This file is **declared law**. The map renders it; contracts promise it;
-enforcement is the runner's seam (derive worker scopes from home +
+This file is **declared grants**. Explorer renders it; contracts promise it;
+enforcement is the runner's seam (derive agent scopes from home +
 registry). Until that lands, honesty holds: the map shows the grant; the
 OS does not yet cut off a hand that ignores it.
 
@@ -53,8 +56,8 @@ OS does not yet cut off a hand that ignores it.
 |---|---|---|---|
 | `consumes-http` | none (no source access) | none | the target's HTTP interface only |
 | `export-lane` | source | target, generated output only | the export script only — no hand edits the artifact |
-| `press-pass` | everywhere | home only | direct reads; citing is governed by the home's own law |
-| `reference-only` | inbound only | none (and never push) | findings become tickets in the consuming neighborhood |
+| `press-pass` | everywhere | home only | direct reads; citing is governed by the home's own instructions |
+| `reference-only` | inbound only | none (and never push) | findings become tickets in the consuming project |
 
 ---
 
@@ -68,5 +71,5 @@ a cross-boundary rule is real.**
 |---|---|---|---|---|
 
 <!-- Example row (delete or replace):
-| app | store | consumes-http | app consumes the store via HTTP only — no direct imports | docs/adr/ADR-001.md |
+| webapp | api | consumes-http | webapp consumes the api via HTTP only — no direct imports | docs/adr/ADR-001.md |
 -->

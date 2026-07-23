@@ -22,7 +22,7 @@ did this?", no rules that live in one vendor's config format.
 |---|---|
 | **The city** | Your whole operation: every project, agent, human, and rule under one set of laws. Its root is wherever you keep your projects — a folder, a monorepo, a GitHub org. |
 | **City hall** | The place city-wide law and records live: the root of the city. |
-| **Neighborhood** | One project — a repo or directory where work happens. Independent, but protocol-compliant (§4). |
+| **Neighborhood** | One project — a repo or directory where work happens. Independent, but protocol-compliant (§4). **Surface speech (BluePrint suite, 2026-07-22):** prefer **project** for the L1 unit and **workspace** for the founded root; keep Neighborhood in this Charter as the host-neutral civic term. |
 | **The work-order desk** | The ticket store. All work moves by ticket — filed, claimed, signed. Never by chat or memory. |
 | **The workforce** | Your agents — any vendor. Each has a registered identity, a job description, and signs everything it does. |
 | **Citizens** | The humans. Bots execute; humans govern — citizens hold the taste, the gates, and the final word. |
@@ -87,7 +87,7 @@ thin pointers, never content — e.g. `CLAUDE.md` containing only `@AGENTS.md`,
 `GROK.md` as a symlink. One law, every vendor reads it. Founding tools do
 not plant vendor pointers by default.
 
-**The perimeter registry:** cross-cabinet grants live at city-root
+**The perimeter registry:** cross-neighborhood grants live at city-root
 `PERIMETER.md` (L0 only). Cabinets (L1) use the implicit home default;
 contracts (L2) and prompts (L3) may promise scope but do not own the
 registry. See WIDTH LAW prose in `docs/specs/CITY_EDGES.md`.

@@ -1,9 +1,7 @@
-# {{NEIGHBORHOOD_NAME}} — Neighborhood Law (L1)
+# {{NEIGHBORHOOD_NAME}} — Project instructions (L1)
 
-<!-- Copy this file to the NEIGHBORHOOD ROOT (the project's repo/folder) as
-     AGENTS.md. Fill every {{PLACEHOLDER}}, delete these comments. This is
-     the first thing any agent reads before touching your project — write
-     it for a competent stranger. -->
+<!-- Alias template (legacy filename). Prefer project-AGENTS.md.
+     {{NEIGHBORHOOD_NAME}} is the project folder display name. -->
 
 ## What this place is
 
@@ -18,9 +16,6 @@ automatically on push", "prototype, nothing depends on it".}}
 {{TEST_COMMAND}}
 ```
 
-<!-- If verification is more than one command, link a doc. An agent that
-     can't verify its work must stop and say so, not guess. -->
-
 ## The desk
 
 - Ticket store: `{{STORE_SLUG}}` (work orders `{{PREFIX}}-*`)
@@ -29,25 +24,9 @@ automatically on push", "prototype, nothing depends on it".}}
 
 ## Boundaries and no-go zones
 
-<!-- The most valuable section. Name what agents must never touch and why,
-     e.g. payment code, production configs, migration files, another
-     neighborhood's internals. -->
-
 - {{NO_GO_1}} — {{WHY}}
 - {{NO_GO_2}} — {{WHY}}
 
-## The workforce here
+## The agents here
 
-| Worker | Vendor CLI | May claim | Contract |
-|---|---|---|---|
-| `{{WORKER_ID}}` | {{CLI}} | `lane:{{WORKER_ID}}` tickets | `workers/{{WORKER_ID}}/CONTRACT.md` |
-
-<!-- No workers yet? Delete the table, keep the heading, write "Citizen
-     sessions only for now." Still compliant — law first, workforce later. -->
-
-## Citizen gates (local)
-
-<!-- What needs a human in THIS neighborhood, beyond city-wide gates.
-     e.g. schema migrations, dependency upgrades, anything user-visible. -->
-
-- {{LOCAL_GATE_1}}
+- {{AGENT_1}} — {{ROLE}}

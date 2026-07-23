@@ -1,25 +1,25 @@
-# Example — the Riverside city
+# Example — minimal workspace (Riverside)
 
-A complete, minimal city: one root, one neighborhood, one worker — every
+A complete, minimal workspace: one root, one project, one agent — every
 template from [`templates/`](../templates/) filled in for a fictional
 operator ("Riv") who runs a recipe website and wants one agent working the
 backlog. This is [FOUNDING.md](../FOUNDING.md) executed end to end.
 
 ```
-riverside/                    ← city root
-├── AGENTS.md                 ← L0 city law (registry, rules, gates)
-└── recipes-site/             ← the one neighborhood
-    ├── AGENTS.md             ← L1 neighborhood law
+riverside/                    ← workspace root
+├── AGENTS.md                 ← workspace instructions
+└── recipes-site/             ← the one project
+    ├── AGENTS.md             ← project instructions
     ├── CLAUDE.md             ← vendor pointer (@AGENTS.md)
     └── workers/
         └── claude-recipes/
-            ├── CONTRACT.md   ← L2 employment contract
-            └── prompt.md     ← L3 shift instructions
+            ├── CONTRACT.md   ← agent job (standing role)
+            └── prompt.md     ← this-run instructions
 ```
 
-Compliance check (Charter §4): law written ✓ (both AGENTS.md), work
-ticketed ✓ (store `recipes`, orders `rs-*`), workers sign ✓ (identity
-`claude-recipes`). Riverside is a city.
+Set up well when: instructions exist ✓ (both AGENTS.md), work is tracked ✓
+(work orders), agents sign ✓ (identity `claude-recipes`).
 
 Start reading at [`AGENTS.md`](AGENTS.md) and follow the pointers down —
-that's exactly what an agent would do.
+that's exactly what an agent would do. In the suite, the same tree appears
+as the **workspace map**.
