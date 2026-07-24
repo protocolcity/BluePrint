@@ -27,6 +27,16 @@ them.
 
 Or: `pip install protocolcity protocolcity-worklane protocolcity-workforce`
 
+### What to clone vs install
+
+| You want… | Do this |
+|---|---|
+| **Run the suite** (Overview · Map · agents · work orders) | **Homebrew** (above) or the three PyPI packages |
+| **Read the papers** (Charter, templates, example) | Browse/clone [ProtocolCity-BluePrint](https://github.com/protocolcity/ProtocolCity-BluePrint) — docs only |
+| **Contribute to an engine** | Clone WorkLane / WorkForce source repos (developer path) |
+
+Cloning BluePrint alone does **not** install a runnable Map/Desk/Roster.
+
 ## What you see
 
 Open the suite → **Overview** (system summary). Click **Map** to dig in —
@@ -57,14 +67,16 @@ owned by you.
 
 ## What's inside
 
+Papers live on GitHub (links work from PyPI too):
+
 | Document | What it is |
 |---|---|
-| [**CHARTER.md**](CHARTER.md) | Full protocol spec (advanced / optional depth) |
-| [**MANIFESTO.md**](MANIFESTO.md) | Why we built this — brand voice |
-| [**FOUNDING.md**](FOUNDING.md) | Paper path: templates + compliance (no install) |
-| [**RUNNING.md**](RUNNING.md) | Day-to-day loops after setup |
-| [**templates/**](templates/) | Fill-in-the-blank instruction files |
-| [**example/**](example/) | Minimal workspace (one root, one project, one agent) |
+| [**CHARTER.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/CHARTER.md) | Full protocol spec (advanced / optional depth) |
+| [**MANIFESTO.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/MANIFESTO.md) | Why we built this — brand voice |
+| [**FOUNDING.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/FOUNDING.md) | Paper path: templates + compliance (no install) |
+| [**RUNNING.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/RUNNING.md) | Day-to-day loops after setup |
+| [**templates/**](https://github.com/protocolcity/ProtocolCity-BluePrint/tree/main/templates) | Fill-in-the-blank instruction files |
+| [**example/**](https://github.com/protocolcity/ProtocolCity-BluePrint/tree/main/example) | Minimal workspace (one root, one project, one agent) |
 
 ## The short version
 
@@ -80,8 +92,30 @@ A project is set up well when three things are true:
 3. **Agents sign** — every action carries a registered identity.
 
 Start with one project, one agent, one instruction file —
-[FOUNDING.md](FOUNDING.md) walks the paper path; the install path above opens
-the **map** so you can see the same structure visually.
+[FOUNDING.md](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/FOUNDING.md)
+walks the paper path; the install path above opens the **map** so you can see
+the same structure visually.
+
+## Report a bug
+
+1. On the machine that broke, run (local only — nothing is uploaded):
+
+   ```bash
+   protocolcity feedback
+   # or: protocolcity feedback ~/my-workspace
+   ```
+
+2. Paste the markdown into a new issue:
+   [ProtocolCity-BluePrint issues](https://github.com/protocolcity/ProtocolCity-BluePrint/issues/new/choose)
+
+Include versions from that block. Rough routing:
+
+| Symptom | Board |
+|---|---|
+| Overview / Map / setup / serve shell | [BluePrint issues](https://github.com/protocolcity/ProtocolCity-BluePrint/issues) |
+| Work orders / `tk` / desk stores | [WorkLane issues](https://github.com/protocolcity/ProtocolCity-WorkLane/issues) |
+| Hire / roster / agent daemon | [WorkForce issues](https://github.com/protocolcity/ProtocolCity-WorkForce/issues) |
+| Formula only | [homebrew-tap](https://github.com/protocolcity/homebrew-tap/issues) |
 
 ## Status
 
@@ -91,4 +125,4 @@ quickly as first-user feedback lands.
 
 ## License
 
-[CC BY 4.0](LICENSE) — use it, adapt it, build on it, with attribution.
+[CC BY 4.0](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/LICENSE) — use it, adapt it, build on it, with attribution.

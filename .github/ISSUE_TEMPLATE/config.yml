@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Homebrew formula / tap only
+    url: https://github.com/protocolcity/homebrew-tap/issues
+    about: Formula install problems that are not the suite runtime itself
+  - name: WorkLane engine (work orders)
+    url: https://github.com/protocolcity/ProtocolCity-WorkLane/issues
+    about: Desk, tk CLI, ticket stores — after you have a version string
+  - name: WorkForce engine (agents)
+    url: https://github.com/protocolcity/ProtocolCity-WorkForce/issues
+    about: Hire, roster, daemon, shift logs
