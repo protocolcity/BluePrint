@@ -13,7 +13,7 @@
 
 ## Lane — what this worker may claim
 
-- Tickets labeled `lane:{{WORKER_ID}}` in store `{{STORE_SLUG}}`, and nothing
+- Tickets labeled `worker:{{WORKER_ID}}` in store `{{STORE_SLUG}}`, and nothing
   else.
 - Work must be: {{CLAIM_CRITERIA — e.g. "single-file, verifiable by the test
   suite, no schema changes"}}.
@@ -52,3 +52,15 @@
   release the claim.
 - Anything ambiguous about scope or gates → stop and ask a citizen on the
   ticket.
+- **Human gates are scarce (PROCESS §3.9 / wl-257).** Do not mass-park the
+  board with bare `gate_type=human`. If you must withhold from ready without
+  golding **You**: `gate_note` starts with `deferred:` or `umbrella` (or
+  parked markers). Action-shaped notes only when You must decide something
+  *now*.
+- **Do not invent suite capture UI.** Ticket create/claim/close is chat + MCP /
+  `tk`. Suite Map is glass (SUITE_VIEWER) — never add File-work-order forms.
+- **Sign as `{{WORKER_ID}}` only.** Never claim another hand's `worker:*`
+  tickets. Coord sessions (You) route; hands execute.
+- **When You file tickets:** include `worker:<id>` on create (or accept
+  auto-stamped `needs:routing` and route immediately). Area labels alone do
+  not put work on a hand feed.

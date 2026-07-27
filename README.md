@@ -13,42 +13,62 @@ supposed to follow, who is hired, and which work orders are still open.
 
 ## Install the suite (recommended)
 
+### macOS (Homebrew)
+
 ```bash
 brew install protocolcity/tap/protocolcity
 # Pick *your* folder name (Developer, notes, work, … — no forced default).
 protocolcity setup ~/my-workspace
 protocolcity serve --root ~/my-workspace --with-engines
-# → http://127.0.0.1:8801/  (Overview; Map digs in)
+# → http://127.0.0.1:8801/  (Overview; Map digs in at /workspace-map)
 ```
 
 That one formula installs the BluePrint CLI and pulls WorkLane + WorkForce
 from PyPI. Product source repos stay separate; install does not require cloning
 them.
 
-Or: `pip install protocolcity protocolcity-worklane protocolcity-workforce`
+### Windows (pip · Python 3.11+)
+
+```powershell
+py -3.11 -m pip install protocolcity protocolcity-worklane protocolcity-workforce
+protocolcity setup $env:USERPROFILE\ProtocolCity --create --yes
+protocolcity serve --root $env:USERPROFILE\ProtocolCity --with-engines
+# → http://127.0.0.1:8801/
+```
+
+If Scripts is not on PATH: `py -3.11 -m protocolcity …` (same commands).
+Full first-run notes: [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
+
+### Any OS (pip)
+
+```bash
+pip install protocolcity protocolcity-worklane protocolcity-workforce
+```
 
 ### What to clone vs install
 
 | You want… | Do this |
 |---|---|
-| **Run the suite** (Overview · Map · agents · work orders) | **Homebrew** (above) or the three PyPI packages |
+| **Run the suite** (Overview · Map · work orders · agents on the map) | **macOS:** Homebrew · **Windows/Linux:** pip (three packages above) |
 | **Read the papers** (Charter, templates, example) | Browse/clone [ProtocolCity-BluePrint](https://github.com/protocolcity/ProtocolCity-BluePrint) — docs only |
 | **Contribute to an engine** | Clone WorkLane / WorkForce source repos (developer path) |
 
-Cloning BluePrint alone does **not** install a runnable Map/Desk/Roster.
+Cloning BluePrint alone does **not** install a runnable suite.
 
 ## What you see
 
-Open the suite → **Overview** (system summary). Click **Map** to dig in —
-then click a project folder to see:
+Open the suite → **Overview** (system summary). Click **Map**
+(`http://127.0.0.1:8801/workspace-map`) to dig in — then click a project
+folder to see:
 
 | Layer | What it is | Typical files |
 |---|---|---|
 | **You** | Human decisions and gates | (you, in the loop) |
 | **Workspace** | Rules for the whole folder | root `AGENTS.md`, boundaries |
 | **Project** | One app or repo under the workspace | project `AGENTS.md` |
-| **Agent** | A hired AI worker | `workers/<id>/CONTRACT.md` |
-| **Job / this run** | What to do on this shift | `workers/<id>/prompt.md` |
+| **Agent** (worker/hand) | Hired AI that claims work orders | `workers/<id>/CONTRACT.md` · roster `kind=lane` |
+| **This run** | Shift brief for that agent | `workers/<id>/prompt.md` |
+| **Job** | Scheduled workspace duty (Map diamond) | roster `kind=job` · `seed-ops` |
 | **Work orders** | Tracked tickets until done | WorkLane desk |
 
 Nobody has to learn a “city” metaphor to run the system. Optional deeper docs
@@ -98,17 +118,26 @@ the same structure visually.
 
 ## Report a bug
 
-1. On the machine that broke, run (local only — nothing is uploaded):
+**Local only** until you paste. No telemetry.
 
-   ```bash
-   protocolcity feedback
-   # or: protocolcity feedback ~/my-workspace
-   ```
+### You alone
 
-2. Paste the markdown into a new issue:
-   [ProtocolCity-BluePrint issues](https://github.com/protocolcity/ProtocolCity-BluePrint/issues/new/choose)
+```bash
+blueprint feedback --write
+# or: protocolcity feedback ~/my-workspace --open
+```
 
-Include versions from that block. Rough routing:
+Paste into
+[ProtocolCity-BluePrint issues](https://github.com/protocolcity/ProtocolCity-BluePrint/issues/new/choose).
+
+### With any AI host (Cursor / Claude / Grok)
+
+1. Run `blueprint feedback --agent-prompt` and paste that ritual into chat  
+   (or: “File a BluePrint beta bug — run `blueprint feedback` and fill symptoms”).
+2. Agent gathers versions/doctor/logs, redacts secrets, fills Summary/Expected/Actual.
+3. **You** paste the markdown into the issues URL. Agents do not post without you.
+
+Rough routing:
 
 | Symptom | Board |
 |---|---|

@@ -26,6 +26,10 @@ automatically on push", "prototype, nothing depends on it".}}
 - Ticket store: `{{STORE_SLUG}}` (work orders `{{PREFIX}}-*`)
 - Every change ties to a ticket; every ticket close-out states what was done
   and how it was verified.
+- **File** work via chat + MCP / `tk` (any vendor). The suite Map is a live
+  viewer — not a ticket compose form.
+- **Route** each ready ticket to a hand: label `worker:<id>` (or it stays
+  visible as `needs:routing` but no schedule drains it).
 
 ## Boundaries and no-go zones
 

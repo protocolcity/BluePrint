@@ -4,15 +4,17 @@
 citizen actually operates once the city exists — and, just as important,
 what you never have to touch because it runs itself.
 
-## The frame: dumb loops, smart Desk
+## The frame: dumb loops, smart work-order ledger
 
 Most agent systems build clever long-running loops that hold goals in
 memory — and lose everything when the loop dies. A city inverts that:
-**shifts are stateless, the Desk is the memory.** Every dispatch
-wakes up, asks the desk "what's ready for me?", does one slice, writes
+**shifts are stateless, the work-order ledger is the memory.** Every dispatch
+wakes up, asks WorkLane "what's ready for me?", does one slice, writes
 everything back — claims, comments, close-outs, follow-ups — and exits.
 Work keeps going not because anything runs forever, but because the
-**ledger** persists between shifts.
+**ledger** persists between shifts. In the BluePrint suite you **see** that
+ledger on the **Map** (open counts, tape, paper drawer) — not a separate Desk
+app.
 
 The corollary is the economics: an empty queue costs nothing (shifts skip
 cleanly), and a queue that stops shrinking stops being worked (no-progress
