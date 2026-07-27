@@ -25,7 +25,10 @@ automatically on push", "prototype, nothing depends on it".}}
 
 - Ticket store: `{{STORE_SLUG}}` (work orders `{{PREFIX}}-*`)
 - Every change ties to a ticket; every ticket close-out states what was done
-  and how it was verified.
+  and how it was verified. Residual work stays on the board (child tickets or
+  open parent) — not only in a `Follow-ups:` prose note. If you changed
+  structural truth (process, public install, decision checklists), update
+  those papers in the same close-out.
 - **File** work via chat + MCP / `tk` (any vendor). The suite Map is a live
   viewer — not a ticket compose form.
 - **Route** each ready ticket to a hand: label `worker:<id>` (or it stays

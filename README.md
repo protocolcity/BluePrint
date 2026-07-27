@@ -16,16 +16,17 @@ supposed to follow, who is hired, and which work orders are still open.
 ### macOS (Homebrew)
 
 ```bash
-brew install protocolcity/tap/protocolcity
+brew install protocolcity/tap/blueprint
 # Pick *your* folder name (Developer, notes, work, … — no forced default).
-protocolcity setup ~/my-workspace
-protocolcity serve --root ~/my-workspace --with-engines
+blueprint setup ~/my-workspace
+blueprint serve --root ~/my-workspace --with-engines
 # → http://127.0.0.1:8801/  (Overview; Map digs in at /workspace-map)
 ```
 
-That one formula installs the BluePrint CLI and pulls WorkLane + WorkForce
-from PyPI. Product source repos stay separate; install does not require cloning
-them.
+That installs the **BluePrint** suite (CLI + Map) and pulls WorkLane + WorkForce
+from PyPI. (`protocolcity/tap/protocolcity` is a compat formula name for the
+same bottle; `protocolcity` CLI remains an alias of `blueprint`.) Product
+source repos stay separate; install does not require cloning them.
 
 ### Windows (pip · Python 3.11+)
 

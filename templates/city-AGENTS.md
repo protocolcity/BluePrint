@@ -48,6 +48,24 @@ CLI for hired hands, suite as **glass**.
 - Full ladder: product docs `INSTRUCTION_LADDER.md` + `SUITE_VIEWER.md` when
   present in your BluePrint install
 
+## Truth upkeep (board + papers — every project)
+
+The work-order board is shared memory. **Closing a ticket hides the work.**
+
+- **Sticky residual.** If work remains at close: keep the parent open, **or**
+  file child tickets first and list those ids under `Follow-ups:`.  
+  **`Follow-ups: none` means none** — not “tabled in the close comment.”
+- **Docs drift.** If the change altered structural truth (entrypoints, process,
+  public install lines, decision checklists / ADRs, architecture), update those
+  papers **in the same close-out commit**. Name the doc updates under
+  `Completed:` (or write `docs: no drift`). Stale truth files are invisible work.
+- **Decisions with checklists.** When a later release lands a checklist item,
+  tick the decision paper in that same slice — do not leave ratified ADRs
+  half-checked forever.
+
+WorkLane’s PROTOCOL (PROCESS) carries the full close-out rules; this section is
+the short city-root reminder every neighborhood inherits.
+
 ## Boundaries
 
 <!-- How projects are allowed to talk to each other. The strongest
