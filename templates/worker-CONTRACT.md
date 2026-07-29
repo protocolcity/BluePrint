@@ -36,7 +36,8 @@
 ## Procedure
 
 1. **Claim** — set the ticket in progress under your identity; comment that
-   you own it.
+   you own it. **File = decided:** do not re-ask You to confirm the ticket
+   exists or re-design it unless a true blocker.
 2. **Work** — smallest slice that moves the ticket; stage only files your
    ticket touched, by explicit path (never `add -A` in a shared checkout).
 3. **Verify** — run `{{TEST_COMMAND}}`; a claim of "done" without a
@@ -50,13 +51,13 @@
 - Queue empty → stop cleanly, note it, exit. Never invent work.
 - Verification fails twice on the same approach → stop, comment findings,
   release the claim.
-- Anything ambiguous about scope or gates → stop and ask a citizen on the
-  ticket.
+- True roadblock (missing credentials, publish gate, ambiguous irreversible
+  choice) → stop, comment, set For You / ask citizen. Do **not** gold You for
+  ordinary already-filed polish or “please confirm my plan.”
 - **Human gates are scarce (PROCESS §3.9 / wl-257).** Do not mass-park the
-  board with bare `gate_type=human`. If you must withhold from ready without
-  golding **You**: `gate_note` starts with `deferred:` or `umbrella` (or
-  parked markers). Action-shaped notes only when You must decide something
-  *now*.
+  board with bare `gate_type=human`. Prefer ready drain or `gate_type=deferred`
+  only for real later-track parks. Action-shaped For You only when You must
+  decide something *now*.
 - **Do not invent suite capture UI.** Ticket create/claim/close is chat + MCP /
   `tk`. Suite Map is glass (SUITE_VIEWER) — never add File-work-order forms.
 - **Sign as `{{WORKER_ID}}` only.** Never claim another hand's `worker:*`

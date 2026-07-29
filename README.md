@@ -17,33 +17,40 @@ supposed to follow, who is hired, and which work orders are still open.
 
 ```bash
 brew install protocolcity/tap/blueprint
-# Pick *your* folder name (Developer, notes, work, … — no forced default).
-blueprint setup ~/my-workspace
-blueprint serve --root ~/my-workspace --with-engines
+blueprint setup                 # soft default ~/BluePrint — or use an existing folder
+# blueprint setup ~/my-workspace --create --yes
+blueprint serve --root ~/BluePrint --with-engines
 # → http://127.0.0.1:8801/  (Overview; Map digs in at /workspace-map)
 ```
 
 That installs the **BluePrint** suite (CLI + Map) and pulls WorkLane + WorkForce
-from PyPI. (`protocolcity/tap/protocolcity` is a compat formula name for the
-same bottle; `protocolcity` CLI remains an alias of `blueprint`.) Product
-source repos stay separate; install does not require cloning them.
+from PyPI. The taught CLI is **`blueprint` only** (no `protocolcity` command
+alias). Product source repos stay separate; install does not require cloning them.
 
-### Windows (pip · Python 3.11+)
+### Windows — first time (nothing installed)
+
+**1. Install Python once** from [python.org/downloads/windows](https://www.python.org/downloads/windows/)  
+(Python **3.11+**). Tick **Add python.exe to PATH**, finish, then open a **new** PowerShell.
+
+**2. Paste this whole block** into PowerShell and press Enter:
 
 ```powershell
-py -3.11 -m pip install protocolcity protocolcity-worklane protocolcity-workforce
-protocolcity setup $env:USERPROFILE\ProtocolCity --create --yes
-protocolcity serve --root $env:USERPROFILE\ProtocolCity --with-engines
-# → http://127.0.0.1:8801/
+py -3 -m pip install --upgrade pip
+py -3 -m pip install --upgrade "protocolcity[engines]"
+blueprint setup "$env:USERPROFILE\ProtocolCity" --create --yes
+blueprint serve --root "$env:USERPROFILE\ProtocolCity"
+# If blueprint is not on PATH: py -3 -m protocolcity setup … / serve …
 ```
 
-If Scripts is not on PATH: `py -3.11 -m protocolcity …` (same commands).
-Full first-run notes: [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
+**3. Open** [http://127.0.0.1:8801/](http://127.0.0.1:8801/) in your browser.  
+Leave PowerShell open while you use the suite. Stop with **Ctrl+C**.
+
+Stuck? [WINDOWS_FIRST_USER.md](WINDOWS_FIRST_USER.md) — PATH fixes, firewall, next-day restart.
 
 ### Any OS (pip)
 
 ```bash
-pip install protocolcity protocolcity-worklane protocolcity-workforce
+python3 -m pip install --upgrade "protocolcity[engines]"
 ```
 
 ### What to clone vs install
@@ -125,7 +132,7 @@ the same structure visually.
 
 ```bash
 blueprint feedback --write
-# or: protocolcity feedback ~/my-workspace --open
+# or: blueprint feedback ~/my-workspace --open
 ```
 
 Paste into

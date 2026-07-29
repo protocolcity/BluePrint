@@ -26,13 +26,6 @@ neighborhood's folder directly so its own law (AGENTS.md) loads.
   a default project — pass the project's slug on every ticket call.
 - **Work spanning two projects = two tickets**, one per neighborhood,
   each scoped to its side of the boundary.
-- **Capture via chat + MCP or `tk` CLI.** The suite Map is live glass — it
-  does not host a ticket compose form. Identity default for session actions:
-  **you** (any display label you configure; do not teach vendor host ids as the
-  product default).
-- **Route before ready.** Label every work order `worker:<id>` before marking
-  it ready. Without a routing label no schedule drains it — it stays ready but
-  invisible to every worker queue. Unlabeled tickets should carry `needs:routing`.
 
 ## Coordination (You in chat — any vendor)
 
@@ -40,10 +33,13 @@ BluePrint is vendor-neutral: pick any chat host + MCP/`tk` for capture, any
 CLI for hired hands, suite as **glass**.
 
 - **Capture** = chat + MCP (`wl_create` / `tk create`) — not suite Map forms
+- **File = decided.** When You file a work order, hands work it — they do not
+  re-ask for permission. Route with `worker:<id>` on create.
 - **Hands** drain only tickets labeled `worker:<id>`
+- **For You** = roadblocks only (true decisions / sign-off) — not FYI, not
+  “confirm this plan” after You already filed
 - **Coord sessions** file / label / dispatch / escalate — they do **not** claim
   `worker:*` work when a hand runtime exists
-- **Feed ready; do not stockpile For You.** Three board columns: **Ready** (worker feed) · **For You** (act now) · **Deferred** (`gate_type=deferred` — parked for later, not golded). Park later work with `gate_type=deferred`. Reserve `gate_type=human` for real act-now decisions. Do not bulk-snooze as a substitute for reclassifying.
 - **Identity** default wire id: **`you`** (UI shows **You**)
 - Full ladder: product docs `INSTRUCTION_LADDER.md` + `SUITE_VIEWER.md` when
   present in your BluePrint install

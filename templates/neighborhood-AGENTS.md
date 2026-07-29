@@ -24,7 +24,7 @@ automatically on push", "prototype, nothing depends on it".}}
 - **File** work via chat + MCP / `tk` (any vendor). The suite Map is a live
   viewer — not a ticket compose form.
 - **Route** each ready ticket to a hand: label `worker:<id>` (or it stays
-  visible as `needs:routing` but no schedule drains it).
+  visible as needs routing but no schedule drains it).
 
 ## Boundaries and no-go zones
 
