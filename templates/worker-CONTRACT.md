@@ -54,6 +54,13 @@
 - True roadblock (missing credentials, publish gate, ambiguous irreversible
   choice) → stop, comment, set For You / ask citizen. Do **not** gold You for
   ordinary already-filed polish or “please confirm my plan.”
+- **Host-mutation gate (`docs/policy/host-mutation-gate.md`):** production
+  system service daemons, shared ports (`:8797`/`:8799`/`:8801`),
+  `~/.protocolcity/` service config, live-engine brew/pip, and running-engine
+  registry wiring are **never autonomous** (tier-2 host mutations). Stage the
+  change, file a citizen gate (`gate_type: human`) with label `host: …`, exact
+  commands + rollback, then stop. Autonomous execution is an automatic contract
+  violation.
 - **Human gates are scarce (PROCESS §3.9 / wl-257).** Do not mass-park the
   board with bare `gate_type=human`. Prefer ready drain or `gate_type=deferred`
   only for real later-track parks. Action-shaped For You only when You must
