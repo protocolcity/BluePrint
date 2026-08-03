@@ -2,7 +2,10 @@
 
 <!-- One file per worker, conventionally at
      <neighborhood>/workers/{{WORKER_ID}}/CONTRACT.md. This binds the worker
-     on EVERY dispatch. Fill, trim, delete comments. -->
+     on EVERY dispatch. Fill, trim, delete comments.
+
+     Hygiene (ALWAYS_WORK_PROCESS §6): prefer ≤ ~120 lines. Hard smell > 200.
+     Reference specs/PROCESS/skills — do not restate workspace rules here. -->
 
 ## Identity
 
@@ -22,7 +25,7 @@
 
 - Load and follow only the **authority-chain** paths handed at dispatch
   (plus this contract and prompt). Any other `AGENTS.md` is **paper** until
-  adopted onto the chain. (Doctrine: city-hall
+  adopted onto the chain. (Doctrine: workspace
   `docs/research/obedience-boundary-audit-2026-07.md` / RUNNER_SPEC §6.)
 
 ## Never touch
@@ -31,7 +34,19 @@
 
 - {{FORBIDDEN_AREA_1}}
 - {{FORBIDDEN_AREA_2}}
-- Anything behind a citizen gate (L0/L1) — prepare, never ship.
+- Anything requiring Your approval (L0/L1) — prepare, never ship.
+
+## Workplace
+
+- **Repo / workdir:** this project's root — the hire `workdir` / nearest
+  parcel with its own `AGENTS.md`. Resolve at read time; **never** bake a
+  host absolute path into L2 law (no home-directory or user-account
+  prefixes — any citizen home folder counts).
+- **City L0:** workspace root via `WORKSPACE_ROOT` / `BLUEPRINT_WORKSPACE` /
+  walk-up to outermost `AGENTS.md` (`protocolcity.workspace`). From a
+  project parcel, relative `../AGENTS.md` is fine when the layout is
+  one-level deep; prefer env or discovery over home-relative paths.
+- Work on `main` unless this contract or the ticket says otherwise.
 
 ## Procedure
 
@@ -49,11 +64,17 @@
 ## Stop rules
 
 - Queue empty → stop cleanly, note it, exit. Never invent work.
+- **Drain seat:** `worker:{{WORKER_ID}}` is your seat; cron drains it. `worker:you`
+  is **never** a drain seat — cron does not claim You. Escalation = keep your
+  seat + `gate_type=human`; never re-seat failed work to `worker:you`.
 - Verification fails twice on the same approach → stop, comment findings,
   release the claim.
 - True roadblock (missing credentials, publish gate, ambiguous irreversible
   choice) → stop, comment, set For You / ask citizen. Do **not** gold You for
   ordinary already-filed polish or “please confirm my plan.”
+- **Propose, don’t freeze:** if a preference is unclear but a safe default
+  exists, comment `Proposal: …` and continue. City keeps working when humans
+  step away (ALWAYS_WORK_PROCESS product promise).
 - **Host-mutation gate (`docs/policy/host-mutation-gate.md`):** production
   system service daemons, shared ports (`:8797`/`:8799`/`:8801`),
   `~/.protocolcity/` service config, live-engine brew/pip, and running-engine
@@ -66,9 +87,9 @@
   only for real later-track parks. Action-shaped For You only when You must
   decide something *now*.
 - **Do not invent suite capture UI.** Ticket create/claim/close is chat + MCP /
-  `tk`. Suite Map is glass (SUITE_VIEWER) — never add File-work-order forms.
+  `tk`. Suite Map is viewer-only (SUITE_VIEWER) — never add File-work-order forms.
 - **Sign as `{{WORKER_ID}}` only.** Never claim another hand's `worker:*`
-  tickets. Coord sessions (You) route; hands execute.
+  tickets. Coord sessions (You) route; agents execute.
 - **When You file tickets:** include `worker:<id>` on create (or accept
   auto-stamped `needs:routing` and route immediately). Area labels alone do
   not put work on a hand feed.

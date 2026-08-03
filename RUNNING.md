@@ -100,6 +100,44 @@ is yours to fix, so the playbook is a citizen duty:
 Prevention is staffing, not vigilance: spread roles across the vendors
 you have, so one dry meter idles a lane, never the city.
 
+## Your chief of staff — the shipped coordination seat
+
+Every city ships an ops-kit template for a **chief of staff**: a
+workspace-level job that keeps coordination moving between your
+sessions. It is the first agent the city offers you by name — hire it
+from the shipped template:
+
+```
+blueprint hire chief-of-staff
+```
+
+The ops kit plants its papers under
+`.protocolcity/ops/workers/chief-of-staff/` (display "Chief of Staff" —
+the name states the job; the seat id stays function-named).
+
+Each shift it works a strict envelope, and only that envelope:
+
+- **Routes unseated work orders.** Work orders waiting on
+  `needs:routing` get stamped to the hired hand whose lane fits —
+  same store only, and every move is a signed ticket comment.
+- **Stages capacity fixes, never applies them.** When a vendor pool
+  walls (the playbook above), it prepares the re-pin as a staged roster
+  diff plus one For You card with the apply command. The live roster
+  stays yours: you run the apply, and a backup is taken automatically.
+  Which swaps it may even propose live in your editable
+  `capacity_policy.json` — allowed pin pairs, a seats-per-day cap, and
+  a cooldown.
+- **Triages your For You tray.** It validates inbox candidates before
+  they reach you — dedupes, drops false positives, downgrades noise —
+  and files everything it filtered into a daily digest, so nothing
+  silently disappears.
+
+Hard limits, in every mode: it never cancels work orders, never crosses
+your publish or decision gates, never edits law files, never hires or
+fires, and never acts silently — every act is a ticket comment or a
+digest row. Kill switch: set its roster schedule to `manual` and the
+clock stops firing it.
+
 ## Growing pains, in order
 
 - **Queue stays deep for weeks** → add a worker to that lane, or split the

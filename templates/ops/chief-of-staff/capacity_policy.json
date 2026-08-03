@@ -1,0 +1,48 @@
+{
+  "schema": "workforce.capacity_policy/v1",
+  "mode_default": "B",
+  "description": "User-editable pin rails for Mode B stage+approve (wf-133). Chief-of-staff stages only; citizen applies live roster changes.",
+  "allowed_pin_fields": ["model", "command"],
+  "forbidden_pin_fields": [
+    "schedule",
+    "budget_secs",
+    "identity",
+    "kind",
+    "queue_url",
+    "workdir",
+    "name",
+    "staff"
+  ],
+  "tiers": {
+    "generalist": {
+      "restore_after_pool_clear": true,
+      "example_models": ["claude-sonnet-4-6", "grok-4.5"]
+    },
+    "patrol": {
+      "restore_after_pool_clear": true,
+      "example_models": ["claude-haiku-4-5-20251001", "grok-4.5"]
+    },
+    "heavy_multipass": {
+      "restore_after_pool_clear": false,
+      "notes": "Stay on heavy pin (e.g. Grok multipass); pool restore does not move them."
+    }
+  },
+  "pin_pairs": [
+    {
+      "tier": "generalist",
+      "bidirectional": true,
+      "models": ["claude-sonnet-4-6", "grok-4.5"]
+    },
+    {
+      "tier": "patrol",
+      "bidirectional": true,
+      "models": ["claude-haiku-4-5-20251001", "grok-4.5"]
+    }
+  ],
+  "seats_per_day_cap": 8,
+  "cooldown_hours": 4,
+  "for_you": {
+    "required_on_stage": true,
+    "idempotent_key": "capacity-restore:{pool}:{YYYY-MM-DD}"
+  }
+}
