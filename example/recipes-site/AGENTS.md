@@ -16,6 +16,11 @@ npm test         # link checker + recipe front-matter validation
 ## The desk
 
 - Ticket store: `recipes` (work orders `rs-*`)
+  - Prefix `rs` is the canonical prefix **registered in the desk when the store
+    was created**. `blueprint adopt` reads this back from `/api/scene` on every
+    subsequent adopt, so re-adoption never invents a second prefix.
+    Run `blueprint doctor --neighborhood recipes-site` to confirm the live
+    prefix matches `desk-join.json`.
 - Every change ties to a ticket; every ticket close-out states what was done
   and how it was verified.
 

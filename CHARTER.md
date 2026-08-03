@@ -28,6 +28,15 @@ did this?", no rules that live in one vendor's config format.
 | **Citizens** | The humans. Bots execute; humans govern — citizens hold the taste, the gates, and the final word. |
 | **Laws** | The rules, always written as readable files, one owner per rule. If it isn't in an `.md`, it isn't law. |
 
+**Dual register (foundation v2 — 2026-08-01):** this Charter keeps **civic**
+nouns (city, neighborhood, ticket, worker) as the host-neutral protocol
+language. BluePrint **citizen surfaces** (suite Map, templates, CORE AGENTS)
+use the parallel register: **workspace · project · work order · Agents · You**.
+They mean the same hierarchy. Full table:
+[`docs/specs/SUITE_VOCABULARY.md`](specs/SUITE_VOCABULARY.md) § Dual register.
+Shipped glass must not require learning civic words; code paths may keep
+legacy ids forever.
+
 **Reserved words — one word, one meaning, city-wide.** Vocabulary debt
 compounds: a word that means two things in the docs eventually means two
 things in the code, and that rename costs a migration. So the Charter
