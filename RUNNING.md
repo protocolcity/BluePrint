@@ -73,6 +73,21 @@ idles for pennies (skips are cheap); when *you* step away, nothing breaks —
 prepared work stalls at your gates, shifts log clean skips, and the whole
 operation waits, legible, for the next sweep.
 
+## Who works your city
+
+Three types of workers — every worker you hire or schedule is one:
+
+| Type | What it does | Naming law |
+|---|---|---|
+| **Agent** | Claims work orders from a ready feed; open-ended workload; persona name is optional citizen flavor | id lowercase-kebab, stable forever |
+| **Staff** (shipped seats) | Clock-fired, fixed envelope — routes, triages, patrols; never claims work orders; ships with every city | Function-named: the name states the role |
+| **Job** | Recurring single duty on a schedule (report, sync, release); never claims, never a persona | Function-named: the name states the duty |
+
+Agents grow and shrink with your backlog. Staff and jobs are fixed-cost
+infrastructure — they run on a clock and never accumulate. The Map and the
+worker API carry this as `type` (agent · staff · job), derived from the
+roster's `kind` + staff mark — one word everywhere, from hire to legend.
+
 ## When a worker hits a wall — the vendor-limit playbook
 
 Sooner or later a vendor meter runs dry mid-employment: a balance
@@ -104,11 +119,14 @@ you have, so one dry meter idles a lane, never the city.
 
 Every city ships an ops-kit template for a **chief of staff**: a
 workspace-level job that keeps coordination moving between your
-sessions. It is the first agent the city offers you by name — hire it
-from the shipped template:
+sessions. It is the first agent the city offers you by name — and the
+default **seed-ops** trio plants it automatically (with **health-patrol**
+and **workspace-efficiency**):
 
 ```
-blueprint hire chief-of-staff
+blueprint seed-ops --root <workspace>
+# only if the seat is missing after an older install:
+blueprint hire chief-of-staff --workdir <workspace>/.protocolcity/ops --kind job
 ```
 
 The ops kit plants its papers under

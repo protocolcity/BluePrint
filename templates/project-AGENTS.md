@@ -11,6 +11,13 @@
 must know before acting — e.g. "handles real customer data", "deploys
 automatically on push", "prototype, nothing depends on it".}}
 
+## Architecture
+
+**Read [`ARCHITECTURE.md`](ARCHITECTURE.md) before structural work.** Layers,
+sources of truth, data-flow direction, and invariants live there — not only
+in vault research notes. Any structural change updates that paper in the same
+close-out.
+
 ## How to run and test it
 
 ```

@@ -12,21 +12,33 @@ single product folder.
 Hire them into WorkForce (roster). Map paints them on the **Workspace ops**
 ring next to You. Project folders keep only **project** agents.
 
-## Shipped paper packs (this tree)
+## Default trio (auto-seed)
+
+`blueprint seed-ops` / first serve plant exactly these three:
 
 | Seat | Role |
 |---|---|
-| `workspace-efficiency` | Drain hygiene job (seed-ops default) |
-| `papers-patrol` | Weekly AGENTS generated-block refresh |
-| `chief-of-staff` | Mode B capacity stage+approve |
+| `chief-of-staff` | Coordination — routing, capacity staging, inbox triage (Mode B) |
+| `health-patrol` | Ticket health patrol (was `marshal`) |
+| `workspace-efficiency` | Drain hygiene job |
 
-Plant / hire:
+## Optional paper packs (this tree)
+
+| Seat | Role |
+|---|---|
+| `papers-sync` | Weekly AGENTS generated-block refresh (was `papers-patrol`; citizen install) |
+
+Plist template for always-on weekly fire (public path):
+`templates/host-agents/com.protocolcity.papers-sync.plist`
+
+Plant / hire optional seats:
 
 ```text
-blueprint hire chief-of-staff \
+blueprint hire papers-sync \
   --workdir <workspace>/.protocolcity/ops \
   --kind job \
-  --role 'capacity Mode B stager'
+  --role 'weekly AGENTS generated-block refresh' \
+  --schedule '0 9 * * 1'
 ```
 
 Papers also plant via `protocolcity.seed_ops.plant_ops_seat_papers` without
