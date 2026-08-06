@@ -9,6 +9,9 @@ AI agents in this workspace — not cloud vendor packs, not CLI-home-only files.
 |---|---|
 | Workspace `.agents/skills/<id>/` | **Preferred SoT** for cross-project (L0) skills |
 | Workspace `.claude/skills/<id>/` | **Discovery** for Map toolkit + Claude-style loaders (real dir or symlink → `.agents`) |
+| Workspace `.agents/policy/` | **Permissions SoT** — allow/deny + boundaries; vendor settings are **generated** |
+| Workspace `.claude/settings.json` | **Generated** Claude permissions mirror (`bash scripts/policy_sync.sh`) — not hand-authored |
+| Workspace `.claude/settings.local.json` | **Host-personal** overrides only — never city SoT |
 | Project `<folder>/.claude/skills/<id>/` | **L1** — one product / domain only |
 | `~/.claude/skills/`, `~/.grok/skills/`, `~/.codex/skills/` | **CLI discovery only** — symlink **into this workspace**; never invent SoT under `~/` for coordination skills |
 | Cloud skill marketplaces | Out of scope for BluePrint coordination |
@@ -64,6 +67,16 @@ bash scripts/skills_sync.sh --check
 
 That symlinks each L0 id into every managed project’s `.claude/skills/`
 (without clobbering real L1 skill directories of the same name).
+
+**Permissions:** edit `.agents/policy/permissions.json`, then:
+
+```bash
+bash scripts/policy_sync.sh          # generate .claude/settings.json
+bash scripts/policy_sync.sh --check  # exit 1 if the mirror drifted
+```
+
+Do not hand-edit the generated settings file. Host-only grants go in
+`.claude/settings.local.json`.
 
 ### Assign ≠ escalate (queue seating)
 

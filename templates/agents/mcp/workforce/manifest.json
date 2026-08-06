@@ -1,0 +1,23 @@
+{
+  "id": "workforce",
+  "description": "WorkForce roster / dispatch MCP (optional L0 until install is stable)",
+  "transport": "stdio",
+  "command": "{{WORKSPACE_ROOT}}/workforce/.venv/bin/python",
+  "args": [
+    "-m",
+    "workforce.mcp",
+    "--author",
+    "you"
+  ],
+  "env": {
+    "WORKFORCE_ROSTER": "{{WORKSPACE_ROOT}}/.protocolcity/workforce/local/roster.json"
+  },
+  "env_required": [],
+  "capability": "mutating",
+  "risk": "roster / hire / dispatch writes — not money",
+  "seats": ["*"],
+  "level": "L0",
+  "vendor_locked": false,
+  "enabled": true,
+  "notes": "Optional L0. Seed only when workforce/ is present and MCP module importable (pc-1079). Prefer host venv path with {{WORKSPACE_ROOT}} tokens."
+}

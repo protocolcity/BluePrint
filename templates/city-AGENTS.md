@@ -82,6 +82,33 @@ CLI for hired hands, suite as **glass**.
 - Full ladder: product docs `INSTRUCTION_LADDER.md` + `SUITE_VIEWER.md` when
   present in your BluePrint install
 
+## Creating workers and work orders
+
+When the citizen asks to create something, route by shape:
+
+| Ask shape | Right move | Never |
+|---|---|---|
+| One-off outcome | File a **work order** | Create a new worker |
+| Recurring fixed duty (report, sync, release) | **Job** (`kind=job`, function-named) | Give it a persona |
+| Open-ended claiming worker for a project | **Agent hire** (`kind=lane`; persona optional) | Make it a staff seat |
+| Coordination / triage powers needed | Point at the shipped **chief-of-staff** | Invent a second coordinator |
+
+**Naming law:** Jobs and staff are function-named — the name states the duty
+(`weekly-report`, `health-patrol`, not a person's name). Lane ids are
+lowercase-kebab and stable forever — the id is a contract with the
+work-order board.
+
+```shell
+# Seed the shipped ops trio (chief-of-staff, health-patrol, workspace-efficiency):
+blueprint seed-ops --root <workspace>
+
+# Hire an agent for a project:
+blueprint hire <id> --workdir <project>/.protocolcity --kind lane
+
+# Hire a recurring job:
+blueprint hire <function-name> --workdir <workspace>/.protocolcity/ops --kind job
+```
+
 ## Truth upkeep (board + papers — every project)
 
 The work-order board is shared memory. **Closing a ticket hides the work.**

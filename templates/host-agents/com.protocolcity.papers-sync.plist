@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TEMPLATE ONLY — substitute your workspace path before install.
+
+  papers-sync job (renamed from papers-patrol): runs
+    blueprint doctor --fix-papers <workspace>
+  weekly to keep neighborhood AGENTS.md generated blocks in sync.
+  No LLM, no tickets, no KeepAlive — one-shot per fire.
+
+  Install (citizen / host-ops gate):
+    1. Replace every /REPLACE/WITH/WORKSPACE with your workspace root.
+    2. Point ProgramArguments[0] at your blueprint binary if needed
+       (Homebrew: /opt/homebrew/bin/blueprint).
+    3. Copy to ~/Library/LaunchAgents/com.protocolcity.papers-sync.plist
+    4. Add to WorkForce roster (kind=job, schedule="0 9 * * 1", name papers-sync).
+    5. launchctl bootstrap gui/$UID \
+         ~/Library/LaunchAgents/com.protocolcity.papers-sync.plist
+
+  Unload:
+    launchctl bootout gui/$UID/com.protocolcity.papers-sync
+
+  Papers: templates/ops/papers-sync/CONTRACT.md (in package or git tree)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.protocolcity.papers-sync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/blueprint</string>
+        <string>doctor</string>
+        <string>--fix-papers</string>
+        <string>/REPLACE/WITH/WORKSPACE</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/REPLACE/WITH/WORKSPACE</string>
+    <!-- Weekly: Monday 09:00 local time -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <key>ExitTimeOut</key>
+    <integer>60</integer>
+    <key>StandardOutPath</key>
+    <string>/REPLACE/WITH/WORKSPACE/.protocolcity/logs/papers-sync.out</string>
+    <key>StandardErrorPath</key>
+    <string>/REPLACE/WITH/WORKSPACE/.protocolcity/logs/papers-sync.err</string>
+</dict>
+</plist>

@@ -1,14 +1,12 @@
-# Vendor pointers (optional)
+# Vendor pointers (thin defaults)
 
 The canonical law file is always `AGENTS.md` — one law, every vendor reads
-it. Vendor-specific files are **optional**: add them only when a vendor CLI
-needs its own filename. When present, they must be thin pointers, never
-content.
+it. Vendor-specific files are **thin pointers only**, never a second law body.
 
-Missing a vendor file is fine — Office does not treat empty drawer wood as a
-to-do. When a vendor file *is* present, it must be a thin pointer (or it is
-**DIVERGED** and needs MERGE/CONVERT, never a second law body).
-`protocolcity found` / `adopt` / `doctor --fix` do **not** plant these files.
+`blueprint found` plants `CLAUDE.md` and `GROK.md` as `@AGENTS.md` by default
+. `doctor --fix` plants them when missing on a managed city. When a
+vendor file *is* present but not a thin pointer, it is **DIVERGED** (MERGE /
+CONVERT — never auto-rewritten).
 
 **Claude Code** — create `CLAUDE.md` containing exactly one line:
 

@@ -1,0 +1,24 @@
+{
+  "id": "worklane",
+  "description": "WorkLane / Ticketing Protocol board (claim, close, ready)",
+  "transport": "stdio",
+  "command": "{{WORKSPACE_ROOT}}/worklane/.venv/bin/python",
+  "args": [
+    "-m",
+    "ticketingprotocol.mcp",
+    "--author",
+    "you"
+  ],
+  "env": {
+    "TP_AGENT_ID": "${TP_AGENT_ID:-you}",
+    "TICKETING_PROTOCOL_RUNTIME_DIR": "{{WORKSPACE_ROOT}}/worklane/ticketingprotocol/local"
+  },
+  "env_required": [],
+  "capability": "mutating",
+  "risk": "board write — claim/close/label; not money",
+  "seats": ["*"],
+  "level": "L0",
+  "vendor_locked": false,
+  "enabled": true,
+  "notes": "Author defaults to you; hands set TP_AGENT_ID at process start. Aliases: ticketingprotocol (legacy Codex id)."
+}
