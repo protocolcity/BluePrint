@@ -3,8 +3,8 @@
 The canonical law file is always `AGENTS.md` — one law, every vendor reads
 it. Vendor-specific files are **thin pointers only**, never a second law body.
 
-`blueprint found` plants `CLAUDE.md` and `GROK.md` as `@AGENTS.md` by default
-. `doctor --fix` plants them when missing on a managed city. When a
+`blueprint found` plants `CLAUDE.md` and `GROK.md` as `@AGENTS.md` by default.
+`doctor --fix` plants them when missing on a managed city. When a
 vendor file *is* present but not a thin pointer, it is **DIVERGED** (MERGE /
 CONVERT — never auto-rewritten).
 

@@ -1,6 +1,6 @@
 # City MCP registry (BYO-MCP)
 
-**Ticket:**  ·  · **Design:** `docs/research/byo-mcp-library-design-2026-08.md`
+**Design:** `docs/research/byo-mcp-library-design-2026-08.md`
 
 MCP server definitions are **city-owned**, not per-vendor. Edit manifests here;
 regenerate vendor mirrors. Do **not** hand-author workspace `.mcp.json`.

@@ -34,7 +34,8 @@ In the **new** PowerShell window, **copy everything below**, paste, press **Ente
 
 ```powershell
 py -3 -m pip install --upgrade pip
-py -3 -m pip install --upgrade "protocolcity[engines]"
+py -3 -m pip install --upgrade "protocolcity-blueprint[engines]"
+# Forever-compat alias: py -3 -m pip install --upgrade "protocolcity[engines]"
 blueprint setup "$env:USERPROFILE\BluePrint" --create --yes
 blueprint serve --root "$env:USERPROFILE\BluePrint"
 ```

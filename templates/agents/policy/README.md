@@ -1,6 +1,6 @@
 # City policy (permissions SoT)
 
-**Ticket:**  · **Pattern:** generate, don't document (skills_sync family)
+**Pattern:** generate, don't document (skills_sync family)
 
 Security posture for hands is **city-owned**, not per-vendor. Edit this shelf;
 regenerate vendor mirrors. Do not hand-author `.claude/settings.json`.
