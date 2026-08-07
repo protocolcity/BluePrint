@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# policy_sync.sh — city permissions SoT → generated vendor settings (pc-1059)
+# policy_sync.sh — city permissions SoT → generated vendor settings
 #
 # Problem: security posture was per-vendor (hand-authored .claude/settings.json
 # allowlists). A hand's permissions then depend on which vendor runs it.

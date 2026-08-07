@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# mcp_sync.sh — city MCP registry SoT → generated vendor mirrors (pc-1078)
+# mcp_sync.sh — city MCP registry SoT → generated vendor mirrors
 #
 # Problem: MCP server defs were hand-authored in workspace .mcp.json and each
-# vendor's config.toml. Drift is inevitable (pc-1069 dead path; audit evidence).
+# vendor's config.toml. Drift is inevitable without a single SoT.
 #
 # Fix: one city SoT (.agents/mcp/<id>/manifest.json) and this bridge that
 # generates .mcp.json (+ patches managed [mcp_servers.<id>] in Grok/Codex).
@@ -21,7 +21,7 @@
 #   bash scripts/mcp_sync.sh --list       # inventory registry
 #   bash scripts/mcp_sync.sh apply
 #   bash scripts/mcp_sync.sh import       # seed SoT from existing .mcp.json
-#   bash scripts/mcp_sync.sh seed         # L0 worklane (+ optional workforce) (pc-1079)
+#   bash scripts/mcp_sync.sh seed         # L0 worklane (+ optional workforce)
 #   bash scripts/mcp_sync.sh migrate      # import + seed L0 + apply (live host)
 #   bash scripts/mcp_sync.sh plant        # plant shelf + script + seed L0
 #   bash scripts/mcp_sync.sh show

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check_mcp_secrets.sh — host secrets inventory check (pc-1061)
+# check_mcp_secrets.sh — host secrets inventory check
 #
 # Walks .agents/mcp/*/manifest.json env_required names, joins
 # .agents/secrets/inventory.json lifecycle paper, reports missing/expired

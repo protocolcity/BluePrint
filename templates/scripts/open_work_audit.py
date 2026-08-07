@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI shim — open-work audit lives in protocolcity.open_work_audit (pc-963).
+"""CLI shim — open-work audit lives in protocolcity.open_work_audit.
 
 Planted by found / seed-ops. Requires the blueprint / protocolcity package.
 

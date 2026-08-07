@@ -36,7 +36,8 @@ alias). Product source repos stay separate; install does not require cloning the
 
 ```powershell
 py -3 -m pip install --upgrade pip
-py -3 -m pip install --upgrade "protocolcity[engines]"
+py -3 -m pip install --upgrade "protocolcity-blueprint[engines]"
+# Forever-compat alias: py -3 -m pip install --upgrade "protocolcity[engines]"
 blueprint setup "$env:USERPROFILE\ProtocolCity" --create --yes
 blueprint serve --root "$env:USERPROFILE\ProtocolCity"
 # If blueprint is not on PATH: py -3 -m protocolcity setup … / serve …
@@ -50,7 +51,8 @@ Stuck? [WINDOWS_FIRST_USER.md](WINDOWS_FIRST_USER.md) — PATH fixes, firewall, 
 ### Any OS (pip)
 
 ```bash
-python3 -m pip install --upgrade "protocolcity[engines]"
+python3 -m pip install --upgrade "protocolcity-blueprint[engines]"
+# Forever-compat alias still works: pip install --upgrade "protocolcity[engines]"
 ```
 
 ### What to clone vs install

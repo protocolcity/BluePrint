@@ -14,7 +14,7 @@ delete the guidance comments.
 |---|---|---|
 | [`city-AGENTS.md`](city-AGENTS.md) | **workspace** root | `AGENTS.md` (L0 CORE — title: Workspace instructions) |
 | [`project-AGENTS.md`](project-AGENTS.md) | each **project** root | `AGENTS.md` (L1) |
-| [`project-ARCHITECTURE.md`](project-ARCHITECTURE.md) | each **project** root | `ARCHITECTURE.md` (L1 structural law — ) |
+| [`project-ARCHITECTURE.md`](project-ARCHITECTURE.md) | each **project** root | `ARCHITECTURE.md` (L1 structural law) |
 | [`BOUNDARIES.md`](BOUNDARIES.md) | workspace root (next to `AGENTS.md`) | `BOUNDARIES.md` (L0 cross-project grants — **citizen name**) |
 | [`PERIMETER.md`](PERIMETER.md) | *(forever alias)* → prefer `BOUNDARIES.md` | still accepted at runtime |
 | [`OFFICE_PERIMETER.md`](OFFICE_PERIMETER.md) | *(legacy alias)* → use `BOUNDARIES.md` | legacy name |
