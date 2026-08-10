@@ -138,6 +138,11 @@ Each shift it works a strict envelope, and only that envelope:
 - **Routes unseated work orders.** Work orders waiting on
   `needs:routing` get stamped to the hired hand whose lane fits —
   same store only, and every move is a signed ticket comment.
+- **Decomposes structural epics, not citizen parks.** Structural umbrellas
+  (`tracking` + `epic:tracking`) get children and runway cuts; citizen parks
+  (`deferred` + `epic:citizen-park`) stay gated until you thaw them. When a
+  lane finishes its scope, the seat may file one concrete GOAL proposal for
+  your ratification — never a bare "what next?" ask.
 - **Stages capacity fixes, never applies them.** When a vendor pool
   walls (the playbook above), it prepares the re-pin as a staged roster
   diff plus one For You card with the apply command. The live roster
