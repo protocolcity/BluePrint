@@ -7,8 +7,8 @@ labels: ["install"]
 
 ## How you installed
 
-- [ ] `brew install protocolcity/tap/protocolcity`
-- [ ] `pip install protocolcity …`
+- [ ] `brew install protocolcity/tap/blueprint`
+- [ ] `pip install protocolcity-blueprint …`
 - [ ] Other:
 
 Exact command(s):
@@ -20,8 +20,8 @@ Exact command(s):
 ## What failed
 
 - [ ] brew / pip install
-- [ ] `protocolcity setup` / `found` / `adopt`
-- [ ] `protocolcity serve --with-engines` (engines never ready)
+- [ ] `blueprint setup` / `found` / `adopt`
+- [ ] `blueprint serve --with-engines` (engines never ready)
 - [ ] Browser at http://127.0.0.1:8801/
 
 Transcript or error text:
@@ -32,6 +32,6 @@ Transcript or error text:
 
 ## Versions
 
-Prefer: `protocolcity feedback` (paste whole block).
+Prefer: `blueprint feedback` (paste whole block).
 
-Or: `brew list --versions protocolcity` + engine package versions.
+Or: `brew list --versions blueprint` + engine package versions.

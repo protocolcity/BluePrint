@@ -10,10 +10,10 @@ labels: ["bug"]
 Paste output of:
 
 ```bash
-protocolcity feedback
+blueprint feedback
 # or:
-brew list --versions protocolcity 2>/dev/null
-pip show protocolcity protocolcity-worklane protocolcity-workforce 2>/dev/null | grep -E '^(Name|Version)'
+brew list --versions blueprint 2>/dev/null
+pip show protocolcity-blueprint protocolcity-worklane protocolcity-workforce 2>/dev/null | grep -E '^(Name|Version)'
 ```
 
 - macOS version:
@@ -33,11 +33,11 @@ Actual:
 ## Logs
 
 Paste the last ~30 lines from `<workspace>/.protocolcity/logs/` if present
-(suite / worklane / workforce / citylens), or the block from `protocolcity feedback`.
+(suite / worklane / workforce / citylens), or the block from `blueprint feedback`.
 
 ## Surface
 
 - [ ] Suite shell (Overview / Map / Settings) — this BluePrint repo
-- [ ] Work orders (Desk / tk) — WorkLane
+- [ ] Work orders (Desk / wl_*) — WorkLane
 - [ ] Agents (Roster / hire / daemon) — WorkForce
 - [ ] Homebrew formula only — homebrew-tap
