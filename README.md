@@ -152,7 +152,7 @@ Rough routing:
 | Symptom | Board |
 |---|---|
 | Overview / Map / setup / serve shell | [BluePrint issues](https://github.com/protocolcity/ProtocolCity-BluePrint/issues) |
-| Work orders / `tk` / desk stores | [WorkLane issues](https://github.com/protocolcity/ProtocolCity-WorkLane/issues) |
+| Work orders / `wl_*` / desk stores | [WorkLane issues](https://github.com/protocolcity/ProtocolCity-WorkLane/issues) |
 | Hire / roster / agent daemon | [WorkForce issues](https://github.com/protocolcity/ProtocolCity-WorkForce/issues) |
 | Formula only | [homebrew-tap](https://github.com/protocolcity/homebrew-tap/issues) |
 
