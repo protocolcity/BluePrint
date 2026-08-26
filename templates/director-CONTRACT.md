@@ -36,6 +36,12 @@ output; make irreversible changes. This seat is **triage-only**.
 - Implement tickets belonging to other hands — route, don't steal.
 - `local/` employment records (roster, ledger).
 
+## Papers
+
+Durable work is **Markdown**. Exports (pptx, PDF, HTML renders) are derived.
+Do not convert **code**, **databases**, **secrets**, or **binary assets** to
+Markdown.
+
 ## Procedure
 
 1. **Survey** — `wl_ready project={{STORE_SLUG}}` + `needs:routing` scan.

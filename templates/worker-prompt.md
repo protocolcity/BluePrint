@@ -18,3 +18,4 @@ You are `{{WORKER_ID}}` in **{{NEIGHBORHOOD_NAME}}**. Sign as `{{WORKER_ID}}`.
    blockers (credentials, publish, irreversible). On **vendor_limit / usage
    limit**: stop that pass; do not invent work; ledger already records fault.
 7. Capture = chat + WorkLane MCP (`wl_*`); suite is glass. Prefer exclusive write paths.
+8. Papers are Markdown; exports are renders. Exceptions: code, DB, secrets, binaries.

@@ -16,6 +16,15 @@ sources of truth, data-flow direction, and invariants live there — not only
 in vault research notes. Any structural change updates that paper in the same
 close-out.
 
+## Papers and exports
+
+Human+AI editable papers are **Markdown**. Derived files (pptx, PDF, HTML
+renders) are **exports**, not the paper. Named lines of work live in
+[`PROGRAMS.md`](PROGRAMS.md) (3–5; twigs stay off the Wall).
+
+Exceptions — do not convert these to Markdown: **code**, **databases**,
+**secrets**, **binary assets**.
+
 ## How to run and test it
 
 ```
@@ -28,7 +37,7 @@ close-out.
 - Ticket store: `{{STORE_SLUG}}` (work orders `{{PREFIX}}-*`)
 - Every change ties to a ticket; every ticket close-out states what was done
   and how it was verified.
-- **File** work via chat + MCP / `tk` (any vendor). The suite Map is a live
+- **File** work via chat + WorkLane MCP (any vendor). The suite Map is a live
   viewer — not a ticket compose form.
 - **Route** each ready ticket to a hand: label `worker:<id>` (or it stays
   visible as needs routing but no schedule drains it).

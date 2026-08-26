@@ -48,6 +48,12 @@
   one-level deep; prefer env or discovery over home-relative paths.
 - Work on `main` unless this contract or the ticket says otherwise.
 
+## Papers
+
+Durable work is **Markdown** in the project tree. Exports (pptx, PDF, HTML
+renders) are derived, not the paper. Do not convert **code**, **databases**,
+**secrets**, or **binary assets** to Markdown.
+
 ## Procedure
 
 1. **Claim** — set the ticket in progress under your identity; comment that
@@ -86,8 +92,8 @@
   board with bare `gate_type=human`. Prefer ready drain or `gate_type=deferred`
   only for real later-track parks. Action-shaped For You only when You must
   decide something *now*.
-- **Do not invent suite capture UI.** Ticket create/claim/close is chat + MCP /
-  `tk`. Suite Map is viewer-only (SUITE_VIEWER) — never add File-work-order forms.
+- **Do not invent suite capture UI.** Ticket create/claim/close is chat + MCP.
+  Suite Map is viewer-only (SUITE_VIEWER) — never add File-work-order forms. Never `tk`.
 - **Sign as `{{WORKER_ID}}` only.** Never claim another hand's `worker:*`
   tickets. Coord sessions (You) route; agents execute.
 - **When You file tickets:** include `worker:<id>` on create (or accept

@@ -44,16 +44,16 @@ blocked.
 ## Cross-project rules
 
 - **Scope every work order explicitly.** At workspace root, never rely on a
-  default project — pass the project's slug on every call (`tk` / MCP).
+  default project — pass the project's slug on every call (MCP).
 - **Work spanning two projects = two work orders**, one per project,
   each scoped to its side of the boundary.
 
 ## Coordination (You in chat — any vendor)
 
-BluePrint is vendor-neutral: pick any chat host + MCP/`tk` for capture, any
+BluePrint is vendor-neutral: pick any chat host + WorkLane MCP for capture, any
 CLI for hired hands, suite as **glass**.
 
-- **Capture** = chat + MCP (`wl_create` / `tk create`) — not suite Map forms
+- **Capture** = chat + MCP (`wl_create`) — not suite Map forms. Never `tk`.
 - **File = decided.** When You file a work order, hands work it — they do not
   re-ask for permission. Route with `worker:<id>` on create.
 - **Hands** drain only tickets labeled `worker:<id>`

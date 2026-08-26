@@ -17,7 +17,7 @@ python3 scripts/open_work_audit.py --process
 python3 scripts/open_work_audit.py --decay
 ```
 
-(If `scripts/` is missing, use Map/`tk` counts and ready lists instead.)
+(If `scripts/` is missing, use Map / WorkLane API counts and ready lists instead.)
 
 4. For each project with ready>0, inspect ready seats. **Re-label** clear
    You-starve implement tickets (bare worker:you — not list/human-gated) to the

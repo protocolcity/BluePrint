@@ -2,10 +2,10 @@
   "mcpServers": {
     "worklane": {
       "command": "python3",
-      "args": ["-m", "ticketingprotocol.mcp", "--author", "you"],
+      "args": ["-m", "worklane.mcp", "--author", "you"],
       "env": {
         "TP_AGENT_ID": "you",
-        "TICKETING_PROTOCOL_RUNTIME_DIR": "{{WORKSPACE_ROOT}}/.protocolcity/worklane"
+        "WORKLANE_RUNTIME_DIR": "{{WORKSPACE_ROOT}}/.protocolcity/worklane"
       }
     },
     "workforce": {
