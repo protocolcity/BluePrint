@@ -56,13 +56,13 @@ aliases) to registry SoT + regenerated mirrors.
 ```json
 {
   "id": "worklane",
-  "description": "WorkLane / Ticketing Protocol board",
+  "description": "WorkLane board",
   "transport": "stdio",
   "command": "{{WORKSPACE_ROOT}}/worklane/.venv/bin/python",
   "args": ["-m", "worklane.mcp", "--author", "you"],
   "env": {
     "TP_AGENT_ID": "${TP_AGENT_ID:-you}",
-    "TICKETING_PROTOCOL_RUNTIME_DIR": "{{WORKSPACE_ROOT}}/.protocolcity/worklane"
+    "WORKLANE_RUNTIME_DIR": "{{WORKSPACE_ROOT}}/.protocolcity/worklane"
   },
   "env_required": [],
   "capability": "mutating",

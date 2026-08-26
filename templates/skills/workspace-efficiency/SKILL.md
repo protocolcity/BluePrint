@@ -183,23 +183,23 @@ L0; product-only skills stay L1 under the project.
 
 ### F · Report inbox (For You)
 
-Citizen reports must appear on Map **For You** (inbox + snooze), not only on disk.
+Citizen briefs (desk brief, digest, You read packs) must appear on Map
+**For You**. Efficiency reports stay **on disk**.
 
 ```bash
-# multi-project scan (efficiency / digest / correspondent slots)
+# briefs / digest — not efficiency gold
 python3 scripts/report_to_for_you.py --workspace "$WS" --scan
 # product-local For You drop when that product ships one:
 # ( cd <product> && python -m <module>.for_you_drop )
 ```
 
-If reports exist for today but For You has no matching `Inbox · …` /
-`inbox-report:` human gate → run `--scan` (or file process WO).
+If a **brief** exists for today but For You has no matching `Inbox · …` card
+→ run `--scan` (or file process WO). Missing efficiency gold is expected.
 
-**Efficiency For You rule:** `--scan` must not mint one gold per product for
-efficiency. Default = one workspace rollup card or disk-only. Gold a
-per-product card only when that product has an act-now smell (stuck agent,
-critical feed failure). Desk brief / You read packs remain For You cards.
-See [`FOR_YOU_INBOX_REPORTS.md`](../../../ProtocolCity/docs/specs/FOR_YOU_INBOX_REPORTS.md) §Gold vs rollup policy.
+**Efficiency For You rule:** `--scan` must not gold efficiency. Write the
+dated report; leave it on disk. Gold only with `--act-now` when a product
+has a stuck hand or critical feed failure. Desk brief / You read packs
+remain For You cards. See [`FOR_YOU_INBOX_REPORTS.md`](../../../ProtocolCity/docs/specs/FOR_YOU_INBOX_REPORTS.md) §Gold vs rollup policy.
 
 ### G · Actions
 
@@ -212,7 +212,7 @@ See [`FOR_YOU_INBOX_REPORTS.md`](../../../ProtocolCity/docs/specs/FOR_YOU_INBOX_
 | Escalate confused with assign | Teach: keep hand seat + human gate — never re-seat to You |
 | ready=0 + deferred chew on seat | **Auto-thaw** (§C′′) up to watermark |
 | needs:routing + hands exist | Route to hand or hire |
-| Report on disk, missing For You | `report_to_for_you.py --scan` or `for_you_drop` |
+| Report on disk, missing For You | Efficiency: expected (disk-only). Other briefs: `--scan` or `for_you_drop` |
 | L0 skills missing in project | `skills_sync.sh` |
 | Dead papers path | Plant papers or pause schedule |
 | Code drift inside one project | File to that project’s `efficiency-*` or code lane |
@@ -407,7 +407,7 @@ Write:
 | connector | design lane |
 | presentations | talks lane |
 | gridfinity | workshop lane |
-| career | personal cabinet lane |
+| career | personal project lane |
 
 **Dogfood density:** a host may run many hands by design. Shipped BluePrint seed is the ops trio only — do not treat a fat dogfood roster as the product package.
 

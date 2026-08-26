@@ -6,28 +6,28 @@ Reports that only land on disk are invisible. This tool creates or refreshes a
 **human-gated** work order tagged to You so Map · You · FOR YOU lists it.
 
   # after writing a report
-  python3 scripts/report_to_for_you.py \
-    --project my-app \
-    --key desk-brief \
-    --title "Desk brief · 2026-08-02" \
-    --path my-app/local/reports/2026-08-02-desk-brief.md \
+  python3 scripts/report_to_for_you.py \\
+    --project myproject \\
+    --key desk-brief \\
+    --title "Desk brief · 2026-08-02" \\
+    --path myproject/local/reports/2026-08-02-desk-brief.md \\
     --workspace /path/to/workspace
 
   # scan common report slots and drop missing inbox items for today
   python3 scripts/report_to_for_you.py --scan --workspace /path/to/workspace
 
-  # per-product efficiency stays disk-only unless act-now smell
+  # per-product efficiency stays disk-only unless act-now smell 
   python3 scripts/report_to_for_you.py --scan --workspace /path/to/workspace --act-now
 
 Idempotent: label ``inbox-report:<project>:<key>:<date>`` — re-run updates
 description/title, does not spam duplicate gold items for the same day.
 
 **Efficiency policy (FOR_YOU_INBOX_REPORTS / DAILY_REPORTS_MAP):**
-engine ``efficiency-*``, product ``efficiency-pass``, and ``suite-efficiency``
-are **disk-only** by default. ``--scan`` golds at most the workspace
-``workspace-efficiency`` rollup for efficiency — never one human gate per
-product. Opt in with ``--act-now`` only when a product has a true act-now smell
-(stuck hand, critical feed failure).
+engine ``efficiency-*``, Trading ``efficiency-pass``, ``suite-efficiency``,
+and the workspace ``workspace-efficiency`` rollup are **disk-only** by default.
+Jobs still write dated reports; For You does not gold them. Opt in with
+``--act-now`` only when a product has a true act-now smell (stuck hand,
+critical feed failure).
 
 **Dual-audience (FOR_YOU_INBOX_REPORTS §Dual-audience):**
 every gold card body carries ``### Builder`` + ``### User`` (one holistic
@@ -35,14 +35,12 @@ card per project per day). ``--scan`` skips thin/all-ops product files
 (``reason=thin_rollup``) instead of minting per-product gold; fold those
 paths into one workspace thin-rollup card when any exist.
 
-**One product gold / day:** product desk brief (+ optional related pack) is
-**one** human-gated card (key ``desk-brief``). ``--scan`` does not mint a
-second legacy alias or a separate secondary-pack gold. Efficiency /
-board-validation stay disk-only unless ``--act-now``.
-
-Plant kit note: this template ships generic workspace + BluePrint slots only.
-Host product-specific scan paths live in the product monorepo ``scripts/``
-copy, not in the bare-city plant.
+**One product gold / day :** Trading desk brief + HTML
+glance + RSU pack are **one** human-gated card (key ``desk-brief``, same
+idempotency label as Trading ``for_you_drop``). ``--scan`` does not mint a
+second ``maru-desk-brief`` or a separate ``rsu-window`` gold. RSU alone
+(no desk brief file) still golds once under ``desk-brief``. Efficiency /
+board-validation and all efficiency keys stay disk-only unless ``--act-now``.
 
 Requires Desk up (default http://127.0.0.1:8799). Sign as author=you (system
 drop) or REPORT_TO_FOR_YOU_AUTHOR.
@@ -152,6 +150,7 @@ def _inbox_label(project: str, key: str, day: str) -> str:
 
 # Product display + matrix hints (FOR_YOU_INBOX_REPORTS §Dual-audience)
 _PRODUCT_DISPLAY = {
+    "trading": "Trading",
     "protocolcity": "protocolcity",
     "worklane": "worklane",
     "workforce": "workforce",
@@ -162,13 +161,12 @@ _PRODUCT_DISPLAY = {
 }
 
 # Keys that always gold when present (never thin-skip on --scan).
-# Product gold is ``desk-brief`` only; secondary packs fold into it.
+# Trading product gold is ``desk-brief`` only ; RSU folds in.
 _ALWAYS_GOLD_KEYS = frozenset(
     {
         "desk-brief",
         "maru-desk-brief",  # legacy alias → canonical desk-brief
         "workspace-digest",
-        "workspace-efficiency",
         "correspondent-rollup",
         "workspace-thin-rollup",
     }
@@ -192,7 +190,7 @@ def product_display_name(project: str) -> str:
 
 
 def extract_dual_sections(text: str) -> Tuple[Optional[str], Optional[str]]:
-    """Pull Builder / User bodies from report markdown.
+    """Pull Builder / User bodies from report markdown .
 
     Accepts ``## Builder`` / ``## User`` or ``### Builder`` / ``### User``
     in either order. Prefer the higher-level (fewer ``#``) marker when both
@@ -253,7 +251,7 @@ def format_dual_description(
 ) -> str:
     """Card body: product header + ### Builder + ### User + Report path.
 
-    Matches FOR_YOU_INBOX_REPORTS §Report-body structure.
+    Matches FOR_YOU_INBOX_REPORTS §Report-body structure .
     Parses dual sections from the report when present; otherwise synthesizes
     both lenses from a short glance (generators still catching up).
     """
@@ -306,7 +304,7 @@ def is_always_gold_key(key: str) -> bool:
 
 
 def canonical_report_key(key: str) -> str:
-    """Map legacy / secondary keys to the stable drop key."""
+    """Map legacy / secondary keys to the stable drop key ."""
     k = _slug_key(key)
     if k in _DESK_BRIEF_ALIASES:
         return "desk-brief"
@@ -316,7 +314,7 @@ def canonical_report_key(key: str) -> str:
 
 
 def is_folded_into_desk_key(key: str) -> bool:
-    """True when this key must not mint a separate gold."""
+    """True when this key must not mint a separate gold ."""
     return _slug_key(key) in _FOLDED_INTO_DESK_KEYS
 
 
@@ -326,9 +324,9 @@ def is_thin_report(
     *,
     min_chars: int = 400,
 ) -> bool:
-    """True when a product report is too thin for its own gold.
+    """True when a product report is too thin for its own gold .
 
-    Always-gold keys (maru, digest, workspace-efficiency, …) never thin.
+    Always-gold keys (maru, digest, …) never thin.
     Disk-only efficiency keys are handled separately — not via thin_rollup.
     Thin = short file, or ops-only (no User section) under a soft size cap.
     """
@@ -355,15 +353,14 @@ def is_thin_report(
 
 
 def is_disk_only_efficiency_key(key: str) -> bool:
-    """True when this report key must not mint routine For You gold.
+    """True when this report key must not mint routine For You gold .
 
-    Workspace rollup ``workspace-efficiency`` is the single efficiency gold card.
-    Engine / product efficiency keys stay on disk unless ``--act-now``.
+    All efficiency keys stay on disk unless ``--act-now`` .
+    Includes workspace ``workspace-efficiency`` — reports remain on disk for
+    on-demand read; they do not gold For You daily.
     """
     k = _slug_key(key)
-    if k == "workspace-efficiency":
-        return False
-    if k in ("efficiency-pass", "suite-efficiency"):
+    if k in ("efficiency-pass", "suite-efficiency", "workspace-efficiency"):
         return True
     if k.startswith("efficiency-"):
         return True
@@ -433,7 +430,7 @@ def drop_report(
     """Create or refresh a For You inbox item for one report."""
     workspace = workspace.expanduser().resolve()
     day = day or _local_today()
-    #: legacy maru-desk-brief / rsu-window → one desk-brief card
+    # legacy maru-desk-brief / rsu-window → one desk-brief card
     key = canonical_report_key(key)
     label = _inbox_label(project, key, day)
     abs_path = report_path.expanduser()
@@ -466,7 +463,7 @@ def drop_report(
             visual_line = (visual_line or "\n") + "".join(extra_lines)
 
     full_title = title if title.startswith("Inbox ·") else ("Inbox · %s" % title)
-    # Dual-audience body — dig-in still uses REPORT face; **Report:**
+    # Dual-audience body  — dig-in still uses REPORT face; **Report:**
     # path stays parseable for path buttons.
     description = format_dual_description(
         project=project,
@@ -606,11 +603,17 @@ def _first_existing(workspace: Path, candidates: List[str]) -> Optional[Path]:
 
 
 def _rsu_candidates(day: str, day_utc: str) -> List[str]:
-    """Optional secondary pack paths (folded into desk-brief gold).
-
-    Plant kit: empty. Host monorepo ``scripts/`` may override with product paths.
-    """
-    return []
+    """Common RSU pack paths (folded into desk-brief gold, not separate)."""
+    # Month pack + day-stamped variants
+    month = (day or "")[:7] or "2026-08"
+    month_utc = (day_utc or "")[:7] or month
+    return [
+        "Trading/local/reports/maru/%s-rsu-window.md" % month,
+        "Trading/local/reports/maru/%s-rsu-window.md" % month_utc,
+        "Trading/local/reports/maru/%s-rsu-window.md" % day,
+        "Trading/local/reports/maru/%s-rsu-window.md" % day_utc,
+        "Trading/local/reports/maru/2026-08-rsu-window.md",
+    ]
 
 
 def scan_and_drop(
@@ -623,13 +626,14 @@ def scan_and_drop(
 ) -> List[Dict[str, Any]]:
     """Drop For You items for known report slots that exist today.
 
-    Efficiency / board-validation slots are disk-only unless ``act_now``.
-    Workspace ``workspace-efficiency`` remains the single rollup gold.
+    Efficiency / board-validation slots are disk-only unless ``act_now``
+    . That includes workspace ``workspace-efficiency``.
 
-    Thin / all-ops product files skip per-product gold and fold into one
-    workspace ``workspace-thin-rollup`` card when any exist.
+    Thin / all-ops product files skip per-product gold  and
+    fold into one workspace ``workspace-thin-rollup`` card when any exist.
 
-    Plant kit: workspace + BluePrint slots only — no host product hardcoding.
+    Trading product gold is one ``desk-brief`` card  — same key as
+    ``for_you_drop``. RSU pack paths fold into that card; no second gold.
     """
     workspace = workspace.expanduser().resolve()
     day = day or _local_today()
@@ -640,8 +644,46 @@ def scan_and_drop(
     # (project, key, title, path candidates, optional visual)
     # Disk-only efficiency keys still listed so --scan can report them as
     # skipped (and gold them only with --act-now).
-    # Plant kit: workspace + BluePrint slots only (no host product hardcode).
+    # Trading: one desk-brief slot (not maru + rsu) — .
     slots: List[Tuple[str, str, str, List[str], Optional[str]]] = [
+        (
+            "trading",
+            "desk-brief",
+            "Trading · desk brief · %s" % day,
+            [
+                "Trading/local/reports/maru/%s-desk-brief.md" % day,
+                "Trading/local/reports/maru/%s-desk-brief.md" % day_utc,
+            ],
+            "Trading/local/reports/for-you/latest.html",
+        ),
+        # rsu-window listed only so scan can report folded/skip (not gold)
+        (
+            "trading",
+            "rsu-window",
+            "Trading · RSU window pack",
+            _rsu_candidates(day, day_utc),
+            "Trading/local/reports/for-you/latest.html",
+        ),
+        (
+            "trading",
+            "efficiency-pass",
+            "Trading · efficiency pass · %s" % day,
+            [
+                "Trading/local/reports/efficiency-pass/%s.md" % day,
+                "Trading/local/reports/efficiency-pass/%s.md" % day_utc,
+            ],
+            None,
+        ),
+        (
+            "trading",
+            "board-validation",
+            "Trading · board validation · %s" % day,
+            [
+                "Trading/local/reports/board-validation-%s.md" % day,
+                "Trading/local/reports/board-validation-%s.md" % day_utc,
+            ],
+            None,
+        ),
         (
             "protocolcity",
             "workspace-digest",
@@ -775,10 +817,16 @@ def scan_and_drop(
             )
         )
 
-    # Optional secondary pack fold (plant kit candidates empty)
-    desk_brief_path = None
+    # Resolve Trading desk brief + RSU once so we can fold 
+    desk_brief_path = _first_existing(
+        workspace,
+        [
+            "Trading/local/reports/maru/%s-desk-brief.md" % day,
+            "Trading/local/reports/maru/%s-desk-brief.md" % day_utc,
+        ],
+    )
     rsu_path = _first_existing(workspace, _rsu_candidates(day, day_utc))
-    desk_brief_dropped = False
+    trading_desk_dropped = False
 
     for project, key, title, cands, visual in slots:
         path = _first_existing(workspace, cands)
@@ -793,7 +841,7 @@ def scan_and_drop(
                 }
             )
             continue
-        #: never mint N× per-product efficiency (or board-validation) gold
+        # never mint N× per-product efficiency (or board-validation) gold
         if is_disk_only_scan_key(key) and not act_now:
             results.append(
                 {
@@ -806,7 +854,7 @@ def scan_and_drop(
                 }
             )
             continue
-        #: RSU never mints its own gold — fold into desk-brief
+        # RSU never mints its own gold — fold into desk-brief
         if is_folded_into_desk_key(key):
             if desk_brief_path is not None:
                 results.append(
@@ -821,7 +869,7 @@ def scan_and_drop(
                 )
                 continue
             # RSU alone (no desk brief MD) → one desk-brief gold using RSU body
-            if desk_brief_dropped:
+            if trading_desk_dropped:
                 results.append(
                     {
                         "ok": True,
@@ -834,9 +882,9 @@ def scan_and_drop(
                 )
                 continue
             key = "desk-brief"
-            title = "%s · desk brief · %s" % (product_display_name(project), day)
+            title = "Trading · desk brief · %s" % day
             # fall through to drop as desk-brief
-        # /: thin product output → workspace rollup, not gold spam
+        # thin product output → workspace rollup, not gold spam
         if is_thin_report(path, key):
             thin_hits.append((project, key, path))
             results.append(
@@ -868,9 +916,8 @@ def scan_and_drop(
             related_paths=related,
             dry_run=dry_run,
         )
-        if canonical_report_key(key) == "desk-brief":
-            desk_brief_dropped = True
-            desk_brief_path = path
+        if project == "trading" and canonical_report_key(key) == "desk-brief":
+            trading_desk_dropped = True
         results.append(r)
 
     # One workspace card for thin product signals (not N per-product golds)
@@ -880,7 +927,7 @@ def scan_and_drop(
         lines = [
             "# Workspace thin rollup · %s\n\n" % day,
             "Per-product reports were thin or all-ops — folded here instead of "
-            "minting one gold each (FOR_YOU dual-audience /).\n\n",
+            "minting one gold each (FOR_YOU dual-audience).\n\n",
             "## Builder\n\n",
             "Thin product slots skipped from per-product gold:\n\n",
         ]
@@ -942,7 +989,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help=(
             "allow gold for disk-only efficiency / board-validation keys "
-            "(act-now smell only; default is disk-only —)"
+            "(act-now smell only; default is disk-only — )"
         ),
     )
     ap.add_argument("--project", default=None)
@@ -996,7 +1043,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     # Single-drop: refuse efficiency / board-validation gold unless --act-now
-    #. Also refuse standalone rsu-window gold (— fold to desk).
+    # . Also refuse standalone rsu-window gold (— fold to desk).
     if is_disk_only_scan_key(args.key) and not args.act_now:
         r = {
             "ok": True,
@@ -1006,7 +1053,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "key": args.key,
             "reason": (
                 "efficiency / board-validation keys are disk-only by default; "
-                "use workspace-efficiency rollup or pass --act-now for smell"
+                "pass --act-now only for a true stuck-hand / feed-failure smell"
             ),
             "path": args.path,
         }
@@ -1027,8 +1074,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             "project": args.project,
             "key": args.key,
             "reason": (
-                "rsu-window folds into the single desk-brief gold; "
-                "drop with --key desk-brief (and secondary pack as related "
+                "rsu-window folds into the single Trading desk-brief gold "
+                "; drop with --key desk-brief (and RSU as related "
                 "path via --scan) or pass --act-now only for true act-now"
             ),
             "path": args.path,
