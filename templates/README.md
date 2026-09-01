@@ -16,6 +16,7 @@ delete the guidance comments.
 | [`project-AGENTS.md`](project-AGENTS.md) | each **project** root | `AGENTS.md` (L1) |
 | [`project-ARCHITECTURE.md`](project-ARCHITECTURE.md) | each **project** root | `ARCHITECTURE.md` (L1 structural law) |
 | [`PROGRAMS.md`](PROGRAMS.md) | each **project** root | `PROGRAMS.md` (3–5 named lines of work) |
+| [`FEATURES.md`](FEATURES.md) | each project `docs/` (or root when no `docs/`) | `FEATURES.md` (citizen-named surfaces: name · where · verify · notes) |
 | [`BOUNDARIES.md`](BOUNDARIES.md) | workspace root (next to `AGENTS.md`) | `BOUNDARIES.md` (L0 cross-project grants — **citizen name**) |
 | [`PERIMETER.md`](PERIMETER.md) | *(forever alias)* → prefer `BOUNDARIES.md` | still accepted at runtime |
 | [`OFFICE_PERIMETER.md`](OFFICE_PERIMETER.md) | *(legacy alias)* → use `BOUNDARIES.md` | legacy name |
@@ -26,8 +27,8 @@ delete the guidance comments.
 | [`vendor-pointers.md`](vendor-pointers.md) | (optional instructions, not a law file) | — |
 | [`skills-README.md`](skills-README.md) | workspace `.claude/skills/README.md` | L0 skills shelf rules (planted by `found`) |
 
-**Citizen words (foundation v2):** workspace · project · work order · Agents · You.  
-Civic words (Charter only): city · neighborhood · ticket.
+**Words:** workspace · project · work order · Agents · You.  
+Do not teach city · neighborhood · cabinet as operating nouns.
 
 Start with product `docs/FOUNDING.md` when present. A **workspace of one**
 (single project) may use `project-AGENTS.md` as both L0 and L1 until a second

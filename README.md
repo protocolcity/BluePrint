@@ -60,7 +60,8 @@ python3 -m pip install --upgrade "protocolcity-blueprint[engines]"
 | You want… | Do this |
 |---|---|
 | **Run the suite** (Overview · Map · work orders · agents on the map) | **macOS:** Homebrew · **Windows/Linux:** pip (three packages above) |
-| **Read the papers** (Charter, templates, example) | Browse/clone [ProtocolCity-BluePrint](https://github.com/protocolcity/ProtocolCity-BluePrint) — docs only |
+| **Read the spec only** (no suite) | Browse/clone [ProtocolCity-Charter](https://github.com/protocolcity/ProtocolCity-Charter) — paper door |
+| **Read the papers + example** | Browse/clone [ProtocolCity-BluePrint](https://github.com/protocolcity/ProtocolCity-BluePrint) — docs only |
 | **Contribute to an engine** | Clone WorkLane / WorkForce source repos (developer path) |
 
 Cloning BluePrint alone does **not** install a runnable suite.
@@ -101,7 +102,8 @@ Papers live on GitHub (links work from PyPI too):
 
 | Document | What it is |
 |---|---|
-| [**CHARTER.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/CHARTER.md) | Full protocol spec (advanced / optional depth) |
+| [**CHARTER.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/CHARTER.md) | Protocol spec — workspace · project · work order · agent (same paper as [ProtocolCity-Charter](https://github.com/protocolcity/ProtocolCity-Charter)) |
+| [**COVENANT.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/COVENANT.md) | Authority doctrine (You · session · agent) |
 | [**MANIFESTO.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/MANIFESTO.md) | Why we built this — brand voice |
 | [**FOUNDING.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/FOUNDING.md) | Paper path: templates + compliance (no install) |
 | [**RUNNING.md**](https://github.com/protocolcity/ProtocolCity-BluePrint/blob/main/RUNNING.md) | Day-to-day loops after setup |

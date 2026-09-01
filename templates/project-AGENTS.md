@@ -22,7 +22,9 @@ close-out.
 
 Human+AI editable papers are **Markdown**. Derived files (pptx, PDF, HTML
 renders) are **exports**, not the paper. Named lines of work live in
-[`PROGRAMS.md`](PROGRAMS.md) (3–5; twigs stay off the Wall).
+[`PROGRAMS.md`](PROGRAMS.md) (3–5; twigs stay off the Wall). The product's
+named surfaces — what each feature is called, where it lives, and how a hand
+verifies it — live in `docs/FEATURES.md` (template: `FEATURES.md`).
 
 Exceptions — do not convert these to Markdown: **code**, **databases**,
 **secrets**, **binary assets**.

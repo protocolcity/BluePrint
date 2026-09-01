@@ -48,6 +48,19 @@ blocked.
 - **Work spanning two projects = two work orders**, one per project,
   each scoped to its side of the boundary.
 
+## Foreign / upstream-owned folders
+
+Third-party git clones in this workspace are **consumers** by default — no
+adopt required to run automations or file operator work.
+
+- **Code defects / features** → file an issue on the **upstream** GitHub.
+  Do not patch tracked source here (keeps `git pull` clean).
+- **Operator work** (sync jobs, local data, note hygiene) → work orders in
+  that project's desk store.
+- `data/` and gitignored config are the local safe zone.
+- Adopt is optional. `blueprint adopt … --force` joins the desk for
+  coordination only; origin stays foreign.
+
 ## Coordination (You in chat — any vendor)
 
 BluePrint is vendor-neutral: pick any chat host + WorkLane MCP for capture, any
@@ -125,7 +138,7 @@ The work-order board is shared memory. **Closing a ticket hides the work.**
   half-checked forever.
 
 WorkLane’s PROTOCOL (PROCESS) carries the full close-out rules; this section is
-the short city-root reminder every neighborhood inherits.
+the short workspace-root reminder every project inherits.
 
 ## Boundaries
 
