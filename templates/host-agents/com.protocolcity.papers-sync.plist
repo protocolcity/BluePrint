@@ -4,7 +4,7 @@
 
   papers-sync job (renamed from papers-patrol): runs
     blueprint doctor --fix-papers <workspace>
-  weekly to keep neighborhood AGENTS.md generated blocks in sync.
+  weekly to keep project AGENTS.md generated blocks in sync.
   No LLM, no tickets, no KeepAlive — one-shot per fire.
 
   Install (citizen / host-ops gate):

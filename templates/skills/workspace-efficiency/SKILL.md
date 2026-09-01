@@ -15,7 +15,7 @@ description: >
 Catch routing starve, idle agents, and empty-shift lies **on a cadence** — not
 only in host chat.
 
-**Law:** [`ProtocolCity/docs/specs/ALWAYS_WORK_PROCESS.md`](../../../ProtocolCity/docs/specs/ALWAYS_WORK_PROCESS.md)  
+**Law:** `ALWAYS_WORK_PROCESS.md` (ships with ProtocolCity under `docs/specs/`)  
 **Engine starve guard:** WorkLane `routing_labels` (wl-315)  
 **Companion skill:** `ticket-routing` (create-time rules)
 
@@ -199,7 +199,8 @@ If a **brief** exists for today but For You has no matching `Inbox · …` card
 **Efficiency For You rule:** `--scan` must not gold efficiency. Write the
 dated report; leave it on disk. Gold only with `--act-now` when a product
 has a stuck hand or critical feed failure. Desk brief / You read packs
-remain For You cards. See [`FOR_YOU_INBOX_REPORTS.md`](../../../ProtocolCity/docs/specs/FOR_YOU_INBOX_REPORTS.md) §Gold vs rollup policy.
+remain For You cards. See `FOR_YOU_INBOX_REPORTS.md` §Gold vs rollup policy
+(ships with ProtocolCity under `docs/specs/`).
 
 ### G · Actions
 

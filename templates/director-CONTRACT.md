@@ -1,6 +1,7 @@
 # {{WORKER_ID}} — Employment Contract (L2)
 
-> Queue director / triage seat. Role law: [ALWAYS_WORK_PROCESS §3](../docs/specs/ALWAYS_WORK_PROCESS.md).
+> Queue director / triage seat. Role law: `ALWAYS_WORK_PROCESS.md` §3
+> (this workspace's process spec; ships with ProtocolCity under `docs/specs/`).
 
 ## Identity
 

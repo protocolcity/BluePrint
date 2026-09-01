@@ -1,6 +1,6 @@
 # papers-sync — Employment Contract (L2)
 
-Weekly workspace job that keeps neighborhood `AGENTS.md` generated blocks
+Weekly workspace job that keeps project `AGENTS.md` generated blocks
 in sync with the live roster and desk scene (renamed from papers-patrol).
 Doctor-class: runs
 `blueprint doctor --fix-papers <workspace>` and exits. No LLM, no tickets,
@@ -27,7 +27,7 @@ blueprint doctor --fix-papers <workspace>
 ```
 
 `fix_papers()` rewrites only the `<!-- bp:generated:... -->` marker
-blocks inside each neighborhood `AGENTS.md`. It is idempotent: a second run
+blocks inside each project `AGENTS.md`. It is idempotent: a second run
 with no roster/scene change is always a no-op. Output (stdout) is appended to
 `.protocolcity/logs/papers-sync.out` by the LaunchAgent when installed.
 

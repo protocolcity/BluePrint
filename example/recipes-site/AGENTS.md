@@ -1,9 +1,9 @@
-# recipes-site — Neighborhood Law (L1)
+# recipes-site — Project instructions (L1)
 
 ## What this place is
 
 A static recipe website: markdown recipes in `content/`, built with a static
-site generator, deployed manually by the citizen. Nothing here handles user
+site generator, deployed manually by You. Nothing here handles user
 data; the worst possible accident is publishing a bad recipe.
 
 ## How to run and test it
@@ -20,7 +20,7 @@ npm test         # link checker + recipe front-matter validation
     was created**. `blueprint adopt` reads this back from `/api/scene` on every
     subsequent adopt, so re-adoption never invents a second prefix.
     Run `blueprint doctor --neighborhood recipes-site` to confirm the live
-    prefix matches `desk-join.json`.
+    prefix matches `desk-join.json` (`--neighborhood` is the project folder).
 - Every change ties to a ticket; every ticket close-out states what was done
   and how it was verified.
 

@@ -1,30 +1,30 @@
-# Riverside — City Law (L0)
+# Riverside — Workspace instructions (L0)
 
-This folder is the root of the city. Sessions opened here are
-**cross-neighborhood sessions**; for deep work on one project, open that
-neighborhood's folder directly so its own law (AGENTS.md) loads.
+This folder is the **workspace** root. Sessions opened here are
+**cross-project**; for deep work on one project, open that project's folder
+directly so its own `AGENTS.md` loads.
 
-## Neighborhood registry
+## Project registry
 
 | Folder | What it is | Work orders (prefix) | Status |
 |---|---|---|---|
 | `recipes-site/` | Recipe website — static site generator + content | `rs-*` | live |
 
-## Cross-neighborhood rules
+## Cross-project rules
 
-- **Scope every ticket explicitly.** Pass the neighborhood's slug on every
-  ticket call, even while there's only one store.
-- **Work spanning two neighborhoods = two tickets** (rule pre-registered for
-  the day a second neighborhood exists).
+- **Scope every work order explicitly.** Pass the project's slug on every
+  call, even while there's only one store.
+- **Work spanning two projects = two work orders** (rule pre-registered for
+  the day a second project exists).
 
 ## Boundaries
 
-- Only one neighborhood so far; boundary rules start when the second one is
-  chartered.
+- Only one project so far; boundary rows start when the second one is
+  founded.
 
-## Citizen gates (city-wide)
+## Your gates (workspace-wide)
 
-Anything below is prepared by workers but shipped only by a citizen:
+Anything below is prepared by agents but shipped only by You:
 
 - Publishing or deploying the site
 - Releases and version tags
@@ -33,5 +33,5 @@ Anything below is prepared by workers but shipped only by a citizen:
 
 ## Vendor pointers
 
-The canonical law file at every level is `AGENTS.md`. Vendor files are
-pointers, never content.
+The canonical instructions file at every level is `AGENTS.md`. Vendor files
+are pointers, never content.

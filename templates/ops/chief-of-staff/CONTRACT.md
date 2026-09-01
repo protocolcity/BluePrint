@@ -21,7 +21,7 @@ propose pin diffs under policy; never merge the live roster.
 | Kind | `job` (staff / workspace ops) |
 | Workdir | `.protocolcity/ops` |
 | Papers | `.protocolcity/ops/workers/chief-of-staff/` |
-| Scope | `workspace_ops` (Map staff ring · not a product neighborhood) |
+| Scope | `workspace_ops` (Map staff ring · not a product project) |
 | Policy file | `capacity_policy.json` (this folder; citizen may copy to engine local) |
 
 ## Charter

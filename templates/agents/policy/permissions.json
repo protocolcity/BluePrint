@@ -6,11 +6,10 @@
       "BOUNDARIES.md",
       "PERIMETER.md"
     ],
-    "notes": "ADR-056: tradeOS must not import WorkLane runtime. Hands never commit across cabinet boundaries under this identity."
+    "notes": "ADR-056: tradeOS must not import WorkLane runtime. Hands never commit across project boundaries under this identity."
   },
   "command_classes": {
     "allow": [
-      "mcp__ticketingprotocol",
       "mcp__worklane",
       "WebSearch",
       "Bash(git status:*)",
