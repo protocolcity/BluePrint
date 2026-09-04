@@ -59,7 +59,7 @@ fi
 # Skip export mirrors, VCS, and known non-project trees.
 _skip_name() {
   case "$1" in
-    .*|node_modules|__pycache__|dist|build|exports|ProtocolCity-WorkLane|ProtocolCity-BluePrint|ProtocolCity-WorkForce)
+    .*|node_modules|__pycache__|dist|build|exports|ProtocolCity-WorkLane|ProtocolCity-BluePrint|ProtocolCity-WorkForce|ProtocolCity-Charter)
       return 0 ;;
   esac
   return 1

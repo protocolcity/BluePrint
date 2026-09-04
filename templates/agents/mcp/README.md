@@ -47,9 +47,14 @@ bash scripts/check_mcp_secrets.sh --gold       # + For You when gaps
 | `worklane` | Always on `plant` / `seed` / `migrate` | `worklane/manifest.json` |
 | `workforce` | Optional — only when `workforce/` + MCP module present | `workforce/manifest.json` |
 
-Canonical templates ship in the BluePrint package. Live hosts: `migrate` upgrades
-hand-authored vendor blocks (including stale command paths and legacy package
-aliases) to registry SoT + regenerated mirrors.
+Canonical templates ship in the BluePrint package. WorkLane L0 is the bottle
+entrypoint (`python3 -m worklane.mcp`, runtime `.protocolcity/worklane`) — not
+a sibling `worklane/.venv`. Live hosts: `migrate` / `doctor --fix` upgrade
+hand-authored vendor blocks (including stale command paths, deleted sibling
+checkouts, and legacy package aliases) to registry SoT + regenerated mirrors.
+`blueprint doctor` fails `MCP-COMMAND-MISSING` when a stdio `command` is not
+an existing file and is not on PATH. Cursor `mcp_auth` on that error is not a
+login grant — the local process never started.
 
 ## Manifest sketch (v1)
 
@@ -58,7 +63,7 @@ aliases) to registry SoT + regenerated mirrors.
   "id": "worklane",
   "description": "WorkLane board",
   "transport": "stdio",
-  "command": "{{WORKSPACE_ROOT}}/worklane/.venv/bin/python",
+  "command": "python3",
   "args": ["-m", "worklane.mcp", "--author", "you"],
   "env": {
     "TP_AGENT_ID": "${TP_AGENT_ID:-you}",

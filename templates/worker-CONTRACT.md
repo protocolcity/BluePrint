@@ -69,14 +69,15 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
 
 ## Stop rules
 
-- Queue empty → climb the empty-feed ladder before idling (ALWAYS_WORK_PROCESS
-  §2k): refill (thaw eligible deferred / cut children from open epics), then
-  **standing chew** — file one bounded hygiene child on your own seat inside
-  your exclusive path (dead code, test gap, docs drift, already-law polish)
-  and drain it. Larger ideas → `Proposal:` comment on the parent epic. Never
-  silent freelance; chew never invents product direction, hardware,
-  credentials, trading paths, or host mutation. Still empty after chew →
-  stop cleanly, note it, exit.
+- Queue empty → climb the empty-feed ladder (ALWAYS_WORK_PROCESS §2k):
+  refill (thaw eligible deferred / cut children from open epics). Still
+  empty → **stop**. Do **not** file a hygiene / leftover
+  / next-knob sibling so the next fire has work. Leftover-truth on the
+  close-out of the real WO; land origin/main on the same ticket. Larger
+  ideas → `Proposal:` on the parent epic. Never silent freelance. Never
+  invent product direction, hardware, credentials, trading paths, or host
+  mutation. If remaining work needs a ruling → gold one decision (hand
+  seat + `gate_type=human`).
 - **Drain seat:** `worker:{{WORKER_ID}}` is your seat; cron drains it. `worker:you`
   is **never** a drain seat — cron does not claim You. Escalation = keep your
   seat + `gate_type=human`; never re-seat failed work to `worker:you`.

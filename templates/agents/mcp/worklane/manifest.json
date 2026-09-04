@@ -2,7 +2,7 @@
   "id": "worklane",
   "description": "WorkLane board (claim, close, ready)",
   "transport": "stdio",
-  "command": "{{WORKSPACE_ROOT}}/worklane/.venv/bin/python",
+  "command": "python3",
   "args": [
     "-m",
     "worklane.mcp",
@@ -11,7 +11,7 @@
   ],
   "env": {
     "TP_AGENT_ID": "${TP_AGENT_ID:-you}",
-    "WORKLANE_RUNTIME_DIR": "{{WORKSPACE_ROOT}}/worklane/worklane/local"
+    "WORKLANE_RUNTIME_DIR": "{{WORKSPACE_ROOT}}/.protocolcity/worklane"
   },
   "env_required": [],
   "capability": "mutating",
@@ -22,5 +22,5 @@
   "level": "L0",
   "vendor_locked": false,
   "enabled": true,
-  "notes": "Author defaults to you; hands set TP_AGENT_ID at process start. Legacy vendor id ticketingprotocol is stripped on mcp_sync apply. Engine still dual-reads TICKETING_PROTOCOL_RUNTIME_DIR."
+  "notes": "Bottle entrypoint (python3 -m worklane.mcp) with runtime under .protocolcity/worklane. Legacy sibling checkout (…/worklane/.venv/bin/python) and ticketingprotocol.mcp are rewritten on seed / doctor --fix when the command path is dead (pc-1425 / GH #33). Cursor mcp_auth on a failed local stdio start is not an OAuth grant."
 }

@@ -75,8 +75,8 @@ Every piece of a working workspace belongs to exactly one layer:
 
 | Layer | Owns | Reference implementation |
 |---|---|---|
-| **Store** | The work — work orders, claims, signed authors, audit trail | [WorkLane](https://github.com/protocolcity/ProtocolCity-WorkLane) |
-| **Orchestrator** | The agents — identities, schedules, dispatch, budgets | [WorkForce](https://github.com/protocolcity/ProtocolCity-WorkForce) |
+| **Store** | The work — work orders, claims, signed authors, audit trail | [WorkLane](https://github.com/protocolcity/WorkLane) |
+| **Orchestrator** | The agents — identities, schedules, dispatch, budgets | [WorkForce](https://github.com/protocolcity/WorkForce) |
 | **Workplace** | The code the agents act on | your repos |
 
 The layers are substitutable — the Charter cares that each exists and keeps
