@@ -71,7 +71,7 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
 
 - Queue empty → climb the empty-feed ladder (ALWAYS_WORK_PROCESS §2k):
   refill (thaw eligible deferred / cut children from open epics). Still
-  empty → **stop**. Do **not** file a hygiene / leftover
+  empty → **stop** (mill-stop). Do **not** file a hygiene / leftover
   / next-knob sibling so the next fire has work. Leftover-truth on the
   close-out of the real WO; land origin/main on the same ticket. Larger
   ideas → `Proposal:` on the parent epic. Never silent freelance. Never
