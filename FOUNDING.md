@@ -62,7 +62,7 @@ one real project beats five hollow ones.
 File your first three work orders: real work you actually want done. From
 here on, work moves by work order, not memory. A paper list is enough. The
 optional engine is
-[WorkLane](https://github.com/protocolcity/ProtocolCity-WorkLane).
+[WorkLane](https://github.com/protocolcity/WorkLane).
 
 ## Step 4 — hire your first agent (L2 + L3)
 
@@ -91,6 +91,6 @@ teaches you one, a project when a folder earns one. A filled worked example
 [`example/`](example/).
 
 Founded and want the optional suite? Start at
-[ProtocolCity-BluePrint](https://github.com/protocolcity/ProtocolCity-BluePrint).
+[BluePrint](https://github.com/protocolcity/BluePrint).
 Day two on the suite is
 [RUNNING.md](RUNNING.md).
