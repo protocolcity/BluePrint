@@ -30,6 +30,17 @@ npm test         # link checker + recipe front-matter validation
   never link.
 - `deploy.config.js` — deployment is citizen-gated; workers never touch it.
 
+## Code shape (proactive)
+
+This project is small on purpose. Still load L0 skill `code-efficiency`
+when working here: if a first-party source file crosses watch / split /
+urgent bands, extract **one** seam or file one routed split work order.
+Do not wait to be asked. `npm test` must stay green. One split at a time.
+
+```
+python3 ../scripts/code_size_scan.py --root .
+```
+
 ## The workforce here
 
 | Worker | Vendor CLI | May claim | Contract |
