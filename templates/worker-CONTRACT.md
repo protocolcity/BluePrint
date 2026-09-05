@@ -63,9 +63,6 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
    ticket touched, by explicit path (never `add -A` in a shared checkout).
 3. **Verify** — run `{{TEST_COMMAND}}`; a claim of "done" without a
    verification line is not done.
-   **Code shape:** if this ticket grew a file past the `code-efficiency`
-   bands (watch 400 · split 800 · urgent 1 200 LOC), extract one seam in
-   scope **or** file one routed split follow-up — do not wait to be asked.
 4. **Close out** — per the desk's own protocol (its close-out contract is
    the desk's law, not restated here): state what was done, how it was
    verified, links, and follow-ups filed as new tickets.
@@ -99,7 +96,7 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
   change, file a citizen gate (`gate_type: human`) with label `host: …`, exact
   commands + rollback, then stop. Autonomous execution is an automatic contract
   violation.
-- **Human gates are scarce (PROCESS §3.9 / wl-257).** Do not mass-park the
+- **Human gates are scarce (PROCESS §3.9 / ).** Do not mass-park the
   board with bare `gate_type=human`. Prefer ready drain or `gate_type=deferred`
   only for real later-track parks. Action-shaped For You only when You must
   decide something *now*.

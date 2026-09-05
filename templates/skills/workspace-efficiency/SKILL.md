@@ -16,7 +16,7 @@ Catch routing starve, idle agents, and empty-shift lies **on a cadence** — not
 only in host chat.
 
 **Law:** `ALWAYS_WORK_PROCESS.md` (ships with ProtocolCity under `docs/specs/`)  
-**Engine starve guard:** WorkLane `routing_labels` (wl-315)  
+**Engine starve guard:** WorkLane `routing_labels`  
 **Companion skill:** `ticket-routing` (create-time rules)
 
 This skill is **read → report → re-route (coord only) → file**.  
@@ -35,10 +35,8 @@ Agents over *your* workspace folder.
 | Host chat “efficiency pass / validate queues” | Coord session loads this skill |
 | After reboot / mass hire / process change | You or coord once |
 
-**Not** a substitute for per-project code-shape work. Oversized / god
-modules → L0 skill **`code-efficiency`** and optional job
-`efficiency-<slug>` (papers: `templates/jobs/code-efficiency/`). This pass
-is **workspace drain + seating** only — never edit product source trees.
+**Not** a substitute for per-project `efficiency-*` code jobs (those clean
+code inside one project folder). This pass is **workspace drain + seating**.
 
 ---
 
@@ -95,7 +93,7 @@ For each managed project with `ready > 0`:
    - **Escalate to You** = hand seat kept + `gate_type=human` / Blocked: (gold)
    - **Assigned to You** = `worker:you` (Your list; no cron drain)
 5. Flag **no seat / needs:routing** on ready when hands exist.
-6. Flag **wrong product** seats (wl-296) if known.
+6. Flag **wrong product** seats if known.
 
 ### C · Agent feeds (empty-shift truth)
 
@@ -175,7 +173,7 @@ git root often **never see them** unless bridged.
 
 | Tool | Bridge |
 |---|---|
-| Grok | `~/.grok/config.toml` → `[skills] paths = ["~/OneSeo/.agents/skills"]` |
+| Grok | `~/.grok/config.toml` → `[skills] paths = ["~/<workspace>/.agents/skills"]` |
 | Claude / Cursor | `skills_sync.sh` symlinks L0 into each managed `project/.claude/skills/` |
 | SoT | Always `.agents/skills/<id>/` — never edit project copies |
 
@@ -218,7 +216,7 @@ remain For You cards. See `FOR_YOU_INBOX_REPORTS.md` §Gold vs rollup policy
 | Report on disk, missing For You | Efficiency: expected (disk-only). Other briefs: `--scan` or `for_you_drop` |
 | L0 skills missing in project | `skills_sync.sh` |
 | Dead papers path | Plant papers or pause schedule |
-| Code drift / oversized module in one project | File a routed split WO (`code-efficiency` playbook / `efficiency-<slug>`) — do not extract from this job |
+| Code drift inside one project | File to that project’s `efficiency-*` or code lane |
 | Consecutive capacity fails, hand re-fired | Comment on the ledger WO; hand must not re-fire before limit resets |
 | Hard-down pool, no For You gold | `python3 -m workforce capacity --live` or `report_to_for_you.py --project workforce --key capacity-<pool> --path <report>` |
 
@@ -337,13 +335,34 @@ single physical or browser action under five minutes.
 | Deferred, gate_note = short You-action | Collect into one quickfire batch block in report |
 | Batch > 10 items | Still one block — list all; do not paginate into multiple golds |
 
+### M · Stuck-without-gate (health-patrol owns writes)
+
+Stalled/stuck work orders without `gate_type=human` stay Watch-only — they
+never become Decide gold on their own. That is a ticket-health smell when
+the work is truly blocked.
+
+```bash
+python3 scripts/open_work_audit.py --stuck
+```
+
+**Writes:** `health-patrol` (not this job) may emit **one** Next-step
+comment or scarce Decide gold (`gate_type=human`) **per ticket per day**
+via `--stuck --nudge`. This job reports the count in the efficiency
+digest — no per-item gold.
+
+| Finding | Action |
+|---|---|
+| Stalled/stuck, no human gate | Report count + ids; health-patrol nudges |
+| Already stamped `stuck-nudge:YYYY-MM-DD` | Skip — one action per ticket per day |
+| You must act (credential / publish / decision) | health-patrol may gold Decide; this job does not |
+
 ---
 
 ## Report shape
 
 Write:
 
-`OneSeo/.protocolcity/ops/reports/workspace-efficiency/YYYY-MM-DD.md`
+`<workspace>/.protocolcity/ops/reports/workspace-efficiency/YYYY-MM-DD.md`
 
 ```markdown
 # Workspace efficiency · YYYY-MM-DD
@@ -356,6 +375,7 @@ Write:
 - deferred pile smells: N
 - capacity: pools hard-down · thrash events · For You gold Y/N
 - process decay: ok | smells=N (skills_sync · §9 pending · retired seats)
+- stuck-without-gate: N (health-patrol nudges; this job reports)
 
 ## Scene table
 …
@@ -391,6 +411,9 @@ Write:
 ## Quickfire For You batch (L)
 | id | project | action |
 
+## Stuck-without-gate (M)
+| id | project | title | gate | needs You |
+
 ## Skipped (intentional You parks)
 - Publish / You · notes …
 ```
@@ -399,18 +422,15 @@ Write:
 
 ## Seat fit cheat-sheet (example workspace)
 
+Host-private product names do not belong in this plant kit. Use the
+workspace's own project list; the public seats below are the BluePrint trio.
+
 | Project | Typical implement seats |
 |---|---|
 | protocolcity | suite lane · code lane · quality lane · docs lane · brand |
-| oneseo-pos | POS/till · inventory/catalog |
-| trading | visual · execution · research seats (see that product's AGENTS) |
+| (sibling till/inventory product) | till · inventory/catalog — host slug lives on that product, not in this plant kit |
 | worklane | engine lane |
 | workforce | employment lane |
-| socials | drafts lane |
-| connector | design lane |
-| presentations | talks lane |
-| gridfinity | workshop lane |
-| career | personal project lane |
 
 **Dogfood density:** a host may run many hands by design. Shipped BluePrint seed is the ops trio only — do not treat a fat dogfood roster as the product package.
 
@@ -427,4 +447,5 @@ Write:
 - Zero-child parked epics (J): flagged or confirmed none
 - Closed-unverified You checks (K): digest entries collected or confirmed none (last 7 days)
 - Quickfire For You batch (L): batch block rendered in report or confirmed none
+- Stuck-without-gate (M): count reported (health-patrol owns the daily nudge)
 - Console one-liner for WorkForce ledger

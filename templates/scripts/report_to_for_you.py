@@ -24,8 +24,7 @@ description/title, does not spam duplicate gold items for the same day.
 
 **Efficiency policy (FOR_YOU_INBOX_REPORTS / DAILY_REPORTS_MAP):**
 engine ``efficiency-*``, Trading ``efficiency-pass``, ``suite-efficiency``,
-per-project ``code-efficiency``, and the workspace ``workspace-efficiency``
-rollup are **disk-only** by default.
+and the workspace ``workspace-efficiency`` rollup are **disk-only** by default.
 Jobs still write dated reports; For You does not gold them. Opt in with
 ``--act-now`` only when a product has a true act-now smell (stuck hand,
 critical feed failure).
@@ -43,11 +42,10 @@ second ``maru-desk-brief`` or a separate ``rsu-window`` gold. RSU alone
 (no desk brief file) still golds once under ``desk-brief``. Efficiency /
 board-validation and all efficiency keys stay disk-only unless ``--act-now``.
 
-Requires Desk up (default http://127.0.0.1:8799). Sign as author=you (system
-drop) or REPORT_TO_FOR_YOU_AUTHOR.
-
-Inbox policy (keys, thin/disk-only, dual-audience body) lives in
-``for_you_inbox_policy.py`` — imported and re-exported from this CLI.
+Requires Desk up (default http://127.0.0.1:8799). Before claiming a For You
+drop, GET attention on ``WL_DESK_URL`` / ``SUITE_DESK_URL`` / ``CITY_DESK``.
+On fail, say desk unreachable — do not claim the drop succeeded.
+Sign as author=you (system drop) or REPORT_TO_FOR_YOU_AUTHOR.
 """
 
 from __future__ import annotations
@@ -55,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -63,26 +62,27 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from for_you_inbox_policy import (  # re-export seam — callers keep these names
-    _DESK_BRIEF_ALIASES,
-    _read_glance,
-    _slug_key,
-    canonical_report_key,
-    extract_dual_sections,
-    format_dual_description,
-    is_always_gold_key,
-    is_disk_only_efficiency_key,
-    is_disk_only_scan_key,
-    is_folded_into_desk_key,
-    is_thin_report,
-    product_display_name,
-)
 
-
-DEFAULT_DESK = os.environ.get("WL_DESK_URL") or os.environ.get(
-    "TP_DESK_URL", "http://127.0.0.1:8799"
-)
 DEFAULT_AUTHOR = os.environ.get("REPORT_TO_FOR_YOU_AUTHOR") or "you"
+_FALLBACK_DESK = "http://127.0.0.1:8799"
+_ATTENTION_PATHS = ("/api/dev/attention", "/api/attention")
+
+
+def resolve_desk_url(explicit: Optional[str] = None) -> str:
+    """First non-empty among explicit and the known desk env names."""
+    for cand in (
+        explicit,
+        os.environ.get("WL_DESK_URL"),
+        os.environ.get("SUITE_DESK_URL"),
+        os.environ.get("CITY_DESK"),
+        os.environ.get("TP_DESK_URL"),
+    ):
+        if cand and str(cand).strip():
+            return str(cand).strip().rstrip("/")
+    return _FALLBACK_DESK
+
+
+DEFAULT_DESK = resolve_desk_url()
 
 
 def _utc_today() -> str:
@@ -123,6 +123,89 @@ def _req(
         return {"ok": False, "error": str(e)}
 
 
+def probe_desk_attention(
+    desk: str, timeout: float = 4.0
+) -> Dict[str, Any]:
+    """GET attention before claiming a For You drop succeeded.
+
+    WorkLane serves ``/api/dev/attention``; suite serves ``/api/attention``.
+    Connection / timeout / empty-URL failure → desk unreachable.
+    """
+    base = (desk or "").strip().rstrip("/")
+    if not base:
+        return {
+            "ok": False,
+            "error": "desk unreachable",
+            "detail": "no desk URL",
+        }
+    last = "attention GET failed"
+    for path in _ATTENTION_PATHS:
+        out = _req("GET", base + path, timeout=timeout)
+        if not isinstance(out, dict):
+            last = "unexpected attention payload"
+            continue
+        err = str(out.get("error") or "").strip()
+        if err and out.get("ok") is False and "items" not in out and "count" not in out:
+            last = err
+            continue
+        if "items" in out or "count" in out or out.get("ok") is True:
+            return {"ok": True, "desk": base, "path": path}
+        if out.get("ok") is not False:
+            return {"ok": True, "desk": base, "path": path}
+        last = err or "attention GET failed"
+    return {
+        "ok": False,
+        "error": "desk unreachable",
+        "detail": last,
+        "desk": base,
+    }
+
+
+def desk_unreachable_receipt(
+    *,
+    desk: str = "",
+    detail: str = "",
+    **extra: Any,
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "ok": False,
+        "action": "desk_unreachable",
+        "error": "desk unreachable",
+        "detail": detail or "attention GET failed",
+        "desk": desk,
+    }
+    out.update(extra)
+    return out
+
+
+def _slug_key(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")[:48] or "report"
+
+
+def _read_glance(path: Path, max_lines: int = 24, max_chars: int = 1200) -> str:
+    if not path.is_file():
+        return "_Report file not found yet — open path when available._\n"
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        return "_Could not read report: %s_\n" % e
+    lines = text.splitlines()
+    # skip pure front-matter fences
+    body_lines: List[str] = []
+    for line in lines[: max_lines + 20]:
+        if line.strip() in ("---",) and not body_lines:
+            continue
+        body_lines.append(line)
+        if len(body_lines) >= max_lines:
+            break
+    chunk = "\n".join(body_lines).strip()
+    if len(chunk) > max_chars:
+        chunk = chunk[: max_chars - 1] + "…"
+    return chunk + ("\n" if chunk else "")
+
+
 def _rel_display(path: Path, workspace: Path) -> str:
     try:
         return str(path.resolve().relative_to(workspace.resolve()))
@@ -136,6 +219,233 @@ def _inbox_label(project: str, key: str, day: str) -> str:
         _slug_key(key),
         day,
     )
+
+
+# Product display + matrix hints (FOR_YOU_INBOX_REPORTS §Dual-audience)
+_PRODUCT_DISPLAY = {
+    "trading": "Trading",
+    "protocolcity": "protocolcity",
+    "worklane": "worklane",
+    "workforce": "workforce",
+    "register": "register",
+    "connector": "connector",
+    "gridfinity": "gridfinity",
+    "socials": "socials",
+}
+
+# Keys that always gold when present (never thin-skip on --scan).
+# Trading product gold is ``desk-brief`` only ; RSU folds in.
+_ALWAYS_GOLD_KEYS = frozenset(
+    {
+        "desk-brief",
+        "maru-desk-brief",  # legacy alias → canonical desk-brief
+        "workspace-digest",
+        "correspondent-rollup",
+        "workspace-thin-rollup",
+    }
+)
+
+# Secondary product paths that must not mint their own gold (fold into primary).
+_FOLDED_INTO_DESK_KEYS = frozenset({"rsu-window"})
+
+# Canonical product gold key + aliases that share one inbox-report label day.
+_DESK_BRIEF_ALIASES = ("desk-brief", "maru-desk-brief")
+
+_DUAL_HEADING = re.compile(
+    r"^(#{2,3})\s+(Builder|User)\b[^\n]*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+_H2_HEADING = re.compile(r"^##\s+\S", re.MULTILINE)
+
+
+def product_display_name(project: str) -> str:
+    return _PRODUCT_DISPLAY.get(_slug_key(project), project)
+
+
+def extract_dual_sections(text: str) -> Tuple[Optional[str], Optional[str]]:
+    """Pull Builder / User bodies from report markdown .
+
+    Accepts ``## Builder`` / ``## User`` or ``### Builder`` / ``### User``
+    in either order. Prefer the higher-level (fewer ``#``) marker when both
+    exist for the same name. Body ends at the next ``##`` heading or the
+    other dual marker.
+    """
+    if not text:
+        return None, None
+    matches = list(_DUAL_HEADING.finditer(text))
+    if not matches:
+        return None, None
+
+    # Prefer ## over ### for the same audience name
+    by_name: Dict[str, Tuple[int, Any]] = {}
+    for m in matches:
+        name = m.group(2).lower()
+        level = len(m.group(1))
+        prev = by_name.get(name)
+        if prev is None or level < prev[0]:
+            by_name[name] = (level, m)
+
+    out: Dict[str, str] = {}
+    for name, (_level, m) in by_name.items():
+        start = m.end()
+        ends: List[int] = []
+        for _oname, (_ol, om) in by_name.items():
+            if om.start() > m.start():
+                ends.append(om.start())
+        for hm in _H2_HEADING.finditer(text, start):
+            if hm.start() == m.start():
+                continue
+            ends.append(hm.start())
+            break
+        end = min(ends) if ends else len(text)
+        body = text[start:end].strip()
+        body = re.sub(r"^---\s*", "", body).strip()
+        out[name] = body
+
+    return out.get("builder"), out.get("user")
+
+
+def _trim_section(s: str, max_chars: int = 900) -> str:
+    s = (s or "").strip()
+    if len(s) > max_chars:
+        s = s[: max_chars - 1] + "…"
+    return s + ("\n" if s else "")
+
+
+def format_dual_description(
+    *,
+    project: str,
+    day: str,
+    key: str,
+    rel: str,
+    report_path: Path,
+    visual_line: str = "",
+    max_section_chars: int = 900,
+) -> str:
+    """Card body: product header + ### Builder + ### User + Report path.
+
+    Matches FOR_YOU_INBOX_REPORTS §Report-body structure .
+    Parses dual sections from the report when present; otherwise synthesizes
+    both lenses from a short glance (generators still catching up).
+    """
+    text = ""
+    if report_path.is_file():
+        try:
+            text = report_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+
+    builder, user = extract_dual_sections(text)
+    if builder is None and user is None:
+        glance = _read_glance(report_path, max_lines=18, max_chars=700)
+        missing = (
+            "_Report has no dual headings yet "
+            "(add ``## Builder`` / ``## User``). Auto glance:_\n\n"
+        )
+        builder = missing + glance
+        user = missing + glance
+    else:
+        if not builder:
+            builder = "_No Builder section in report — open full path._\n"
+        if not user:
+            user = "_No User section in report — open full path._\n"
+
+    return (
+        "## %s — %s\n\n"
+        "### Builder\n\n"
+        "%s\n"
+        "### User\n\n"
+        "%s\n"
+        "**Report:** `%s`\n"
+        "%s"
+        "**Date:** %s · **Key:** `%s`\n"
+        % (
+            product_display_name(project),
+            day,
+            _trim_section(builder, max_section_chars),
+            _trim_section(user, max_section_chars),
+            rel,
+            visual_line,
+            day,
+            key,
+        )
+    )
+
+
+def is_always_gold_key(key: str) -> bool:
+    return _slug_key(key) in _ALWAYS_GOLD_KEYS
+
+
+def canonical_report_key(key: str) -> str:
+    """Map legacy / secondary keys to the stable drop key ."""
+    k = _slug_key(key)
+    if k in _DESK_BRIEF_ALIASES:
+        return "desk-brief"
+    if k in _FOLDED_INTO_DESK_KEYS:
+        return "desk-brief"
+    return k
+
+
+def is_folded_into_desk_key(key: str) -> bool:
+    """True when this key must not mint a separate gold ."""
+    return _slug_key(key) in _FOLDED_INTO_DESK_KEYS
+
+
+def is_thin_report(
+    path: Path,
+    key: str,
+    *,
+    min_chars: int = 400,
+) -> bool:
+    """True when a product report is too thin for its own gold .
+
+    Always-gold keys (maru, digest, …) never thin.
+    Disk-only efficiency keys are handled separately — not via thin_rollup.
+    Thin = short file, or ops-only (no User section) under a soft size cap.
+    """
+    if is_always_gold_key(key):
+        return False
+    if is_disk_only_scan_key(key):
+        return False
+    if not path.is_file():
+        return True
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return True
+    stripped = text.strip()
+    if len(stripped) < min_chars:
+        return True
+    builder, user = extract_dual_sections(text)
+    if user and builder and (len(user) + len(builder)) >= (min_chars // 2):
+        return False
+    # All-ops / missing User with moderate size → roll into workspace card
+    if not user and len(stripped) < (min_chars * 3):
+        return True
+    return False
+
+
+def is_disk_only_efficiency_key(key: str) -> bool:
+    """True when this report key must not mint routine For You gold .
+
+    All efficiency keys stay on disk unless ``--act-now`` .
+    Includes workspace ``workspace-efficiency`` — reports remain on disk for
+    on-demand read; they do not gold For You daily.
+    """
+    k = _slug_key(key)
+    if k in ("efficiency-pass", "suite-efficiency", "workspace-efficiency"):
+        return True
+    if k.startswith("efficiency-"):
+        return True
+    return False
+
+
+def is_disk_only_scan_key(key: str) -> bool:
+    """Scan keys that must not gold by default (efficiency + board-validation)."""
+    k = _slug_key(key)
+    if k == "board-validation":
+        return True
+    return is_disk_only_efficiency_key(k)
 
 
 def find_open_by_label(
@@ -259,12 +569,25 @@ def drop_report(
         "label": label,
         "path": rel,
         "action": "none",
+        "desk": desk,
     }
 
     if dry_run:
         receipt["action"] = "would_update" if existing else "would_create"
         receipt["existing_id"] = (existing or {}).get("id")
         return receipt
+
+    probe = probe_desk_attention(desk)
+    if not probe.get("ok"):
+        return desk_unreachable_receipt(
+            desk=desk,
+            detail=str(probe.get("detail") or ""),
+            project=project,
+            key=key,
+            day=day,
+            label=label,
+            path=rel,
+        )
 
     if existing:
         tid = str(existing.get("id") or "")
@@ -292,8 +615,15 @@ def drop_report(
                 % (desk.rstrip("/"), bare, project),
                 body,
             )
+        task = out.get("task") if isinstance(out.get("task"), dict) else None
+        if not out.get("ok") and task is None:
+            receipt["ok"] = False
+            receipt["action"] = "update_failed"
+            receipt["error"] = out.get("error") or "desk unreachable"
+            receipt["api"] = out
+            return receipt
         receipt["action"] = "updated"
-        receipt["task_id"] = (out.get("task") or existing).get("id")
+        receipt["task_id"] = (task or existing).get("id")
         receipt["api"] = out
         return receipt
 
@@ -403,6 +733,19 @@ def scan_and_drop(
     day_utc = _utc_today()
     results: List[Dict[str, Any]] = []
     thin_hits: List[Tuple[str, str, Path]] = []  # project, key, path
+
+    if not dry_run:
+        probe = probe_desk_attention(desk)
+        if not probe.get("ok"):
+            return [
+                desk_unreachable_receipt(
+                    desk=desk,
+                    detail=str(probe.get("detail") or ""),
+                    project="workspace",
+                    key="scan",
+                    day=day,
+                )
+            ]
 
     # (project, key, title, path candidates, optional visual)
     # Disk-only efficiency keys still listed so --scan can report them as
@@ -782,7 +1125,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(json.dumps({"ok": True, "results": results}, indent=2, default=str))
         else:
             for r in results:
-                if r.get("skipped"):
+                if r.get("action") == "desk_unreachable":
+                    print(
+                        "desk unreachable — %s"
+                        % (r.get("detail") or r.get("error") or "attention GET failed")
+                    )
+                elif r.get("skipped"):
                     print("skip  %s/%s — %s" % (r.get("project"), r.get("key"), r.get("reason")))
                 else:
                     print(
@@ -867,6 +1215,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     if args.json:
         print(json.dumps(r, indent=2, default=str))
+    elif r.get("action") == "desk_unreachable":
+        print(
+            "desk unreachable — %s"
+            % (r.get("detail") or r.get("error") or "attention GET failed")
+        )
     else:
         print(
             "%s %s → %s"

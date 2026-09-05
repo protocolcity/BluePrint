@@ -47,14 +47,6 @@ Exceptions — do not convert these to Markdown: **code**, **databases**,
 - {{NO_GO_1}} — {{WHY}}
 - {{NO_GO_2}} — {{WHY}}
 
-## Code shape (proactive)
-
-Do **not** wait to be asked. Load L0 skill `code-efficiency` in this
-folder: scan oversized / god modules, extract one seam at a time, keep
-`{{TEST_COMMAND}}` green. Optional job: `efficiency-{{STORE_SLUG}}`
-(papers: `templates/jobs/code-efficiency/`). Prefer `project-AGENTS.md`
-for new plants.
-
 ## The agents here
 
 - {{AGENT_1}} — {{ROLE}}

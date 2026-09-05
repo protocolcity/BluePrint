@@ -3,7 +3,7 @@
 
 Works from workspace-root plants and parcel scripts without a repo venv:
 
-  python3 scripts/open_work_audit.py [--json] [--feeds] [--history] [--process] [--decay]
+  python3 scripts/open_work_audit.py [--json] [--feeds] [--history] [--process] [--decay] [--stuck] [--nudge]
   python3 ProtocolCity/scripts/open_work_audit.py
   blueprint doctor
 """

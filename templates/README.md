@@ -26,10 +26,6 @@ delete the guidance comments.
 | [`worker-prompt.md`](worker-prompt.md) | `<project>/workers/<worker-id>/` | `prompt.md` (This run) |
 | [`vendor-pointers.md`](vendor-pointers.md) | (optional instructions, not a law file) | — |
 | [`skills-README.md`](skills-README.md) | workspace `.claude/skills/README.md` | L0 skills shelf rules (planted by `found`) |
-| [`skills/code-efficiency/SKILL.md`](skills/code-efficiency/SKILL.md) | workspace `.agents/skills/code-efficiency/` | L0 code-shape playbook (oversized / god modules) |
-| [`jobs/README.md`](jobs/README.md) | (index) | Optional **project** job packs (not workspace ops) |
-| [`jobs/code-efficiency/`](jobs/code-efficiency/) | `<project>/workers/efficiency-<slug>/` | Optional per-project scan + one-split job (CONTRACT + prompt) |
-| [`code-split-WO.md`](code-split-WO.md) | (file as a work order; not a standing law file) | One extract-module ticket |
 
 **Words:** workspace · project · work order · Agents · You.  
 Do not teach city · neighborhood · cabinet as operating nouns.
@@ -41,13 +37,6 @@ project exists.
 **Skills** are the local agent coordination layer (not cloud): L0 under
 workspace `.claude/skills/` / `.agents/skills/`; L1 under each project.
 Product law: `docs/INSTRUCTION_LADDER.md` §Skills.
-
-**Two efficiency plays — do not conflate:** `workspace-efficiency` is
-queue drain hygiene (seed-ops trio). `code-efficiency` is project
-code-shape (scan → one extract). Hire the optional job with
-`blueprint hire efficiency-<slug> --workdir <project>/.protocolcity --kind job`.
-Scan helper: [`scripts/code_size_scan.py`](scripts/code_size_scan.py)
-(standalone — no package import).
 
 Filled examples of every template live under product `example/` when present
 in this checkout.

@@ -61,36 +61,6 @@ Exceptions — do not convert these to Markdown: **code**, **databases**,
 - {{NO_GO_1}} — {{WHY}}
 - {{NO_GO_2}} — {{WHY}}
 
-## Code shape (proactive)
-
-Do **not** wait to be asked. When working this folder, load L0 skill
-`code-efficiency` (workspace `.agents/skills/code-efficiency/`) and keep
-modules extractable.
-
-Default bands (override here if this tree is generated-heavy): **watch**
-≥ 400 LOC / 24 KiB · **split** ≥ 800 / 48 KiB · **urgent** ≥ 1 200 / 80 KiB.
-Prefer extract-module over rewrite. Keep `{{TEST_COMMAND}}` green. **One**
-split work order (or PR) at a time.
-
-```
-python3 scripts/code_size_scan.py --root .
-# planted script lives at the workspace root when found from BluePrint:
-# python3 ../scripts/code_size_scan.py --root .
-```
-
-Optional cadence job (papers: BluePrint `templates/jobs/code-efficiency/`):
-
-```
-blueprint hire efficiency-{{STORE_SLUG}} \
-  --workdir <this-project>/.protocolcity \
-  --kind job \
-  --role 'scan oversized modules; file one split WO at a time' \
-  --schedule '0 10 * * 1'
-```
-
-Foreign / upstream origin: file an upstream issue, not a local split
-patch (workspace foreign-repo rule).
-
 ## The agents here
 
 <!-- Who is hired on this project (optional at found). -->
