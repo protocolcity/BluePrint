@@ -59,6 +59,21 @@ OS does not yet cut off a hand that ignores it.
 | `press-pass` | everywhere | home only | direct reads; citing is governed by the home's own instructions |
 | `reference-only` | inbound only | none (and never push) | findings become tickets in the consuming project |
 
+### Worked example — ProtocolCity (suite) ↔ oneseo-pos (product)
+
+This is **row style**, not a planted grant. Copy it into the workspace-root
+registry only when that sibling product is actually on the scene. The OS
+does not enforce the row; Explorer renders it and contracts promise it.
+
+On the ProtocolCity dogfood host the pair is:
+
+| from | to | kind | rule | owner |
+|---|---|---|---|---|
+| protocolcity | oneseo-pos | reference-only | Suite may cite Map prefixes and work-order vocabulary only — do not import POS app code. POS system-of-record and ops papers live in the POS repo, not city hall. | BOUNDARIES.md |
+
+Keep Map / ticket prefixes for dogfood wiring. Do not copy POS runbooks,
+host identity, or payment-provider rulings into ProtocolCity city hall.
+
 ---
 
 ## Registry (machine-readable)

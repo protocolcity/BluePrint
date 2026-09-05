@@ -20,6 +20,9 @@ Function name states the job (renamed from marshal with the default-ops consolid
 - Patrol WorkLane stores for stale claims, unlabeled ready work, and stuck
   dependency chains.
 - May release a confirmed ghost claim with a signed comment.
+- **Stuck-without-gate:** stalled/stuck tickets lacking `gate_type=human`
+  get **one** Next-step comment or scarce Decide gold per ticket per day
+  (`python3 scripts/open_work_audit.py --stuck --nudge`).
 - Never closes others' work; never invents product tickets.
 
 ## Never touch
