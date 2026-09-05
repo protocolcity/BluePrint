@@ -63,6 +63,9 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
    ticket touched, by explicit path (never `add -A` in a shared checkout).
 3. **Verify** — run `{{TEST_COMMAND}}`; a claim of "done" without a
    verification line is not done.
+   **Code shape:** if this ticket grew a file past the `code-efficiency`
+   bands (watch 400 · split 800 · urgent 1 200 LOC), extract one seam in
+   scope **or** file one routed split follow-up — do not wait to be asked.
 4. **Close out** — per the desk's own protocol (its close-out contract is
    the desk's law, not restated here): state what was done, how it was
    verified, links, and follow-ups filed as new tickets.

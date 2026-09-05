@@ -31,6 +31,12 @@ Anything below is prepared by agents but shipped only by You:
 - Money, credentials, and permissions
 - Deleting anything that can't be regenerated
 
+## Coordination notes
+
+- Drain hygiene is L0 `workspace-efficiency` (workspace-wide queues).
+- Code shape is L0 `code-efficiency` (per-project modules). Hands in
+  `recipes-site/` scan and split without being asked.
+
 ## Vendor pointers
 
 The canonical instructions file at every level is `AGENTS.md`. Vendor files

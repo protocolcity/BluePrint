@@ -133,6 +133,25 @@ The ops kit plants its papers under
 `.protocolcity/ops/workers/chief-of-staff/` (display "Chief of Staff" —
 the name states the job; the seat id stays function-named).
 
+**Code shape is a different job.** `workspace-efficiency` never edits
+product trees. L0 skill `code-efficiency` is the playbook: agents scan a
+project for oversized / god modules and file or land **one** extract at a
+time — they do not wait for You to ask. Optional cadence (one project):
+
+```
+blueprint hire efficiency-<project-slug> \
+  --workdir <project>/.protocolcity \
+  --kind job \
+  --role 'scan oversized modules; file one split WO at a time' \
+  --schedule '0 10 * * 1'
+```
+
+Papers: `templates/jobs/code-efficiency/`. Scanner:
+`python3 scripts/code_size_scan.py --root <project>`. Until the installable
+package plants the new L0 skill automatically, copy
+`templates/skills/code-efficiency/` into `.agents/skills/code-efficiency/`
+and run `bash scripts/skills_sync.sh`.
+
 Each shift it works a strict envelope, and only that envelope:
 
 - **Routes unseated work orders.** Work orders waiting on
@@ -165,6 +184,9 @@ clock stops firing it.
 
 - **Queue stays deep for weeks** → add a worker to that lane, or split the
   neighborhood's ledger.
+- **A file is a god module (800+ LOC, everyone edits it)** → load
+  `code-efficiency`; file **one** split work order (or extract that seam).
+  Do not wait for a “please modularize” ticket.
 - **Two workers touch the same files** → tighten lanes in their contracts;
   add a workspace guard to the runner.
 - **You can't remember what's running** → you need the board (rota, health,

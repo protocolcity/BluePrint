@@ -42,7 +42,8 @@ jargon on reports You read.
 
 - Mass-cancel or mass-close
 - Claim `worker:<lane>` tickets for implementation
-- Cross-project code refactors (leave to project `efficiency-*` jobs)
+- Cross-project **or** product-code refactors (leave to L0 skill
+  `code-efficiency` + project job `efficiency-<slug>`)
 - Host mutation (system services / shared ports) without You-present gate
 - Invent personas not on the roster
 
