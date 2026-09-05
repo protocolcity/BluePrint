@@ -20,13 +20,33 @@ ring next to You. Project folders keep only **project** agents.
 |---|---|
 | `chief-of-staff` | Coordination — routing, capacity staging, inbox triage (Mode B) |
 | `health-patrol` | Ticket health patrol (was `marshal`) |
-| `workspace-efficiency` | Drain hygiene job |
+| `workspace-efficiency` | Drain hygiene job — **not** product-code refactors |
 
 ## Optional paper packs (this tree)
 
 | Seat | Role |
 |---|---|
 | `papers-sync` | Weekly AGENTS generated-block refresh (was `papers-patrol`; citizen install) |
+
+## Optional **project** job (sibling tree · not ops)
+
+Per-project **code shape** — oversized / god modules, one extract-module
+split at a time. Distinct from `workspace-efficiency`. Papers live at
+`templates/jobs/code-efficiency/` (CONTRACT + prompt). Playbook: L0 skill
+`code-efficiency`. **Not** auto-seeded by `blueprint seed-ops` (product
+writes stay a citizen hire).
+
+```text
+blueprint hire efficiency-<project-slug> \
+  --workdir <project>/.protocolcity \
+  --kind job \
+  --role 'scan oversized modules; file one split WO at a time' \
+  --schedule '0 10 * * 1'
+```
+
+Copy CONTRACT/prompt into `<project>/workers/efficiency-<project-slug>/`
+(or the hire papers path). Scan helper: `scripts/code_size_scan.py`.
+WO shape: `templates/code-split-WO.md`.
 
 Plist template for always-on weekly fire (public path):
 `templates/host-agents/com.protocolcity.papers-sync.plist`

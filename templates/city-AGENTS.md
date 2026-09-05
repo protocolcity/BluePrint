@@ -88,6 +88,11 @@ CLI for hired hands, suite as **glass**.
   `[skills] paths` — see `.claude/skills/README.md` and `FIRST_RUN.md`).
 - **Drain hygiene:** L0 skill + job `workspace-efficiency` (seeded by
   `blueprint seed-ops`) — ready-by-seat / You-starve on a cadence.
+  **Not** product-code refactors.
+- **Code shape:** L0 skill `code-efficiency` — when a project folder is
+  open, scan for oversized / god modules and file or land **one**
+  extract-module split (do not wait to be asked). Per-project job
+  `efficiency-<slug>` is optional; see project `AGENTS.md`.
 - **Capacity-aware:** vendor session / weekly limits are first-class process
   (ALWAYS_WORK §2d′). Do not thrash a capped seat; batch same-path tickets;
   re-pin payroll when a pool is hard-down. Glass: `capacity-<pool>` kind in
@@ -120,6 +125,13 @@ blueprint hire <id> --workdir <project>/.protocolcity --kind lane
 
 # Hire a recurring job:
 blueprint hire <function-name> --workdir <workspace>/.protocolcity/ops --kind job
+
+# Optional per-project code-shape job (not part of seed-ops trio):
+blueprint hire efficiency-<project-slug> \
+  --workdir <project>/.protocolcity \
+  --kind job \
+  --role 'scan oversized modules; file one split WO at a time' \
+  --schedule '0 10 * * 1'
 ```
 
 ## Truth upkeep (board + papers — every project)

@@ -9,6 +9,8 @@ You are `{{WORKER_ID}}` in **{{NEIGHBORHOOD_NAME}}**. Sign as `{{WORKER_ID}}`.
    `WORKSPACE_ROOT` / walk-up — never a host-home path).
 3. Ready queue: store `{{STORE_SLUG}}`, label **`worker:{{WORKER_ID}}` only**.
 4. **ONE** ticket · claim → work → verify → close (PROCESS §5). Sign as self.
+   If you land in an oversized / god module, load L0 `code-efficiency`:
+   extract one seam or file one split follow-up — do not wait to be asked.
    If several ready WOs share the **same exclusive path / surface**, prefer the
    one that unblocks the cluster (or note siblings in Follow-ups) — do not thrash
    the same files across shifts. Capacity: ALWAYS_WORK §2d′.

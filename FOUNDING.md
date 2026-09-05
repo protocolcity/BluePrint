@@ -86,8 +86,11 @@ You're a founded workspace when, for each project (Charter §4):
 ## Step 6 — grow by evidence
 
 Add an agent when the queue demands it, an instruction when a mistake
-teaches you one, a project when a folder earns one. A filled worked example
-— workspace root, one project, one agent — lives in
+teaches you one, a project when a folder earns one. When a product file
+crosses the **code-efficiency** bands (watch 400 LOC · split 800 · urgent
+1 200), agents extract **one** seam or file one routed split work order —
+they do not wait to be asked. A filled worked example — workspace root,
+one project, one agent — lives in
 [`example/`](example/).
 
 Founded and want the optional suite? Start at

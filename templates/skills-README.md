@@ -31,7 +31,13 @@ then agent instructions). Optional `references/` and `scripts/`.
 | id | Role |
 |---|---|
 | `workspace-efficiency` | Drain hygiene — ready-by-seat, You-starve, assign≠escalate, skills bridge |
+| `code-efficiency` | Code shape — oversized / god modules, extract-module, one split WO at a time |
 | _(add more)_ | Folders under `.agents/skills/<id>/` + list here |
+
+`workspace-efficiency` must **not** edit product trees. `code-efficiency`
+is the project-code counterpart: any implement session in a project
+folder loads it **without being asked**. Optional per-project job
+`efficiency-<slug>` uses the same playbook (`templates/jobs/code-efficiency/`).
 
 ## L0 must load inside project sessions
 
@@ -88,6 +94,10 @@ Do not hand-edit the generated settings file. Host-only grants go in
 
 Bare `worker:you` on implement work is **starve** (cron never claims You).
 Cadence: L0 skill + job `workspace-efficiency` (seeded by `blueprint seed-ops`).
+
+Code-shape cadence is **separate**: L0 skill `code-efficiency` (planted
+with other L0 skills) plus optional
+`blueprint hire efficiency-<slug> --workdir <project>/.protocolcity --kind job`.
 
 ## Agents: where to put a new skill
 
