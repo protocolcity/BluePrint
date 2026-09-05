@@ -35,8 +35,10 @@ Agents over *your* workspace folder.
 | Host chat “efficiency pass / validate queues” | Coord session loads this skill |
 | After reboot / mass hire / process change | You or coord once |
 
-**Not** a substitute for per-project `efficiency-*` code jobs (those clean
-code inside one project folder). This pass is **workspace drain + seating**.
+**Not** a substitute for per-project code-shape work. Oversized / god
+modules → L0 skill **`code-efficiency`** and optional job
+`efficiency-<slug>` (papers: `templates/jobs/code-efficiency/`). This pass
+is **workspace drain + seating** only — never edit product source trees.
 
 ---
 
@@ -216,7 +218,7 @@ remain For You cards. See `FOR_YOU_INBOX_REPORTS.md` §Gold vs rollup policy
 | Report on disk, missing For You | Efficiency: expected (disk-only). Other briefs: `--scan` or `for_you_drop` |
 | L0 skills missing in project | `skills_sync.sh` |
 | Dead papers path | Plant papers or pause schedule |
-| Code drift inside one project | File to that project’s `efficiency-*` or code lane |
+| Code drift / oversized module in one project | File a routed split WO (`code-efficiency` playbook / `efficiency-<slug>`) — do not extract from this job |
 | Consecutive capacity fails, hand re-fired | Comment on the ledger WO; hand must not re-fire before limit resets |
 | Hard-down pool, no For You gold | `python3 -m workforce capacity --live` or `report_to_for_you.py --project workforce --key capacity-<pool> --path <report>` |
 

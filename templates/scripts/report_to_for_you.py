@@ -24,7 +24,8 @@ description/title, does not spam duplicate gold items for the same day.
 
 **Efficiency policy (FOR_YOU_INBOX_REPORTS / DAILY_REPORTS_MAP):**
 engine ``efficiency-*``, Trading ``efficiency-pass``, ``suite-efficiency``,
-and the workspace ``workspace-efficiency`` rollup are **disk-only** by default.
+per-project ``code-efficiency``, and the workspace ``workspace-efficiency``
+rollup are **disk-only** by default.
 Jobs still write dated reports; For You does not gold them. Opt in with
 ``--act-now`` only when a product has a true act-now smell (stuck hand,
 critical feed failure).
@@ -360,9 +361,16 @@ def is_disk_only_efficiency_key(key: str) -> bool:
     on-demand read; they do not gold For You daily.
     """
     k = _slug_key(key)
-    if k in ("efficiency-pass", "suite-efficiency", "workspace-efficiency"):
+    if k in (
+        "efficiency-pass",
+        "suite-efficiency",
+        "workspace-efficiency",
+        "code-efficiency",
+    ):
         return True
     if k.startswith("efficiency-"):
+        return True
+    if k.startswith("code-efficiency"):
         return True
     return False
 
