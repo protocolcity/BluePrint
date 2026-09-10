@@ -9,7 +9,8 @@
 // Public shape:
 //   const state = createViewState();
 //   state.subscribe(fn)           // fn(state) on any change; returns unsubscribe
-//   state.setDig({relPath, name}) // dig into a lot; pushes trail
+//   state.setDig({relPath, name}) // nested dig — push onto trail (child of current)
+//   state.replaceDig({...})       // root-level dig — REPLACE trail with [node]
 //   state.clearDig()              // Reset — trail empty, dig null
 //   state.popDig()                // Back — pop one trail entry (null if empty)
 //   state.setFilter(k, v)         // one of: managed | unmanaged | hidden
@@ -55,6 +56,13 @@ export function createViewState(initial = {}) {
         state.trail.push({ relPath: node.relPath, name: node.name || node.relPath });
       }
       state.dig = { relPath: node.relPath, name: node.name || node.relPath };
+      emit();
+    },
+    replaceDig(node) {
+      if (!node || typeof node.relPath !== 'string') return;
+      const entry = { relPath: node.relPath, name: node.name || node.relPath };
+      state.trail = [entry];
+      state.dig = { ...entry };
       emit();
     },
     clearDig() {
