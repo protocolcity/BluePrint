@@ -1,0 +1,7 @@
+{
+  "agents": [
+    { "name": "demo-worker", "state": "idle" }
+  ],
+  "jobs": [],
+  "pulse": { "ticks": [], "last_at": null }
+}

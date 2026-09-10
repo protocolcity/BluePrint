@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BluePrint — Overview V1</title>
+  <link rel="stylesheet" href="./css/overview.css" />
+</head>
+<body>
+  <main id="overview-shell" class="ov-shell" aria-label="Mission Control">
+    <header class="ov-banner" role="status" aria-live="polite">
+      <span class="ov-banner-dot" aria-hidden="true"></span>
+      <span class="ov-banner-label">Local desk</span>
+    </header>
+
+    <section class="ov-tiles" aria-label="Overview">
+      <article class="ov-tile" id="ov-agents" aria-labelledby="ov-agents-title">
+        <h2 class="ov-tile-title" id="ov-agents-title">Agents</h2>
+        <div class="ov-tile-body" data-role="agents-body">
+          <p class="ov-empty">No agents</p>
+        </div>
+      </article>
+
+      <article class="ov-tile" id="ov-jobs" aria-labelledby="ov-jobs-title">
+        <h2 class="ov-tile-title" id="ov-jobs-title">Jobs</h2>
+        <div class="ov-tile-body" data-role="jobs-body">
+          <p class="ov-empty">No open jobs</p>
+        </div>
+      </article>
+
+      <article class="ov-tile" id="ov-pulse" aria-labelledby="ov-pulse-title">
+        <h2 class="ov-tile-title" id="ov-pulse-title">Pulse</h2>
+        <div class="ov-tile-body" data-role="pulse-body">
+          <div class="ov-pulse-track" aria-hidden="true"></div>
+        </div>
+      </article>
+    </section>
+
+    <nav class="ov-handoffs" aria-label="Other lenses">
+      <a class="ov-chip" href="/map" data-lens="map">Map</a>
+      <a class="ov-chip" href="/calendar" data-lens="calendar">Calendar</a>
+      <a class="ov-chip" href="/settings" data-lens="settings">Settings</a>
+    </nav>
+  </main>
+
+  <script type="module" src="./js/overview.v1.js"></script>
+</body>
+</html>
