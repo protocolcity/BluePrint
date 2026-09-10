@@ -1,0 +1,166 @@
+/* overview.css — Overview V1 Mission Control glass.
+ *
+ * Theme §Token classes: Surface · Voice · State · Focus.
+ * Dark PC desk only (#0f1114 family). No cream, no LLC-era palette, no
+ * light-mode variant in V1.
+ *
+ * Invariants (see docs/specs/OVERVIEW_THEME.md):
+ *   - Three equal tiles (agents · jobs · pulse) — no dominant tile.
+ *   - Pulse is discrete — ticks land as events land, no continuous animation.
+ *   - Empty is real — Writer copy, no skeleton shimmer.
+ *   - One focus voice — shared 2px ring across tiles, chips, banner.
+ */
+
+:root {
+  /* Surface class — desk glass background, tile background, empty background.
+   * One background voice across all three tiles; no per-tile tint. */
+  --ov-bg: #0f1114;
+  --ov-tile-bg: #14171c;
+  --ov-tile-border: #262a33;
+
+  /* Voice class — type ramp for the four V1 surfaces. Quiet, read at rest. */
+  --ov-fg: #e6e8eb;
+  --ov-muted: #8b8f96;
+  --ov-title: #d9dde3;
+
+  /* State class — agent-state palette (idle · working · error · off) + pulse tick. */
+  --ov-state-idle: #6b7280;
+  --ov-state-working: #6fbf73;
+  --ov-state-error: #d97060;
+  --ov-state-off: #3a3f48;
+  --ov-pulse-tick: #f5cf7a;
+
+  /* Focus class — shared 2px ring. One focus voice across every interactive
+   * element. No per-component focus styling. */
+  --ov-focus: #f5cf7a;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  background: var(--ov-bg); color: var(--ov-fg);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.ov-shell {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 20px;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Local-only honesty banner — quiet, permanent, never a toast. */
+.ov-banner {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 999px;
+  background: var(--ov-tile-bg);
+  color: var(--ov-muted);
+  font-size: 12px;
+  justify-self: start;
+}
+.ov-banner-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ov-state-working);
+}
+.ov-banner-label { letter-spacing: 0.02em; }
+
+/* Three equal tiles — no dominant tile, no hero band. */
+.ov-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.ov-tile {
+  background: var(--ov-tile-bg);
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 10px;
+  padding: 16px;
+  min-height: 180px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.ov-tile-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ov-muted);
+}
+.ov-tile-body { flex: 1; min-width: 0; }
+
+/* Empty copy — Writer lock. No shimmer, no spinner. */
+.ov-empty {
+  margin: 0;
+  color: var(--ov-muted);
+  font-size: 14px;
+}
+
+/* Agent rows — one dot per agent (dot IS the state, not a label next to it). */
+.ov-agent-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.ov-agent-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.ov-agent-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ov-state-idle);
+  flex-shrink: 0;
+}
+.ov-agent-dot[data-state="idle"]    { background: var(--ov-state-idle); }
+.ov-agent-dot[data-state="working"] { background: var(--ov-state-working); }
+.ov-agent-dot[data-state="error"]   { background: var(--ov-state-error); }
+.ov-agent-dot[data-state="off"]     { background: var(--ov-state-off); }
+.ov-agent-name { color: var(--ov-fg); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Job rows — one row per job with a plain state word (no color chips in V1). */
+.ov-job-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.ov-job-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.ov-job-name { color: var(--ov-fg); font-size: 13px; }
+.ov-job-state { color: var(--ov-muted); font-size: 12px; text-transform: lowercase; }
+
+/* Pulse — one quiet tick line. Discrete marks; no animation, no shimmer. */
+.ov-pulse-track {
+  position: relative;
+  height: 20px;
+  border-top: 1px solid var(--ov-tile-border);
+  margin-top: 6px;
+}
+.ov-pulse-tick {
+  position: absolute; top: -1px;
+  width: 2px; height: 10px;
+  background: var(--ov-pulse-tick);
+}
+.ov-pulse-last {
+  color: var(--ov-muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* Hand-off chips — quiet lens names (Map, Calendar, Settings). */
+.ov-handoffs {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.ov-chip {
+  display: inline-flex; align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ov-muted);
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.ov-chip:hover { color: var(--ov-fg); border-color: var(--ov-muted); }
+
+/* Shared focus voice — one 2px ring across every interactive element. */
+.ov-chip:focus-visible,
+.ov-tile:focus-visible,
+.ov-banner:focus-visible {
+  outline: 2px solid var(--ov-focus);
+  outline-offset: 2px;
+}
