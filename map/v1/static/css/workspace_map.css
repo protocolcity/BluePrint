@@ -1,0 +1,123 @@
+/* workspace_map.css — Map V1 shell.
+ *
+ * Glass §Paint stack: five layers under #world. Chrome sits in HTML overlay,
+ * outside the SVG. Only elements with `pointer-events: auto` fight for hits;
+ * .map-chrome-hit turns hits on where the hit router expects chrome ownership.
+ *
+ * V1 rule: no cinema, no motion, no seat classes, no wo-tape / agents-panel /
+ * gold beat rules. If you add one, mark it DEFERred and gate it behind a flag.
+ */
+
+:root {
+  --map-bg: #0f1114;
+  --map-fg: #e6e8eb;
+  --map-muted: #8b8f96;
+  --map-hub: #f5cf7a;
+  --map-hub-fg: #1a1a1a;
+  --map-lot: #2c3038;
+  --map-lot-md: #3a4b70;
+  --map-lot-file: #444a55;
+  --map-dig: #3f4550;
+  --map-chrome-bg: rgba(20, 22, 26, 0.92);
+  --map-chrome-fg: #e6e8eb;
+  --map-chrome-border: #333844;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--map-fg); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+.map-shell { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.map-stage { position: absolute; inset: 0; touch-action: none; user-select: none; }
+#map-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* Base map — hub + lots */
+.map-hub-disc { fill: var(--map-hub); stroke: #2a2016; stroke-width: 1; }
+.map-hub-label { fill: var(--map-hub-fg); font-weight: 600; font-size: 12px; pointer-events: none; }
+
+.map-lot-plate { fill: var(--map-lot); stroke: #1e2128; stroke-width: 1; }
+.map-lot-md .map-lot-plate { fill: var(--map-lot-md); }
+.map-lot-file .map-lot-plate { fill: var(--map-lot-file); }
+.map-lot-label { fill: var(--map-fg); font-size: 11px; pointer-events: none; }
+
+/* Dig-in fan */
+.map-dig-plate { fill: var(--map-dig); stroke: #1e2128; stroke-width: 1; }
+.map-dig-md .map-dig-plate { fill: var(--map-lot-md); }
+.map-dig-label { fill: var(--map-fg); font-size: 10px; pointer-events: none; }
+
+/* Hit ownership: SVG nodes tagged as .map-hit take pointer events; every
+ * other SVG paint is decoration. Chrome overlay owns its own hits via
+ * .map-chrome-hit (data-hit-layer=chrome forces the router row). */
+.map-hit { cursor: pointer; }
+#world text { pointer-events: none; }
+
+/* Chrome overlay — HTML corner panels */
+.map-chrome {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+}
+.map-chrome-hit { pointer-events: auto; }
+.map-chrome-panel, .map-chrome-btn {
+  background: var(--map-chrome-bg);
+  color: var(--map-chrome-fg);
+  border: 1px solid var(--map-chrome-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font: inherit;
+}
+.map-chrome-panel[open] { padding-bottom: 10px; }
+.map-chrome-panel summary { cursor: pointer; user-select: none; }
+.map-chrome-panel label { display: block; padding: 2px 0; }
+
+#map-view-options { grid-column: 1; grid-row: 1; justify-self: start; }
+#map-reset { grid-column: 2; grid-row: 1; justify-self: end; cursor: pointer; }
+#map-dig-trail {
+  grid-column: 1 / -1; grid-row: 3;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  background: var(--map-chrome-bg);
+  border: 1px solid var(--map-chrome-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.map-trail-crumb {
+  background: transparent; color: inherit; border: none;
+  padding: 2px 6px; border-radius: 4px; cursor: pointer;
+}
+.map-trail-crumb:hover { background: rgba(255,255,255,0.06); }
+.map-trail-sep { color: var(--map-muted); }
+
+/* Reader overlay — foreignObject-hosted panel */
+#md-viewer-layer { pointer-events: none; }
+.map-md-fo { pointer-events: none; }
+.map-md-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: auto;
+}
+.map-md-panel {
+  width: min(720px, 92vw); max-height: 82vh; overflow: auto;
+  background: #14171c; color: var(--map-fg);
+  border: 1px solid var(--map-chrome-border); border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+.map-md-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--map-chrome-border);
+}
+.map-md-title { font-weight: 600; }
+.map-md-close {
+  background: transparent; color: inherit; border: none;
+  font-size: 22px; line-height: 1; cursor: pointer;
+}
+.map-md-content { padding: 14px 18px; }
+.map-md-content.is-loading::before { content: "Loading…"; color: var(--map-muted); }
+.map-md-content h1, .map-md-content h2, .map-md-content h3 { margin-top: 0.6em; }
+.map-md-content pre {
+  background: #0b0d10; padding: 8px 12px; border-radius: 6px; overflow: auto;
+}
+.map-md-content code { background: #0b0d10; padding: 1px 4px; border-radius: 3px; }
