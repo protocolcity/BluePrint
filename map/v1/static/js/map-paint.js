@@ -65,15 +65,16 @@ export function paintHub(world, binder) {
   layer.appendChild(group);
 }
 
-export function paintLots(world, lots, { radius = 220 } = {}) {
+export function paintLots(world, lots, { radius = 220, selectedRelPath = null } = {}) {
   const layer = world.querySelector('#lots');
   layer.replaceChildren();
   const positions = ringPositions(lots.length, radius);
   lots.forEach((lot, i) => {
     const { x, y } = positions[i];
     const kind = lot.isDir === false ? 'file' : 'folder';
+    const isSelected = selectedRelPath && lot.relPath === selectedRelPath;
     const group = el('g', {
-      class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}`,
+      class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}${isSelected ? ' is-selected' : ''}`,
       transform: `translate(${x.toFixed(2)},${y.toFixed(2)})`,
       'data-rel-path': lot.relPath,
       'data-name': lot.name,
@@ -90,6 +91,15 @@ export function paintLots(world, lots, { radius = 220 } = {}) {
   });
 }
 
+// Truncate a name to fit inside a dig chip label. SVG has no native
+// text-overflow, so we clip in JS and append U+2026.
+const DIG_LABEL_MAX = 14;
+function truncateLabel(name) {
+  if (typeof name !== 'string') return '';
+  if (name.length <= DIG_LABEL_MAX) return name;
+  return `${name.slice(0, DIG_LABEL_MAX - 1)}…`;
+}
+
 export function paintDigIn(world, digNode, children, { radius = 140, origin } = {}) {
   const layer = world.querySelector('#dig-in-layer');
   layer.replaceChildren();
@@ -97,6 +107,9 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
   const positions = ringPositions(children.length, radius);
   const ox = (origin && Number.isFinite(origin.x)) ? origin.x : 0;
   const oy = (origin && Number.isFinite(origin.y)) ? origin.y : 0;
+  // Dense fans (>8 children) get their labels staggered above/below the
+  // plate so neighbor labels do not collide along the ring.
+  const stagger = children.length > 8;
   children.forEach((child, i) => {
     const { x, y } = positions[i];
     const kind = child.isDir === false ? 'file' : 'folder';
@@ -114,7 +127,17 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
     } else {
       group.appendChild(el('circle', { cx: 0, cy: 0, r: 18, class: 'map-dig-plate map-dig-file-plate' }));
     }
-    group.appendChild(el('text', { x: 0, y: 4, class: 'map-dig-label', 'text-anchor': 'middle' }, child.name));
+    // Alternate label position when the ring is dense: even indices sit
+    // below the plate (y=+30), odd indices ride above (y=-22).
+    const labelY = stagger ? (i % 2 === 0 ? 30 : -22) : 4;
+    const label = el('text', {
+      x: 0, y: labelY, class: 'map-dig-label', 'text-anchor': 'middle',
+    }, truncateLabel(child.name));
+    if (child.name && child.name.length > DIG_LABEL_MAX) {
+      // Keep the full name reachable via native SVG tooltip.
+      label.appendChild(el('title', {}, child.name));
+    }
+    group.appendChild(label);
     layer.appendChild(group);
   });
 }
@@ -134,4 +157,4 @@ export function fitTransform(width, height, { radius = 220, margin = 60 } = {}) 
   return `translate(${cx.toFixed(2)},${cy.toFixed(2)}) scale(${scale.toFixed(3)})`;
 }
 
-export const _internal = { ringPositions, LAYER_IDS };
+export const _internal = { ringPositions, LAYER_IDS, truncateLabel, DIG_LABEL_MAX };
