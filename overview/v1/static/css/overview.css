@@ -157,9 +157,12 @@ html, body {
 }
 .ov-chip:hover { color: var(--ov-fg); border-color: var(--ov-muted); }
 
-/* Shared focus voice — one 2px ring across every interactive element. */
+/* Shared focus voice — one 2px ring across every interactive element.
+ * Tiles participate via their focusable body (tabindex=0), so keyboard
+ * users see the same ring on Agents · Jobs · Pulse as on chips and banner. */
 .ov-chip:focus-visible,
 .ov-tile:focus-visible,
+.ov-tile-body:focus-visible,
 .ov-banner:focus-visible {
   outline: 2px solid var(--ov-focus);
   outline-offset: 2px;
