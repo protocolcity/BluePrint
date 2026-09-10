@@ -97,10 +97,16 @@ export function paintPulse(root, pulse) {
   if (!body) return;
   clear(body);
   const ticks = Array.isArray(pulse?.ticks) ? pulse.ticks : [];
-  const track = document.createElement("div");
-  track.className = "ov-pulse-track";
-  track.setAttribute("aria-hidden", "true");
+  if (ticks.length === 0 && !pulse?.last_at) {
+    // Honest empty: no ticks, no last-at → silent spacer, no orphan divider.
+    // THEME §Writer copy allows a silent pulse; the tick-track chrome only
+    // paints when there is something to carry.
+    return;
+  }
   if (ticks.length > 0) {
+    const track = document.createElement("div");
+    track.className = "ov-pulse-track";
+    track.setAttribute("aria-hidden", "true");
     // One quiet mark per tick, evenly spaced left-to-right. No animation,
     // no easing — ticks paint once when the fetch resolves.
     const n = ticks.length;
@@ -111,11 +117,7 @@ export function paintPulse(root, pulse) {
       mark.style.left = `${pct}%`;
       track.appendChild(mark);
     }
-  }
-  body.appendChild(track);
-  if (!pulse?.last_at && ticks.length === 0) {
-    // Silent is allowed per THEME §Writer copy. Nothing to append.
-    return;
+    body.appendChild(track);
   }
   if (pulse?.last_at) {
     const last = document.createElement("p");
