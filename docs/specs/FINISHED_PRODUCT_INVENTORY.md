@@ -15,10 +15,11 @@ peel accidentally re-lands rot or re-invents a fold that already has a home.
 ## Label lock (say-so, so this doc doesn't drift)
 
 **BluePrint** = the desk. **Overview** = the Mission Control glass (landing
-lens). **Map** = dig (glass over a folder). Brand is **PC**. Overview never
-borrows Map verbs (`dig`, `lot`, `hub`, `fan`, `trail`, `md-viewer`,
-`binder`, `crumb`) and Map never borrows Overview verbs (`agents`, `jobs`,
-`pulse`). No LLC / cream / stranger-marketing carryover.
+lens). **Map** = dig (glass over a folder). Brand is **Protocol City** (PC
+as acronym elsewhere in this doc). Overview never borrows Map verbs (`dig`,
+`lot`, `hub`, `fan`, `trail`, `md-viewer`, `binder`, `crumb`) and Map never
+borrows Overview verbs (`agents`, `jobs`, `pulse`). No LLC / cream /
+stranger-marketing carryover.
 
 ---
 
@@ -34,8 +35,7 @@ Overview surfaces the INTENT spec locks. Nothing else is V1.
 | **Map** — empty pan · zoom · reset | DoD 2 | `MapViewState` |
 | **Map** — dig (lot · hub · child) with one trail | DoD 3 | `MapViewState.dig` |
 | **Map** — MD viewer overlay (open on `.md`, Esc / × / backdrop close) | DoD 4 | `/api/file?render=html` |
-| **Map** — View Options filters (Managed · Unmanaged · Hidden) | DoD 5 | Server managed/hidden state |
-| **Map** — WO-open passthrough (reader → `/ticket?id=…`) | DoD 6 | Suite router |
+| **Map** — View Options filters (Managed · Unmanaged · Hidden) | DoD 5 | Server managed/hidden state (Cellar dig 0.1.50 includes VO; wired in `workspace_map_app.v1.js`) |
 | **Map polish (shipped)** — focus ring, hub label contrast, dense dig fan, md-viewer wrap | Post-shell polish | In-file CSS |
 | **Overview** — Agents surface (idle · working · error · off) | `OVERVIEW_INTENT.md` V1 | Local agent registry / running-process view |
 | **Overview** — Jobs surface (launched · tracked · status) | INTENT V1 | Local job store |
@@ -62,6 +62,7 @@ citing which V1 invariant it must not regress.
 | Expand FAB (top-level children everywhere) | Map | Density mode — separate |
 | Dig-trail glyphs · dig-tier foundation weight | Map | Secondary palette |
 | Agents Activities rail (map side) | Map (Later) | Roster stream — Overview already owns "agents" voice; Map version is a live badge, deferred |
+| Map — WO-open passthrough (reader → `/ticket?id=…`) | Map (Later) | Option B Map V1 did not ship WO-open; suite router hop is a separate peel |
 | WO tape · WO buckets · folder papers panel | Map | Store poll; not truth-of-folder |
 | Searchlight | Map | Search over cinema; needs live index |
 | Six `inspect-*` sidebars (project · person · you · workspace · orbit · shell) | Split — see below | Reader is V1's only sidebar |
