@@ -68,11 +68,14 @@ export async function boot(opts = {}) {
   }
 
   function repaint() {
-    const filters = viewState.snapshot().filters;
+    const snap = viewState.snapshot();
+    // Selected top-level lot = the root of the current dig trail. Passing
+    // its relPath into paintLots lights the 2px accent focus ring on the
+    // matching lot so "digging into X" is visually anchored to X.
+    const selectedRelPath = snap.trail.length > 0 ? snap.trail[0].relPath : null;
     paintHub(world, tree.binder);
-    paintLots(world, tree.topLots(filters), { radius: cfg.radius });
-    const digNode = viewState.snapshot().dig;
-    if (!digNode) { clearDigIn(world); }
+    paintLots(world, tree.topLots(snap.filters), { radius: cfg.radius, selectedRelPath });
+    if (!snap.dig) { clearDigIn(world); }
     applyCamera();
     renderTrail();
   }
@@ -87,6 +90,9 @@ export async function boot(opts = {}) {
   async function digInto(node) {
     if (!node || !node.relPath) return;
     viewState.setDig(node);
+    // Re-paint the lot ring so the top-level lot picks up the .is-selected
+    // focus ring (paintLots reads selectedRelPath from the trail root).
+    scheduleRepaint();
     const kids = await tree.childrenAt(node.relPath);
     paintDigIn(world, node, kids, { radius: cfg.digRadius });
     renderTrail();
@@ -98,6 +104,8 @@ export async function boot(opts = {}) {
     camera.x = 0; camera.y = 0; camera.k = 1;
     applyCamera();
     renderTrail();
+    // Trail cleared → drop the .is-selected ring on the previous top lot.
+    scheduleRepaint();
   }
 
   function renderTrail() {
@@ -132,6 +140,7 @@ export async function boot(opts = {}) {
           clearDigIn(world);
         }
         renderTrail();
+        scheduleRepaint();
       });
       el.appendChild(btn);
     });
@@ -233,6 +242,8 @@ export async function boot(opts = {}) {
       clearDigIn(world);
     }
     renderTrail();
+    // Trail root may have changed (or gone empty) → refresh the focus ring.
+    scheduleRepaint();
   });
 
   await tree.load();

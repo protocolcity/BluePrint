@@ -17,6 +17,7 @@
   --map-lot: #2c3038;
   --map-lot-md: #3a4b70;
   --map-lot-file: #444a55;
+  --map-lot-focus: #f5cf7a;
   --map-dig: #3f4550;
   --map-chrome-bg: rgba(20, 22, 26, 0.92);
   --map-chrome-fg: #e6e8eb;
@@ -32,12 +33,24 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 
 /* Base map — hub + lots */
 .map-hub-disc { fill: var(--map-hub); stroke: #2a2016; stroke-width: 1; }
-.map-hub-label { fill: var(--map-hub-fg); font-weight: 600; font-size: 12px; pointer-events: none; }
+/* Hub label: dark on yellow disc. Bumped to weight 700 with a matching stroke
+ * via paint-order so the glyphs stay legible even when the binder name runs
+ * long enough to touch the disc edge. */
+.map-hub-label {
+  fill: var(--map-hub-fg); font-weight: 700; font-size: 12px;
+  letter-spacing: 0.02em; pointer-events: none;
+  paint-order: stroke fill; stroke: var(--map-hub); stroke-width: 3px;
+  stroke-linejoin: round;
+}
 
 .map-lot-plate { fill: var(--map-lot); stroke: #1e2128; stroke-width: 1; }
 .map-lot-md .map-lot-plate { fill: var(--map-lot-md); }
 .map-lot-file .map-lot-plate { fill: var(--map-lot-file); }
 .map-lot-label { fill: var(--map-fg); font-size: 11px; pointer-events: none; }
+/* Selected lot = clear 2px accent focus ring on dark (Theme §Enhance). */
+.map-lot.is-selected .map-lot-plate {
+  stroke: var(--map-lot-focus); stroke-width: 2;
+}
 
 /* Dig-in fan */
 .map-dig-plate { fill: var(--map-dig); stroke: #1e2128; stroke-width: 1; }
@@ -108,16 +121,39 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-md-bar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px; border-bottom: 1px solid var(--map-chrome-border);
+  gap: 8px;
 }
-.map-md-title { font-weight: 600; }
+.map-md-title {
+  font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; flex: 1;
+}
 .map-md-close {
   background: transparent; color: inherit; border: none;
   font-size: 22px; line-height: 1; cursor: pointer;
+  flex-shrink: 0;
 }
-.map-md-content { padding: 14px 18px; }
+/* Reader content wraps long lines (URLs, code, unbroken prose) so nothing
+ * clips beyond the panel width; code blocks keep their own scroll. */
+.map-md-content {
+  padding: 14px 18px;
+  overflow-wrap: anywhere; word-break: break-word;
+}
 .map-md-content.is-loading::before { content: "Loading…"; color: var(--map-muted); }
-.map-md-content h1, .map-md-content h2, .map-md-content h3 { margin-top: 0.6em; }
-.map-md-content pre {
-  background: #0b0d10; padding: 8px 12px; border-radius: 6px; overflow: auto;
+.map-md-content h1, .map-md-content h2, .map-md-content h3 {
+  margin-top: 0.6em; overflow-wrap: anywhere;
 }
-.map-md-content code { background: #0b0d10; padding: 1px 4px; border-radius: 3px; }
+.map-md-content pre {
+  background: #0b0d10; padding: 8px 12px; border-radius: 6px;
+  overflow-x: auto; max-width: 100%;
+  white-space: pre; word-break: normal; overflow-wrap: normal;
+}
+.map-md-content code {
+  background: #0b0d10; padding: 1px 4px; border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+.map-md-content pre code {
+  background: transparent; padding: 0; overflow-wrap: normal;
+}
+.map-md-content img { max-width: 100%; height: auto; }
+.map-md-content table { display: block; max-width: 100%; overflow-x: auto; }
