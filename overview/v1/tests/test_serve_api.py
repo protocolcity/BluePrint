@@ -108,6 +108,31 @@ class HonestEmptyServeTests(unittest.TestCase):
         self.assertIn(">Settings<", text)
         self.assertNotIn("Dig here", text)
 
+    def test_overview_tile_bodies_are_keyboard_focusable(self) -> None:
+        """Focus invariant — each tile body carries tabindex=0 so keyboard
+        users can land the shared 2px ring on Agents · Jobs · Pulse."""
+        _, body, _ = _get(self.port, "/")
+        text = body.decode("utf-8")
+        for role in ("agents-body", "jobs-body", "pulse-body"):
+            self.assertRegex(
+                text,
+                rf'data-role="{role}"[^>]*tabindex="0"',
+                f"Overview tile body {role!r} must be focusable",
+            )
+
+    def test_overview_html_hides_empty_pulse_divider(self) -> None:
+        """Empty pulse paints silent — no orphan `ov-pulse-track` chrome
+        when there are no ticks (THEME §Writer copy)."""
+        _, body, _ = _get(self.port, "/")
+        text = body.decode("utf-8")
+        self.assertNotIn("ov-pulse-track", text)
+
+    def test_overview_css_shares_focus_ring_on_tile_body(self) -> None:
+        """One focus voice — the tile body joins the shared 2px ring rule."""
+        _, body, _ = _get(self.port, "/css/overview.css")
+        css = body.decode("utf-8")
+        self.assertIn(".ov-tile-body:focus-visible", css)
+
     def test_overview_html_never_speaks_map_verbs(self) -> None:
         """Label lock — Overview never borrows Map's vocabulary."""
         _, body, _ = _get(self.port, "/")
