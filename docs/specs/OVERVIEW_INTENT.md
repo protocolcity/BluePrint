@@ -2,8 +2,8 @@
 
 **Status:** DRAFT · Product design room (Brand · Designer · Writer) + Eli
 review · **spec-first**, code peels do not open until this INTENT lands **and**
-the Design theme pass returns an `OVERVIEW_THEME.md`. Sibling of
-[`MAP_V1_GLASS.md`](./MAP_V1_GLASS.md) — same shape, different lens.
+the Design theme pass returns [`OVERVIEW_THEME.md`](./OVERVIEW_THEME.md).
+Sibling of [`MAP_V1_GLASS.md`](./MAP_V1_GLASS.md) — same shape, different lens.
 
 ## Label lock (do not swap)
 
@@ -22,14 +22,14 @@ Overview element wants to say `dig`, `lot`, `hub`, `md-viewer`, `fan`, or
 `trail`, it belongs on Map instead — reject the paint and file it to the
 Map track.
 
-The brand is **PC** (ProtocolCity). No LLC surface, no legacy oneseollc
+The brand is **PC** (Protocol City). No LLC surface, no legacy oneseollc
 carryover, no cream palette — this is the dark PC desk.
 
 ## One sentence
 
 **Overview is the Mission Control glass for the BluePrint desk** — a
-system summary of **agents · jobs · pulse** at the current workspace, spoken
-in a local-only voice. It is the lens the operator lands on; it never
+system summary of **agents · jobs · pulse** at this desk, spoken in a
+local-only voice. It is the lens the operator lands on; it never
 pretends work is happening in the cloud.
 
 ## Four-lens spine (reminder)
@@ -56,7 +56,7 @@ tone for the desk.
 | Local-only honesty — reports only what this desk can see on this machine | A cloud-ops theater — no fake in-flight indicators for work the desk didn't launch |
 | Honestly empty when nothing is running | Padded with placeholder cards, motion, or synthetic activity to look busy |
 | Aware of its neighbors — a quiet hand-off to Map / Calendar / Settings | A dashboard that tries to *be* Map or Calendar inside itself |
-| Dark PC desk — one theme, keyed to a forthcoming `OVERVIEW_THEME.md` | Cream, LLC-era palette, or any legacy brand carryover |
+| Dark PC desk — one theme, keyed to [`OVERVIEW_THEME.md`](./OVERVIEW_THEME.md) | Cream, LLC-era palette, or any legacy brand carryover |
 
 ## V1 must-have chrome
 
@@ -113,8 +113,8 @@ Rules a peel cannot break without failing V1.
 6. **No rot re-entry.** The Later list is the rot ledger. A peel that
    re-lands any Later row must cite this section and prove it does not
    regress an invariant.
-7. **PC dark theme.** No cream. No LLC-era palette. Tokens come from a
-   forthcoming `OVERVIEW_THEME.md` (see next).
+7. **PC dark theme.** No cream. No LLC-era palette. Tokens come from
+   [`OVERVIEW_THEME.md`](./OVERVIEW_THEME.md) (see next).
 8. **One landing lens.** Overview is the only surface with landing-lens
    behavior. Neither Map, Calendar, nor Settings competes for that role.
 
@@ -123,9 +123,10 @@ Rules a peel cannot break without failing V1.
 This spec **does not invent Design tokens**. It names the need and hands it
 to the Design room:
 
-- Overview needs an `OVERVIEW_THEME.md` companion (dark PC desk) that
-  enumerates **keep · enhance · drop** decisions against the current
-  landing surface's token set — the same shape Map is getting.
+- Overview needs an [`OVERVIEW_THEME.md`](./OVERVIEW_THEME.md) companion
+  (dark PC desk) that enumerates **keep · enhance · drop** decisions
+  against the current landing surface's token set — the same shape Map
+  is getting.
 - Points Design at three token classes explicitly:
   1. **Surface** — the desk glass background, the Mission Control tile
      background, the honest-empty state background.
@@ -161,7 +162,7 @@ For the record, so a future peel knows the frame it lands into:
 - V1 Mission Control surface = **agents · jobs · pulse · local-only**.
   Nothing else.
 - Peels open only **after** this INTENT is accepted **and** the Design
-  theme pass returns `OVERVIEW_THEME.md`.
+  theme pass returns [`OVERVIEW_THEME.md`](./OVERVIEW_THEME.md).
 - Peel order will be published as a separate `OVERVIEW_V1_GLASS.md`
   (paint-and-quiet order first, then jobs · pulse, then filters), mirror
   of the Map DoD ladder.
