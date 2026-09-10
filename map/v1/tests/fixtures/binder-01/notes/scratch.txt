@@ -1,0 +1,2 @@
+This is a non-md file inside a lot; used to check has_md=false for folders
+that contain only non-md siblings.
