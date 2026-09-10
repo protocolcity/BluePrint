@@ -57,10 +57,14 @@ export async function boot(opts = {}) {
 
   // Camera state — snap only. No easing (Glass §Empty pan and zoom).
   const camera = { x: 0, y: 0, k: 1 };
+  // Last outer radius reported by paintLots; the folder ring widens when
+  // dense (see computeHubLayout), and applyCamera has to fit against the
+  // actual outer radius or a dense hub gets clipped at the edges.
+  let currentOuterRadius = cfg.radius;
 
   function applyCamera() {
     const rect = stage.getBoundingClientRect();
-    const base = fitTransform(rect.width, rect.height, { radius: cfg.radius });
+    const base = fitTransform(rect.width, rect.height, { radius: currentOuterRadius });
     world.setAttribute(
       'transform',
       `${base} translate(${camera.x.toFixed(2)},${camera.y.toFixed(2)}) scale(${camera.k.toFixed(3)})`,
@@ -74,7 +78,10 @@ export async function boot(opts = {}) {
     // matching lot so "digging into X" is visually anchored to X.
     const selectedRelPath = snap.trail.length > 0 ? snap.trail[0].relPath : null;
     paintHub(world, tree.binder);
-    paintLots(world, tree.topLots(snap.filters), { radius: cfg.radius, selectedRelPath });
+    const layout = paintLots(world, tree.topLots(snap.filters), { radius: cfg.radius, selectedRelPath });
+    currentOuterRadius = (layout && Number.isFinite(layout.outerRadius))
+      ? Math.max(cfg.radius, layout.outerRadius)
+      : cfg.radius;
     if (!snap.dig) { clearDigIn(world); }
     applyCamera();
     renderTrail();

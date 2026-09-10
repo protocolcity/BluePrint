@@ -47,6 +47,11 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-lot-md .map-lot-plate { fill: var(--map-lot-md); }
 .map-lot-file .map-lot-plate { fill: var(--map-lot-file); }
 .map-lot-label { fill: var(--map-fg); font-size: 11px; pointer-events: none; }
+/* Inner-ring file dots — smaller marks so the folder ring's labels breathe.
+ * Muted vs folder labels so the eye reads the outer ring first. */
+.map-lot-file-label {
+  fill: var(--map-muted); font-size: 10px; pointer-events: none;
+}
 /* Selected lot = clear 2px accent focus ring on dark (Theme §Enhance). */
 .map-lot.is-selected .map-lot-plate {
   stroke: var(--map-lot-focus); stroke-width: 2;
