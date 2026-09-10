@@ -69,7 +69,10 @@ must cite this section and prove it does not regress an INTENT invariant.
 ## Writer — empty copy (V1 lock)
 
 Every surface must read as legible with **zero** entries. These are the
-strings Writer signed off on; the peel uses them verbatim.
+strings Writer signed off on; the peel uses them verbatim. Zeros **PASS**
+dogfood — see the Dogfood note in [`OVERVIEW_INTENT.md`](./OVERVIEW_INTENT.md):
+`No agents` is the correct paint when the desk truthfully has none, not a
+fallback for a broken read.
 
 | Surface | Empty copy |
 |---|---|
@@ -120,7 +123,8 @@ the theme pass.
    animation on the landing lens.
 4. **Empty is real.** Empty states use Writer copy or a Design spacer.
    Never skeleton shimmer — shimmer lies about a loading state that
-   isn't happening.
+   isn't happening. A `demo-worker` on the local registry does **not**
+   paint a busy tile — it paints `No agents` until a real event ticks.
 5. **One focus voice.** The 2px ring is shared across every interactive
    element. No per-component focus experiments in V1.
 6. **Copy lock.** The strings in the Writer table above are exact. A

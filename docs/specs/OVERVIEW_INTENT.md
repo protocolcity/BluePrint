@@ -72,6 +72,27 @@ Four surfaces. Nothing else lands in V1.
 Each surface must read as legible with **zero** entries. Honest empty is a
 first-class state, not a fallback.
 
+### Dogfood note — empty is truth
+
+Recorded from a Local + Eli pass on **this desk · Protocol City**:
+Workspace·Agents rendered **empty** (`people.staff = 0`, `workers = [demo-worker]`,
+`live = 0`). This is the intentional state after an agent reset / consume cut —
+**not a hang, not a missing-roster bug, not a wiring gap.**
+
+Rules that fall out of this evidence — a peel that breaks any of them fails V1:
+
+- Empty Agents is a **valid honesty state** under local-only. Do not imply a
+  missing roster; do not invent demo agents as chrome to fill the tile.
+- V1 wiring for **agents · jobs · pulse** paints **real desk truth** — including
+  zeros. Never fake activity, never fabricate an employed count, never
+  synthesize a heartbeat to make the tile look occupied.
+- **`demo-worker` alone ≠ employed pulse.** A placeholder worker on the
+  registry is not evidence the desk is working; the pulse tile stays quiet
+  until a real event ticks.
+- The Writer empties in [`OVERVIEW_THEME.md`](./OVERVIEW_THEME.md) (`No agents`
+  · `No open jobs` · pulse silent or `No pulse yet`) are the **PASS** copy for
+  this dogfood state, not a fallback for a broken read.
+
 ## Later — chrome held (activity flags)
 
 Everything below is the rot that Overview inherited from the prior wall
@@ -107,7 +128,10 @@ Rules a peel cannot break without failing V1.
    on this machine. No "somewhere in the cloud, something is happening"
    surfaces. If the truth source is not local, the surface does not paint.
 4. **Honest empty.** Agents · jobs · pulse each render legibly with zero
-   entries. Empty is copy, not a spinner.
+   entries. Empty is copy, not a spinner. Zeros **PASS** dogfood — the
+   Dogfood note above is the reference case: `people.staff = 0` +
+   `workers = [demo-worker]` + `live = 0` paints `No agents`, not a
+   synthetic employed count.
 5. **Landing.** Overview is the landing lens. It hands off to Map,
    Calendar, Settings — it does not try to be them.
 6. **No rot re-entry.** The Later list is the rot ledger. A peel that
