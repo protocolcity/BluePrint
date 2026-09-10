@@ -94,13 +94,23 @@ export async function boot(opts = {}) {
     Promise.resolve().then(() => { repaintScheduled = false; repaint(); });
   }
 
-  async function digInto(node) {
+  async function digInto(node, { mode = 'root' } = {}) {
     if (!node || !node.relPath) return;
-    viewState.setDig(node);
+    // Root-level dig (sibling of hub / sibling of the current dig root) must
+    // REPLACE the trail — clicking B after A should not nest B under A. Only
+    // a nested click (verb from #dig-in-layer child) pushes onto the trail.
+    if (mode === 'nest') {
+      viewState.setDig(node);
+    } else {
+      viewState.replaceDig(node);
+    }
     // Re-paint the lot ring so the top-level lot picks up the .is-selected
     // focus ring (paintLots reads selectedRelPath from the trail root).
     scheduleRepaint();
     const kids = await tree.childrenAt(node.relPath);
+    // Belt-and-braces: clear the fan layer before every paint so a racing
+    // second click cannot leave A's ring layered under B's.
+    clearDigIn(world);
     paintDigIn(world, node, kids, { radius: cfg.digRadius });
     renderTrail();
   }
@@ -140,11 +150,11 @@ export async function boot(opts = {}) {
       btn.addEventListener('click', async () => {
         while (viewState.snapshot().trail.length > i + 1) viewState.popDig();
         const top = viewState.snapshot().dig;
+        clearDigIn(world);
         if (top) {
           const kids = await tree.childrenAt(top.relPath);
-          paintDigIn(world, top, kids, { radius: cfg.digRadius });
-        } else {
           clearDigIn(world);
+          paintDigIn(world, top, kids, { radius: cfg.digRadius });
         }
         renderTrail();
         scheduleRepaint();
@@ -177,7 +187,11 @@ export async function boot(opts = {}) {
           return;
         }
         if (!isDir) return; // non-md file: no verb in V1
-        digInto({ relPath, name });
+        // hit.layer semantics pin the dig grammar:
+        //   'lots'   → root-ring click; REPLACE trail (sibling swap)
+        //   'dig-in' → child inside the current fan; PUSH trail (nested)
+        const mode = hit.layer === 'dig-in' ? 'nest' : 'root';
+        digInto({ relPath, name }, { mode });
         return;
       }
       default:
@@ -242,11 +256,11 @@ export async function boot(opts = {}) {
     if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
     ev.preventDefault();
     const popped = viewState.popDig();
+    clearDigIn(world);
     if (popped) {
       const kids = await tree.childrenAt(popped.relPath);
-      paintDigIn(world, popped, kids, { radius: cfg.digRadius });
-    } else {
       clearDigIn(world);
+      paintDigIn(world, popped, kids, { radius: cfg.digRadius });
     }
     renderTrail();
     // Trail root may have changed (or gone empty) → refresh the focus ring.

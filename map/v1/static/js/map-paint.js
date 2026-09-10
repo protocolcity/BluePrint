@@ -75,12 +75,18 @@ export function paintHub(world, binder) {
 // can fit-to-screen against the effective outer radius instead of a fixed
 // baseRadius that would clip a widened ring.
 const HUB_DISC_R = 44;
-const FOLDER_ARC_PX = 95;        // per-plate arc budget (~68px plate + gutter)
+const FOLDER_ARC_PX = 108;       // per-plate arc budget (~68px plate + gutter)
 const FILE_ARC_PX = 34;          // per-dot arc budget on the inner ring
 const FILE_RING_CLEAR = 90;      // min inner-ring radius (clears the hub disc)
 const FILE_RING_GAP = 90;        // min gap between file ring and folder ring
-const HUB_FOLDER_STAGGER_MIN = 8;
-const HUB_FILE_STAGGER_MIN = 12;
+const HUB_FOLDER_STAGGER_MIN = 6;
+const HUB_FILE_STAGGER_MIN = 10;
+// Above this, folders spread onto two concentric orbits so a very dense
+// binder (Cellar Path B: 20+ top-level lots) doesn't shove every label
+// onto a single arc. Even-indexed folders ride the outer orbit; odd ones
+// ride the inner orbit at ~72% radius.
+const HUB_MULTI_ORBIT_MIN = 16;
+const HUB_INNER_ORBIT_RATIO = 0.72;
 
 export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
   const items = Array.isArray(lots) ? lots : [];
@@ -93,20 +99,30 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
 
   const folderCount = folders.length;
   const fileCount = files.length;
+  const multiOrbit = folderCount > HUB_MULTI_ORBIT_MIN;
+  // In multi-orbit mode the arc budget is per orbit, so we size against
+  // the busier orbit's count (ceil for the outer, floor for the inner).
+  const perOrbitCount = multiOrbit ? Math.ceil(folderCount / 2) : folderCount;
 
   const folderMinRadius = folderCount > 0
-    ? (folderCount * FOLDER_ARC_PX) / (2 * Math.PI)
+    ? (perOrbitCount * FOLDER_ARC_PX) / (2 * Math.PI)
     : 0;
   const folderRadius = Math.max(baseRadius, folderMinRadius);
+  const folderInnerRadius = multiOrbit
+    ? Math.max(HUB_DISC_R + FILE_RING_GAP, folderRadius * HUB_INNER_ORBIT_RATIO)
+    : folderRadius;
 
   const fileMinRadius = fileCount > 0
     ? (fileCount * FILE_ARC_PX) / (2 * Math.PI)
     : 0;
+  // In multi-orbit mode the file ring must clear the inner folder orbit,
+  // not the outer one — otherwise dots collide with the inner-orbit plates.
+  const fileClearanceRef = multiOrbit ? folderInnerRadius : folderRadius;
   const fileRadius = fileCount > 0
     ? Math.max(
       FILE_RING_CLEAR,
       fileMinRadius,
-      Math.min(folderRadius - FILE_RING_GAP, folderRadius * 0.55),
+      Math.min(fileClearanceRef - FILE_RING_GAP, fileClearanceRef * 0.55),
     )
     : 0;
 
@@ -114,12 +130,29 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
   const fileStagger = fileCount > HUB_FILE_STAGGER_MIN;
 
   const placed = new Array(items.length);
-  const folderPositions = ringPositions(folderCount, folderRadius);
-  folders.forEach((idx, k) => {
-    const { x, y } = folderPositions[k];
-    const labelY = folderStagger ? (k % 2 === 0 ? 34 : -28) : 4;
-    placed[idx] = { x, y, labelY, ring: 'folder' };
-  });
+  if (multiOrbit) {
+    const outerIdxs = folders.filter((_, k) => k % 2 === 0);
+    const innerIdxs = folders.filter((_, k) => k % 2 === 1);
+    const outerPositions = ringPositions(outerIdxs.length, folderRadius);
+    const innerPositions = ringPositions(innerIdxs.length, folderInnerRadius);
+    outerIdxs.forEach((idx, k) => {
+      const { x, y } = outerPositions[k];
+      const labelY = folderStagger ? (k % 2 === 0 ? 34 : -28) : 4;
+      placed[idx] = { x, y, labelY, ring: 'folder' };
+    });
+    innerIdxs.forEach((idx, k) => {
+      const { x, y } = innerPositions[k];
+      const labelY = folderStagger ? (k % 2 === 0 ? 34 : -28) : 4;
+      placed[idx] = { x, y, labelY, ring: 'folder' };
+    });
+  } else {
+    const folderPositions = ringPositions(folderCount, folderRadius);
+    folders.forEach((idx, k) => {
+      const { x, y } = folderPositions[k];
+      const labelY = folderStagger ? (k % 2 === 0 ? 34 : -28) : 4;
+      placed[idx] = { x, y, labelY, ring: 'folder' };
+    });
+  }
   const filePositions = ringPositions(fileCount, fileRadius);
   files.forEach((idx, k) => {
     const { x, y } = filePositions[k];
@@ -130,9 +163,22 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
   return {
     placed,
     folderRadius,
+    folderInnerRadius,
     fileRadius,
+    multiOrbit,
     outerRadius: Math.max(folderRadius, HUB_DISC_R),
   };
+}
+
+// Hub-lot label cap. SVG has no native text-overflow, so we clip the long
+// tail and stash the full name on an SVG <title> tooltip. Files are dots
+// with a shorter cap; folder plates are wider and can carry more glyphs.
+const LOT_FOLDER_LABEL_MAX = 16;
+const LOT_FILE_LABEL_MAX = 12;
+function truncateLotLabel(name, max) {
+  if (typeof name !== 'string') return '';
+  if (name.length <= max) return name;
+  return `${name.slice(0, max - 1)}…`;
 }
 
 export function paintLots(world, lots, { radius = 220, selectedRelPath = null } = {}) {
@@ -159,10 +205,13 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
       // Inner-ring files are small dots so the folder ring's labels breathe.
       group.appendChild(el('circle', { cx: 0, cy: 0, r: 12, class: 'map-lot-plate map-lot-file-plate' }));
     }
+    const rawName = lot.name || lot.relPath || '';
+    const max = kind === 'file' ? LOT_FILE_LABEL_MAX : LOT_FOLDER_LABEL_MAX;
     const label = el('text', {
       x: 0, y: pos.labelY, class: 'map-lot-label', 'text-anchor': 'middle',
-    }, lot.name || lot.relPath);
+    }, truncateLotLabel(rawName, max));
     if (kind === 'file') label.setAttribute('class', 'map-lot-label map-lot-file-label');
+    if (rawName.length > max) label.appendChild(el('title', {}, rawName));
     group.appendChild(label);
     layer.appendChild(group);
   });
@@ -239,9 +288,14 @@ export const _internal = {
   ringPositions,
   LAYER_IDS,
   truncateLabel,
+  truncateLotLabel,
   DIG_LABEL_MAX,
+  LOT_FOLDER_LABEL_MAX,
+  LOT_FILE_LABEL_MAX,
   HUB_FOLDER_STAGGER_MIN,
   HUB_FILE_STAGGER_MIN,
+  HUB_MULTI_ORBIT_MIN,
+  HUB_INNER_ORBIT_RATIO,
   FOLDER_ARC_PX,
   FILE_ARC_PX,
 };
