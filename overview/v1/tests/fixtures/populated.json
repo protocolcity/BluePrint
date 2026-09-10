@@ -1,0 +1,19 @@
+{
+  "agents": [
+    { "name": "planner", "state": "working" },
+    { "name": "reviewer", "state": "idle" },
+    { "name": "runner", "state": "error" },
+    { "name": "watcher", "state": "off" }
+  ],
+  "jobs": [
+    { "name": "peel/overview-v1-mc-shell", "state": "open" },
+    { "name": "dogfood-cycle-1", "state": "ready" }
+  ],
+  "pulse": {
+    "ticks": [
+      { "at": "2026-09-10T09:00:00", "label": "boot" },
+      { "at": "2026-09-10T09:12:00", "label": "job-open" }
+    ],
+    "last_at": "2026-09-10T09:12:00"
+  }
+}
