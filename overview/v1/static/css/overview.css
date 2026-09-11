@@ -239,6 +239,12 @@ html, body {
 .ov-job-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 4px 0; }
 .ov-job-name { color: var(--ov-fg); font-size: 13px; }
 .ov-job-state { color: var(--ov-muted); font-size: 12px; text-transform: lowercase; }
+.ov-job-more {
+  margin: 8px 0 0;
+  color: var(--ov-muted);
+  font-size: 12px;
+}
+
 .ov-tile-buckets {
   margin-top: 8px;
   display: flex;

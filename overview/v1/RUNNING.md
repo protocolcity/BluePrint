@@ -135,3 +135,19 @@ When ``--binder DIR`` is set and ``<binder>/.blueprint/overview.json`` is
 Missing stores stay honest-empty. Planted ``overview.json`` still wins.
 Cellar tip stays the boot-pinned brew face.
 
+## LaunchAgent / always-on (macOS)
+
+Phase-B Agents/Jobs projectors only run when the desk is started with
+`--binder DIR`. A LaunchAgent (or login wrapper) that runs plain
+`blueprint-overview` with **no** `--binder` will paint honest-empty Agents/Jobs
+even when WorkForce/WorkLane stores exist under the binder.
+
+Dogfood always-on Overview with local truth:
+
+```bash
+blueprint-overview --binder <your-binder-dir> --port 8803
+```
+
+Map's LaunchAgent already passes `--binder`; keep Overview's agent in the same
+shape. Without `--binder`, Overview still boots (four lenses + brew Cellar tip)
+— it just has no local Agents/Jobs feed to project.

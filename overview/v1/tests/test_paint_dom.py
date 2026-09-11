@@ -134,5 +134,32 @@ class HiddenCssRuleTests(unittest.TestCase):
         )
 
 
+
+class JobsCapTests(unittest.TestCase):
+    """Jobs tile never walls — cap + blocked→ready→waiting + N more."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.cases = _run_harness()
+
+    def test_visible_rows_capped(self) -> None:
+        c = self.cases["jobs_cap"]
+        self.assertLessEqual(c["row_count"], 8)
+        self.assertEqual(c["row_count"], 8)
+        self.assertEqual(c["more_text"], "4 more")
+
+    def test_rank_blocked_ready_waiting(self) -> None:
+        c = self.cases["jobs_rank"]
+        self.assertEqual(c["visible"], 8)
+        self.assertEqual(c["more"], 4)
+        order = c["order"]
+        self.assertEqual(order[:4], ["blocked"] * 4)
+        self.assertEqual(order[4:7], ["ready"] * 3)
+        self.assertEqual(order[7:], ["waiting"])
+
+    def test_buckets_still_paint_full_counts(self) -> None:
+        counts = self.cases["jobs_cap"]["bucket_counts"]
+        self.assertEqual(counts, ["100", "3", "12"])
+
 if __name__ == "__main__":
     unittest.main()

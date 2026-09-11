@@ -219,4 +219,43 @@ const cases = {};
   };
 }
 
+
+// Jobs tile: cap visible rows; quiet N more; buckets stay full counts.
+{
+  const root = makeShell();
+  const many = [];
+  for (let i = 0; i < 5; i++) many.push({ name: `w${i}`, state: "waiting" });
+  for (let i = 0; i < 3; i++) many.push({ name: `r${i}`, state: "ready" });
+  for (let i = 0; i < 4; i++) many.push({ name: `b${i}`, state: "blocked" });
+  mod.paintJobs(root, many, { waiting: 100, ready: 3, blocked: 12 });
+  const body = root.querySelector('[data-role="jobs-body"]');
+  const buckets = root.querySelector('[data-role="jobs-buckets"]');
+  const list = body.children.find((c) => c.tagName === "UL");
+  const more = body.children.find((c) => c.tagName === "P" && c.className === "ov-job-more");
+  const rows = list ? list.children : [];
+  const states = rows.map((li) => {
+    const st = li.children.find((c) => c.className === "ov-job-state");
+    return st ? st.textContent : "";
+  });
+  cases.jobs_cap = {
+    row_count: rows.length,
+    more_text: more ? more.textContent : null,
+    first_states: states.slice(0, 4),
+    bucket_html: buckets.innerHTML || String(buckets.children.map((c) => c.textContent).join("|")),
+  };
+  // buckets: three rows with counts — collect count textContent
+  const counts = buckets.children.map((row) => {
+    const count = row.children.find((c) => c.className === "ov-bucket-count");
+    return count ? count.textContent : "";
+  });
+  cases.jobs_cap.bucket_counts = counts;
+  const ranked = mod.rankAndCapJobs(many, 8);
+  cases.jobs_rank = {
+    visible: ranked.visible.length,
+    more: ranked.more,
+    order: ranked.visible.map((r) => r.state),
+  };
+}
+
+
 process.stdout.write(JSON.stringify(cases));
