@@ -147,9 +147,14 @@ def project_agents(binder: Path) -> list[dict]:
         if kind and kind not in ("lane", "job"):
             continue
         identity = str(row.get("identity") or wid).strip() or str(wid)
-        # Wire ``name`` is the worker id (identity). Display stays roster-local;
-        # Overview V1 contract is {name, state} and demo-worker filter keys on id.
-        name = identity
+        display = str(row.get("display") or "").strip()
+        # Prefer roster ``display`` for paint (Design soft watch). Keep
+        # ``demo-worker`` as the wire name so the alone→No agents filter still
+        # keys on identity.
+        if identity == "demo-worker" or str(wid) == "demo-worker":
+            name = "demo-worker"
+        else:
+            name = display or identity
         if not name:
             continue
         state = "working" if (identity in in_flight or str(wid) in in_flight) else "idle"
