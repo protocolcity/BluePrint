@@ -128,19 +128,43 @@ function buildBuilderLink(label, kind, entries) {
   return a;
 }
 
+/** Cap for the Jobs MC tile — never wall the desk with full WorkLane. */
+export const JOBS_TILE_CAP = 8;
+
+const _JOB_STATE_RANK = { blocked: 0, ready: 1, waiting: 2 };
+
+/**
+ * Sort blocked → ready → waiting (unknown last), then take the first `cap`
+ * rows. Returns `{ visible, more }` — buckets stay on the full API counts.
+ */
+export function rankAndCapJobs(jobs, cap = JOBS_TILE_CAP) {
+  const rows = Array.isArray(jobs) ? jobs.slice() : [];
+  rows.sort((a, b) => {
+    const ra = _JOB_STATE_RANK[String(a?.state || "").toLowerCase()];
+    const rb = _JOB_STATE_RANK[String(b?.state || "").toLowerCase()];
+    const aa = ra === undefined ? 99 : ra;
+    const bb = rb === undefined ? 99 : rb;
+    return aa - bb;
+  });
+  const limit = Math.max(0, Number(cap) || JOBS_TILE_CAP);
+  const visible = rows.slice(0, limit);
+  const more = Math.max(0, rows.length - visible.length);
+  return { visible, more };
+}
+
 export function paintJobs(root, jobs, buckets) {
   const body = root.querySelector('[data-role="jobs-body"]');
   const bucketNode = root.querySelector('[data-role="jobs-buckets"]');
   if (!body) return;
 
-  const rows = Array.isArray(jobs) ? jobs : [];
+  const { visible, more } = rankAndCapJobs(jobs, JOBS_TILE_CAP);
   clear(body);
-  if (rows.length === 0) {
+  if (visible.length === 0 && more === 0) {
     body.appendChild(makeEmpty("No open jobs"));
   } else {
     const list = document.createElement("ul");
     list.className = "ov-job-list";
-    for (const row of rows) {
+    for (const row of visible) {
       const li = document.createElement("li");
       li.className = "ov-job-row";
       const name = document.createElement("span");
@@ -153,6 +177,12 @@ export function paintJobs(root, jobs, buckets) {
       list.appendChild(li);
     }
     body.appendChild(list);
+    if (more > 0) {
+      const moreEl = document.createElement("p");
+      moreEl.className = "ov-job-more";
+      moreEl.textContent = `${more} more`;
+      body.appendChild(moreEl);
+    }
   }
 
   if (!bucketNode) return;
