@@ -17,13 +17,16 @@ Run with:  pytest overview/v1/tests
 from __future__ import annotations
 
 import sys
+import subprocess
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 _OVERVIEW_V1 = _HERE.parent
 sys.path.insert(0, str(_OVERVIEW_V1))
 
+from server import overview_state  # noqa: E402
 from server.overview_state import (  # noqa: E402
     DEFAULT_CELLAR_TIP,
     HEARTBEAT_NAMES,
@@ -225,9 +228,9 @@ class HeartbeatHonestyTests(unittest.TestCase):
         """Cellar tip is a top-level state field — never smuggled from a
         heartbeat row masquerading as a version string."""
         state = empty_state()
-        state["cellar_tip"] = "blueprint 0.1.50_6"
+        state["cellar_tip"] = "blueprint 0.1.50_9"
         payload = load_pulse(state)
-        self.assertEqual(payload["cellar_tip"], "blueprint 0.1.50_6")
+        self.assertEqual(payload["cellar_tip"], "blueprint 0.1.50_9")
 
 
 class ProjectHonestyTests(unittest.TestCase):
@@ -281,3 +284,50 @@ class WirePayloadShapeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _completed(returncode: int, stdout: str) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(
+        args=["brew", "list", "--versions", "blueprint"],
+        returncode=returncode,
+        stdout=stdout,
+        stderr="",
+    )
+
+
+class CellarTipDetectTests(unittest.TestCase):
+    """Brew face detection — brew is never required for the suite to pass."""
+
+    def test_detect_falls_back_when_brew_is_missing(self) -> None:
+        with mock.patch("server.overview_state.subprocess.run",
+                        side_effect=FileNotFoundError("brew")):
+            self.assertEqual(overview_state.detect_cellar_tip(), DEFAULT_CELLAR_TIP)
+
+    def test_detect_falls_back_when_brew_exits_nonzero(self) -> None:
+        with mock.patch("server.overview_state.subprocess.run",
+                        return_value=_completed(1, "")):
+            self.assertEqual(overview_state.detect_cellar_tip(), DEFAULT_CELLAR_TIP)
+
+    def test_detect_falls_back_on_timeout(self) -> None:
+        with mock.patch("server.overview_state.subprocess.run",
+                        side_effect=subprocess.TimeoutExpired("brew", 2.0)):
+            self.assertEqual(overview_state.detect_cellar_tip(), DEFAULT_CELLAR_TIP)
+
+    def test_detect_parses_brew_list_versions(self) -> None:
+        with mock.patch("server.overview_state.subprocess.run",
+                        return_value=_completed(0, "blueprint 0.1.50_9\n")):
+            self.assertEqual(overview_state.detect_cellar_tip(), "blueprint 0.1.50_9")
+
+    def test_detect_takes_the_newest_keg(self) -> None:
+        with mock.patch("server.overview_state.subprocess.run",
+                        return_value=_completed(0, "blueprint 0.1.50_8 0.1.50_9\n")):
+            self.assertEqual(overview_state.detect_cellar_tip(), "blueprint 0.1.50_9")
+
+    def test_detect_never_paints_a_private_sha(self) -> None:
+        """A SHA-shaped token is refused — the tip stays the brew face."""
+        with mock.patch("server.overview_state.subprocess.run",
+                        return_value=_completed(0, "blueprint c35db4f5\n")):
+            tip = overview_state.detect_cellar_tip()
+        self.assertEqual(tip, DEFAULT_CELLAR_TIP)
+        self.assertNotIn("protocolcity", tip.lower())
+

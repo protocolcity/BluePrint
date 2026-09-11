@@ -5,7 +5,7 @@
   "jobs": [],
   "buckets": { "waiting": 0, "ready": 0, "blocked": 0 },
   "pulse": { "heartbeats": [], "ticks": [], "last_at": null },
-  "cellar_tip": "blueprint 0.1.50_6",
+  "cellar_tip": "blueprint 0.1.50_9",
   "project": {},
   "charter": {}
 }
