@@ -221,7 +221,7 @@ class BinderTruthTests(unittest.TestCase):
                     "ticks": [],
                     "last_at": "2026-09-11T10:00:00",
                 },
-                "cellar_tip": "blueprint 0.1.50_6",
+                "cellar_tip": "blueprint 0.1.50_9",
             }),
             encoding="utf-8",
         )

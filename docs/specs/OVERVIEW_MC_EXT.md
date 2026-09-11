@@ -62,4 +62,4 @@ Wire shape locked by this spec (extends `overview_state.py`):
 | `GET /api/overview/project` | `{"title","project","path_hint","badges":{local_write,consume,upstream,local_only},"charter_excerpt"}` or `{}` when nothing selected |
 | `GET /api/overview/charter` | `{"title","sections":[{heading,body}],"footer"}` or `{}` when not opened |
 
-`--cellar-tip` on `serve.py` (default `blueprint 0.1.50_6`) is the brew face injected into `/api/overview/pulse`. `--fixture` for project/charter fixtures is tests / demo only; default serve stays empty.
+`--cellar-tip` on `serve.py` is the brew face injected into `/api/overview/pulse`; omitted, the server reads the local brew Cellar (`brew list --versions blueprint`) and falls back to `blueprint 0.1.50_9`. `--fixture` for project/charter fixtures is tests / demo only; default serve stays empty.

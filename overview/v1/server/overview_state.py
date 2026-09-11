@@ -29,14 +29,19 @@ Never-lie contract (MC_EXT):
 - Cloud / remote builders are outbound **links**, never painted as local
   agents. They come back in their own arrays; the client renders them as
   link chips, never as rows in the agent roster.
-- Cellar tip is the brew app version (e.g. ``blueprint 0.1.50_6``), not a
-  private ProtocolCity SHA. The default is injected by ``serve.py``.
+- Cellar tip is the brew app version (e.g. ``blueprint 0.1.50_9``), not a
+  private ProtocolCity SHA. It is resolved from the local brew Cellar by
+  ``detect_cellar_tip()`` and injected by ``serve.py``; when brew is
+  missing or fails we fall back to ``DEFAULT_CELLAR_TIP`` rather than
+  invent a version.
 - Heartbeat rows carry a state string; a missing heartbeat paints muted
   (``off``), never working green.
 """
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 from pathlib import Path
 
 
@@ -50,7 +55,46 @@ _DEMO_WORKER = "demo-worker"
 # A heartbeat missing from state paints as ``off`` (muted), not working green.
 HEARTBEAT_NAMES = ("FS Watch", "Builder", "Cellar", "Index", "Sync")
 
-DEFAULT_CELLAR_TIP = "blueprint 0.1.50_6"
+DEFAULT_CELLAR_TIP = "blueprint 0.1.50_9"
+
+# Brew face detection. ``brew list --versions blueprint`` is the stable
+# query — it prints ``blueprint <version> [<version> …]`` and exits
+# non-zero when the formula is not installed. Short timeout, failures
+# swallowed: the desk never blocks on brew and never invents a version.
+_CELLAR_FORMULA = "blueprint"
+_BREW_TIMEOUT_S = 2.0
+_VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z._+-]*$")
+
+
+def _brew_blueprint_version() -> str | None:
+    """Installed brew version of the ``blueprint`` formula, or ``None``."""
+    try:
+        proc = subprocess.run(
+            ["brew", "list", "--versions", _CELLAR_FORMULA],
+            capture_output=True,
+            text=True,
+            timeout=_BREW_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    parts = (proc.stdout or "").split()
+    # ``blueprint 0.1.50_8 0.1.50_9`` — brew lists oldest keg first, so
+    # the tip is last. Anything that is not a version string (a SHA, a
+    # path, an error line) is refused rather than painted.
+    if len(parts) < 2 or parts[0] != _CELLAR_FORMULA:
+        return None
+    version = parts[-1]
+    return version if _VERSION_RE.match(version) else None
+
+
+def detect_cellar_tip() -> str:
+    """Brew face for the pulse tile — detected, else ``DEFAULT_CELLAR_TIP``."""
+    version = _brew_blueprint_version()
+    return f"{_CELLAR_FORMULA} {version}" if version else DEFAULT_CELLAR_TIP
+
 
 
 def empty_state() -> dict:

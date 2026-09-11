@@ -39,7 +39,9 @@ Calendar. Missing files keep the honest-empty paint.
 
 ``--fixture PATH`` overrides the entire overview state (tests / demo only).
 
-``--cellar-tip`` sets the brew face — never a private ProtocolCity SHA
+``--cellar-tip`` sets the brew face — never a private ProtocolCity SHA.
+Omit it and the tip is read from the local brew Cellar
+(``brew list --versions blueprint``), falling back to ``DEFAULT_CELLAR_TIP``
 (``OVERVIEW_MC_EXT.md`` never-lie DoD).
 """
 from __future__ import annotations
@@ -63,6 +65,7 @@ _MAP_V1 = _REPO_ROOT / "map" / "v1"
 
 from server.overview_state import (  # noqa: E402
     DEFAULT_CELLAR_TIP,
+    detect_cellar_tip,
     empty_state,
     load_agents,
     load_charter,
@@ -284,10 +287,12 @@ class Handler(BaseHTTPRequestHandler):
 def _apply_cellar_tip(state: dict, cellar_tip: str) -> dict:
     """Overlay the brew-face Cellar tip onto the loaded state.
 
-    Never a private ProtocolCity SHA. ``--cellar-tip`` on the CLI is the
-    single voice for the version string the pulse tile paints.
+    Never a private ProtocolCity SHA. An explicit ``--cellar-tip`` on the
+    CLI is the single voice; omitted or empty, we ask the local brew
+    Cellar and fall back to ``DEFAULT_CELLAR_TIP`` — so Settings and Pulse
+    track the tap without a manual bump every rev.
     """
-    tip = (cellar_tip or "").strip() or DEFAULT_CELLAR_TIP
+    tip = (cellar_tip or "").strip() or detect_cellar_tip()
     state["cellar_tip"] = tip
     return state
 
@@ -310,10 +315,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--cellar-tip",
-        default=DEFAULT_CELLAR_TIP,
+        default="",
         help=(
-            "Brew-face Cellar tip painted by /api/overview/pulse "
-            f"(default: {DEFAULT_CELLAR_TIP!r}). Never a private ProtocolCity SHA."
+            "Brew-face Cellar tip painted by /api/overview/pulse. Omit to read "
+            f"it from the local brew Cellar (fallback: {DEFAULT_CELLAR_TIP!r}). "
+            "Never a private ProtocolCity SHA."
         ),
     )
     args = parser.parse_args(argv)

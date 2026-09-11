@@ -28,6 +28,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest import mock
 import urllib.request
 from pathlib import Path
 
@@ -280,7 +281,7 @@ class PopulatedFixtureTests(unittest.TestCase):
         names = [hb["name"] for hb in payload["heartbeats"]]
         self.assertEqual(list(HEARTBEAT_NAMES), names)
         # No private ProtocolCity SHA — the tip is the brew face.
-        self.assertEqual(payload["cellar_tip"], "blueprint 0.1.50_6")
+        self.assertEqual(payload["cellar_tip"], "blueprint 0.1.50_9")
         self.assertNotIn("protocolcity", payload["cellar_tip"].lower())
         self.assertEqual(payload["last_at"], "2026-09-11T10:21:34")
 
@@ -340,17 +341,29 @@ class FullGlassFixtureTests(unittest.TestCase):
 
 
 class CellarTipInjectionTests(unittest.TestCase):
-    """--cellar-tip on serve.py is the single voice for the brew face."""
+    """--cellar-tip is the single voice; omitted, the tip comes from brew."""
 
     def test_apply_cellar_tip_overrides_state(self) -> None:
         st = empty_state()
-        overview_serve._apply_cellar_tip(st, "blueprint 0.1.50_7")
+        with mock.patch.object(overview_serve, "detect_cellar_tip") as detect:
+            overview_serve._apply_cellar_tip(st, "blueprint 0.1.50_7")
         self.assertEqual(st["cellar_tip"], "blueprint 0.1.50_7")
+        detect.assert_not_called()
 
-    def test_apply_cellar_tip_defaults_when_empty(self) -> None:
+    def test_apply_cellar_tip_detects_when_empty(self) -> None:
         st = empty_state()
-        overview_serve._apply_cellar_tip(st, "")
+        with mock.patch.object(overview_serve, "detect_cellar_tip",
+                               return_value="blueprint 0.1.50_9"):
+            overview_serve._apply_cellar_tip(st, "")
+        self.assertEqual(st["cellar_tip"], "blueprint 0.1.50_9")
+
+    def test_apply_cellar_tip_defaults_when_brew_is_absent(self) -> None:
+        st = empty_state()
+        with mock.patch("server.overview_state.subprocess.run",
+                        side_effect=FileNotFoundError("brew")):
+            overview_serve._apply_cellar_tip(st, "")
         self.assertEqual(st["cellar_tip"], DEFAULT_CELLAR_TIP)
+        self.assertNotIn("protocolcity", st["cellar_tip"].lower())
 
 
 if __name__ == "__main__":
