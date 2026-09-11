@@ -8,37 +8,107 @@
 </head>
 <body>
   <main id="overview-shell" class="ov-shell" aria-label="Mission Control">
-    <header class="ov-banner" role="status" aria-live="polite">
-      <span class="ov-banner-dot" aria-hidden="true"></span>
-      <span class="ov-banner-label">Local desk</span>
+    <header class="ov-topnav" role="banner">
+      <div class="ov-brand">Protocol City</div>
+      <nav class="ov-lens-nav" aria-label="Lenses">
+        <a class="ov-lens ov-lens--current" href="/" data-lens="overview" aria-current="page">Overview</a>
+        <a class="ov-lens" href="/map" data-lens="map">Map</a>
+        <a class="ov-lens" href="/calendar" data-lens="calendar">Calendar</a>
+        <a class="ov-lens" href="/settings" data-lens="settings">Settings</a>
+      </nav>
     </header>
 
-    <section class="ov-tiles" aria-label="Overview">
-      <article class="ov-tile" id="ov-agents" aria-labelledby="ov-agents-title">
-        <h2 class="ov-tile-title" id="ov-agents-title">Agents</h2>
-        <div class="ov-tile-body" data-role="agents-body" tabindex="0">
-          <p class="ov-empty">No agents</p>
-        </div>
-      </article>
+    <div class="ov-banner-row">
+      <button
+        type="button"
+        class="ov-banner"
+        aria-label="Local desk"
+        aria-haspopup="menu"
+      >
+        <span class="ov-banner-dot" aria-hidden="true"></span>
+        <span class="ov-banner-label">Local desk</span>
+        <span class="ov-banner-caret" aria-hidden="true">▾</span>
+      </button>
+    </div>
 
-      <article class="ov-tile" id="ov-jobs" aria-labelledby="ov-jobs-title">
-        <h2 class="ov-tile-title" id="ov-jobs-title">Jobs</h2>
-        <div class="ov-tile-body" data-role="jobs-body" tabindex="0">
-          <p class="ov-empty">No open jobs</p>
-        </div>
-      </article>
+    <section class="ov-body">
+      <section class="ov-tiles" aria-label="Overview">
+        <article class="ov-tile" id="ov-agents" aria-labelledby="ov-agents-title">
+          <h2 class="ov-tile-title" id="ov-agents-title">
+            <span class="ov-tile-glyph" aria-hidden="true">◇</span>
+            <span>Agents</span>
+          </h2>
+          <div class="ov-tile-body" data-role="agents-body" tabindex="0">
+            <p class="ov-empty">No agents</p>
+          </div>
+          <div class="ov-tile-links" data-role="agents-links" hidden></div>
+        </article>
 
-      <article class="ov-tile" id="ov-pulse" aria-labelledby="ov-pulse-title">
-        <h2 class="ov-tile-title" id="ov-pulse-title">Pulse</h2>
-        <div class="ov-tile-body" data-role="pulse-body" tabindex="0"></div>
-      </article>
+        <article class="ov-tile" id="ov-jobs" aria-labelledby="ov-jobs-title">
+          <h2 class="ov-tile-title" id="ov-jobs-title">
+            <span class="ov-tile-glyph" aria-hidden="true">▤</span>
+            <span>Jobs</span>
+          </h2>
+          <div class="ov-tile-body" data-role="jobs-body" tabindex="0">
+            <p class="ov-empty">No open jobs</p>
+          </div>
+          <div class="ov-tile-buckets" data-role="jobs-buckets" hidden></div>
+        </article>
+
+        <article class="ov-tile" id="ov-pulse" aria-labelledby="ov-pulse-title">
+          <h2 class="ov-tile-title" id="ov-pulse-title">
+            <span class="ov-tile-glyph" aria-hidden="true">∿</span>
+            <span>Pulse</span>
+          </h2>
+          <div class="ov-tile-body" data-role="pulse-body" tabindex="0"></div>
+          <div class="ov-tile-meta" data-role="pulse-meta" hidden></div>
+        </article>
+      </section>
+
+      <aside
+        id="ov-charter-drawer"
+        class="ov-charter-drawer"
+        data-role="charter-drawer"
+        aria-labelledby="ov-charter-title"
+        hidden
+      >
+        <h2 class="ov-charter-title" id="ov-charter-title">Charter</h2>
+        <div class="ov-charter-body" data-role="charter-body"></div>
+        <p class="ov-charter-footer" data-role="charter-footer" hidden></p>
+      </aside>
     </section>
 
-    <nav class="ov-handoffs" aria-label="Other lenses">
-      <a class="ov-chip" href="/map" data-lens="map">Map</a>
-      <a class="ov-chip" href="/calendar" data-lens="calendar">Calendar</a>
-      <a class="ov-chip" href="/settings" data-lens="settings">Settings</a>
-    </nav>
+    <section
+      id="ov-project-card"
+      class="ov-project-card"
+      data-role="project-card"
+      hidden
+      aria-labelledby="ov-project-title"
+    >
+      <header class="ov-project-header">
+        <span class="ov-project-glyph" aria-hidden="true">▤</span>
+        <h2 class="ov-project-title" id="ov-project-title" data-role="project-title"></h2>
+      </header>
+      <p class="ov-project-path" data-role="project-path"></p>
+      <div class="ov-project-badges" aria-label="Honest badges">
+        <span class="ov-project-badges-title">Honest badges</span>
+        <div class="ov-badge-row" data-role="project-badges"></div>
+      </div>
+      <div class="ov-project-excerpt-wrap" data-role="project-excerpt-wrap" hidden>
+        <h3 class="ov-project-excerpt-title">Charter excerpt</h3>
+        <blockquote class="ov-project-excerpt" data-role="project-excerpt"></blockquote>
+      </div>
+      <div class="ov-project-actions">
+        <a class="ov-project-action ov-project-action--primary" href="#charter" data-role="action-open-charter">Open Charter</a>
+        <a class="ov-project-action" href="#flag" data-role="action-plant-flag">Plant flag</a>
+        <a class="ov-project-action" href="#agents-md" data-role="action-read-agents">Read AGENTS.md</a>
+      </div>
+    </section>
+
+    <footer class="ov-footer" data-role="footer" aria-label="Local pulse footer">
+      <div class="ov-footer-row" data-role="footer-row"></div>
+      <span class="ov-footer-quiet" data-role="footer-quiet">All systems quiet</span>
+    </footer>
   </main>
 
   <script type="module" src="./js/overview.v1.js"></script>
