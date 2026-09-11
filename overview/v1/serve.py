@@ -34,10 +34,12 @@ pulse · `No events`) per ``docs/specs/OVERVIEW_INTENT.md`` §Dogfood note
 and ``OVERVIEW_CALENDAR_SETTINGS.md`` §Calendar empty state.
 
 ``--binder DIR`` opts local truth in: ``<binder>/.blueprint/overview.json``
-seeds Agents/Jobs/Pulse (+ Project/Charter), ``<binder>/.blueprint/calendar.json``
-seeds the Calendar. Both are re-read when they change on disk, so a binder edit
-lands on the next refresh — no server bounce. Missing files keep honest-empty.
-``--fixture`` stays boot-pinned (tests / demo).
+seeds Agents/Jobs/Pulse (+ Project/Charter) when present (wins). When absent,
+Phase-B projectors read WorkForce roster + WorkLane SQLite (optional Desk
+HTTP) under the binder — honest empty when stores are missing.
+``<binder>/.blueprint/calendar.json`` seeds the Calendar. Inputs are re-read
+when they change on disk — no server bounce. ``--fixture`` stays boot-pinned
+(tests / demo).
 
 ``--fixture PATH`` overrides the entire overview state (tests / demo only).
 

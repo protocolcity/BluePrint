@@ -1,0 +1,11 @@
+{
+  "workers": {
+    "demo-worker": {
+      "kind": "lane",
+      "display": "Demo Worker",
+      "identity": "demo-worker",
+      "workdir": "/path/to/demo",
+      "schedule": "manual"
+    }
+  }
+}
