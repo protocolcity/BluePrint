@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import threading
 from pathlib import Path
 
 
@@ -382,11 +383,74 @@ def load_charter(state: dict | None = None) -> dict:
 # feed the four-lens shell without inventing state.
 
 
+
+# Sentinel for BinderOverview first-read (distinct from absent-file None stamp).
+_UNREAD = object()
+
+# Phase-B (parked): project WorkForce roster / WorkLane store under the binder
+# into agents[] / jobs[]+buckets when those public file shapes exist. Missing
+# stores must degrade to overview.json → empty_state — never invent busy.
+
+
+class BinderOverview:
+    """mtime-aware re-reader for ``<binder>/.blueprint/overview.json``.
+
+    ``current()`` is the per-request entry point: a stat on the hot path, a
+    re-parse only when the file changed on disk. Thread-safe — the desk runs
+    on a ``ThreadingHTTPServer``.
+
+    ``cellar_tip`` pins the resolved brew face (CLI ``--cellar-tip`` or
+    ``detect_cellar_tip()``), so a live re-read never shells out to brew on
+    the request path and a binder file can never re-voice the Cellar tip.
+    """
+
+    def __init__(self, binder: Path, cellar_tip: str = "") -> None:
+        self.binder = Path(binder).expanduser().resolve()
+        self.path = self.binder / ".blueprint" / "overview.json"
+        self.cellar_tip = (cellar_tip or "").strip() or DEFAULT_CELLAR_TIP
+        self._stamp: object = _UNREAD
+        self._state: dict = empty_state()
+        self._lock = threading.Lock()
+
+    def _stamp_now(self) -> tuple | None:
+        """File identity — ``None`` when the file is absent.
+
+        Size and inode ride along with ``st_mtime_ns`` so a rewrite still
+        reads as changed on filesystems with coarse timestamps.
+        """
+        try:
+            st = self.path.stat()
+        except OSError:
+            return None
+        return (st.st_mtime_ns, st.st_size, st.st_ino)
+
+    def _read(self, stamp: tuple | None) -> dict:
+        if stamp is None:
+            return empty_state()
+        try:
+            return load_from_fixture(self.path)
+        except (OSError, ValueError):
+            return empty_state()
+
+    def current(self) -> dict:
+        """State for this request — re-read only when the file changed."""
+        stamp = self._stamp_now()
+        with self._lock:
+            if stamp != self._stamp:
+                state = self._read(stamp)
+                state["cellar_tip"] = self.cellar_tip
+                self._state = state
+                self._stamp = stamp
+            return self._state
+
+
 def load_from_binder(binder: Path) -> dict:
     """Read local truth off ``<binder>/.blueprint/overview.json`` if present.
 
     Returns the full state (same shape as ``load_from_fixture``). Missing
     file → ``empty_state()`` — honest-empty is a first-class PASS.
+    Boot-time read; the live serve path uses ``BinderOverview`` so a binder
+    edit lands on the next GET.
     """
     binder = Path(binder).expanduser().resolve()
     marker = binder / ".blueprint" / "overview.json"

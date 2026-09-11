@@ -16,8 +16,11 @@ Run with:  pytest overview/v1/tests
 """
 from __future__ import annotations
 
-import sys
+import json
+import shutil
 import subprocess
+import sys
+import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -330,4 +333,31 @@ class CellarTipDetectTests(unittest.TestCase):
             tip = overview_state.detect_cellar_tip()
         self.assertEqual(tip, DEFAULT_CELLAR_TIP)
         self.assertNotIn("protocolcity", tip.lower())
+
+
+class BinderOverviewTests(unittest.TestCase):
+    def test_unchanged_file_is_not_reparsed(self) -> None:
+        tmp = tempfile.mkdtemp(prefix="bp-binder-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        binder = Path(tmp)
+        (binder / ".blueprint").mkdir()
+        (binder / ".blueprint" / "overview.json").write_text(
+            json.dumps({"agents": [{"name": "planner", "state": "working"}]}),
+            encoding="utf-8",
+        )
+        src = overview_state.BinderOverview(binder)
+        first = src.current()
+        with mock.patch.object(overview_state, "load_from_fixture") as parse:
+            second = src.current()
+        parse.assert_not_called()
+        self.assertIs(first, second)
+        self.assertEqual(first["cellar_tip"], DEFAULT_CELLAR_TIP)
+
+    def test_missing_file_is_honest_empty(self) -> None:
+        tmp = tempfile.mkdtemp(prefix="bp-binder-empty-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        src = overview_state.BinderOverview(Path(tmp), cellar_tip=DEFAULT_CELLAR_TIP)
+        st = src.current()
+        self.assertEqual(st["agents"], [])
+        self.assertEqual(st["cellar_tip"], DEFAULT_CELLAR_TIP)
 
