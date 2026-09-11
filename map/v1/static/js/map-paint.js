@@ -65,28 +65,29 @@ export function paintHub(world, binder) {
   layer.appendChild(group);
 }
 
-// Split hub lots into folder + file rings so dense binders (30+ lots) don't
-// pile all their labels onto a single arc. Widen the folder ring when dense,
-// stash files on a tighter inner ring as smaller dots so folder labels
-// breathe, and alternate labels above/below at the ring level a plain
-// evenly-spaced arc can no longer clear.
+// Hub crowding (Design MAP_HUB_CROWDING_GUIDE — prefer order):
+//   1) density-aware orbit (+~30% when folderCount ≥ 12)
+//   2) multi-orbit lots (R1/R2) when still crowded; files stay inner
+//   3) hide-until-hover labels at density (paintLots + CSS)
+//   4) longer stagger / higher arc budget
+//   5) plate shrink at dense hubs (paintLots)
+// Dig REPLACE / focus / md-viewer must stay PASS.
 //
-// Returns { placed[], folderRadius, fileRadius, outerRadius } so the host
-// can fit-to-screen against the effective outer radius instead of a fixed
-// baseRadius that would clip a widened ring.
+// Returns { placed[], folderRadius, fileRadius, outerRadius, dense, … }
+// so the host can fit-to-screen against the effective outer radius.
 const HUB_DISC_R = 44;
-const FOLDER_ARC_PX = 108;       // per-plate arc budget (~68px plate + gutter)
-const FILE_ARC_PX = 34;          // per-dot arc budget on the inner ring
-const FILE_RING_CLEAR = 90;      // min inner-ring radius (clears the hub disc)
-const FILE_RING_GAP = 90;        // min gap between file ring and folder ring
+const HUB_DENSE_MIN = 12;         // Design: density tools kick in here
+const HUB_DENSITY_SCALE = 1.30;   // +30% lot orbit when dense
+const FOLDER_ARC_PX = 128;        // per-plate arc (~plate chord + gutter)
+const FOLDER_ARC_PX_DENSE = 140;  // extra chord when dense + multi-orbit
+const FILE_ARC_PX = 36;
+const FILE_RING_CLEAR = 90;
+const FILE_RING_GAP = 100;        // more clearance file↔folder when dense
 const HUB_FOLDER_STAGGER_MIN = 6;
-const HUB_FILE_STAGGER_MIN = 10;
-// Above this, folders spread onto two concentric orbits so a very dense
-// binder (Cellar Path B: 20+ top-level lots) doesn't shove every label
-// onto a single arc. Even-indexed folders ride the outer orbit; odd ones
-// ride the inner orbit at ~72% radius.
-const HUB_MULTI_ORBIT_MIN = 16;
-const HUB_INNER_ORBIT_RATIO = 0.72;
+const HUB_FILE_STAGGER_MIN = 8;
+// Design: split lots across two outer orbits when still crowded after grow.
+const HUB_MULTI_ORBIT_MIN = 12;
+const HUB_INNER_ORBIT_RATIO = 0.78;
 
 export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
   const items = Array.isArray(lots) ? lots : [];
@@ -99,15 +100,17 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
 
   const folderCount = folders.length;
   const fileCount = files.length;
-  const multiOrbit = folderCount > HUB_MULTI_ORBIT_MIN;
-  // In multi-orbit mode the arc budget is per orbit, so we size against
-  // the busier orbit's count (ceil for the outer, floor for the inner).
+  const dense = folderCount >= HUB_DENSE_MIN;
+  const multiOrbit = folderCount >= HUB_MULTI_ORBIT_MIN;
   const perOrbitCount = multiOrbit ? Math.ceil(folderCount / 2) : folderCount;
+  const arcPx = dense ? FOLDER_ARC_PX_DENSE : FOLDER_ARC_PX;
+  const densityScale = dense ? HUB_DENSITY_SCALE : 1;
 
   const folderMinRadius = folderCount > 0
-    ? (perOrbitCount * FOLDER_ARC_PX) / (2 * Math.PI)
+    ? (perOrbitCount * arcPx) / (2 * Math.PI)
     : 0;
-  const folderRadius = Math.max(baseRadius, folderMinRadius);
+  // Design §1 — grow past baseRadius when dense, then honor arc budget.
+  const folderRadius = Math.max(baseRadius * densityScale, folderMinRadius);
   const folderInnerRadius = multiOrbit
     ? Math.max(HUB_DISC_R + FILE_RING_GAP, folderRadius * HUB_INNER_ORBIT_RATIO)
     : folderRadius;
@@ -115,19 +118,23 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
   const fileMinRadius = fileCount > 0
     ? (fileCount * FILE_ARC_PX) / (2 * Math.PI)
     : 0;
-  // In multi-orbit mode the file ring must clear the inner folder orbit,
-  // not the outer one — otherwise dots collide with the inner-orbit plates.
   const fileClearanceRef = multiOrbit ? folderInnerRadius : folderRadius;
+  const fileGap = dense ? FILE_RING_GAP : 90;
   const fileRadius = fileCount > 0
     ? Math.max(
       FILE_RING_CLEAR,
       fileMinRadius,
-      Math.min(fileClearanceRef - FILE_RING_GAP, fileClearanceRef * 0.55),
+      Math.min(fileClearanceRef - fileGap, fileClearanceRef * 0.52),
     )
     : 0;
 
   const folderStagger = folderCount > HUB_FOLDER_STAGGER_MIN;
   const fileStagger = fileCount > HUB_FILE_STAGGER_MIN;
+  // Design §4 — farther radial label offsets when dense (labels outside plate).
+  const folderLabelFar = dense ? 48 : 34;
+  const folderLabelNear = dense ? -40 : -28;
+  const fileLabelFar = dense ? 26 : 22;
+  const fileLabelNear = dense ? -20 : -16;
 
   const placed = new Array(items.length);
   if (multiOrbit) {
@@ -137,27 +144,27 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
     const innerPositions = ringPositions(innerIdxs.length, folderInnerRadius);
     outerIdxs.forEach((idx, k) => {
       const { x, y } = outerPositions[k];
-      const labelY = folderStagger ? (k % 2 === 0 ? 34 : -28) : 4;
-      placed[idx] = { x, y, labelY, ring: 'folder' };
+      const labelY = folderStagger ? (k % 2 === 0 ? folderLabelFar : folderLabelNear) : folderLabelFar;
+      placed[idx] = { x, y, labelY, ring: 'folder', orbit: 'outer' };
     });
     innerIdxs.forEach((idx, k) => {
       const { x, y } = innerPositions[k];
-      const labelY = folderStagger ? (k % 2 === 0 ? 34 : -28) : 4;
-      placed[idx] = { x, y, labelY, ring: 'folder' };
+      const labelY = folderStagger ? (k % 2 === 0 ? folderLabelFar : folderLabelNear) : folderLabelFar;
+      placed[idx] = { x, y, labelY, ring: 'folder', orbit: 'inner' };
     });
   } else {
     const folderPositions = ringPositions(folderCount, folderRadius);
     folders.forEach((idx, k) => {
       const { x, y } = folderPositions[k];
-      const labelY = folderStagger ? (k % 2 === 0 ? 34 : -28) : 4;
-      placed[idx] = { x, y, labelY, ring: 'folder' };
+      const labelY = folderStagger ? (k % 2 === 0 ? folderLabelFar : folderLabelNear) : 4;
+      placed[idx] = { x, y, labelY, ring: 'folder', orbit: 'outer' };
     });
   }
   const filePositions = ringPositions(fileCount, fileRadius);
   files.forEach((idx, k) => {
     const { x, y } = filePositions[k];
-    const labelY = fileStagger ? (k % 2 === 0 ? 22 : -16) : 22;
-    placed[idx] = { x, y, labelY, ring: 'file' };
+    const labelY = fileStagger ? (k % 2 === 0 ? fileLabelFar : fileLabelNear) : fileLabelFar;
+    placed[idx] = { x, y, labelY, ring: 'file', orbit: 'file' };
   });
 
   return {
@@ -166,6 +173,7 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
     folderInnerRadius,
     fileRadius,
     multiOrbit,
+    dense,
     outerRadius: Math.max(folderRadius, HUB_DISC_R),
   };
 }
@@ -185,13 +193,19 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
   const layer = world.querySelector('#lots');
   layer.replaceChildren();
   const layout = computeHubLayout(lots, { baseRadius: radius });
+  const dense = !!layout.dense;
+  // Design §5 — shrink plates ~15% at dense hubs only (hit targets stay usable).
+  const plateW = dense ? 58 : 68;
+  const plateH = dense ? 38 : 44;
+  const plateRx = dense ? 5 : 6;
   lots.forEach((lot, i) => {
     const pos = layout.placed[i];
     if (!pos) return;
     const kind = lot.isDir === false ? 'file' : 'folder';
     const isSelected = selectedRelPath && lot.relPath === selectedRelPath;
+    const denseClass = dense ? ' map-lot-dense' : '';
     const group = el('g', {
-      class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}${isSelected ? ' is-selected' : ''}`,
+      class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}${isSelected ? ' is-selected' : ''}${denseClass}`,
       transform: `translate(${pos.x.toFixed(2)},${pos.y.toFixed(2)})`,
       'data-rel-path': lot.relPath,
       'data-name': lot.name,
@@ -200,22 +214,34 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
       'data-ring': pos.ring,
     });
     if (kind === 'folder') {
-      group.appendChild(el('rect', { x: -34, y: -22, width: 68, height: 44, rx: 6, class: 'map-lot-plate' }));
+      group.appendChild(el('rect', {
+        x: -plateW / 2, y: -plateH / 2, width: plateW, height: plateH, rx: plateRx,
+        class: 'map-lot-plate',
+      }));
     } else {
       // Inner-ring files are small dots so the folder ring's labels breathe.
-      group.appendChild(el('circle', { cx: 0, cy: 0, r: 12, class: 'map-lot-plate map-lot-file-plate' }));
+      group.appendChild(el('circle', { cx: 0, cy: 0, r: dense ? 10 : 12, class: 'map-lot-plate map-lot-file-plate' }));
     }
     const rawName = lot.name || lot.relPath || '';
     const max = kind === 'file' ? LOT_FILE_LABEL_MAX : LOT_FOLDER_LABEL_MAX;
+    // Design §3 — at density, truncated rest labels hide until hover/focus;
+    // full name stays on <title> + data-name for a11y.
+    const labelClass = kind === 'file'
+      ? 'map-lot-label map-lot-file-label'
+      : 'map-lot-label';
     const label = el('text', {
-      x: 0, y: pos.labelY, class: 'map-lot-label', 'text-anchor': 'middle',
+      x: 0, y: pos.labelY, class: labelClass, 'text-anchor': 'middle',
     }, truncateLotLabel(rawName, max));
-    if (kind === 'file') label.setAttribute('class', 'map-lot-label map-lot-file-label');
-    if (rawName.length > max) label.appendChild(el('title', {}, rawName));
+    label.appendChild(el('title', {}, rawName));
     group.appendChild(label);
     layer.appendChild(group);
   });
-  return { outerRadius: layout.outerRadius, folderRadius: layout.folderRadius, fileRadius: layout.fileRadius };
+  return {
+    outerRadius: layout.outerRadius,
+    folderRadius: layout.folderRadius,
+    fileRadius: layout.fileRadius,
+    dense,
+  };
 }
 
 // Truncate a name to fit inside a dig chip label. SVG has no native
@@ -231,7 +257,10 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
   const layer = world.querySelector('#dig-in-layer');
   layer.replaceChildren();
   if (!digNode || !children || children.length === 0) return;
-  const positions = ringPositions(children.length, radius);
+  // Soft nit: fat dig fans — grow radius + hide-until-hover (same density tools).
+  const fat = children.length >= 12;
+  const digRadius = fat ? radius * 1.28 : (children.length > 8 ? radius * 1.12 : radius);
+  const positions = ringPositions(children.length, digRadius);
   const ox = (origin && Number.isFinite(origin.x)) ? origin.x : 0;
   const oy = (origin && Number.isFinite(origin.y)) ? origin.y : 0;
   // Dense fans (>8 children) get their labels staggered above/below the
@@ -242,7 +271,7 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
     const kind = child.isDir === false ? 'file' : 'folder';
     const relPath = child.relPath || `${digNode.relPath}/${child.name}`;
     const group = el('g', {
-      class: `map-hit map-dig-child map-dig-${kind}${child.hasMd ? ' map-dig-md' : ''}`,
+      class: `map-hit map-dig-child map-dig-${kind}${child.hasMd ? ' map-dig-md' : ''}${fat ? ' map-dig-dense' : ''}`,
       transform: `translate(${(ox + x).toFixed(2)},${(oy + y).toFixed(2)})`,
       'data-rel-path': relPath,
       'data-name': child.name,

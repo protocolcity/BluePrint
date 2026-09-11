@@ -93,8 +93,8 @@ class HubCrowdingFollowupTests(unittest.TestCase):
         self.assertIn("HUB_INNER_ORBIT_RATIO", self.paint)
         self.assertIn("folderInnerRadius", self.paint)
         self.assertIsNotNone(
-            re.search(r"multiOrbit\s*=\s*folderCount\s*>\s*HUB_MULTI_ORBIT_MIN", self.paint),
-            "multiOrbit must trigger on folderCount > HUB_MULTI_ORBIT_MIN",
+            re.search(r"multiOrbit\s*=\s*folderCount\s*>=\s*HUB_MULTI_ORBIT_MIN", self.paint),
+            "multiOrbit must trigger on folderCount >= HUB_MULTI_ORBIT_MIN",
         )
 
     def test_folder_arc_budget_widened(self) -> None:
@@ -121,13 +121,8 @@ class HubCrowdingFollowupTests(unittest.TestCase):
         # name reachable via an SVG <title> tooltip.
         self.assertIn("LOT_FOLDER_LABEL_MAX", self.paint)
         self.assertIn("truncateLotLabel", self.paint)
-        self.assertIsNotNone(
-            re.search(
-                r"if\s*\(rawName\.length\s*>\s*max\)\s*label\.appendChild\(el\('title'",
-                self.paint,
-            ),
-            "long lot names must be reachable via an SVG <title> tooltip",
-        )
+        # Always attach <title> so hover works even when rest labels are hidden.
+        self.assertIn("label.appendChild(el('title'", self.paint)
 
 
 if __name__ == "__main__":
