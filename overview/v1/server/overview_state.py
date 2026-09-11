@@ -324,3 +324,82 @@ def load_charter(state: dict | None = None) -> dict:
     if not charter:
         return {}
     return _sanitize_charter(charter)
+
+
+# ── Binder local-truth loaders ──────────────────────────────────────────────
+# When the desk server is launched with ``--binder DIR``, we look for a
+# ``.blueprint/`` marker directory and read a small set of JSON files off it:
+#
+#   <binder>/.blueprint/overview.json  → same wire shape as the fixtures
+#   <binder>/.blueprint/calendar.json  → { "events": [...], "range": "..." }
+#
+# Every file is optional. Missing file = honest empty (`No agents` / `No
+# events`). This is deliberately the smallest local-truth surface that can
+# feed the four-lens shell without inventing state.
+
+
+def load_from_binder(binder: Path) -> dict:
+    """Read local truth off ``<binder>/.blueprint/overview.json`` if present.
+
+    Returns the full state (same shape as ``load_from_fixture``). Missing
+    file → ``empty_state()`` — honest-empty is a first-class PASS.
+    """
+    binder = Path(binder).expanduser().resolve()
+    marker = binder / ".blueprint" / "overview.json"
+    if not marker.is_file():
+        return empty_state()
+    return load_from_fixture(marker)
+
+
+def _sanitize_event(row: dict) -> dict:
+    """One calendar event row. Source ∈ routine·WO·manual; state ∈
+    scheduled·due·done — anything else silently drops back to `manual` /
+    `scheduled`."""
+    title = str(row.get("title", "")).strip()
+    at = row.get("at")
+    if at is not None:
+        at = str(at)
+    source = str(row.get("source", "manual")).strip()
+    if source not in ("routine", "WO", "manual"):
+        source = "manual"
+    state = str(row.get("state", "scheduled")).strip().lower()
+    if state not in ("scheduled", "due", "done"):
+        state = "scheduled"
+    return {"title": title, "at": at, "source": source, "state": state}
+
+
+def load_events(binder: Path | None = None) -> dict:
+    """Body for ``GET /api/calendar/events``.
+
+    Reads ``<binder>/.blueprint/calendar.json`` if present. Missing file →
+    ``{"events": [], "range": ""}`` (honest empty — `No events` copy).
+    """
+    if binder is None:
+        return {"events": [], "range": ""}
+    binder = Path(binder).expanduser().resolve()
+    marker = binder / ".blueprint" / "calendar.json"
+    if not marker.is_file():
+        return {"events": [], "range": ""}
+    try:
+        raw = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"events": [], "range": ""}
+    events = [
+        _sanitize_event(row)
+        for row in (raw.get("events") or [])
+        if isinstance(row, dict)
+    ]
+    range_str = str(raw.get("range") or "").strip()
+    return {"events": events, "range": range_str}
+
+
+def load_desk(binder: Path | None = None) -> dict:
+    """Body for ``GET /api/settings/desk``.
+
+    Reports the binder path (**on this desk** when no binder was pinned) and
+    the local desk label. Never says `workspace`.
+    """
+    if binder is None:
+        return {"binder_path": "on this desk", "desk_label": "Local desk"}
+    binder = Path(binder).expanduser().resolve()
+    return {"binder_path": str(binder), "desk_label": "Local desk"}

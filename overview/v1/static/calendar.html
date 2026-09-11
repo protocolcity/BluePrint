@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BluePrint — Calendar V1</title>
+  <link rel="stylesheet" href="/css/overview.css" />
+</head>
+<body>
+  <main id="calendar-shell" class="ov-shell" aria-label="Calendar">
+    <header class="ov-topnav" role="banner">
+      <div class="ov-brand">Protocol City</div>
+      <nav class="ov-lens-nav" aria-label="Lenses">
+        <a class="ov-lens" href="/" data-lens="overview">Overview</a>
+        <a class="ov-lens" href="/map" data-lens="map">Map</a>
+        <a class="ov-lens ov-lens--current" href="/calendar" data-lens="calendar" aria-current="page">Calendar</a>
+        <a class="ov-lens" href="/settings" data-lens="settings">Settings</a>
+      </nav>
+    </header>
+
+    <div class="ov-banner-row">
+      <button
+        type="button"
+        class="ov-banner"
+        aria-label="Local desk"
+        aria-haspopup="menu"
+      >
+        <span class="ov-banner-dot" aria-hidden="true"></span>
+        <span class="ov-banner-label">Local desk</span>
+        <span class="ov-banner-caret" aria-hidden="true">▾</span>
+      </button>
+    </div>
+
+    <section class="ov-cal-body">
+      <article class="ov-cal-tile" aria-labelledby="ov-cal-title">
+        <header class="ov-cal-head">
+          <h1 class="ov-cal-title" id="ov-cal-title">
+            <span class="ov-tile-glyph" aria-hidden="true">▤</span>
+            <span>Calendar</span>
+          </h1>
+          <p class="ov-cal-lead">What’s on this desk.</p>
+          <span class="ov-cal-hint" data-role="cal-range"></span>
+        </header>
+        <div class="ov-cal-list" data-role="cal-list" tabindex="0">
+          <p class="ov-empty">No events</p>
+        </div>
+      </article>
+    </section>
+
+    <footer class="ov-footer" data-role="footer" aria-label="Local pulse footer">
+      <div class="ov-footer-row" data-role="footer-row"></div>
+      <span class="ov-footer-quiet" data-role="footer-quiet">All systems quiet</span>
+    </footer>
+  </main>
+
+  <script type="module" src="/js/calendar.v1.js"></script>
+</body>
+</html>

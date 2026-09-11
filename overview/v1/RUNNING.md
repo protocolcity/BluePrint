@@ -1,15 +1,27 @@
-# Running Overview V1 — dogfood steps
+# Running the BluePrint desk — dogfood steps (four-lens shell)
 
-The V1 shell is dogfoodable stand-alone before it lands in the BluePrint
+The desk server is dogfoodable stand-alone before it lands in the BluePrint
 pip package. One path today: **local dev tree** via the tiny server.
+
+`overview/v1/serve.py` mounts all four lenses on one origin — Overview
+(landing MC), Map V1 dig, Calendar (week list), Settings (groups). Every
+lens chip in the top nav is a real page; no dead pills, no 404.
 
 ## Local dev tree
 
 ```bash
 # from the BluePrint repo root
-python3 overview/v1/serve.py --port 8803
-# → http://127.0.0.1:8803/
+python3 overview/v1/serve.py --port 8803 --binder ~/BluePrint
+# → http://127.0.0.1:8803/          Overview
+# → http://127.0.0.1:8803/map       Map V1 dig (same binder)
+# → http://127.0.0.1:8803/calendar  Calendar week list
+# → http://127.0.0.1:8803/settings  Settings groups
 ```
+
+`--binder DIR` is optional. Without it the desk still boots on all four
+lenses; Overview / Calendar / Map paint honest empty. With it the desk
+also reads `<binder>/.blueprint/overview.json` and
+`<binder>/.blueprint/calendar.json` (both optional) to seed local truth.
 
 Then in the browser:
 
@@ -100,4 +112,6 @@ and update the test.
 - Do **not** wire in the pre-V1 landing surface (Wall-shaped `.html`
   face with come-back stacks). That surface is not in this shell; if you
   find yourself importing it you are on a different peel.
-- Do **not** touch `map/v1/` or port `:8801` from this peel.
+- Do **not** touch `map/v1/` (its files, tests, or the standalone `:8801`
+  server) from this peel. The four-lens shell only *reads* the map
+  projector and static assets — never edits them.

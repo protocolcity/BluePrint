@@ -438,11 +438,121 @@ html, body {
 .ov-footer-state { color: var(--ov-muted); text-transform: capitalize; }
 .ov-footer-quiet { color: var(--ov-muted); }
 
+/* Calendar lens — week list, quiet events. Empty is `No events`. */
+.ov-cal-lead {
+  margin: 4px 0 12px;
+  color: var(--ov-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.ov-cal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ov-cal-tile {
+  background: var(--ov-tile-bg);
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 220px;
+}
+.ov-cal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ov-tile-border);
+}
+.ov-cal-title {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ov-fg);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ov-cal-hint { color: var(--ov-muted); font-size: 12px; }
+.ov-cal-list { min-width: 0; }
+.ov-cal-events { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.ov-cal-event {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--ov-tile-border);
+}
+.ov-cal-event:last-child { border-bottom: none; }
+.ov-cal-event-title { color: var(--ov-fg); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-cal-event-when { color: var(--ov-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ov-cal-event-source {
+  color: var(--ov-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ov-cal-event-state {
+  color: var(--ov-muted);
+  font-size: 12px;
+  text-transform: lowercase;
+}
+.ov-cal-event-state[data-state="done"]      { color: var(--ov-state-working); }
+.ov-cal-event-state[data-state="due"]       { color: var(--ov-state-scanning); }
+.ov-cal-event-state[data-state="scheduled"] { color: var(--ov-muted); }
+
+/* Settings lens — grouped rows, quiet helper. Same density as tiles. */
+.ov-set-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ov-set-group {
+  background: var(--ov-tile-bg);
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ov-set-group-title {
+  margin: 0 0 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ov-muted);
+}
+.ov-set-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-top: 1px solid var(--ov-tile-border);
+}
+.ov-set-row:first-of-type { border-top: none; }
+.ov-set-label { color: var(--ov-fg); font-size: 13px; }
+.ov-set-value { color: var(--ov-fg); font-size: 13px; font-variant-numeric: tabular-nums; }
+.ov-set-value--muted { color: var(--ov-muted); }
+.ov-set-hint { color: var(--ov-muted); font-size: 12px; }
+@media (max-width: 720px) {
+  .ov-set-row { grid-template-columns: 1fr; }
+}
+
 /* Shared focus voice — one 2px ring across every interactive element. */
 .ov-lens:focus-visible,
 .ov-banner:focus-visible,
 .ov-tile:focus-visible,
 .ov-tile-body:focus-visible,
+.ov-cal-list:focus-visible,
 .ov-link-row:focus-visible,
 .ov-project-action:focus-visible {
   outline: 2px solid var(--ov-focus);
