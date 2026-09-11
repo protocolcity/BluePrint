@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 """Tiny dogfood server for the Overview V1 Mission Control shell.
 
-Serves the three V1 endpoints + the static assets:
+Serves the V1 endpoints + static assets:
 
-- ``GET /api/overview/agents``
-- ``GET /api/overview/jobs``
-- ``GET /api/overview/pulse``
-- ``GET /``            → overview.html
-- ``GET /<static>``    → static/… assets
+- ``GET /api/overview/agents``   (with cloud / remote builder links)
+- ``GET /api/overview/jobs``     (with Waiting · Ready · Blocked buckets)
+- ``GET /api/overview/pulse``    (named heartbeats + Cellar tip + last tick)
+- ``GET /api/overview/project``  (project card or ``{}``)
+- ``GET /api/overview/charter``  (charter drawer or ``{}``)
+- ``GET /``                      → overview.html
+- ``GET /<static>``              → static/… assets
 
 Usage::
 
     python3 overview/v1/serve.py --port 8803
     python3 overview/v1/serve.py --port 8803 --fixture path/to/state.json
+    python3 overview/v1/serve.py --port 8803 --cellar-tip "blueprint 0.1.50_6"
 
 The default serve returns honest-empty (``No agents`` · ``No open jobs`` ·
 silent pulse) — that is the correct paint per
 ``docs/specs/OVERVIEW_INTENT.md`` §Dogfood note. ``--fixture`` is for tests
 and manual demos only; it never lands in the pip package.
+
+``--cellar-tip`` overrides the brew face injected into
+``/api/overview/pulse`` — never a private ProtocolCity SHA (``OVERVIEW_MC_EXT.md``
+never-lie DoD).
 
 Sibling of ``map/v1/serve.py``; the BluePrint pip package can vendor
 ``server/overview_state.py`` and mount the same routes in its BFF later.
@@ -35,10 +42,13 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from server.overview_state import (  # noqa: E402
+    DEFAULT_CELLAR_TIP,
     empty_state,
     load_agents,
+    load_charter,
     load_from_fixture,
     load_jobs,
+    load_project,
     load_pulse,
 )
 
@@ -93,6 +103,12 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/overview/pulse":
             self._send_json(200, load_pulse(self.state))
             return
+        if route == "/api/overview/project":
+            self._send_json(200, load_project(self.state))
+            return
+        if route == "/api/overview/charter":
+            self._send_json(200, load_charter(self.state))
+            return
 
         if route == "/" or route == "/overview":
             self._serve_static("overview.html")
@@ -116,6 +132,17 @@ class Handler(BaseHTTPRequestHandler):
         self._send_bytes(200, candidate.read_bytes(), ctype)
 
 
+def _apply_cellar_tip(state: dict, cellar_tip: str) -> dict:
+    """Overlay the brew-face Cellar tip onto the loaded state.
+
+    Never a private ProtocolCity SHA. ``--cellar-tip`` on the CLI is the
+    single voice for the version string the pulse tile paints.
+    """
+    tip = (cellar_tip or "").strip() or DEFAULT_CELLAR_TIP
+    state["cellar_tip"] = tip
+    return state
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Dogfood server for BluePrint Overview V1")
     parser.add_argument("--host", default="127.0.0.1")
@@ -126,17 +153,27 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="JSON fixture of local truth (tests / demo only — default serve stays empty)",
     )
+    parser.add_argument(
+        "--cellar-tip",
+        default=DEFAULT_CELLAR_TIP,
+        help=(
+            "Brew-face Cellar tip painted by /api/overview/pulse "
+            f"(default: {DEFAULT_CELLAR_TIP!r}). Never a private ProtocolCity SHA."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.fixture is not None:
         try:
-            Handler.state = load_from_fixture(args.fixture)
+            state = load_from_fixture(args.fixture)
         except (FileNotFoundError, ValueError) as exc:
             print(f"overview-v1: fixture error: {exc}", file=sys.stderr)
             return 2
         print(f"overview-v1: loaded fixture {args.fixture}", file=sys.stderr)
     else:
-        Handler.state = empty_state()
+        state = empty_state()
+
+    Handler.state = _apply_cellar_tip(state, args.cellar_tip)
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"overview-v1: Mission Control on http://{args.host}:{args.port}/")

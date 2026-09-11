@@ -1,34 +1,47 @@
-/* overview.css — Overview V1 Mission Control glass.
+/* overview.css — Overview V1 Mission Control glass (full glass ext-01c/02c/03d).
  *
  * Theme §Token classes: Surface · Voice · State · Focus.
  * Dark PC desk only (#0f1114 family). No cream, no LLC-era palette, no
  * light-mode variant in V1.
  *
- * Invariants (see docs/specs/OVERVIEW_THEME.md):
- *   - Three equal tiles (agents · jobs · pulse) — no dominant tile.
+ * Invariants (see docs/specs/OVERVIEW_THEME.md · OVERVIEW_MC_EXT.md):
+ *   - Three equal peer tiles (agents · jobs · pulse) — no dominant tile.
+ *   - Charter drawer sits alongside the peer tiles, never replaces them.
+ *   - Cloud / remote builders paint as outbound links, not agent rows.
  *   - Pulse is discrete — ticks land as events land, no continuous animation.
  *   - Empty is real — Writer copy, no skeleton shimmer.
- *   - One focus voice — shared 2px ring across tiles, chips, banner.
+ *   - One focus voice — shared 2px ring across every interactive element.
  */
 
 :root {
   /* Surface class — desk glass background, tile background, empty background.
-   * One background voice across all three tiles; no per-tile tint. */
+   * One background voice; charter drawer + project card share the tile bg. */
   --ov-bg: #0f1114;
   --ov-tile-bg: #14171c;
   --ov-tile-border: #262a33;
+  --ov-tile-border-strong: #333a46;
 
-  /* Voice class — type ramp for the four V1 surfaces. Quiet, read at rest. */
+  /* Voice class — type ramp for the V1 surfaces. Quiet, read at rest. */
   --ov-fg: #e6e8eb;
   --ov-muted: #8b8f96;
   --ov-title: #d9dde3;
+  --ov-brand: #eef1f5;
+  --ov-link: #7ea8ff;
 
   /* State class — agent-state palette (idle · working · error · off) + pulse tick. */
   --ov-state-idle: #6b7280;
   --ov-state-working: #6fbf73;
   --ov-state-error: #d97060;
   --ov-state-off: #3a3f48;
+  --ov-state-scanning: #e0b060;
+  --ov-state-connected: #6fbf73;
   --ov-pulse-tick: #f5cf7a;
+
+  /* Badge state — lit uses a warm brand amber; off uses the muted grey. */
+  --ov-badge-lit-fg: #f5cf7a;
+  --ov-badge-lit-border: #6c561f;
+  --ov-badge-off-fg: #6b7280;
+  --ov-badge-off-border: #262a33;
 
   /* Focus class — shared 2px ring. One focus voice across every interactive
    * element. No per-component focus styling. */
@@ -45,31 +58,94 @@ html, body {
 .ov-shell {
   min-height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 20px;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: 16px;
   padding: 20px;
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
-/* Local-only honesty banner — quiet, permanent, never a toast. */
+/* Top nav — four lenses in one voice. Overview is the current lens. */
+.ov-topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 6px;
+}
+.ov-brand {
+  color: var(--ov-brand);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.ov-lens-nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ov-lens {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 20px;
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 8px;
+  background: var(--ov-tile-bg);
+  color: var(--ov-muted);
+  text-decoration: none;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+.ov-lens:hover { color: var(--ov-fg); border-color: var(--ov-tile-border-strong); }
+.ov-lens--current {
+  color: var(--ov-fg);
+  border-color: #3a5f9a;
+  background: #182238;
+}
+
+/* Local desk banner — pill under the top nav, never `workspace`. */
+.ov-banner-row {
+  display: flex;
+  align-items: center;
+}
 .ov-banner {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
   border: 1px solid var(--ov-tile-border);
   border-radius: 999px;
   background: var(--ov-tile-bg);
-  color: var(--ov-muted);
-  font-size: 12px;
-  justify-self: start;
+  color: var(--ov-fg);
+  font-size: 13px;
+  cursor: pointer;
 }
 .ov-banner-dot {
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 8px; height: 8px; border-radius: 50%;
   background: var(--ov-state-working);
+  flex-shrink: 0;
 }
-.ov-banner-label { letter-spacing: 0.02em; }
+.ov-banner-label { letter-spacing: 0.01em; }
+.ov-banner-caret { color: var(--ov-muted); font-size: 11px; }
 
-/* Three equal tiles — no dominant tile, no hero band. */
+/* Body — peer tiles on the left, optional Charter drawer alongside on the right.
+ * When the drawer is hidden the tiles span the full width. */
+.ov-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.ov-body:has([data-role="charter-drawer"]:not([hidden])) {
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+}
+@media (max-width: 900px) {
+  .ov-body:has([data-role="charter-drawer"]:not([hidden])) {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Three equal peer tiles — Agents · Jobs · Pulse. Never a dominant tile. */
 .ov-tiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -81,8 +157,10 @@ html, body {
   border: 1px solid var(--ov-tile-border);
   border-radius: 10px;
   padding: 16px;
-  min-height: 180px;
-  display: flex; flex-direction: column; gap: 12px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .ov-tile-title {
   margin: 0;
@@ -91,8 +169,12 @@ html, body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ov-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
-.ov-tile-body { flex: 1; min-width: 0; }
+.ov-tile-glyph { color: var(--ov-link); font-size: 14px; }
+.ov-tile-body { min-width: 0; }
 
 /* Empty copy — Writer lock. No shimmer, no spinner. */
 .ov-empty {
@@ -101,9 +183,11 @@ html, body {
   font-size: 14px;
 }
 
-/* Agent rows — one dot per agent (dot IS the state, not a label next to it). */
+/* Agent rows — one dot per agent; the dot IS the state. */
 .ov-agent-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.ov-agent-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.ov-agent-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.ov-agent-name { color: var(--ov-fg); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-agent-state-cell { display: inline-flex; align-items: center; gap: 8px; color: var(--ov-muted); font-size: 12px; }
 .ov-agent-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--ov-state-idle);
@@ -113,15 +197,84 @@ html, body {
 .ov-agent-dot[data-state="working"] { background: var(--ov-state-working); }
 .ov-agent-dot[data-state="error"]   { background: var(--ov-state-error); }
 .ov-agent-dot[data-state="off"]     { background: var(--ov-state-off); }
-.ov-agent-name { color: var(--ov-fg); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Job rows — one row per job with a plain state word (no color chips in V1). */
+/* Cloud / remote builder outbound link group — never painted as agents. */
+.ov-tile-links {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--ov-tile-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ov-tile-links-heading {
+  color: var(--ov-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.ov-link-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ov-link);
+  text-decoration: none;
+  font-size: 13px;
+}
+.ov-link-row::before {
+  content: "+";
+  color: var(--ov-link);
+  font-weight: 500;
+}
+.ov-link-row .ov-link-ext { color: var(--ov-muted); font-size: 11px; }
+
+/* Job rows + Waiting / Ready / Blocked buckets. */
 .ov-job-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .ov-job-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 4px 0; }
 .ov-job-name { color: var(--ov-fg); font-size: 13px; }
 .ov-job-state { color: var(--ov-muted); font-size: 12px; text-transform: lowercase; }
+.ov-tile-buckets {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ov-bucket-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+.ov-bucket-label { display: inline-flex; align-items: center; gap: 8px; color: var(--ov-fg); font-size: 13px; }
+.ov-bucket-count { color: var(--ov-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.ov-bucket-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ov-state-idle); }
+.ov-bucket-dot[data-bucket="waiting"] { background: var(--ov-state-idle); }
+.ov-bucket-dot[data-bucket="ready"]   { background: var(--ov-state-working); }
+.ov-bucket-dot[data-bucket="blocked"] { background: var(--ov-state-error); }
 
-/* Pulse — one quiet tick line. Discrete marks; no animation, no shimmer. */
+/* Pulse — heartbeat rows + Cellar tip + Last tick. Discrete, no motion. */
+.ov-pulse-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.ov-pulse-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+}
+.ov-pulse-glyph { color: var(--ov-link); font-size: 13px; }
+.ov-pulse-name { color: var(--ov-fg); font-size: 13px; }
+.ov-pulse-state { color: var(--ov-muted); font-size: 12px; text-transform: capitalize; }
+.ov-pulse-state[data-state="watching"]  { color: var(--ov-state-working); }
+.ov-pulse-state[data-state="connected"] { color: var(--ov-state-connected); }
+.ov-pulse-state[data-state="scanning"]  { color: var(--ov-state-scanning); }
+.ov-pulse-state[data-state="idle"]      { color: var(--ov-muted); }
+.ov-pulse-state[data-state="paused"]    { color: var(--ov-muted); }
+.ov-pulse-state[data-state="off"]       { color: var(--ov-state-off); }
+.ov-pulse-state[data-state="error"]     { color: var(--ov-state-error); }
+.ov-pulse-time { color: var(--ov-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
 .ov-pulse-track {
   position: relative;
   height: 20px;
@@ -133,37 +286,160 @@ html, body {
   width: 2px; height: 10px;
   background: var(--ov-pulse-tick);
 }
-.ov-pulse-last {
-  color: var(--ov-muted);
-  font-size: 12px;
-  margin-top: 8px;
+.ov-tile-meta {
+  border-top: 1px solid var(--ov-tile-border);
+  padding-top: 10px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+.ov-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ov-meta-label { color: var(--ov-muted); font-size: 12px; display: inline-flex; align-items: center; gap: 8px; }
+.ov-meta-value { color: var(--ov-link); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ov-meta-value--muted { color: var(--ov-muted); }
 
-/* Hand-off chips — quiet lens names (Map, Calendar, Settings). */
-.ov-handoffs {
-  display: flex; gap: 8px; flex-wrap: wrap;
-  justify-content: flex-start;
+/* Project card — folder icon, title, `on this desk` path, honest badges. */
+.ov-project-card {
+  background: var(--ov-tile-bg);
+  border: 1px solid var(--ov-badge-lit-border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.ov-chip {
-  display: inline-flex; align-items: center;
-  padding: 6px 12px;
-  border: 1px solid var(--ov-tile-border);
+.ov-project-header { display: flex; align-items: center; gap: 10px; }
+.ov-project-glyph { color: var(--ov-muted); font-size: 18px; }
+.ov-project-title { margin: 0; font-size: 20px; color: var(--ov-fg); font-weight: 600; }
+.ov-project-path { margin: 0; color: var(--ov-muted); font-size: 13px; }
+.ov-project-path strong { color: var(--ov-badge-lit-fg); font-weight: 500; }
+.ov-project-badges { display: flex; flex-direction: column; gap: 8px; }
+.ov-project-badges-title {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--ov-fg); font-size: 13px;
+}
+.ov-project-badges-title::before {
+  content: ""; display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ov-link);
+}
+.ov-badge-row {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.ov-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
   border-radius: 999px;
-  background: transparent;
-  color: var(--ov-muted);
-  text-decoration: none;
+  border: 1px solid var(--ov-badge-off-border);
+  color: var(--ov-badge-off-fg);
   font-size: 12px;
-  letter-spacing: 0.02em;
+  background: transparent;
 }
-.ov-chip:hover { color: var(--ov-fg); border-color: var(--ov-muted); }
+.ov-badge[data-lit="true"] {
+  color: var(--ov-badge-lit-fg);
+  border-color: var(--ov-badge-lit-border);
+}
+.ov-badge-glyph { font-size: 11px; }
+.ov-badge-tail { font-size: 10px; opacity: 0.7; }
+.ov-project-excerpt-wrap { display: flex; flex-direction: column; gap: 6px; }
+.ov-project-excerpt-title {
+  margin: 0; color: var(--ov-fg); font-size: 13px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.ov-project-excerpt {
+  margin: 0;
+  color: var(--ov-muted);
+  font-style: italic;
+  font-size: 13px;
+  border: none;
+  padding: 0 8px 0 0;
+}
+.ov-project-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ov-project-action {
+  display: inline-flex; align-items: center;
+  padding: 8px 16px;
+  border: 1px solid var(--ov-tile-border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ov-fg);
+  font-size: 13px;
+  text-decoration: none;
+}
+.ov-project-action--primary {
+  border-color: #3a5f9a;
+  background: #182238;
+  color: var(--ov-fg);
+}
 
-/* Shared focus voice — one 2px ring across every interactive element.
- * Tiles participate via their focusable body (tabindex=0), so keyboard
- * users see the same ring on Agents · Jobs · Pulse as on chips and banner. */
-.ov-chip:focus-visible,
+/* Charter drawer — right-side panel alongside peer tiles. */
+.ov-charter-drawer {
+  background: var(--ov-tile-bg);
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 220px;
+}
+.ov-charter-title {
+  margin: 0; color: var(--ov-fg); font-size: 14px; font-weight: 500;
+  padding-bottom: 8px; border-bottom: 1px solid var(--ov-tile-border);
+}
+.ov-charter-body { display: flex; flex-direction: column; gap: 12px; }
+.ov-charter-section { display: flex; flex-direction: column; gap: 4px; }
+.ov-charter-heading { margin: 0; color: var(--ov-fg); font-size: 13px; font-weight: 600; }
+.ov-charter-text { margin: 0; color: var(--ov-muted); font-size: 13px; line-height: 1.5; white-space: pre-line; }
+.ov-charter-footer {
+  margin: auto 0 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ov-tile-border);
+  color: var(--ov-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Quiet footer — mirrors heartbeats + never-lie label. */
+.ov-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 10px;
+  background: var(--ov-tile-bg);
+  color: var(--ov-muted);
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.ov-footer-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ov-footer-cell { display: inline-flex; align-items: center; gap: 6px; }
+.ov-footer-name { color: var(--ov-fg); }
+.ov-footer-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ov-state-off); }
+.ov-footer-dot[data-state="watching"]  { background: var(--ov-state-working); }
+.ov-footer-dot[data-state="connected"] { background: var(--ov-state-connected); }
+.ov-footer-dot[data-state="scanning"]  { background: var(--ov-state-scanning); }
+.ov-footer-dot[data-state="idle"]      { background: var(--ov-state-idle); }
+.ov-footer-dot[data-state="paused"]    { background: var(--ov-state-idle); }
+.ov-footer-dot[data-state="off"]       { background: var(--ov-state-off); }
+.ov-footer-dot[data-state="error"]     { background: var(--ov-state-error); }
+.ov-footer-state { color: var(--ov-muted); text-transform: capitalize; }
+.ov-footer-quiet { color: var(--ov-muted); }
+
+/* Shared focus voice — one 2px ring across every interactive element. */
+.ov-lens:focus-visible,
+.ov-banner:focus-visible,
 .ov-tile:focus-visible,
 .ov-tile-body:focus-visible,
-.ov-banner:focus-visible {
+.ov-link-row:focus-visible,
+.ov-project-action:focus-visible {
   outline: 2px solid var(--ov-focus);
   outline-offset: 2px;
 }

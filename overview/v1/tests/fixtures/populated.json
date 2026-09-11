@@ -5,15 +5,34 @@
     { "name": "runner", "state": "error" },
     { "name": "watcher", "state": "off" }
   ],
+  "cloud_builders": [
+    { "name": "Packet Foundry", "url": "https://packet.example/foundry" }
+  ],
+  "remote_builders": [
+    { "name": "Mesh Warden", "url": "https://mesh.example/warden" }
+  ],
   "jobs": [
     { "name": "peel/overview-v1-mc-shell", "state": "open" },
     { "name": "dogfood-cycle-1", "state": "ready" }
   ],
+  "buckets": {
+    "waiting": 1,
+    "ready": 2,
+    "blocked": 0
+  },
   "pulse": {
-    "ticks": [
-      { "at": "2026-09-10T09:00:00", "label": "boot" },
-      { "at": "2026-09-10T09:12:00", "label": "job-open" }
+    "heartbeats": [
+      { "name": "FS Watch", "state": "watching",  "last_at": "2026-09-11T10:21:34" },
+      { "name": "Builder",  "state": "idle",      "last_at": "2026-09-11T10:21:33" },
+      { "name": "Cellar",   "state": "connected", "last_at": "2026-09-11T10:21:32" },
+      { "name": "Index",    "state": "scanning",  "last_at": "2026-09-11T10:21:31" },
+      { "name": "Sync",     "state": "paused",    "last_at": "2026-09-11T10:21:30" }
     ],
-    "last_at": "2026-09-10T09:12:00"
-  }
+    "ticks": [
+      { "at": "2026-09-11T10:00:00", "label": "boot" },
+      { "at": "2026-09-11T10:21:34", "label": "fs-watch" }
+    ],
+    "last_at": "2026-09-11T10:21:34"
+  },
+  "cellar_tip": "blueprint 0.1.50_6"
 }
