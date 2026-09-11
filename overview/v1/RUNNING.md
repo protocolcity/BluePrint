@@ -120,3 +120,18 @@ and update the test.
 - Do **not** touch `map/v1/` (its files, tests, or the standalone `:8801`
   server) from this peel. The four-lens shell only *reads* the map
   projector and static assets — never edits them.
+
+## Phase-B local projectors (Agents / Jobs)
+
+When ``--binder DIR`` is set and ``<binder>/.blueprint/overview.json`` is
+**absent**, Overview Agents / Jobs project from local Mini feeds:
+
+- Agents: ``<binder>/.protocolcity/workforce/local/roster.json``
+  (twin ``<binder>/workforce/local/roster.json``). Optional ``daemon.json``
+  in the same dir polishes idle/working from ``in_flight`` — it never adds seats.
+- Jobs: Desk HTTP ``http://127.0.0.1:8799`` (short timeout) or SQLite under
+  ``<binder>/worklane/worklane/local/data/<slug>.db``.
+
+Missing stores stay honest-empty. Planted ``overview.json`` still wins.
+Cellar tip stays the boot-pinned brew face.
+

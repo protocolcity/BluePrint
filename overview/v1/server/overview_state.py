@@ -387,17 +387,41 @@ def load_charter(state: dict | None = None) -> dict:
 # Sentinel for BinderOverview first-read (distinct from absent-file None stamp).
 _UNREAD = object()
 
-# Phase-B (parked): project WorkForce roster / WorkLane store under the binder
-# into agents[] / jobs[]+buckets when those public file shapes exist. Missing
-# stores must degrade to overview.json → empty_state — never invent busy.
+# Phase-B: when overview.json is absent, project WorkForce roster /
+# WorkLane SQLite (optional Desk HTTP) into agents[] / jobs[]+buckets.
+# overview.json still wins when present. Missing stores → empty_state.
+# See ``server.local_projectors``.
+
+
+def _apply_projected_slice(projected: dict) -> dict:
+    """Merge a projector slice onto empty_state with the same sanitizers
+    fixtures use — including the demo-worker-alone → No agents filter.
+    """
+    agents_raw = projected.get("agents") or []
+    agents = [_sanitize_agent(row) for row in agents_raw if isinstance(row, dict)]
+    jobs_raw = projected.get("jobs") or []
+    jobs = [_sanitize_job(row) for row in jobs_raw if isinstance(row, dict)]
+    buckets = _sanitize_buckets(projected.get("buckets") or {})
+    if not _agents_are_employed(agents):
+        agents = [row for row in agents if row.get("name") != _DEMO_WORKER]
+    state = empty_state()
+    state["agents"] = agents
+    state["jobs"] = jobs
+    state["buckets"] = buckets
+    return state
 
 
 class BinderOverview:
-    """mtime-aware re-reader for ``<binder>/.blueprint/overview.json``.
+    """mtime-aware binder truth for Overview Agents / Jobs / Pulse.
 
-    ``current()`` is the per-request entry point: a stat on the hot path, a
-    re-parse only when the file changed on disk. Thread-safe — the desk runs
-    on a ``ThreadingHTTPServer``.
+    Precedence per request:
+
+    1. ``<binder>/.blueprint/overview.json`` present → live re-read (wins).
+    2. Else Phase-B projectors (WorkForce roster + WorkLane stores).
+    3. Missing / malformed → ``empty_state()``.
+
+    ``current()`` stats on the hot path and re-parses only when inputs
+    change. Thread-safe — the desk runs on a ``ThreadingHTTPServer``.
 
     ``cellar_tip`` pins the resolved brew face (CLI ``--cellar-tip`` or
     ``detect_cellar_tip()``), so a live re-read never shells out to brew on
@@ -412,28 +436,44 @@ class BinderOverview:
         self._state: dict = empty_state()
         self._lock = threading.Lock()
 
-    def _stamp_now(self) -> tuple | None:
-        """File identity — ``None`` when the file is absent.
-
-        Size and inode ride along with ``st_mtime_ns`` so a rewrite still
-        reads as changed on filesystems with coarse timestamps.
-        """
+    def _overview_stamp(self) -> tuple | None:
+        """overview.json identity — ``None`` when the file is absent."""
         try:
             st = self.path.stat()
         except OSError:
             return None
         return (st.st_mtime_ns, st.st_size, st.st_ino)
 
-    def _read(self, stamp: tuple | None) -> dict:
-        if stamp is None:
-            return empty_state()
+    def _stamp_now(self) -> tuple:
+        """Combined identity for overview.json **or** projector inputs.
+
+        Always a tuple so an absent overview.json still re-reads when the
+        roster / WorkLane DBs change under the binder.
+        """
+        ov = self._overview_stamp()
+        if ov is not None:
+            return ("overview", ov)
+        # Local import keeps the cold path light when only fixtures are used.
+        from server.local_projectors import projector_stamp  # noqa: PLC0415
+
+        return projector_stamp(self.binder)
+
+    def _read(self, stamp: tuple) -> dict:
+        if stamp and stamp[0] == "overview":
+            try:
+                return load_from_fixture(self.path)
+            except (OSError, ValueError):
+                return empty_state()
+        from server.local_projectors import project_local_overview  # noqa: PLC0415
+
         try:
-            return load_from_fixture(self.path)
-        except (OSError, ValueError):
+            projected = project_local_overview(self.binder)
+        except Exception:  # noqa: BLE001 — never 500 the desk on projector bugs
             return empty_state()
+        return _apply_projected_slice(projected)
 
     def current(self) -> dict:
-        """State for this request — re-read only when the file changed."""
+        """State for this request — re-read only when inputs changed."""
         stamp = self._stamp_now()
         with self._lock:
             if stamp != self._stamp:
@@ -445,18 +485,26 @@ class BinderOverview:
 
 
 def load_from_binder(binder: Path) -> dict:
-    """Read local truth off ``<binder>/.blueprint/overview.json`` if present.
+    """Read binder local truth (overview.json wins; else Phase-B projectors).
 
     Returns the full state (same shape as ``load_from_fixture``). Missing
-    file → ``empty_state()`` — honest-empty is a first-class PASS.
+    stores → ``empty_state()`` — honest-empty is a first-class PASS.
     Boot-time read; the live serve path uses ``BinderOverview`` so a binder
     edit lands on the next GET.
     """
     binder = Path(binder).expanduser().resolve()
     marker = binder / ".blueprint" / "overview.json"
-    if not marker.is_file():
+    if marker.is_file():
+        try:
+            return load_from_fixture(marker)
+        except (OSError, ValueError):
+            return empty_state()
+    from server.local_projectors import project_local_overview  # noqa: PLC0415
+
+    try:
+        return _apply_projected_slice(project_local_overview(binder))
+    except Exception:  # noqa: BLE001
         return empty_state()
-    return load_from_fixture(marker)
 
 
 def _sanitize_event(row: dict) -> dict:

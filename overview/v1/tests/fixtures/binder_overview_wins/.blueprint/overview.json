@@ -1,0 +1,5 @@
+{
+  "agents": [{"name": "planted-planner", "state": "working"}],
+  "jobs": [{"name": "planted-job", "state": "waiting"}],
+  "buckets": {"waiting": 1, "ready": 0, "blocked": 0}
+}

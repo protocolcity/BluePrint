@@ -1,0 +1,9 @@
+{
+  "workers": {
+    "roster-only-agent": {
+      "kind": "lane",
+      "display": "Should Not Paint",
+      "identity": "roster-only-agent"
+    }
+  }
+}
