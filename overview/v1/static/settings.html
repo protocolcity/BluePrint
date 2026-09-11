@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BluePrint — Settings V1</title>
+  <link rel="stylesheet" href="/css/overview.css" />
+</head>
+<body>
+  <main id="settings-shell" class="ov-shell" aria-label="Settings">
+    <header class="ov-topnav" role="banner">
+      <div class="ov-brand">Protocol City</div>
+      <nav class="ov-lens-nav" aria-label="Lenses">
+        <a class="ov-lens" href="/" data-lens="overview">Overview</a>
+        <a class="ov-lens" href="/map" data-lens="map">Map</a>
+        <a class="ov-lens" href="/calendar" data-lens="calendar">Calendar</a>
+        <a class="ov-lens ov-lens--current" href="/settings" data-lens="settings" aria-current="page">Settings</a>
+      </nav>
+    </header>
+
+    <div class="ov-banner-row">
+      <button
+        type="button"
+        class="ov-banner"
+        aria-label="Local desk"
+        aria-haspopup="menu"
+      >
+        <span class="ov-banner-dot" aria-hidden="true"></span>
+        <span class="ov-banner-label">Local desk</span>
+        <span class="ov-banner-caret" aria-hidden="true">▾</span>
+      </button>
+    </div>
+
+    <section class="ov-set-body" data-role="settings-body">
+      <section class="ov-set-group" aria-labelledby="ov-set-desk-title">
+        <h2 class="ov-set-group-title" id="ov-set-desk-title">Desk</h2>
+        <div class="ov-set-row">
+          <span class="ov-set-label">Binder path</span>
+          <span class="ov-set-value" data-role="set-binder-path">on this desk</span>
+          <span class="ov-set-hint">This desk only — never a cloud path.</span>
+        </div>
+        <div class="ov-set-row">
+          <span class="ov-set-label">Local desk label</span>
+          <span class="ov-set-value" data-role="set-desk-label">Local desk</span>
+          <span class="ov-set-hint">The banner voice on every lens.</span>
+        </div>
+      </section>
+
+      <section class="ov-set-group" aria-labelledby="ov-set-appearance-title">
+        <h2 class="ov-set-group-title" id="ov-set-appearance-title">Appearance</h2>
+        <div class="ov-set-row">
+          <span class="ov-set-label">Theme</span>
+          <span class="ov-set-value">Dark PC</span>
+          <span class="ov-set-hint">V1 dark only — no cream toggle.</span>
+        </div>
+      </section>
+
+      <section class="ov-set-group" aria-labelledby="ov-set-privacy-title">
+        <h2 class="ov-set-group-title" id="ov-set-privacy-title">Privacy · Local-only</h2>
+        <div class="ov-set-row">
+          <span class="ov-set-label">Local-only</span>
+          <span class="ov-set-value">On</span>
+          <span class="ov-set-hint">Everything painted here is on this machine.</span>
+        </div>
+        <div class="ov-set-row">
+          <span class="ov-set-label">Cloud sync</span>
+          <span class="ov-set-value ov-set-value--muted">Not in V1</span>
+          <span class="ov-set-hint">No cloud-ops toggles that lie.</span>
+        </div>
+      </section>
+
+      <section class="ov-set-group" aria-labelledby="ov-set-about-title">
+        <h2 class="ov-set-group-title" id="ov-set-about-title">About · Cellar</h2>
+        <div class="ov-set-row">
+          <span class="ov-set-label">Cellar tip</span>
+          <span class="ov-set-value" data-role="set-cellar-tip">blueprint 0.1.50_6</span>
+          <span class="ov-set-hint">Brew face — never a private Protocol City SHA.</span>
+        </div>
+      </section>
+    </section>
+
+    <footer class="ov-footer" data-role="footer" aria-label="Local pulse footer">
+      <div class="ov-footer-row" data-role="footer-row"></div>
+      <span class="ov-footer-quiet" data-role="footer-quiet">All systems quiet</span>
+    </footer>
+  </main>
+
+  <script type="module" src="/js/settings.v1.js"></script>
+</body>
+</html>
