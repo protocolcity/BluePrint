@@ -22,9 +22,11 @@ Run with:  pytest overview/v1/tests
 from __future__ import annotations
 
 import json
+import shutil
 import re
 import socket
 import sys
+import tempfile
 import threading
 import time
 import unittest
@@ -38,6 +40,7 @@ sys.path.insert(0, str(_OVERVIEW_V1))
 
 import serve as overview_serve  # noqa: E402
 from server.overview_state import (  # noqa: E402
+    BinderOverview,
     DEFAULT_CELLAR_TIP,
     HEARTBEAT_NAMES,
     empty_state,
@@ -55,8 +58,17 @@ def _pick_port() -> int:
         return s.getsockname()[1]
 
 
-def _start_server(state: dict) -> tuple[object, int, threading.Thread]:
+def _start_server(
+    state: dict,
+    *,
+    binder_overview=None,
+    binder_root: Path | None = None,
+) -> tuple[object, int, threading.Thread]:
+    # Handler carries truth on the class — reset each knob on every boot so
+    # one test class can't leak a binder into the next.
     overview_serve.Handler.state = state
+    overview_serve.Handler.binder_overview = binder_overview
+    overview_serve.Handler.binder_root = binder_root
     port = _pick_port()
     httpd = overview_serve.ThreadingHTTPServer(("127.0.0.1", port), overview_serve.Handler)
     thread = threading.Thread(target=httpd.serve_forever, name=f"ov-v1-{port}", daemon=True)
@@ -338,6 +350,104 @@ class FullGlassFixtureTests(unittest.TestCase):
         self.assertGreater(len(agents["agents"]), 0)
         self.assertIn("buckets", jobs)
         self.assertGreater(len(pulse["heartbeats"]), 0)
+
+
+
+
+class BinderLiveReadTests(unittest.TestCase):
+    """Binder truth is re-read per request, like calendar.json.
+
+    Before this peel Agents / Jobs / Pulse were boot-pinned: a desk started
+    cold stayed cold until it was bounced.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.mkdtemp(prefix="bp-desk-live-")
+        self.binder = Path(self.tmp)
+        (self.binder / ".blueprint").mkdir()
+        self.marker = self.binder / ".blueprint" / "overview.json"
+        self.source = BinderOverview(self.binder, cellar_tip=DEFAULT_CELLAR_TIP)
+        self.httpd, self.port, self.thread = _start_server(
+            self.source.current(),
+            binder_overview=self.source,
+            binder_root=self.binder,
+        )
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _write_marker(self, payload: dict) -> None:
+        self.marker.write_text(json.dumps(payload), encoding="utf-8")
+
+    def _agents(self) -> list:
+        return json.loads(_get(self.port, "/api/overview/agents")[1])["agents"]
+
+    def test_binder_without_overview_json_is_honest_empty(self) -> None:
+        self.assertEqual(self._agents(), [])
+        jobs = json.loads(_get(self.port, "/api/overview/jobs")[1])
+        self.assertEqual(jobs["jobs"], [])
+        self.assertEqual(jobs["buckets"], {"waiting": 0, "ready": 0, "blocked": 0})
+        pulse = json.loads(_get(self.port, "/api/overview/pulse")[1])
+        self.assertEqual([hb["name"] for hb in pulse["heartbeats"]], list(HEARTBEAT_NAMES))
+        self.assertEqual({hb["state"] for hb in pulse["heartbeats"]}, {"off"})
+        self.assertEqual(json.loads(_get(self.port, "/api/overview/project")[1]), {})
+        self.assertEqual(json.loads(_get(self.port, "/api/overview/charter")[1]), {})
+
+    def test_marker_written_mid_serve_paints_on_next_get(self) -> None:
+        self.assertEqual(self._agents(), [])
+        self._write_marker({
+            "agents": [{"name": "planner", "state": "working"}],
+            "jobs": [{"name": "peel-overview-agents-jobs", "state": "open"}],
+            "buckets": {"waiting": 1, "ready": 2, "blocked": 0},
+            "pulse": {
+                "heartbeats": [
+                    {"name": "FS Watch", "state": "watching", "last_at": "2026-09-11T10:00:00"}
+                ],
+                "ticks": [],
+                "last_at": "2026-09-11T10:00:00",
+            },
+        })
+        self.assertEqual([a["name"] for a in self._agents()], ["planner"])
+        jobs = json.loads(_get(self.port, "/api/overview/jobs")[1])
+        self.assertEqual(jobs["buckets"], {"waiting": 1, "ready": 2, "blocked": 0})
+        pulse = json.loads(_get(self.port, "/api/overview/pulse")[1])
+        by_name = {hb["name"]: hb["state"] for hb in pulse["heartbeats"]}
+        self.assertEqual(by_name["FS Watch"], "watching")
+        self.assertEqual(by_name["Builder"], "off")
+
+    def test_marker_mutation_is_visible_without_a_bounce(self) -> None:
+        self._write_marker({"agents": [{"name": "planner", "state": "working"}]})
+        self.assertEqual([a["name"] for a in self._agents()], ["planner"])
+        self._write_marker({"agents": [
+            {"name": "planner", "state": "idle"},
+            {"name": "builder-2", "state": "working"},
+        ]})
+        self.assertEqual([a["name"] for a in self._agents()], ["planner", "builder-2"])
+
+    def test_marker_removal_returns_to_honest_empty(self) -> None:
+        self._write_marker({"agents": [{"name": "planner", "state": "working"}]})
+        self.assertEqual(len(self._agents()), 1)
+        self.marker.unlink()
+        self.assertEqual(self._agents(), [])
+
+    def test_malformed_marker_is_honest_empty_not_500(self) -> None:
+        self.marker.write_text("{ not json", encoding="utf-8")
+        status, body, _ = _get(self.port, "/api/overview/agents")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["agents"], [])
+
+    def test_demo_worker_alone_still_paints_no_agents(self) -> None:
+        self._write_marker({"agents": [{"name": "demo-worker", "state": "working"}]})
+        self.assertEqual(self._agents(), [])
+
+    def test_cellar_tip_stays_the_pinned_brew_face(self) -> None:
+        """A binder file can't re-voice the Cellar tip."""
+        self._write_marker({"cellar_tip": "protocolcity deadbeef"})
+        pulse = json.loads(_get(self.port, "/api/overview/pulse")[1])
+        self.assertEqual(pulse["cellar_tip"], DEFAULT_CELLAR_TIP)
+        self.assertNotIn("protocolcity", pulse["cellar_tip"].lower())
 
 
 class CellarTipInjectionTests(unittest.TestCase):

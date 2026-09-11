@@ -35,7 +35,9 @@ export function paintDesk(root, desk) {
 }
 
 export function paintCellarTip(root, pulse) {
-  const tip = pulse?.cellar_tip || "blueprint 0.1.50_9";
+  // Cold fallback is blank, not a pinned version string — the server's
+  // DEFAULT_CELLAR_TIP is the single cold source when brew is missing.
+  const tip = pulse?.cellar_tip || "";
   setText(root, "set-cellar-tip", tip);
 }
 
