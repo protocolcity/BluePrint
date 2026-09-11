@@ -398,14 +398,19 @@ export function paintCharter(root, charter) {
 }
 
 export function paintFooter(root, pulse) {
-  // Mirror the pulse heartbeats in a single quiet footer line. Missing
-  // heartbeat paints muted — the trailing "All systems quiet" label is a
-  // Writer string, not a state promise.
+  // Mirror the pulse heartbeats in a single quiet footer line — but only
+  // the lit ones. A permanent row of five `off` cells is noise, not
+  // signal (spec: hide fake permanent Off footer rows until real signals
+  // exist). The trailing "All systems quiet" label is a Writer string
+  // that lives regardless.
   const row = root.querySelector('[data-role="footer-row"]');
   if (!row) return;
   const heartbeats = Array.isArray(pulse?.heartbeats) ? pulse.heartbeats : [];
+  const lit = heartbeats.filter(
+    (hb) => String(hb?.state || "off").toLowerCase() !== "off",
+  );
   clear(row);
-  for (const hb of heartbeats) {
+  for (const hb of lit) {
     const cell = document.createElement("span");
     cell.className = "ov-footer-cell";
     const name = document.createElement("span");
