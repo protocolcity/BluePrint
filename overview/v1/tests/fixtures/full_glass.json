@@ -1,0 +1,64 @@
+{
+  "agents": [
+    { "name": "Alpha-7",  "state": "idle" },
+    { "name": "Beta-2",   "state": "working" },
+    { "name": "Gamma-9",  "state": "error" },
+    { "name": "Delta-1",  "state": "off" }
+  ],
+  "cloud_builders": [
+    { "name": "Packet Foundry", "url": "https://packet.example/foundry" },
+    { "name": "Mesh Warden",    "url": "https://mesh.example/warden" },
+    { "name": "Stack Relay",    "url": "https://stack.example/relay" }
+  ],
+  "remote_builders": [],
+  "jobs": [],
+  "buckets": { "waiting": 0, "ready": 0, "blocked": 0 },
+  "pulse": {
+    "heartbeats": [
+      { "name": "FS Watch", "state": "watching",  "last_at": "2026-09-11T10:21:34" },
+      { "name": "Builder",  "state": "idle",      "last_at": "2026-09-11T10:21:33" },
+      { "name": "Cellar",   "state": "connected", "last_at": "2026-09-11T10:21:32" },
+      { "name": "Index",    "state": "scanning",  "last_at": "2026-09-11T10:21:31" },
+      { "name": "Sync",     "state": "paused",    "last_at": "2026-09-11T10:21:30" }
+    ],
+    "ticks": [
+      { "at": "2026-09-11T10:21:34", "label": "fs-watch" }
+    ],
+    "last_at": "2026-09-11T10:21:34"
+  },
+  "cellar_tip": "blueprint 0.1.50_6",
+  "project": {
+    "title": "Protocol City",
+    "project": "protocol-city",
+    "path_hint": "on this desk",
+    "badges": {
+      "local_write": true,
+      "consume": false,
+      "upstream": true,
+      "local_only": true
+    },
+    "charter_excerpt": "Protocol City is a local coordination desk for operators. It records intent, boundaries, decisions and live desk state."
+  },
+  "charter": {
+    "title": "Charter",
+    "sections": [
+      {
+        "heading": "Charter for Local Desk",
+        "body": "Operator console for a private BluePrint cell."
+      },
+      {
+        "heading": "Purpose",
+        "body": "Provide local observation and control for Agents, Jobs, and Pulse."
+      },
+      {
+        "heading": "Scope",
+        "body": "This desk may view and interact with local cell state only. No remote cells. No external orchestration."
+      },
+      {
+        "heading": "Invariants",
+        "body": "• Never act on unverified state\n• Never expose private keys\n• Never assume network trust"
+      }
+    ],
+    "footer": "Cellar app tip v0.1.50_6 — not private Protocol City install"
+  }
+}

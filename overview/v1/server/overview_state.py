@@ -1,10 +1,17 @@
 """Local-only truth stubs for the Overview V1 Mission Control glass.
 
-Contract (from ``docs/specs/OVERVIEW_INTENT.md`` §V1 must-have chrome):
+Contract (from ``docs/specs/OVERVIEW_INTENT.md`` §V1 must-have chrome +
+``OVERVIEW_MC_EXT.md`` §APIs extended):
 
-- ``GET /api/overview/agents`` → ``{"agents": [...]}``
-- ``GET /api/overview/jobs``   → ``{"jobs": [...]}``
-- ``GET /api/overview/pulse``  → ``{"ticks": [...], "last_at": null|str}``
+- ``GET /api/overview/agents``  →
+    ``{"agents":[...], "cloud_builders":[...], "remote_builders":[...]}``
+- ``GET /api/overview/jobs``    →
+    ``{"jobs":[...], "buckets":{"waiting":n,"ready":n,"blocked":n}}``
+- ``GET /api/overview/pulse``   →
+    ``{"heartbeats":[...], "cellar_tip": "<brew face>", "last_at": null|str,
+       "ticks":[...]}``
+- ``GET /api/overview/project`` → project card or ``{}``
+- ``GET /api/overview/charter`` → charter drawer or ``{}``
 
 The default state on this desk is **empty** — honest-empty is a first-class
 PASS state per INTENT §Dogfood note. A running-process view / local job
@@ -16,6 +23,16 @@ Fixture loading is provided **only** for tests and demo — never invent
 fake busy state in default serve. INTENT invariant: ``demo-worker`` alone
 does not count as employed pulse; a fixture with only ``demo-worker`` on
 the registry and no real employed event still paints ``No agents``.
+
+Never-lie contract (MC_EXT):
+
+- Cloud / remote builders are outbound **links**, never painted as local
+  agents. They come back in their own arrays; the client renders them as
+  link chips, never as rows in the agent roster.
+- Cellar tip is the brew app version (e.g. ``blueprint 0.1.50_6``), not a
+  private ProtocolCity SHA. The default is injected by ``serve.py``.
+- Heartbeat rows carry a state string; a missing heartbeat paints muted
+  (``off``), never working green.
 """
 from __future__ import annotations
 
@@ -24,25 +41,46 @@ from pathlib import Path
 
 
 _AGENT_STATES = frozenset({"idle", "working", "error", "off"})
+_HEARTBEAT_STATES = frozenset(
+    {"watching", "idle", "connected", "scanning", "paused", "off", "error"}
+)
 _DEMO_WORKER = "demo-worker"
+
+# Named local heartbeats — the pulse tile paints these five, in this order.
+# A heartbeat missing from state paints as ``off`` (muted), not working green.
+HEARTBEAT_NAMES = ("FS Watch", "Builder", "Cellar", "Index", "Sync")
+
+DEFAULT_CELLAR_TIP = "blueprint 0.1.50_6"
 
 
 def empty_state() -> dict:
     """The default local-only truth for this desk on a cold boot."""
     return {
         "agents": [],
+        "cloud_builders": [],
+        "remote_builders": [],
         "jobs": [],
-        "pulse": {"ticks": [], "last_at": None},
+        "buckets": {"waiting": 0, "ready": 0, "blocked": 0},
+        "pulse": {"heartbeats": [], "ticks": [], "last_at": None},
+        "cellar_tip": DEFAULT_CELLAR_TIP,
+        "project": {},
+        "charter": {},
     }
 
 
 def _sanitize_agent(row: dict) -> dict:
-    """Coerce a fixture agent row to the wire shape (name + state dot)."""
     name = str(row.get("name", "")).strip()
     state = str(row.get("state", "idle")).strip().lower()
     if state not in _AGENT_STATES:
         state = "idle"
     return {"name": name, "state": state}
+
+
+def _sanitize_link(row: dict) -> dict:
+    """Cloud / remote builder link. Outbound only — never a local agent row."""
+    name = str(row.get("name", "")).strip()
+    url = str(row.get("url", "")).strip()
+    return {"name": name, "url": url}
 
 
 def _sanitize_job(row: dict) -> dict:
@@ -51,10 +89,32 @@ def _sanitize_job(row: dict) -> dict:
     return {"name": name, "state": state}
 
 
+def _sanitize_buckets(raw: dict) -> dict:
+    def _n(key: str) -> int:
+        v = raw.get(key, 0)
+        try:
+            return max(0, int(v))
+        except (TypeError, ValueError):
+            return 0
+
+    return {"waiting": _n("waiting"), "ready": _n("ready"), "blocked": _n("blocked")}
+
+
 def _sanitize_tick(row: dict) -> dict:
     at = row.get("at")
     label = str(row.get("label", "")).strip()
     return {"at": at, "label": label}
+
+
+def _sanitize_heartbeat(row: dict) -> dict:
+    name = str(row.get("name", "")).strip()
+    state = str(row.get("state", "off")).strip().lower()
+    if state not in _HEARTBEAT_STATES:
+        state = "off"
+    last_at = row.get("last_at")
+    if last_at is not None:
+        last_at = str(last_at)
+    return {"name": name, "state": state, "last_at": last_at}
 
 
 def _agents_are_employed(agents: list[dict]) -> bool:
@@ -72,21 +132,53 @@ def _agents_are_employed(agents: list[dict]) -> bool:
     return False
 
 
+def _sanitize_project(raw: dict) -> dict:
+    """Project card. Path voice is always **on this desk** — never `workspace`,
+    never a cloud path."""
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    title = str(raw.get("title", "")).strip()
+    slug = str(raw.get("project", "")).strip()
+    # ``path_hint`` is copy — enforce the honesty string, no path theater.
+    path_hint = str(raw.get("path_hint", "on this desk")).strip() or "on this desk"
+    excerpt = str(raw.get("charter_excerpt", "")).strip()
+    raw_badges = raw.get("badges") or {}
+    badges = {
+        "local_write": bool(raw_badges.get("local_write", False)),
+        # Consume ≠ MANAGED — the badge is lit only when the desk holds a
+        # live consume lease. Fixture booleans are the truth source here.
+        "consume": bool(raw_badges.get("consume", False)),
+        "upstream": bool(raw_badges.get("upstream", False)),
+        "local_only": bool(raw_badges.get("local_only", False)),
+    }
+    return {
+        "title": title,
+        "project": slug,
+        "path_hint": path_hint,
+        "badges": badges,
+        "charter_excerpt": excerpt,
+    }
+
+
+def _sanitize_charter(raw: dict) -> dict:
+    """Charter drawer. Operator voice OK — stranger / marketing voice is not."""
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    title = str(raw.get("title", "")).strip()
+    footer = str(raw.get("footer", "")).strip()
+    sections = []
+    for section in raw.get("sections") or []:
+        if not isinstance(section, dict):
+            continue
+        heading = str(section.get("heading", "")).strip()
+        body = str(section.get("body", "")).strip()
+        if heading or body:
+            sections.append({"heading": heading, "body": body})
+    return {"title": title, "sections": sections, "footer": footer}
+
+
 def load_from_fixture(fixture_path: Path) -> dict:
-    """Read a JSON fixture that mirrors the wire shape of the V1 APIs.
-
-    Shape::
-
-        {
-          "agents": [{"name": "...", "state": "idle|working|error|off"}, ...],
-          "jobs":   [{"name": "...", "state": "..."}, ...],
-          "pulse":  {"ticks": [{"at": "...", "label": "..."}], "last_at": "..."}
-        }
-
-    Only used by the ``--fixture`` flag and by tests. Absent keys default
-    to empty; unknown fields are dropped so a fixture cannot smuggle
-    surfaces past the V1 lock.
-    """
+    """Read a JSON fixture that mirrors the wire shape of the V1 APIs."""
     fixture_path = Path(fixture_path).expanduser().resolve()
     if not fixture_path.is_file():
         raise FileNotFoundError(f"fixture not found: {fixture_path}")
@@ -97,8 +189,17 @@ def load_from_fixture(fixture_path: Path) -> dict:
     raw_agents = raw.get("agents") or []
     agents = [_sanitize_agent(row) for row in raw_agents if isinstance(row, dict)]
 
+    raw_cloud = raw.get("cloud_builders") or []
+    cloud_builders = [_sanitize_link(row) for row in raw_cloud if isinstance(row, dict)]
+
+    raw_remote = raw.get("remote_builders") or []
+    remote_builders = [
+        _sanitize_link(row) for row in raw_remote if isinstance(row, dict)
+    ]
+
     raw_jobs = raw.get("jobs") or []
     jobs = [_sanitize_job(row) for row in raw_jobs if isinstance(row, dict)]
+    buckets = _sanitize_buckets(raw.get("buckets") or {})
 
     raw_pulse = raw.get("pulse") or {}
     ticks = [
@@ -106,38 +207,120 @@ def load_from_fixture(fixture_path: Path) -> dict:
         for row in (raw_pulse.get("ticks") or [])
         if isinstance(row, dict)
     ]
+    heartbeats = [
+        _sanitize_heartbeat(row)
+        for row in (raw_pulse.get("heartbeats") or [])
+        if isinstance(row, dict)
+    ]
     last_at = raw_pulse.get("last_at")
 
     # demo-worker alone must still paint `No agents` — Agents tile empties
-    # the wire payload unless a real working agent is present. Registry
-    # placeholders never masquerade as roster.
+    # the wire payload unless a real working agent is present.
     if not _agents_are_employed(agents):
         agents = [row for row in agents if row.get("name") != _DEMO_WORKER]
 
     return {
         "agents": agents,
+        "cloud_builders": cloud_builders,
+        "remote_builders": remote_builders,
         "jobs": jobs,
-        "pulse": {"ticks": ticks, "last_at": last_at},
+        "buckets": buckets,
+        "pulse": {"heartbeats": heartbeats, "ticks": ticks, "last_at": last_at},
+        "cellar_tip": str(raw.get("cellar_tip") or DEFAULT_CELLAR_TIP),
+        "project": _sanitize_project(raw.get("project") or {}),
+        "charter": _sanitize_charter(raw.get("charter") or {}),
     }
+
+
+def _normalize_heartbeats(rows: list[dict]) -> list[dict]:
+    """Return one row per named local heartbeat, in HEARTBEAT_NAMES order.
+
+    Missing heartbeats paint as ``off`` (muted) — never working green.
+    A fixture may name additional heartbeats; those append after the named
+    five in the order the fixture provided them, but the five named local
+    heartbeats always render.
+    """
+    by_name = {row.get("name"): row for row in rows if isinstance(row, dict)}
+    out: list[dict] = []
+    for name in HEARTBEAT_NAMES:
+        row = by_name.get(name)
+        if row is None:
+            out.append({"name": name, "state": "off", "last_at": None})
+        else:
+            out.append(_sanitize_heartbeat(row))
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("name")
+        if name in HEARTBEAT_NAMES:
+            continue
+        out.append(_sanitize_heartbeat(row))
+    return out
 
 
 def load_agents(state: dict | None = None) -> dict:
-    """Body for ``GET /api/overview/agents``."""
+    """Body for ``GET /api/overview/agents``.
+
+    Cloud / remote builders come back in their own arrays — the client
+    renders them as outbound links, never as employed local agent rows.
+    """
     st = state if state is not None else empty_state()
-    return {"agents": list(st.get("agents") or [])}
+    return {
+        "agents": list(st.get("agents") or []),
+        "cloud_builders": list(st.get("cloud_builders") or []),
+        "remote_builders": list(st.get("remote_builders") or []),
+    }
 
 
 def load_jobs(state: dict | None = None) -> dict:
-    """Body for ``GET /api/overview/jobs``."""
+    """Body for ``GET /api/overview/jobs``.
+
+    ``buckets`` carries Waiting · Ready · Blocked counts (zeros PASS).
+    """
     st = state if state is not None else empty_state()
-    return {"jobs": list(st.get("jobs") or [])}
+    buckets = st.get("buckets") or {}
+    return {
+        "jobs": list(st.get("jobs") or []),
+        "buckets": _sanitize_buckets(buckets),
+    }
 
 
 def load_pulse(state: dict | None = None) -> dict:
-    """Body for ``GET /api/overview/pulse``."""
+    """Body for ``GET /api/overview/pulse``.
+
+    Returns named local heartbeats (missing ones as ``off``), the Cellar
+    tip (brew face — not a private ProtocolCity SHA), and last-tick.
+    """
     st = state if state is not None else empty_state()
     pulse = st.get("pulse") or {}
+    heartbeats = _normalize_heartbeats(pulse.get("heartbeats") or [])
     return {
+        "heartbeats": heartbeats,
         "ticks": list(pulse.get("ticks") or []),
         "last_at": pulse.get("last_at"),
+        "cellar_tip": str(st.get("cellar_tip") or DEFAULT_CELLAR_TIP),
     }
+
+
+def load_project(state: dict | None = None) -> dict:
+    """Body for ``GET /api/overview/project``.
+
+    Empty ``{}`` when nothing selected — honest default is no card.
+    """
+    st = state if state is not None else empty_state()
+    project = st.get("project") or {}
+    if not project:
+        return {}
+    return _sanitize_project(project)
+
+
+def load_charter(state: dict | None = None) -> dict:
+    """Body for ``GET /api/overview/charter``.
+
+    Empty ``{}`` when the drawer has no content — honest default is closed.
+    """
+    st = state if state is not None else empty_state()
+    charter = st.get("charter") or {}
+    if not charter:
+        return {}
+    return _sanitize_charter(charter)
