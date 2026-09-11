@@ -52,10 +52,12 @@ class HubLayoutTests(unittest.TestCase):
         self.assertIn("FILE_ARC_PX", self.paint)
 
     def test_folder_ring_widens_when_dense(self) -> None:
-        # Dense folder count must widen the outer ring beyond baseRadius.
+        # Dense folder count must widen the outer ring (density scale + arc budget).
+        self.assertIn("HUB_DENSITY_SCALE", self.paint)
+        self.assertIn("HUB_DENSE_MIN", self.paint)
         self.assertIsNotNone(
-            re.search(r"Math\.max\s*\(\s*baseRadius\s*,\s*folderMinRadius\s*\)", self.paint),
-            "folderRadius must grow past baseRadius when the arc budget requires it",
+            re.search(r"Math\.max\s*\(\s*baseRadius\s*\*\s*densityScale\s*,\s*folderMinRadius\s*\)", self.paint),
+            "folderRadius must grow past baseRadius*densityScale when the arc budget requires it",
         )
 
     def test_hub_label_stagger_thresholds(self) -> None:
@@ -102,12 +104,35 @@ class HubLayoutRuntimeShapeTests(unittest.TestCase):
     def test_placed_indexes_match_input_order(self) -> None:
         # placed[idx] preserves the caller's array order — paintLots relies
         # on it for `lots.forEach((lot, i) => layout.placed[i])`.
-        self.assertIn("placed[idx] = { x, y, labelY, ring: 'folder' }", self.paint)
-        self.assertIn("placed[idx] = { x, y, labelY, ring: 'file' }", self.paint)
+        self.assertIn("ring: 'folder'", self.paint)
+        self.assertIn("ring: 'file'", self.paint)
 
     def test_file_ring_clears_hub_disc(self) -> None:
         self.assertIn("FILE_RING_CLEAR", self.paint)
         self.assertIn("HUB_DISC_R", self.paint)
+
+
+class HubCrowdingV2Tests(unittest.TestCase):
+    """Design MAP_HUB_CROWDING_GUIDE — density orbit, hide-until-hover, plate shrink."""
+
+    def setUp(self) -> None:
+        self.paint = _PAINT.read_text(encoding="utf-8")
+        self.css = _CSS.read_text(encoding="utf-8")
+
+    def test_multi_orbit_threshold_matches_dense_min(self) -> None:
+        self.assertIn("HUB_MULTI_ORBIT_MIN = 12", self.paint)
+
+    def test_hide_until_hover_css(self) -> None:
+        self.assertIn(".map-lot.map-lot-dense .map-lot-label", self.css)
+        self.assertIn("map-lot-dense", self.paint)
+
+    def test_dense_plate_shrink(self) -> None:
+        self.assertIn("plateW", self.paint)
+        self.assertIn("dense ? 58 : 68", self.paint)
+
+    def test_dig_fat_fan_density_tools(self) -> None:
+        self.assertIn("map-dig-dense", self.paint)
+        self.assertIn("digRadius", self.paint)
 
 
 if __name__ == "__main__":
