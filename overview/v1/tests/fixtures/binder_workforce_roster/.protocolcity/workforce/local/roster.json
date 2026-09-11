@@ -1,0 +1,25 @@
+{
+  "workers": {
+    "planner": {
+      "kind": "lane",
+      "display": "Planner · Desk",
+      "identity": "planner",
+      "workdir": "/path/to/planner",
+      "schedule": "manual"
+    },
+    "reviewer": {
+      "kind": "job",
+      "display": "Reviewer · Desk",
+      "identity": "reviewer",
+      "workdir": "/path/to/reviewer",
+      "schedule": "0 * * * *"
+    },
+    "demo-worker": {
+      "kind": "lane",
+      "display": "Demo Worker",
+      "identity": "demo-worker",
+      "workdir": "/path/to/demo",
+      "schedule": "manual"
+    }
+  }
+}

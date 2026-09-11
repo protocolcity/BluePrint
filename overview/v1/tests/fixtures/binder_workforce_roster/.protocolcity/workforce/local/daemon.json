@@ -1,0 +1,6 @@
+{
+  "pid": 1,
+  "state": "scheduling",
+  "in_flight": ["planner"],
+  "workers": {}
+}
