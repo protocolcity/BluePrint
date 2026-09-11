@@ -35,7 +35,7 @@ export function paintDesk(root, desk) {
 }
 
 export function paintCellarTip(root, pulse) {
-  const tip = pulse?.cellar_tip || "blueprint 0.1.50_6";
+  const tip = pulse?.cellar_tip || "blueprint 0.1.50_9";
   setText(root, "set-cellar-tip", tip);
 }
 

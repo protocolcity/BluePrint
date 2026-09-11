@@ -26,7 +26,7 @@
     ],
     "last_at": "2026-09-11T10:21:34"
   },
-  "cellar_tip": "blueprint 0.1.50_6",
+  "cellar_tip": "blueprint 0.1.50_9",
   "project": {
     "title": "Protocol City",
     "project": "protocol-city",
@@ -59,6 +59,6 @@
         "body": "• Never act on unverified state\n• Never expose private keys\n• Never assume network trust"
       }
     ],
-    "footer": "Cellar app tip v0.1.50_6 — not private Protocol City install"
+    "footer": "Cellar app tip v0.1.50_9 — not private Protocol City install"
   }
 }
