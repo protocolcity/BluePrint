@@ -6,7 +6,7 @@
 
 ## FAIL (what the shot shows)
 
-Dense dense binder root: outer blue **lot plates** collide (`pos-lot`/`local`, `lot-a`/`lot-b`, bottom cluster). Labels pile and cover plates (`lot-d`, `suite-lot…`, `lot-c`, `dense binderPOS-export`, `engine-backups` on-plate). Dig/md/focus OK — this is **lots→hub layout density only**.
+Dense binder root: outer blue **lot plates** collide (adjacent outer plates + bottom cluster). Labels pile and cover plates (truncated labels stacked on neighboring plates). Dig/md/focus OK — this is **lots→hub layout density only**.
 
 ## Goal
 
@@ -33,7 +33,7 @@ When neighbor angular gap is tight (or lot count ≥ 12):
 
 - **At rest:** plates only (or plates + truncated label if gap allows).
 - **Hover / focus / dig-select:** full label.
-- Hub name (`dense binder`) always visible.
+- Hub name always visible.
 - Prefer labels **outside** the plate (radial outward), never painted across the plate face.
 
 ### 4. Longer stagger (with hide-until-hover)
