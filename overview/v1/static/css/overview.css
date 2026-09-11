@@ -439,6 +439,13 @@ html, body {
 .ov-footer-quiet { color: var(--ov-muted); }
 
 /* Calendar lens — week list, quiet events. Empty is `No events`. */
+.ov-cal-lead {
+  margin: 4px 0 12px;
+  color: var(--ov-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
 .ov-cal-body {
   display: flex;
   flex-direction: column;
