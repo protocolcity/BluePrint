@@ -28,7 +28,7 @@ Extend `#38` (`overview/v1/`) without breaking V1 DoD (`OVERVIEW_V1_GLASS.md` ro
 
 ## Never-lie fences held
 - Consume ≠ MANAGED (badge lit only when a lease is live)
-- No example_user as OneSeoPOS peel SoT
+- Private personal SoTs stay off the public install face
 - No private ProtocolCity as install face
 - Missing heartbeat paints muted, never green
 - Cellar tip = brew app version (e.g. `blueprint 0.1.50_6`)

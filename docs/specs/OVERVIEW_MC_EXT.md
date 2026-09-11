@@ -9,7 +9,7 @@ BluePrint = desk · Overview = Mission Control glass · Map = dig. Prefer **Loca
 
 ## Never-lie DoD (load-bearing)
 - Consume ≠ MANAGED
-- No example_user as OneSeoPOS peel SoT
+- Private personal SoTs stay off the public install face
 - No private ProtocolCity as the install face
 - No fake-green theater; missing heartbeat ≠ green
 - Cellar tip = brew app version only (not private city SHA)
