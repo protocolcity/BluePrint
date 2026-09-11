@@ -107,27 +107,24 @@ export function paintAgents(root, agents, links) {
 
 function buildBuilderLink(label, kind, entries) {
   // A single "+ Cloud builders" / "+ Remote builders" line rendered as an
-  // outbound link. Never painted as a local agent row. When entries carry
-  // a url, the first url wins; the label is always the group name.
+  // outbound link. Never painted as a local agent row. Only rendered when
+  // an entry carries a real outbound url — never a `#hash` fallback. If
+  // no outbound target exists, the group is silent (no anchor at all).
   const target = (entries || []).find((e) => e?.url);
-  const href = target?.url || `#${kind}-builders`;
+  if (!target?.url) return null;
   const a = document.createElement("a");
   a.className = "ov-link-row";
   a.dataset.builder = kind;
-  a.href = href;
-  if (target?.url) {
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-  }
+  a.href = target.url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
   const name = document.createElement("span");
   name.textContent = label;
   a.appendChild(name);
-  if (target?.url) {
-    const ext = document.createElement("span");
-    ext.className = "ov-link-ext";
-    ext.textContent = "↗";
-    a.appendChild(ext);
-  }
+  const ext = document.createElement("span");
+  ext.className = "ov-link-ext";
+  ext.textContent = "↗";
+  a.appendChild(ext);
   return a;
 }
 
@@ -196,9 +193,14 @@ export function paintPulse(root, pulse) {
   const ticks = Array.isArray(pulse?.ticks) ? pulse.ticks : [];
   const cellarTip = pulse?.cellar_tip || "";
   const lastAt = pulse?.last_at || null;
+  // All-off heartbeats read as silent pulse — a row list of five muted
+  // ``off`` rows is not evidence of work. Only lit heartbeats surface as rows.
+  const litHeartbeats = heartbeats.filter(
+    (hb) => String(hb?.state || "off").toLowerCase() !== "off",
+  );
 
   clear(body);
-  if (heartbeats.length === 0 && ticks.length === 0 && !lastAt && !cellarTip) {
+  if (litHeartbeats.length === 0 && ticks.length === 0 && !lastAt && !cellarTip) {
     // Honest empty: silent pulse (no orphan divider, per THEME §Writer copy).
     if (metaNode) {
       clear(metaNode);
@@ -207,10 +209,10 @@ export function paintPulse(root, pulse) {
     return;
   }
 
-  if (heartbeats.length > 0) {
+  if (litHeartbeats.length > 0) {
     const list = document.createElement("ul");
     list.className = "ov-pulse-list";
-    for (const row of heartbeats) {
+    for (const row of litHeartbeats) {
       const li = document.createElement("li");
       li.className = "ov-pulse-row";
       const glyph = document.createElement("span");
