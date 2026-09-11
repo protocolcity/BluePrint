@@ -87,21 +87,21 @@ class RosterProjectorTests(unittest.TestCase):
         binder = FIXTURES / "binder_workforce_roster"
         agents = project_agents(binder)
         names = {a["name"] for a in agents}
-        self.assertIn("planner", names)
-        self.assertIn("reviewer", names)
+        self.assertIn("Planner · Desk", names)
+        self.assertIn("Reviewer · Desk", names)
         self.assertIn("demo-worker", names)
         by_name = {a["name"]: a["state"] for a in agents}
         # daemon in_flight → working; others idle. Never invent.
-        self.assertEqual(by_name["planner"], "working")
-        self.assertEqual(by_name["reviewer"], "idle")
+        self.assertEqual(by_name["Planner · Desk"], "working")
+        self.assertEqual(by_name["Reviewer · Desk"], "idle")
 
     def test_binder_overview_applies_demo_worker_filter_with_peers(self) -> None:
         """With real peers present, demo-worker may remain on the wire."""
         binder = FIXTURES / "binder_workforce_roster"
         st = load_from_binder(binder)
         names = [a["name"] for a in st["agents"]]
-        self.assertIn("planner", names)
-        self.assertIn("reviewer", names)
+        self.assertIn("Planner · Desk", names)
+        self.assertIn("Reviewer · Desk", names)
         # planner is working → employed → demo-worker kept.
         self.assertIn("demo-worker", names)
 
@@ -220,3 +220,49 @@ class TwinRosterPathTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgentDisplayNameTests(unittest.TestCase):
+    """Design soft watch: prefer roster display over identity for paint."""
+
+    def test_prefers_display_when_present(self) -> None:
+        import tempfile, shutil, json
+        from pathlib import Path
+        from server.local_projectors import project_agents
+
+        tmp = tempfile.mkdtemp(prefix="bp-display-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        roster = Path(tmp) / ".protocolcity" / "workforce" / "local"
+        roster.mkdir(parents=True)
+        (roster / "roster.json").write_text(json.dumps({
+            "workers": {
+                "chief-of-staff": {
+                    "kind": "job",
+                    "identity": "chief-of-staff",
+                    "display": "Chief of Staff",
+                }
+            }
+        }), encoding="utf-8")
+        agents = project_agents(Path(tmp))
+        self.assertEqual(agents, [{"name": "Chief of Staff", "state": "idle"}])
+
+    def test_demo_worker_keeps_identity_wire_name(self) -> None:
+        import tempfile, shutil, json
+        from pathlib import Path
+        from server.local_projectors import project_agents
+
+        tmp = tempfile.mkdtemp(prefix="bp-demo-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        roster = Path(tmp) / ".protocolcity" / "workforce" / "local"
+        roster.mkdir(parents=True)
+        (roster / "roster.json").write_text(json.dumps({
+            "workers": {
+                "demo-worker": {
+                    "kind": "lane",
+                    "identity": "demo-worker",
+                    "display": "Demo Lane",
+                }
+            }
+        }), encoding="utf-8")
+        agents = project_agents(Path(tmp))
+        self.assertEqual(agents, [{"name": "demo-worker", "state": "idle"}])
