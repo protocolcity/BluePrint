@@ -55,6 +55,11 @@ html, body {
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Hard hide — a shell with `hidden` never paints, even if a downstream
+ * `display: flex` on the class would otherwise reveal it. Project card and
+ * Charter drawer default to hidden on cold empty; this rule keeps them so. */
+[hidden] { display: none !important; }
+
 .ov-shell {
   min-height: 100%;
   display: grid;
