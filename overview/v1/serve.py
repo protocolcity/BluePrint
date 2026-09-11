@@ -34,8 +34,10 @@ pulse · `No events`) per ``docs/specs/OVERVIEW_INTENT.md`` §Dogfood note
 and ``OVERVIEW_CALENDAR_SETTINGS.md`` §Calendar empty state.
 
 ``--binder DIR`` opts local truth in: ``<binder>/.blueprint/overview.json``
-seeds Agents/Jobs/Pulse, ``<binder>/.blueprint/calendar.json`` seeds the
-Calendar. Missing files keep the honest-empty paint.
+seeds Agents/Jobs/Pulse (+ Project/Charter), ``<binder>/.blueprint/calendar.json``
+seeds the Calendar. Both are re-read when they change on disk, so a binder edit
+lands on the next refresh — no server bounce. Missing files keep honest-empty.
+``--fixture`` stays boot-pinned (tests / demo).
 
 ``--fixture PATH`` overrides the entire overview state (tests / demo only).
 
@@ -64,6 +66,7 @@ _REPO_ROOT = _HERE.parent.parent
 _MAP_V1 = _REPO_ROOT / "map" / "v1"
 
 from server.overview_state import (  # noqa: E402
+    BinderOverview,
     DEFAULT_CELLAR_TIP,
     detect_cellar_tip,
     empty_state,
@@ -128,6 +131,21 @@ def _rewrite_map_html(text: str) -> str:
 class Handler(BaseHTTPRequestHandler):
     state: dict = empty_state()
     binder_root: Path | None = None
+    # Live binder truth for Agents / Jobs / Pulse (+ Project / Charter — one
+    # file). Set when --binder is on and no --fixture override; None keeps
+    # ``state`` as the boot-pinned source.
+    binder_overview: BinderOverview | None = None
+
+    def _overview_state(self) -> dict:
+        """State for this request.
+
+        With a binder and no fixture, re-read ``overview.json`` when it
+        changed on disk — the contract calendar already has via
+        ``load_events``. A ``--fixture`` override and a binder-less desk
+        both stay boot-pinned.
+        """
+        src = self.binder_overview
+        return self.state if src is None else src.current()
 
     # ── low-level helpers ──────────────────────────────────────────────
     def _send_json(self, code: int, payload: dict) -> None:
@@ -162,19 +180,19 @@ class Handler(BaseHTTPRequestHandler):
 
         # Overview API surface — always available.
         if route == "/api/overview/agents":
-            self._send_json(200, load_agents(self.state))
+            self._send_json(200, load_agents(self._overview_state()))
             return
         if route == "/api/overview/jobs":
-            self._send_json(200, load_jobs(self.state))
+            self._send_json(200, load_jobs(self._overview_state()))
             return
         if route == "/api/overview/pulse":
-            self._send_json(200, load_pulse(self.state))
+            self._send_json(200, load_pulse(self._overview_state()))
             return
         if route == "/api/overview/project":
-            self._send_json(200, load_project(self.state))
+            self._send_json(200, load_project(self._overview_state()))
             return
         if route == "/api/overview/charter":
-            self._send_json(200, load_charter(self.state))
+            self._send_json(200, load_charter(self._overview_state()))
             return
 
         # Calendar + Settings — local desk stubs.
@@ -284,16 +302,22 @@ class Handler(BaseHTTPRequestHandler):
         self._send_text(200, text, "text/html; charset=utf-8")
 
 
+def _resolve_cellar_tip(cellar_tip: str) -> str:
+    """The brew face, resolved once at boot.
+
+    An explicit ``--cellar-tip`` is the single voice; omitted or empty, we ask
+    the local brew Cellar and fall back to ``DEFAULT_CELLAR_TIP``. Resolved
+    once so a live binder re-read never shells out to brew per request.
+    """
+    return (cellar_tip or "").strip() or detect_cellar_tip()
+
+
 def _apply_cellar_tip(state: dict, cellar_tip: str) -> dict:
     """Overlay the brew-face Cellar tip onto the loaded state.
 
-    Never a private ProtocolCity SHA. An explicit ``--cellar-tip`` on the
-    CLI is the single voice; omitted or empty, we ask the local brew
-    Cellar and fall back to ``DEFAULT_CELLAR_TIP`` — so Settings and Pulse
-    track the tap without a manual bump every rev.
+    Never a private ProtocolCity SHA.
     """
-    tip = (cellar_tip or "").strip() or detect_cellar_tip()
-    state["cellar_tip"] = tip
+    state["cellar_tip"] = _resolve_cellar_tip(cellar_tip)
     return state
 
 
@@ -331,6 +355,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"bp-desk: --binder is not a directory: {binder}", file=sys.stderr)
             return 2
 
+    tip = _resolve_cellar_tip(args.cellar_tip)
+    source: BinderOverview | None = None
+
     if args.fixture is not None:
         try:
             state = load_from_fixture(args.fixture)
@@ -338,12 +365,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"bp-desk: fixture error: {exc}", file=sys.stderr)
             return 2
         print(f"bp-desk: loaded fixture {args.fixture}", file=sys.stderr)
+        state["cellar_tip"] = tip
     elif binder is not None:
-        state = load_from_binder(binder)
+        # Live: each GET stats overview.json and re-parses only on change.
+        source = BinderOverview(binder, cellar_tip=tip)
+        state = source.current()
     else:
         state = empty_state()
+        state["cellar_tip"] = tip
 
-    Handler.state = _apply_cellar_tip(state, args.cellar_tip)
+    Handler.state = state
+    Handler.binder_overview = source
     Handler.binder_root = binder
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)

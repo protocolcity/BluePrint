@@ -38,6 +38,7 @@ def _pick_port() -> int:
 
 def _start_server(state: dict, binder: Path | None = None):
     bp_serve.Handler.state = state
+    bp_serve.Handler.binder_overview = None
     bp_serve.Handler.binder_root = binder
     port = _pick_port()
     httpd = bp_serve.ThreadingHTTPServer(("127.0.0.1", port), bp_serve.Handler)

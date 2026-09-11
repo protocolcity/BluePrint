@@ -23,6 +23,11 @@ lenses; Overview / Calendar / Map paint honest empty. With it the desk
 also reads `<binder>/.blueprint/overview.json` and
 `<binder>/.blueprint/calendar.json` (both optional) to seed local truth.
 
+Both files are read live: the desk stats them per request and re-parses only
+when they change, so editing `<binder>/.blueprint/overview.json` shows up on
+the next refresh with no server bounce. A missing or malformed file paints
+honest empty. `--fixture` stays boot-pinned (tests / demo).
+
 Then in the browser:
 
 1. **DoD 1 — landing paints three equal tiles + Local desk banner + hand-off
