@@ -182,13 +182,13 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-md-content table { display: block; max-width: 100%; overflow-x: auto; }
 
 
-/* Hub crowding — hide-until-hover labels at density (Design guide). */
-.map-lot.map-lot-dense .map-lot-label { opacity: 0; pointer-events: none; }
+/* Names remain visible at every density; pagination bounds the scene. */
+.map-lot.map-lot-dense .map-lot-label { opacity: 1; pointer-events: none; }
 .map-lot.map-lot-dense:hover .map-lot-label,
 .map-lot.map-lot-dense:focus .map-lot-label,
 .map-lot.map-lot-dense.is-selected .map-lot-label,
 .map-lot.map-lot-dense:focus-within .map-lot-label { opacity: 1; }
-.map-dig-child.map-dig-dense .map-dig-label { opacity: 0; pointer-events: none; }
+.map-dig-child.map-dig-dense .map-dig-label { opacity: 1; pointer-events: none; }
 .map-dig-child.map-dig-dense:hover .map-dig-label,
 .map-dig-child.map-dig-dense:focus .map-dig-label,
 .map-dig-child.map-dig-dense:focus-within .map-dig-label { opacity: 1; }
@@ -200,3 +200,26 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 #map-browser-list button { text-align: left; padding: 7px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--map-chrome-fg); font: inherit; cursor: pointer; overflow-wrap: anywhere; }
 #map-browser-list button:hover, #map-browser-list button:focus-visible { background: #273347; outline: 2px solid #789bce; outline-offset: -2px; }
 @media (max-width: 640px) { .map-browser { width: min(220px, calc(100vw - 48px)); } #map-browser-list { max-height: 30vh; } }
+
+/* Keep navigation outside the scene's hit area and labels readable at rest. */
+.map-chrome { grid-template-columns: 280px 1fr auto; grid-template-rows: auto minmax(0, 1fr) auto; }
+.map-browser { grid-column: 1; grid-row: 2; width: 100%; align-self: start; max-height: 100%; overflow: auto; }
+#map-browser-list { max-height: none; }
+#map-reset { grid-column: 3; }
+#map-view-options { grid-column: 1; }
+#map-page-controls { grid-column: 2 / -1; grid-row: 3; justify-self: end; display: flex; align-items: center; gap: 12px; }
+#map-page-controls[hidden], #map-dig-trail[hidden] { display: none; }
+#map-dig-trail { grid-column: 1; }
+#map-page-controls button { background: transparent; color: inherit; border: 1px solid var(--map-chrome-border); padding: 7px 10px; border-radius: 4px; cursor: pointer; }
+#map-page-controls button:disabled { opacity: .4; cursor: default; }
+.map-lot-label, .map-dig-label { font-size: 12px; paint-order: stroke fill; stroke: var(--map-bg); stroke-width: 3px; stroke-linejoin: round; }
+.map-hit:focus-visible .map-lot-plate, .map-hit:focus-visible .map-dig-plate { stroke: var(--map-lot-focus); stroke-width: 3px; }
+.map-hit:hover .map-lot-plate, .map-hit:hover .map-dig-plate { stroke: var(--map-lot-focus); }
+@media (max-width: 700px) {
+  .map-chrome { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0,1fr) auto; }
+  .map-browser { grid-column: 1 / -1; width: 100%; }
+  #map-reset { grid-column: 2; }
+  #map-page-controls { grid-column: 2; }
+  #map-svg { display: none; }
+  #map-page-controls { display: none; }
+}

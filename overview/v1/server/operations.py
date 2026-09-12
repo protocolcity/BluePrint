@@ -49,7 +49,7 @@ def operations_snapshot(binder):
         build = 'Source checkout'
     result = {'observed_at': now.isoformat(), 'build': build, 'workspace': None,
               'orders': [], 'projects': [], 'agents': [], 'sources': [], 'truncated': False,
-              'events': [], 'work_dates': [], 'excluded_stores': [], 'remote': {'state': 'not_connected', 'message': 'Remote activity is not connected to this view.'}}
+              'events': [], 'work_dates': [], 'excluded_stores': [], 'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
         result['sources'].append({'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.'})
         return result
