@@ -69,6 +69,9 @@ has no events until local truth is planted).
 4. Dark PC desk (`#0f1114` family) — no cream.
 5. No Map verbs (`dig` · `lot` · `hub` · `fan` · `trail` · `md-viewer` ·
    `crumb`) and no Wall feed.
+6. **Detail sheet** — click a row (or Enter / Space). Sheet shows **title ·
+   time · notes** (empty notes stay silent). Esc, Close, or scrim dismisses.
+   Local only — no attendees, no cloud.
 
 ### Settings — `http://127.0.0.1:8803/settings`
 

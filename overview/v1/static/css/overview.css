@@ -512,6 +512,65 @@ html, body {
 .ov-cal-event-state[data-state="done"]      { color: var(--ov-state-working); }
 .ov-cal-event-state[data-state="due"]       { color: var(--ov-state-scanning); }
 .ov-cal-event-state[data-state="scheduled"] { color: var(--ov-muted); }
+.ov-cal-event[role="button"] {
+  width: 100%;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+/* Detail sheet — click a row: title · time · notes. Native dialog + scrim.
+ * No motion. Esc / Close / scrim dismiss. */
+.ov-cal-sheet {
+  margin: 0;
+  margin-left: auto;
+  height: 100%;
+  width: min(360px, 100%);
+  max-width: 100%;
+  border: none;
+  border-left: 1px solid var(--ov-tile-border);
+  background: var(--ov-tile-bg);
+  color: var(--ov-fg);
+  padding: 20px 20px 24px;
+  box-sizing: border-box;
+}
+.ov-cal-sheet::backdrop {
+  background: rgba(15, 17, 20, 0.62);
+}
+.ov-cal-sheet-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 0 12px auto;
+  padding: 0;
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ov-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ov-cal-sheet-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ov-fg);
+}
+.ov-cal-sheet-when {
+  margin: 0 0 16px;
+  color: var(--ov-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.ov-cal-sheet-notes {
+  margin: 0;
+  color: var(--ov-fg);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
 
 /* Settings lens — grouped rows, quiet helper. Same density as tiles. */
 .ov-set-body {
@@ -559,6 +618,8 @@ html, body {
 .ov-tile:focus-visible,
 .ov-tile-body:focus-visible,
 .ov-cal-list:focus-visible,
+.ov-cal-event:focus-visible,
+.ov-cal-sheet-close:focus-visible,
 .ov-link-row:focus-visible,
 .ov-project-action:focus-visible {
   outline: 2px solid var(--ov-focus);

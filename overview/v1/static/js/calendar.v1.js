@@ -42,6 +42,60 @@ function formatWhen(iso) {
   return `${m[1]}-${m[2]}-${m[3]}${clock}`;
 }
 
+function eventRecord(row) {
+  const src = EVENT_SOURCES.has(row?.source) ? row.source : "manual";
+  const st = EVENT_STATES.has(row?.state) ? row.state : "scheduled";
+  return {
+    title: row?.title || "",
+    at: row?.at || "",
+    source: src,
+    state: st,
+    notes: typeof row?.notes === "string" ? row.notes : "",
+  };
+}
+
+export function openSheet(root, event) {
+  const sheet = root.querySelector('[data-role="cal-sheet"]');
+  if (!sheet) return;
+  const rec = eventRecord(event || {});
+  const title = root.querySelector('[data-role="cal-sheet-title"]');
+  const when = root.querySelector('[data-role="cal-sheet-when"]');
+  const notes = root.querySelector('[data-role="cal-sheet-notes"]');
+  if (title) title.textContent = rec.title;
+  if (when) when.textContent = formatWhen(rec.at);
+  if (notes) notes.textContent = rec.notes;
+  if (typeof sheet.showModal === "function") {
+    if (!sheet.open) sheet.showModal();
+  } else {
+    sheet.hidden = false;
+    sheet.open = true;
+  }
+}
+
+export function closeSheet(root) {
+  const sheet = root.querySelector('[data-role="cal-sheet"]');
+  if (!sheet) return;
+  if (typeof sheet.close === "function" && sheet.open) {
+    sheet.close();
+  } else {
+    sheet.hidden = true;
+    sheet.open = false;
+  }
+}
+
+export function bindSheet(root) {
+  const sheet = root.querySelector('[data-role="cal-sheet"]');
+  if (!sheet || sheet.dataset.bound === "1") return;
+  sheet.dataset.bound = "1";
+  const closer = root.querySelector('[data-role="cal-sheet-close"]');
+  if (closer) {
+    closer.addEventListener("click", () => closeSheet(root));
+  }
+  sheet.addEventListener("click", (ev) => {
+    if (ev.target === sheet) closeSheet(root);
+  });
+}
+
 export function paintEvents(root, events) {
   const list = root.querySelector('[data-role="cal-list"]');
   if (!list) return;
@@ -54,25 +108,33 @@ export function paintEvents(root, events) {
   const ul = document.createElement("ul");
   ul.className = "ov-cal-events";
   for (const row of rows) {
+    const rec = eventRecord(row);
     const li = document.createElement("li");
     li.className = "ov-cal-event";
+    li.setAttribute("role", "button");
+    li.setAttribute("tabindex", "0");
     const title = document.createElement("span");
     title.className = "ov-cal-event-title";
-    title.textContent = row?.title || "";
+    title.textContent = rec.title;
     const when = document.createElement("span");
     when.className = "ov-cal-event-when";
-    when.textContent = formatWhen(row?.at);
+    when.textContent = formatWhen(rec.at);
     const source = document.createElement("span");
     source.className = "ov-cal-event-source";
-    const src = EVENT_SOURCES.has(row?.source) ? row.source : "manual";
-    source.textContent = src;
-    source.dataset.source = src;
+    source.textContent = rec.source;
+    source.dataset.source = rec.source;
     const state = document.createElement("span");
     state.className = "ov-cal-event-state";
-    const st = EVENT_STATES.has(row?.state) ? row.state : "scheduled";
-    state.textContent = st;
-    state.dataset.state = st;
+    state.textContent = rec.state;
+    state.dataset.state = rec.state;
     li.append(title, when, source, state);
+    li.addEventListener("click", () => openSheet(root, rec));
+    li.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        if (typeof ev.preventDefault === "function") ev.preventDefault();
+        openSheet(root, rec);
+      }
+    });
     ul.appendChild(li);
   }
   list.appendChild(ul);
@@ -125,6 +187,7 @@ export async function boot(opts = {}) {
     // Local-only honesty: on error keep the `No events` copy on screen.
     console.warn("calendar: events unavailable", err);
   }
+  bindSheet(root);
   try {
     const pulse = await fetchJson(endpoints.pulse, fetcher);
     paintFooter(root, pulse || { heartbeats: [] });

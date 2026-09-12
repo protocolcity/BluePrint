@@ -30,7 +30,21 @@ class El {
     this.style = {};
     this._role = null;
     this._id = null;
+    this.open = false;
+    this.listeners = {};
   }
+  addEventListener(type, fn) {
+    (this.listeners[type] = this.listeners[type] || []).push(fn);
+  }
+  showModal() {
+    this.open = true;
+    this.hidden = false;
+  }
+  close() {
+    this.open = false;
+    this.hidden = true;
+  }
+  focus() {}
   appendChild(c) {
     c.parent = this;
     this.children.push(c);
@@ -276,6 +290,19 @@ function makeCalendarShell() {
   const range = new El("span");
   range.setAttribute("data-role", "cal-range");
   root.appendChild(range);
+  const sheet = new El("dialog");
+  sheet.setAttribute("data-role", "cal-sheet");
+  sheet.hidden = true;
+  const closer = new El("button");
+  closer.setAttribute("data-role", "cal-sheet-close");
+  const sheetTitle = new El("h2");
+  sheetTitle.setAttribute("data-role", "cal-sheet-title");
+  const sheetWhen = new El("p");
+  sheetWhen.setAttribute("data-role", "cal-sheet-when");
+  const sheetNotes = new El("p");
+  sheetNotes.setAttribute("data-role", "cal-sheet-notes");
+  sheet.append(closer, sheetTitle, sheetWhen, sheetNotes);
+  root.appendChild(sheet);
   return root;
 }
 
@@ -357,6 +384,38 @@ const settings = await import(
   const ul = list.children.find((c) => c.tagName === "UL");
   const fields = ul ? eventFields(ul.children[0]) : [];
   cases.calendar_fallback = { fields };
+}
+
+// Detail sheet — title · time · notes; empty notes stay silent; close hides.
+{
+  const root = makeCalendarShell();
+  cal.openSheet(root, {
+    title: "Standup",
+    at: "2026-09-11T09:00",
+    notes: "Local desk check-in.",
+  });
+  const sheet = root.querySelector('[data-role="cal-sheet"]');
+  cases.calendar_sheet_open = {
+    open: !!sheet.open,
+    hidden: !!sheet.hidden,
+    title: root.querySelector('[data-role="cal-sheet-title"]').textContent,
+    when: root.querySelector('[data-role="cal-sheet-when"]').textContent,
+    notes: root.querySelector('[data-role="cal-sheet-notes"]').textContent,
+  };
+  cal.closeSheet(root);
+  cases.calendar_sheet_closed = {
+    open: !!sheet.open,
+    hidden: !!sheet.hidden,
+  };
+}
+
+{
+  const root = makeCalendarShell();
+  cal.openSheet(root, { title: "Filed note", at: "2026-09-12T11:30", notes: "" });
+  cases.calendar_sheet_empty_notes = {
+    title: root.querySelector('[data-role="cal-sheet-title"]').textContent,
+    notes: root.querySelector('[data-role="cal-sheet-notes"]').textContent,
+  };
 }
 
 // Settings desk + Cellar brew face. Empty tip does not invent a version.
