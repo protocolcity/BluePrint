@@ -37,6 +37,21 @@ class OperationsTests(unittest.TestCase):
         result=operations_snapshot(self.root)
         self.assertEqual(len(result['orders']),1)
         self.assertEqual(result['sources'][0]['state'],'partial')
+    def test_unregistered_work_labels_do_not_create_agents(self):
+        self.seed()
+        runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
+        (runtime/'roster.json').write_text(json.dumps({'workers':{}}))
+        result=operations_snapshot(self.root)
+        self.assertEqual(result['orders'][0]['owner'],'agent')
+        self.assertEqual(result['agents'],[])
+    def test_first_read_includes_deferred_open_work(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog',gate_type='deferred' WHERE id=1")
+        result=operations_snapshot(self.root)
+        self.assertEqual(len(result['orders']),1)
+        self.assertEqual(result['orders'][0]['status'],'backlog')
+        self.assertFalse(result['orders'][0]['attention'])
     def test_stale_daemon_never_claims_idle_or_working(self):
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
         (runtime/'roster.json').write_text(json.dumps({'workers':{'agent':{'display':'Agent','command':['example-agent'],'env':{'SECRET':'do not expose'}}}}))
