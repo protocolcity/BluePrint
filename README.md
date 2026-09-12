@@ -109,6 +109,7 @@ Papers live on GitHub (links work from PyPI too):
 | [**RUNNING.md**](https://github.com/protocolcity/BluePrint/blob/main/RUNNING.md) | Day-to-day loops after setup |
 | [**templates/**](https://github.com/protocolcity/BluePrint/tree/main/templates) | Fill-in-the-blank instruction files |
 | [**example/**](https://github.com/protocolcity/BluePrint/tree/main/example) | Minimal workspace (one root, one project, one agent) |
+| [**docs/CLI_HANDOFF.md**](https://github.com/protocolcity/BluePrint/blob/main/docs/CLI_HANDOFF.md) | CLI session handoff — spec read order, lane locks, fence |
 
 ## The short version
 
