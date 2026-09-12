@@ -45,7 +45,7 @@ function orderRow(order) {
   const row=link('',workUrl(order),'bp-order');
   const content=el('div'); content.append(el('strong',order.title));
   content.append(el('span',`${order.project_name} · ${order.id} · ${order.workers.length ? order.owner : 'No worker assigned'} · ${date(order.updated_at)}`,'bp-order-meta'));
-  if(order.attention_face==='watch')content.append(el('span',order.gate_type==='timer' ? 'Timer opens '+date(order.gate_until) : 'No recent update · check progress before recovery','bp-order-note'));
+  if(order.attention_face==='watch')content.append(el('span',order.gate_type==='timer' ? (new Date(order.gate_until) <= new Date() ? 'Timer elapsed ' : 'Timer opens ')+date(order.gate_until) : 'No recent update · check progress before recovery','bp-order-note'));
   if(order.gate_note) content.append(el('span',order.gate_note.length > 160 ? order.gate_note.slice(0,157) + '…' : order.gate_note,'bp-order-note'));
   const gateLabel={deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'}[order.gate_type];
   row.append(content,badge(order.attention ? 'attention' : order.status, order.attention ? 'Needs you' : undefined));

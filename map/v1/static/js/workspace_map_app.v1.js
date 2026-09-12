@@ -138,10 +138,22 @@ export async function boot(opts = {}) {
       }
       if (snap.dig) { clearDigIn(world); paintDigIn(world, snap.dig, nodes.slice(page * pageSize, (page + 1) * pageSize), {radius:220}); }
       list.replaceChildren();
-      for (const node of nodes) {
-        if (!node.isDir && !node.hasMd) continue;
+      let lastGroup = '';
+      const orderedNodes = [...nodes.filter(node => node.isDir), ...nodes.filter(node => !node.isDir && node.hasMd)];
+      for (const node of orderedNodes) {
+        const group = node.isDir ? (snap.dig ? 'Folders' : 'Projects') : 'Papers';
+        if (group !== lastGroup) {
+          const heading = document.createElement('h3');
+          heading.className = 'map-browser-group'; heading.textContent = group; list.append(heading); lastGroup = group;
+        }
         const button = document.createElement('button');
-        button.type = 'button'; button.textContent = (node.isDir ? 'Folder · ' : 'Paper · ') + node.name;
+        button.type = 'button'; button.setAttribute('aria-label', (node.isDir ? 'Folder · ' : 'Paper · ') + node.name);
+        const icon = document.createElement('span'); icon.className = 'map-browser-icon'; icon.setAttribute('aria-hidden', 'true');
+        icon.innerHTML = node.isDir
+          ? '<svg viewBox="0 0 20 20"><path d="M2 5h6l2 2h8v10H2z"/></svg>'
+          : '<svg viewBox="0 0 20 20"><path d="M5 2h7l4 4v12H5zM12 2v5h4M8 10h5M8 13h5"/></svg>';
+        const label = document.createElement('span'); label.textContent = node.name;
+        button.append(icon, label);
         button.addEventListener('click', async () => {
           try {
             if (node.isDir) await digInto(node, {mode:snap.dig ? 'nest' : 'root'});

@@ -76,3 +76,7 @@ unattended worker has been configured.
 The active Map shares the application header, workspace search and operations projection. Folder navigation exposes project-scoped work, human attention, papers and existing instructions, plus the workspace Agents and jobs surface. Open work includes deferred/tracking orders; in-progress status is labeled as status, never live agent activity. Missing sources remain unavailable and truncated details are disclosed. The project/paper outline and breadcrumbs work independently of the SVG scene.
 
 The prior FAST layer, theater, folder-seat stack and four-lens host are retired implementation recipes. Their useful access and truthfulness outcomes are carried by these current controls; they must not be restored as a second projection or an apparent live activity layer. This decision does not claim every optional historical visual treatment is implemented.
+
+## Navigation acceptance
+
+The folder browser groups projects/folders separately from papers, using restrained type icons and preserving the document's original name (including existing emoji). Breadcrumbs and canonical Map URLs preserve folder/paper context through work-order reading. Reader return targets are limited to local Work/Map routes; cold links fall back to Work. Content arrival uses a short fade/translation only when both system and saved motion preferences allow it. Camera pan/zoom remains direct, without ambient or simulated activity.
