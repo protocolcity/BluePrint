@@ -521,7 +521,14 @@ def _sanitize_event(row: dict) -> dict:
     state = str(row.get("state", "scheduled")).strip().lower()
     if state not in ("scheduled", "due", "done"):
         state = "scheduled"
-    return {"title": title, "at": at, "source": source, "state": state}
+    notes = str(row.get("notes", "")).strip()
+    return {
+        "title": title,
+        "at": at,
+        "source": source,
+        "state": state,
+        "notes": notes,
+    }
 
 
 def load_events(binder: Path | None = None) -> dict:

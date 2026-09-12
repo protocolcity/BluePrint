@@ -205,6 +205,24 @@ class CalendarGlassPaintTests(unittest.TestCase):
         self.assertEqual(by_class["ov-cal-event-source"]["text"], "manual")
         self.assertEqual(by_class["ov-cal-event-state"]["text"], "scheduled")
 
+    def test_detail_sheet_paints_title_time_notes(self) -> None:
+        c = self.cases["calendar_sheet_open"]
+        self.assertTrue(c["open"])
+        self.assertFalse(c["hidden"])
+        self.assertEqual(c["title"], "Standup")
+        self.assertEqual(c["when"], "2026-09-11 · 09:00")
+        self.assertEqual(c["notes"], "Local desk check-in.")
+
+    def test_detail_sheet_close_hides(self) -> None:
+        c = self.cases["calendar_sheet_closed"]
+        self.assertFalse(c["open"])
+        self.assertTrue(c["hidden"])
+
+    def test_detail_sheet_empty_notes_stay_silent(self) -> None:
+        c = self.cases["calendar_sheet_empty_notes"]
+        self.assertEqual(c["title"], "Filed note")
+        self.assertEqual(c["notes"], "")
+
 
 class SettingsGlassPaintTests(unittest.TestCase):
     """Settings V1 glass DoD — Desk path + brew-face Cellar tip."""

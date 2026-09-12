@@ -115,6 +115,9 @@ class FourLensNavTests(unittest.TestCase):
         )
         # Honest empty copy present on cold serve.
         self.assertIn("No events", text)
+        # Detail sheet is a native dialog — closed until a row is clicked.
+        self.assertIn('data-role="cal-sheet"', text)
+        self.assertIn("<dialog", text)
         # Local desk banner still says the exact string (Designer IA lock).
         self.assertIn("Local desk", text)
         self.assertNotIn("workspace", text.lower())
@@ -314,6 +317,8 @@ class BinderTruthTests(unittest.TestCase):
         self.assertEqual(titles, ["Standup", "Ship peel", "Filed note"])
         states = {e["state"] for e in payload["events"]}
         self.assertEqual(states, {"scheduled", "due", "done"})
+        notes = [e.get("notes") for e in payload["events"]]
+        self.assertEqual(notes, ["Local desk check-in.", "Glass DoD lock.", ""])
         self.assertEqual(payload["range"], "2026-09-07 → 2026-09-13")
 
     def test_settings_desk_reports_binder_path(self) -> None:
