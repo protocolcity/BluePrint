@@ -51,6 +51,7 @@ class OperationsTests(unittest.TestCase):
         result=operations_snapshot(self.root)
         self.assertEqual(len(result['orders']),1)
         self.assertEqual(result['orders'][0]['status'],'backlog')
+        self.assertEqual(result['orders'][0]['gate_type'],'deferred')
         self.assertFalse(result['orders'][0]['attention'])
     def test_stale_daemon_never_claims_idle_or_working(self):
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)

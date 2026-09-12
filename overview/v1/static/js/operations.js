@@ -14,6 +14,9 @@ $('refresh-preference').value=String(interval);$('motion-preference').value=moti
 document.body.classList.toggle('bp-reduce-motion',motion==='off');
 const query = new URLSearchParams(location.search);
 $('search').value = query.get('q') || '';
+for(const [gate,label] of Object.entries({deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'})) {
+  $('status-filter').add(new Option(label,'gate:'+gate));
+}
 $('status-filter').value = query.get('status') || '';
 let selectedProject = query.get('project') || '';
 $('page-title').textContent = titles[page][0];
@@ -32,8 +35,10 @@ function orderRow(order) {
   const row=link('',workUrl(order),'bp-order');
   const content=el('div'); content.append(el('strong',order.title));
   content.append(el('span',`${order.project_name} · ${order.id} · ${order.owner} · ${date(order.updated_at)}`,'bp-order-meta'));
-  if(order.attention && order.gate_note) content.append(el('span',order.gate_note.length > 160 ? order.gate_note.slice(0,157) + '…' : order.gate_note,'bp-order-note'));
+  if(order.gate_note) content.append(el('span',order.gate_note.length > 160 ? order.gate_note.slice(0,157) + '…' : order.gate_note,'bp-order-note'));
+  const gateLabel={deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'}[order.gate_type];
   row.append(content,badge(order.attention ? 'attention' : order.status, order.attention ? 'Needs you' : undefined));
+  if(gateLabel) row.append(badge(order.gate_type,gateLabel));
   return row;
 }
 function sources(parent, details) {
@@ -77,7 +82,7 @@ function filterOptions() {
 }
 function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value;
-  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!status || (status==='attention'?o.attention:o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
   $('work-list').replaceChildren(...orders.slice(pageIndex*size,(pageIndex+1)*size).map(orderRow));
   if(!orders.length) empty($('work-list'),'No matching open work. Try another project, status, or search.');
