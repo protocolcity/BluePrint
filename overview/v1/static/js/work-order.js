@@ -107,7 +107,7 @@
   }
   window.addEventListener('bp-order-ready', () => {
     const order=window.bpOrder; $('action-priority').value=String(order.priority);
-    try{const labels=typeof order.labels==='string'?JSON.parse(order.labels):order.labels || [];$('action-reminder').value=(labels.find(label=>label.startsWith('reminder:')) || '').slice(9);}catch(error){} 
+    try{const labels=typeof order.labels==='string'?JSON.parse(order.labels):order.labels || [];$('action-reminder').value=(labels.find(label=>label.startsWith('reminder:')) || '').slice(9);}catch(error){}
     $('action-agent').replaceChildren(...(order.assignment_options || []).map(agent=>new Option(agent.name,agent.id)));
     configure();
   });
