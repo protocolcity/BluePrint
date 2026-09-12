@@ -99,7 +99,11 @@ def _roster_candidates(
     """Canonical + legacy roster homes for repo, package, and planted layouts."""
     candidates: List[Path] = []
     if explicit:
-        candidates.append(Path(explicit).expanduser())
+        return [Path(explicit).expanduser()]
+    if city_root is not None:
+        root = Path(city_root).expanduser().resolve()
+        return [root / '.protocolcity/workforce/local/roster.json',
+                root / 'workforce/local/roster.json']
     env = (os.environ.get("WORKFORCE_ROSTER") or "").strip()
     if env:
         candidates.append(Path(env).expanduser())
@@ -1019,6 +1023,8 @@ def print_audit_text(out: Dict[str, Any]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('--workspace', default=os.environ.get('WORKSPACE_ROOT', ''),
+                    help='Explicit workspace root; prevents roster discovery in another workspace')
     ap.add_argument("--json", action="store_true", help="Machine-readable output")
     ap.add_argument(
         "--feeds",
@@ -1064,6 +1070,7 @@ def main() -> int:
         decay=bool(args.decay),
         roster=args.roster or "",
         timeout=DEFAULT_TIMEOUT,
+        city_root=Path(args.workspace).expanduser().resolve() if args.workspace else None,
     )
     if not out.get("reachable", True):
         msg = out.get("note") or (

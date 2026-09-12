@@ -16,7 +16,10 @@ from worklane.products import get_product, product_tracker
 from worklane.mcp.handlers import TPHandlers
 request = json.load(sys.stdin)
 try:
-    from worklane.api.tasks import helpers
+    try:
+        from worklane.api.tasks import helpers
+    except ImportError:
+        raise ValueError('Update WorkLane before using workspace-scoped actions.')
     if not getattr(helpers, '_local_roster_only', lambda: False)():
         raise ValueError('Update WorkLane before using workspace-scoped actions.')
     spec = get_product(request['project'])
