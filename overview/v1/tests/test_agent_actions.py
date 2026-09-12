@@ -1,13 +1,24 @@
 import json
+import io
+from urllib.error import HTTPError
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 from datetime import datetime, timezone
-from server.agent_actions import dispatch_agent
+from server.agent_actions import dispatch_agent, _request
 
 
 class AgentDispatchTests(unittest.TestCase):
+    def test_decline_preserves_empty_queue_and_other_engine_reasons(self):
+        for body, expected in [(b'{"ok":false,"msg":"queue empty"}', 'No assigned work is ready'),
+                               (b'{"ok":false,"msg":"shift already in flight"}', 'shift already in flight'),
+                               (b'not json', 'WorkForce declined dispatch')]:
+            error=HTTPError('http://127.0.0.1/api/dispatch/agent',409,'Conflict',{},io.BytesIO(body))
+            with patch('server.agent_actions.urlopen',side_effect=error):
+                with self.assertRaisesRegex(RuntimeError,expected):
+                    _request(error.url,data=b'{}')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
