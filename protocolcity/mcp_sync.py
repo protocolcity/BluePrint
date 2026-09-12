@@ -803,6 +803,32 @@ def check_runtime_dir_wiring(
     return findings
 
 
+def sync_existing_cursor_entries(root: Path, managed: Dict[str, Any], *, apply: bool = False) -> Dict[str, Any]:
+    """Reconcile existing Cursor registry entries without adding permissions.
+
+    Unmanaged servers and unrelated preferences are preserved. A missing
+    Cursor configuration is reported, never silently created.
+    """
+    if not should_apply_host_vendor(root):
+        return {"ok": True, "detail": "not a live host workspace"}
+    path = Path.home() / ".cursor" / "mcp.json"
+    if not path.is_file():
+        return {"ok": True, "detail": "not configured"}
+    try:
+        body = json.loads(path.read_text(encoding="utf-8"))
+        servers = body.get("mcpServers", {})
+        if not isinstance(servers, dict):
+            raise ValueError("mcpServers must be an object")
+        drift = [key for key in managed if key in servers and servers[key] != managed[key]]
+        if apply and drift:
+            for key in drift:
+                servers[key] = managed[key]
+            path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+        return {"ok": not drift or apply, "detail": "updated existing entries" if apply and drift else ("existing entries drift" if drift else "existing entries match"), "entries": drift, "action": "updated" if apply and drift else "checked"}
+    except (OSError, ValueError, AttributeError) as exc:
+        return {"ok": False, "detail": "Cursor configuration unreadable: %s" % type(exc).__name__}
+
+
 def check_drift(
     workspace: Path,
     *,
@@ -911,6 +937,13 @@ def check_drift(
                 result["vendor"][label] = vchk
                 return result
             vendor_notes.append("%s ok" % label)
+        cursor = sync_existing_cursor_entries(root, managed)
+        result["cursor"] = cursor
+        if not cursor["ok"]:
+            result["codes"].append("MCP-MIRROR-DRIFT")
+            result["detail"] = "cursor vendor drift: " + cursor["detail"]
+            return result
+        vendor_notes.append("cursor: " + cursor["detail"])
 
     result["ok"] = True
     result["drift"] = False
@@ -995,6 +1028,9 @@ def apply_mcp(
                 out["vendors"][label] = _skip_non_live_host_vendor(
                     label, default_fn()
                 )
+        out["vendors"]["cursor"] = sync_existing_cursor_entries(root, managed, apply=True)
+        if not out["vendors"]["cursor"]["ok"]:
+            out["ok"] = False
     return out
 
 

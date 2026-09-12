@@ -128,7 +128,7 @@ class HubCrowdingV2Tests(unittest.TestCase):
 
     def test_dense_plate_shrink(self) -> None:
         self.assertIn("plateW", self.paint)
-        self.assertIn("dense ? 58 : 68", self.paint)
+        self.assertIn("const plateW = 116", self.paint)
 
     def test_dig_fat_fan_density_tools(self) -> None:
         self.assertIn("map-dig-dense", self.paint)

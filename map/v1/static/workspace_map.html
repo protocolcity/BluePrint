@@ -20,17 +20,18 @@
 
       <div id="map-chrome" class="map-chrome" data-hit-layer="chrome">
         <details class="map-chrome-hit map-chrome-panel map-browser" open>
-          <summary>Browse folders and papers</summary>
+          <summary>Projects and papers</summary>
           <p id="map-browser-path" aria-live="polite">Workspace</p>
           <div id="map-browser-list" aria-label="Folders and documents"></div>
         </details>
         <details id="map-view-options" class="map-chrome-hit map-chrome-panel">
           <summary>View</summary>
-          <label><input type="checkbox" id="flt-managed" checked /> Managed</label>
-          <label><input type="checkbox" id="flt-unmanaged" checked /> Unmanaged</label>
+          <label><input type="checkbox" id="flt-managed" checked /> Projects</label>
+          <label><input type="checkbox" id="flt-unmanaged" /> Other workspace folders</label>
           <label><input type="checkbox" id="flt-hidden" /> Hidden</label>
         </details>
-        <button id="map-reset" type="button" class="map-chrome-hit map-chrome-btn">Reset</button>
+        <button id="map-reset" type="button" class="map-chrome-hit map-chrome-btn">Workspace</button>
+        <div id="map-page-controls" class="map-chrome-hit map-chrome-panel" hidden><button type="button" id="map-page-prev">Previous</button><span id="map-page-status" aria-live="polite"></span><button type="button" id="map-page-next">Next</button></div>
         <nav id="map-dig-trail" class="map-chrome-hit map-trail" hidden></nav>
       </div>
     </div>
