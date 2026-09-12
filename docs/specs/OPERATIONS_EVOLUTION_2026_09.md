@@ -4,7 +4,7 @@ User decision: the application developed on :8803 is the forward BP baseline. Th
 
 ## Product behavior
 
-BluePrint provides one view into the selected workspace's projects, work orders, agents, schedules, and data sources. Overview prioritizes explicitly human-gated work and gives project context. Work provides search, project/status filters, pagination, and links to a full description/comment reader. Projects groups registered stores. Agents distinguishes registry membership from fresh runtime evidence. Calendar distinguishes WorkForce next-run reports, dates derived from work orders, and optional manually supplied events. Connections explains source availability and excluded databases. Settings contains functioning browser display preferences and running package identity.
+BluePrint provides one view into the selected workspace's projects, work orders, agents, schedules, and data sources. Overview prioritizes explicitly human-gated work and gives project context. Work provides search, project/status/assignment filters, pagination, and links to a full description/comment reader. Projects groups registered stores. Agents distinguishes registry membership from fresh runtime evidence. Calendar distinguishes WorkForce next-run reports, dates derived from work orders, and optional manually supplied events. Connections explains source availability and excluded databases. Settings contains functioning browser display preferences and running package identity.
 
 The desk disclosure describes the selected workspace; it is not a cloud switch. GitHub delivery activity is connected through an explicit repository allowlist. Direct remote agent execution is not configured. A future remote adapter must carry source identity, observation time, and failure state. A local work order describing remote work is not proof of remote execution.
 
@@ -28,7 +28,7 @@ See [deployment and recovery](../operations/DEPLOYMENT.md).
 
 Work-order notes, priority, hold, resume, and assignment to a registered agent
 use WorkLane with an explicit project, verified store, and record-version
-check. The reader displays errors and preserves the user's context. Notes
+check. Workspace-scoped actions require WorkLane local-roster authority and never use an unrelated default WorkForce service. Assignment does not trigger a default host wake or notification. The reader displays errors and preserves the user's context. Notes
 cannot smuggle lifecycle commands. Create and close use the owning engine
 through the established work-order process. Agents provides manual dispatch
 through WorkForce and displays refusal reasons, including an empty queue.

@@ -63,8 +63,8 @@ class EngineIntegrationTests(unittest.TestCase):
             roster = roots[0]/'.protocolcity/workforce/local/roster.json'
             roster.parent.mkdir(parents=True)
             roster.write_text(json.dumps({'workers': {
-                'test-agent': {'name': 'Test agent', 'queue_url': 'http://localhost/ready?product=protocolcity'},
-                'other-agent': {'name': 'Other agent', 'queue_url': 'http://localhost/ready?product=other'},
+                'test-agent': {'kind': 'lane', 'name': 'Test agent', 'queue_url': 'http://localhost/ready?product=protocolcity'},
+                'other-agent': {'kind': 'lane', 'name': 'Other agent', 'queue_url': 'http://localhost/ready?product=other'},
             }}))
             with self.assertRaisesRegex(ValueError, 'not assigned'):
                 work_action(roots[0], 'protocolcity', 'pc-1', 'assign', 'other-agent', order['updated_at'])
