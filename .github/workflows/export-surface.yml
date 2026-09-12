@@ -20,7 +20,7 @@ jobs:
       - name: Install candidate and WorkLane integration dependency
         # Reviewed local-roster authority support; do not test against an older
         # published engine that cannot enforce selected-workspace assignment.
-        run: python -m pip install . 'git+https://github.com/protocolcity/WorkLane.git@6833ce5ae301d840eaeb357ca6cb67677b3698c0'
+        run: python -m pip install . 'git+https://github.com/protocolcity/WorkLane.git@767fad15552b86c0565d2991ef4dff7a92967fd3'
       - name: Verify operations and engine boundaries
         run: |
           BP_TEST_WORKLANE_PYTHON="$(command -v python)" PYTHONPATH=overview/v1 python -m unittest discover -s overview/v1/tests

@@ -31,7 +31,7 @@ def source_references(root, project, description):
             if directory == '.':directory=''
             params={'path':directory}
             if is_paper:params['md']=relative
-            result.append({'label':value, 'href':'/map?'+urlencode(params),
+            result.append({'label':value, 'path':relative, 'href':'/map?'+urlencode(params),
                            'action':'Read paper' if is_paper else 'Open folder'})
             seen.add(value);break
     return result
@@ -87,3 +87,27 @@ def read_work_order(binder: Path | None, project: str, order_id: str) -> dict:
     if not matches:
         raise FileNotFoundError('Work order not found in this workspace.')
     return matches[0]
+
+
+def reveal_reference(binder, project, order_id, relative):
+    """Reveal an existing permitted source reference; never open it for execution."""
+    import subprocess
+    import sys
+    if sys.platform != 'darwin':
+        raise RuntimeError('File-manager reveal is not available on this host. Use Open folder.')
+    if not binder or not project:
+        raise ValueError('An explicit workspace and project are required.')
+    if not isinstance(relative,str) or not relative:
+        raise ValueError('Choose an existing source reference.')
+    order=read_work_order(binder,project,order_id)
+    if relative not in {ref['path'] for ref in order['references']}:
+        raise ValueError('This path is not a permitted source reference on the work order.')
+    target=(Path(binder).resolve()/relative).resolve()
+    from .workspace_search import permitted
+    if not permitted(Path(binder).resolve(),target):
+        raise ValueError('Source reference is outside the permitted workspace.')
+    try:
+        subprocess.run(['/usr/bin/open','-R',str(target)],check=True,capture_output=True,timeout=5)
+    except (subprocess.SubprocessError,OSError) as exc:
+        raise RuntimeError('The file manager could not reveal this reference.') from exc
+    return {'ok':True}
