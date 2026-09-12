@@ -15,8 +15,8 @@ This folder is the **workspace** root. Sessions opened here are
 ```
 You + entry AI (author = you)
   → file work order (route worker:<hand> on create)
-  → Agents drain that seat on a clock
-  → Map shows live truth
+  → configured runner claims assigned, ready work on manual or scheduled dispatch
+  → BluePrint shows work state and separate execution evidence
   → true blocker → keep hand seat + gold For You (gate_type=human)
   → close on the ticket (history) — do not re-file from chat memory
 ```
@@ -24,7 +24,7 @@ You + entry AI (author = you)
 | Stamp | Meaning |
 |---|---|
 | **Author** | You filed it (host chat intake) |
-| **Seat** | `worker:<hand>` implements while you step away |
+| **Seat** | `worker:<hand>` identifies responsibility; execution requires a configured runner and dispatch |
 | **For You** | Only when the hand needs your decision / credential / publish |
 
 **Load order:** this CORE → product always-work process (if installed) →
@@ -67,12 +67,15 @@ BluePrint is vendor-neutral: pick any chat host + WorkLane MCP for capture, any
 CLI for hired hands, suite as **glass**.
 
 - **Capture** = chat + MCP (`wl_create`) — not suite Map forms. Never `tk`.
-- **File = decided.** When You file a work order, hands work it — they do not
-  re-ask for permission. Route with `worker:<id>` on create.
+- **File = decided within its stated scope.** Route with a registered
+  `worker:<id>` on create. A missing seat needs visible routing; it is not
+  permission for every provider to compete for the same work. Assignment,
+  dispatch, claim, and completion are separate events.
 - **Hands** drain only tickets labeled `worker:<id>`
 - **Assign ≠ escalate.** Assign = `worker:<hand>` on create. Escalate to You =
   keep the hand seat + `gate_type=human` / Blocked — never re-seat failed work
-  to `worker:you` (that parks implement work where cron never drains).
+  to `worker:you`. An authorized host session may implement as You; that
+  does not establish unattended execution.
 - **Tag You only when needed.** Author is always You; gold For You is scarce
   (true blocker). Ordinary finish stays closed by the hand without re-asking.
 - **History on the board.** Work orders + comments are the archive. Prefer
