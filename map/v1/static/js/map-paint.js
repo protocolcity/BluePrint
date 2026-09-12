@@ -39,12 +39,12 @@ function el(name, attrs = {}, textContent) {
 
 // Ring-plot lots around the hub. No easing, no motion, no ornament — just
 // the layout math a folder tree needs to be legible cold.
-function ringPositions(count, radius) {
+function ringPositions(count, radius, offset = 0) {
   const out = [];
   if (count <= 0) return out;
   const step = (Math.PI * 2) / count;
   for (let i = 0; i < count; i += 1) {
-    const angle = -Math.PI / 2 + i * step;
+    const angle = -Math.PI / 2 + i * step + offset;
     out.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
   }
   return out;
@@ -141,7 +141,7 @@ export function computeHubLayout(lots, { baseRadius = 220 } = {}) {
     const outerIdxs = folders.filter((_, k) => k % 2 === 0);
     const innerIdxs = folders.filter((_, k) => k % 2 === 1);
     const outerPositions = ringPositions(outerIdxs.length, folderRadius);
-    const innerPositions = ringPositions(innerIdxs.length, folderInnerRadius);
+    const innerPositions = ringPositions(innerIdxs.length, folderInnerRadius, Math.PI / Math.max(1, innerIdxs.length));
     outerIdxs.forEach((idx, k) => {
       const { x, y } = outerPositions[k];
       const labelY = folderStagger ? (k % 2 === 0 ? folderLabelFar : folderLabelNear) : folderLabelFar;
@@ -195,7 +195,7 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
   const layout = computeHubLayout(lots, { baseRadius: radius });
   const dense = !!layout.dense;
   // Design §5 — shrink plates ~15% at dense hubs only (hit targets stay usable).
-  const plateW = dense ? 58 : 68;
+  const plateW = 116;
   const plateH = dense ? 38 : 44;
   const plateRx = dense ? 5 : 6;
   lots.forEach((lot, i) => {
@@ -207,6 +207,9 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
     const group = el('g', {
       class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}${isSelected ? ' is-selected' : ''}${denseClass}`,
       transform: `translate(${pos.x.toFixed(2)},${pos.y.toFixed(2)})`,
+      tabindex: '0',
+      role: 'button',
+      'aria-label': lot.name,
       'data-rel-path': lot.relPath,
       'data-name': lot.name,
       'data-has-md': lot.hasMd ? '1' : '0',
@@ -230,7 +233,7 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
       ? 'map-lot-label map-lot-file-label'
       : 'map-lot-label';
     const label = el('text', {
-      x: 0, y: pos.labelY, class: labelClass, 'text-anchor': 'middle',
+      x: 0, y: kind === 'folder' ? 4 : pos.labelY, class: labelClass, 'text-anchor': 'middle',
     }, truncateLotLabel(rawName, max));
     label.appendChild(el('title', {}, rawName));
     group.appendChild(label);
@@ -272,6 +275,8 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
     const group = el('g', {
       class: `map-hit map-dig-child map-dig-${kind}${child.hasMd ? ' map-dig-md' : ''}${stagger ? ' map-dig-dense' : ''}`,
       tabindex: '0',
+      role: 'button',
+      'aria-label': child.name,
       transform: `translate(${(ox + x).toFixed(2)},${(oy + y).toFixed(2)})`,
       'data-rel-path': relPath,
       'data-name': child.name,

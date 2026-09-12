@@ -57,6 +57,9 @@ export async function boot(opts = {}) {
 
   // Camera state — snap only. No easing (Glass §Empty pan and zoom).
   const camera = { x: 0, y: 0, k: 1 };
+  let page = 0;
+  const pageSize = 12;
+  let pageNodes = [];
   // Last outer radius reported by paintLots; the folder ring widens when
   // dense (see computeHubLayout), and applyCamera has to fit against the
   // actual outer radius or a dense hub gets clipped at the edges.
@@ -64,10 +67,12 @@ export async function boot(opts = {}) {
 
   function applyCamera() {
     const rect = stage.getBoundingClientRect();
-    const base = fitTransform(rect.width, rect.height, { radius: currentOuterRadius });
+    const inset = rect.width > 700 ? 304 : 0;
+    const sceneWidth = Math.max(1, rect.width - inset);
+    const base = fitTransform(sceneWidth, rect.height - 110, { radius: currentOuterRadius });
     world.setAttribute(
       'transform',
-      `${base} translate(${camera.x.toFixed(2)},${camera.y.toFixed(2)}) scale(${camera.k.toFixed(3)})`,
+      `translate(${inset},50) ${base} translate(${camera.x.toFixed(2)},${camera.y.toFixed(2)}) scale(${camera.k.toFixed(3)})`,
     );
   }
 
@@ -77,8 +82,9 @@ export async function boot(opts = {}) {
     // its relPath into paintLots lights the 2px accent focus ring on the
     // matching lot so "digging into X" is visually anchored to X.
     const selectedRelPath = snap.trail.length > 0 ? snap.trail[0].relPath : null;
-    paintHub(world, tree.binder);
-    const layout = paintLots(world, tree.topLots(snap.filters), { radius: cfg.radius, selectedRelPath });
+    paintHub(world, snap.dig || tree.binder);
+    world.querySelector('#lots').style.display = snap.dig ? 'none' : '';
+    const layout = paintLots(world, tree.topLots(snap.filters).slice(page * pageSize, (page + 1) * pageSize), { radius: cfg.radius, selectedRelPath });
     currentOuterRadius = (layout && Number.isFinite(layout.outerRadius))
       ? Math.max(cfg.radius, layout.outerRadius)
       : cfg.radius;
@@ -91,20 +97,29 @@ export async function boot(opts = {}) {
   let repaintScheduled = false;
   let browseVersion = 0;
   let browserKey = null;
-  function visibleChildren(nodes) { return nodes.filter(node => viewState.snapshot().filters.hidden || !node.hidden); }
+  function visibleChildren(nodes) { return nodes.filter(node => (node.isDir || node.hasMd) && (viewState.snapshot().filters.hidden || !node.hidden)); }
   async function renderBrowser() {
     const list = document.getElementById('map-browser-list');
     if (!list) return;
-    const version = ++browseVersion;
     const snap = viewState.snapshot();
-    const key = JSON.stringify([snap.dig?.relPath || '', snap.filters]);
+    const key = JSON.stringify([snap.dig?.relPath || '', snap.filters, page]);
     if (key === browserKey) return;
+    const version = ++browseVersion;
     document.getElementById('map-browser-path').textContent = snap.dig?.relPath || tree.binder?.name || 'Workspace';
     try {
       const nodes = snap.dig ? visibleChildren(await tree.childrenAt(snap.dig.relPath)) : tree.topLots(snap.filters);
       if (version !== browseVersion) return;
       browserKey = key;
-      if (snap.dig) { clearDigIn(world); paintDigIn(world, snap.dig, nodes, {radius:cfg.digRadius}); }
+      pageNodes = nodes;
+      const pageCount = Math.max(1, Math.ceil(nodes.length / pageSize));
+      const controls = document.getElementById('map-page-controls');
+      if (controls) {
+        controls.hidden = pageCount <= 1;
+        document.getElementById('map-page-status').textContent = `${page + 1} / ${pageCount}`;
+        document.getElementById('map-page-prev').disabled = page === 0;
+        document.getElementById('map-page-next').disabled = page >= pageCount - 1;
+      }
+      if (snap.dig) { clearDigIn(world); paintDigIn(world, snap.dig, nodes.slice(page * pageSize, (page + 1) * pageSize), {radius:220}); }
       list.replaceChildren();
       for (const node of nodes) {
         if (!node.isDir && !node.hasMd) continue;
@@ -129,6 +144,7 @@ export async function boot(opts = {}) {
 
   async function digInto(node, { mode = 'root' } = {}) {
     if (!node || !node.relPath) return;
+    page = 0; camera.x = 0; camera.y = 0; camera.k = 1;
     // Root-level dig (sibling of hub / sibling of the current dig root) must
     // REPLACE the trail — clicking B after A should not nest B under A. Only
     // a nested click (verb from #dig-in-layer child) pushes onto the trail.
@@ -145,11 +161,12 @@ export async function boot(opts = {}) {
     // Belt-and-braces: clear the fan layer before every paint so a racing
     // second click cannot leave A's ring layered under B's.
     clearDigIn(world);
-    paintDigIn(world, node, kids, { radius: cfg.digRadius });
+    paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220 });
     renderTrail();
   }
 
   function resetView() {
+    page = 0;
     viewState.clearDig();
     clearDigIn(world);
     camera.x = 0; camera.y = 0; camera.k = 1;
@@ -182,13 +199,14 @@ export async function boot(opts = {}) {
       btn.className = 'map-trail-crumb';
       btn.textContent = entry.name;
       btn.addEventListener('click', async () => {
+        page = 0;
         while (viewState.snapshot().trail.length > i + 1) viewState.popDig();
         const top = viewState.snapshot().dig;
         clearDigIn(world);
         if (top) {
           const kids = visibleChildren(await tree.childrenAt(top.relPath));
           clearDigIn(world);
-          paintDigIn(world, top, kids, { radius: cfg.digRadius });
+          paintDigIn(world, top, kids.slice(0, pageSize), { radius: 220 });
         }
         renderTrail();
         scheduleRepaint();
@@ -274,6 +292,7 @@ export async function boot(opts = {}) {
     if (!box) return;
     box.checked = viewState.snapshot().filters[key];
     box.addEventListener('change', () => {
+      page = 0;
       viewState.setFilter(key, box.checked);
       scheduleRepaint();
     });
@@ -289,18 +308,31 @@ export async function boot(opts = {}) {
     if (ev.key !== 'Backspace') return;
     if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
     ev.preventDefault();
+    page = 0;
     const popped = viewState.popDig();
     clearDigIn(world);
     if (popped) {
       const kids = visibleChildren(await tree.childrenAt(popped.relPath));
       clearDigIn(world);
-      paintDigIn(world, popped, kids, { radius: cfg.digRadius });
+      paintDigIn(world, popped, kids.slice(0, pageSize), { radius: 220 });
     }
     renderTrail();
     // Trail root may have changed (or gone empty) → refresh the focus ring.
     scheduleRepaint();
   });
 
+  for (const [id, delta] of [['map-page-prev', -1], ['map-page-next', 1]]) {
+    document.getElementById(id)?.addEventListener('click', () => {
+      page = Math.max(0, Math.min(Math.ceil(pageNodes.length / pageSize) - 1, page + delta));
+      scheduleRepaint();
+    });
+  }
+  stage.addEventListener('keydown', ev => {
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.map-hit')) {
+      ev.preventDefault(); ev.target.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+    }
+  });
+  window.addEventListener('resize', applyCamera);
   await tree.load();
   repaint();
 

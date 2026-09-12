@@ -23,7 +23,7 @@ export function createViewState(initial = {}) {
     trail: [],             // array of { relPath, name }, deepest last
     filters: {
       managed: true,
-      unmanaged: true,
+      unmanaged: false,
       hidden: false,
       ...(initial.filters || {}),
     },
