@@ -18,7 +18,9 @@ jobs:
       - name: Validate source privacy
         run: python scripts/check_source_surface.py
       - name: Install candidate and WorkLane integration dependency
-        run: python -m pip install . protocolcity-worklane==0.1.7
+        # Reviewed local-roster authority support; do not test against an older
+        # published engine that cannot enforce selected-workspace assignment.
+        run: python -m pip install . 'git+https://github.com/protocolcity/WorkLane.git@6833ce5ae301d840eaeb357ca6cb67677b3698c0'
       - name: Verify operations and engine boundaries
         run: |
           BP_TEST_WORKLANE_PYTHON="$(command -v python)" PYTHONPATH=overview/v1 python -m unittest discover -s overview/v1/tests

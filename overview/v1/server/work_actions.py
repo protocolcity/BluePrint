@@ -16,6 +16,12 @@ from worklane.products import get_product, product_tracker
 from worklane.mcp.handlers import TPHandlers
 request = json.load(sys.stdin)
 try:
+    try:
+        from worklane.api.tasks import helpers
+    except ImportError:
+        raise ValueError('Update WorkLane before using workspace-scoped actions.')
+    if not getattr(helpers, '_local_roster_only', lambda: False)():
+        raise ValueError('Update WorkLane before using workspace-scoped actions.')
     spec = get_product(request['project'])
     if spec is None or spec.slug != request['project']:
         raise ValueError('Project is not registered in WorkLane.')
@@ -69,6 +75,7 @@ def add_note(binder, project, order_id, body):
 
 
 def _invoke(root, project, order, action):
+    from .local_projectors import resolve_roster_path
     installed = root / 'local/worklane/current/venv/bin/python'
     executable = installed if installed.is_file() else root / 'worklane/.venv/bin/python'
     if not executable.is_file():
@@ -76,7 +83,10 @@ def _invoke(root, project, order, action):
     db = root / 'worklane/worklane/local/data' / (project + '.db')
     env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'HOME': os.environ.get('HOME', ''),
            'PYTHONDONTWRITEBYTECODE': '1', 'WORKLANE_RUNTIME_DIR': str(db.parent.parent),
-           'WORKLANE_DB': str(db), 'TRADEOS_TRACKER': 'sqlite', 'WL_AGENT_ID': 'you', 'TP_AGENT_ID': 'you'}
+           'WORKLANE_DB': str(db), 'TRADEOS_TRACKER': 'sqlite', 'WL_AGENT_ID': 'you', 'TP_AGENT_ID': 'you',
+           'WL_WORKFORCE_LOCAL_ONLY': '1',
+           'WL_WORKFORCE_ROSTER': str(resolve_roster_path(root) or root / '.protocolcity/workforce/local/roster.json'),
+           'WL_WAKE_DISABLE': '1', 'WL_NTFY_DISABLE': '1'}
     try:
         result = subprocess.run([str(executable), '-c', _BRIDGE],
             input=json.dumps({'project': project, 'raw_id': order['id'], 'expected_db': str(db), **action}),
