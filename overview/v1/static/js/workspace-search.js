@@ -1,7 +1,8 @@
 /* One query path for Overview and Map. Source strings never become markup. */
-(() => {
+(async () => {
   const $=id=>document.getElementById(id), input=$('workspace-query');
   if(!input)return;
+  const {readerHref} = await import('/js/reader-navigation.mjs');
   let offset=0, timer, controller, sequence=0;
   async function search() {
     const q=input.value.trim(), version=++sequence;
@@ -21,7 +22,13 @@
       $('workspace-search-status').textContent=`${data.total} ${data.total===1?'match':'matches'}${data.issues.length?' · Some sources incomplete':''}`;
       $('workspace-search-scope').textContent=[data.scope,...data.issues].join(' ');
       for(const hit of data.results) {
-        const link=document.createElement('a');link.className='bp-paper-row';link.href=hit.href;
+        const link=document.createElement('a');link.className='bp-paper-row';link.href=readerHref(hit.href);
+        // Map can move while these results remain visible. Refresh before any
+        // primary or auxiliary activation, including opening in a new tab.
+        const refreshHref=()=>{link.href=readerHref(hit.href);};
+        link.addEventListener('click',refreshHref);
+        link.addEventListener('auxclick',refreshHref);
+        link.addEventListener('contextmenu',refreshHref);
         const title=document.createElement('strong');title.textContent=hit.title;
         const detail=document.createElement('span');detail.className='bp-order-meta';detail.textContent=`${hit.kind} · ${hit.detail}`;
         link.append(title,detail);$('workspace-search-hits').append(link);
