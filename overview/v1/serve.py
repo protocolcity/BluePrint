@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         from server.work_actions import add_note, work_action
         import sqlite3
-        if self.path not in ("/api/work-order/note", "/api/work-order/action"):
+        if self.path not in ("/api/work-order/note", "/api/work-order/action", "/api/agents/dispatch"):
             self._send_json(404, {"error": "Unknown action."})
             return
         # A local browser write must originate on this exact local origin.
@@ -185,7 +185,8 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin", "")
         expected_port = self.server.server_address[1]
         allowed = {f"127.0.0.1:{expected_port}", f"localhost:{expected_port}"}
-        if host not in allowed or origin != f"http://{host}" or self.headers.get("X-BluePrint-Action") != ("note" if self.path.endswith("/note") else "work-order"):
+        action_header = "agent-dispatch" if self.path == "/api/agents/dispatch" else ("note" if self.path.endswith("/note") else "work-order")
+        if host not in allowed or origin != f"http://{host}" or self.headers.get("X-BluePrint-Action") != action_header:
             self._send_json(403, {"error": "This action must come from the local BluePrint page."})
             return
         if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
@@ -198,7 +199,10 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
                 raise ValueError("Invalid action request.")
-            if self.path.endswith("/note"):
+            if self.path == "/api/agents/dispatch":
+                from server.agent_actions import dispatch_agent
+                result = dispatch_agent(self.binder_root, payload.get("identity"))
+            elif self.path.endswith("/note"):
                 result = add_note(self.binder_root, payload.get("project"), payload.get("id"), payload.get("body"))
             else:
                 result = work_action(self.binder_root, payload.get("project"), payload.get("id"), payload.get("action"), payload.get("value"), payload.get("expected_updated_at"))

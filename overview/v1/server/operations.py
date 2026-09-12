@@ -5,8 +5,31 @@ from importlib.metadata import version, PackageNotFoundError
 import json
 from pathlib import Path
 import sqlite3
+import shlex
 
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path
+
+
+def last_run(daemon_path, root, identity):
+    if daemon_path is None or not identity or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in identity):
+        return None
+    path = daemon_path.resolve().parent / 'ledger' / (identity + '.log')
+    if not path.resolve().is_relative_to(root):
+        return None
+    try:
+        with path.open('rb') as stream:
+            stream.seek(0, 2)
+            stream.seek(max(0, stream.tell() - 16384))
+            lines = stream.read().decode('utf-8', errors='replace').splitlines()
+        for line in reversed(lines):
+            parts = shlex.split(line)
+            if len(parts) < 2 or parts[1] not in ('STOP', 'ERROR', 'DONE', 'SKIP'):
+                continue
+            fields = dict(item.split('=', 1) for item in parts[2:] if '=' in item)
+            return {'at': parts[0], 'outcome': parts[1].lower(), 'reason': fields.get('reason') or ('Process exited; verify work outcome.' if parts[1] == 'DONE' else 'No reason reported.')}
+    except (OSError, ValueError):
+        pass
+    return None
 
 
 def read_json(path, root):
@@ -129,6 +152,7 @@ def operations_snapshot(binder):
             live = runtime.get(identity, {})
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
             result['agents'].append({'id': identity, 'name': row.get('display') or identity,
+                'last_run': last_run(resolve_daemon_path(root), root, identity),
                 'report': {k:report.get(k) for k in ('title','observed_at','state','summary','detail','mode')} if report else None,
                 'state': state, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': row.get('kind') or 'agent', 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
