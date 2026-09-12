@@ -1,6 +1,7 @@
 /* All source content is rendered as text. No source value becomes HTML. */
-(() => {
+(async () => {
 'use strict';
+const {readerHref} = await import('/js/reader-navigation.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/activity':'activity','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -39,7 +40,7 @@ function badge(state, text) { const node=el('span',text || state.replaceAll('_',
 function date(value) { if(!value) return 'Not reported'; const d=new Date(value); return Number.isNaN(d.valueOf()) ? 'Not reported' : d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
 function empty(parent, text) { parent.append(el('p',text,'bp-empty')); }
 function scheduleLabel(value) { if(value==='manual')return 'Manual';if(!value || value==='Not scheduled')return 'Not scheduled';return 'Automatic schedule'; }
-function workUrl(order) { return '/work-order?' + new URLSearchParams({project:order.project,id:order.id}); }
+function workUrl(order) { return readerHref('/work-order?' + new URLSearchParams({project:order.project,id:order.id})); }
 function orderRow(order) {
   const row=link('',workUrl(order),'bp-order');
   const content=el('div'); content.append(el('strong',order.title));
@@ -236,7 +237,7 @@ async function refresh() {
 function updateFilters() {
   selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
   const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('search').value)params.set('q',$('search').value);
-  history.replaceState(null,'',location.pathname+(params.size?'?'+params:''));if(snapshot)work();
+  history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
 $('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);
