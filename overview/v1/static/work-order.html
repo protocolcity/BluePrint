@@ -15,7 +15,7 @@
       <article id="order" hidden>
         <p id="identity"></p><h1 id="title"></h1><p id="state"></p>
         <details class="bp-event" id="work-controls"><summary>Manage work order</summary>
-          <p class="bp-muted">Changes are recorded by WorkLane as you. Releasing a hold or assigning an agent can wake ready work.</p>
+          <p class="bp-muted">Changes are recorded by WorkLane as you. Assignment and releasing a hold do not start a runner; use the configured agent’s dispatch control.</p>
           <form id="action-form" class="bp-note-form">
             <label for="work-action">Action</label>
             <select id="work-action"><option value="priority">Change priority</option><option value="hold">Request your decision</option><option value="resume">Release hold</option><option value="assign">Assign agent</option></select>

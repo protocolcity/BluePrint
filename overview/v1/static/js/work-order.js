@@ -13,6 +13,15 @@
       document.getElementById(id).textContent = text;
     }
     window.bpOrder = order;
+    if(order.references?.length) {
+      const section=document.createElement('section');
+      const heading=document.createElement('h2');heading.textContent='Source locations';section.append(heading);
+      for(const reference of order.references) {
+        const link=document.createElement('a');link.className='bp-paper-row';link.href=reference.href;
+        link.textContent=reference.action+' · '+reference.label;section.append(link);
+      }
+      document.getElementById('description').after(section);
+    }
     window.dispatchEvent(new Event('bp-order-ready'));
     const comments = document.getElementById('comments');
     if (!order.comments.length) comments.textContent = 'No comments yet.';

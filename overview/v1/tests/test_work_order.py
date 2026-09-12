@@ -1,4 +1,5 @@
 import sqlite3
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,6 +7,9 @@ from server.work_order import read_work_order
 
 class WorkOrderTests(unittest.TestCase):
     def seed(self, root, project, title):
+        manifest=root/project/'.protocolcity/desk-join.json'
+        manifest.parent.mkdir(parents=True,exist_ok=True)
+        manifest.write_text(json.dumps({'slug':project,'prefix':'pc'}))
         data = root / 'worklane/worklane/local/data'
         data.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(data / (project + '.db')) as conn:
@@ -36,6 +40,14 @@ class WorkOrderTests(unittest.TestCase):
             data = Path(b) / 'worklane/worklane/local/data'; data.mkdir(parents=True)
             (data / 'one.db').symlink_to(Path(a) / 'worklane/worklane/local/data/one.db')
             with self.assertRaises(FileNotFoundError): read_work_order(Path(b), 'one', 'pc-1')
+
+    def test_unregistered_backup_cannot_supply_matching_external_id(self):
+        with tempfile.TemporaryDirectory() as path:
+            root=Path(path);self.seed(root,'one','registered')
+            data=root/'worklane/worklane/local/data'
+            (data/'backup.db').write_bytes((data/'one.db').read_bytes())
+            self.assertEqual(read_work_order(root,'','pc-1')['project'],'one')
+            with self.assertRaises(FileNotFoundError):read_work_order(root,'backup','pc-1')
 
     def test_native_numeric_id_uses_workspace_prefix(self):
         with tempfile.TemporaryDirectory() as path:

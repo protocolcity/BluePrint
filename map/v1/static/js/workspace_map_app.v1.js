@@ -335,6 +335,15 @@ export async function boot(opts = {}) {
   window.addEventListener('resize', applyCamera);
   await tree.load();
   repaint();
+  const initial=new URLSearchParams(location.search);
+  if(initial.get('path')) {
+    let relative='';
+    for(const part of initial.get('path').split('/').filter(Boolean)) {
+      relative=relative ? relative+'/'+part : part;
+      await digInto({relPath:relative,name:part},{mode:relative.includes('/')?'nest':'root'});
+    }
+  }
+  if(initial.get('md'))await viewer.open(initial.get('md'),{label:initial.get('md').split('/').pop()});
 
   return {
     // Exposed for smoke tests + dogfood introspection.
