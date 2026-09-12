@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+  <!-- Overview = report sheet (pc-1298) -->
+  <rect x="4.1" y="2.2" width="9.1" height="10.4" rx="1.15" stroke="#000" stroke-width="1.35"/>
+  <rect x="2.6" y="3.6" width="9.1" height="10.4" rx="1.15" stroke="#000" stroke-width="1.35"/>
+  <path d="M4.8 7.4h4.6M4.8 9.6h3.2" stroke="#000" stroke-width="1.25" stroke-linecap="round"/>
+</svg>

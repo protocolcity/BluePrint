@@ -1,0 +1,1745 @@
+<!doctype html>
+<html lang="en" class="suite-settings-view suite-has-spine">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/brand/favicon.svg?v=pc-1291" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch.png?v=pc-1285">
+<title>BluePrint — Workspace · Settings</title>
+<link rel="stylesheet" href="/suite.css?v=20260821-pc1298">
+<script src="/esc.js?v=20260901-pc1396"></script>
+<script src="/suite-nav.js?v=20260819-pc1291"></script>
+<script src="/suite-data.js?v=20260728boot15s"></script>
+<script src="/suite-settings-sheet.js?v=20260819-pc1267"></script>
+<style>
+  /* Control-panel face (pc-494): control first, one-line help, advanced collapsed */
+  /* pc-1275: one centered page column — not a left sheet + empty stage. */
+  .wrap {
+    display: block;
+    max-width: 44rem;
+    width: 100%;
+    margin: 28px auto 64px;
+    box-sizing: border-box;
+  }
+  .settings-page-only { display: none !important; }
+  .wrap h2 { font-size: var(--type-body); letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px; }
+  /* Section labels match Map panel-h (quiet caption, not heavy ink) */
+  .wrap h3 {
+    font-size: var(--type-caption);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 22px 0 8px;
+    color: var(--dim, #6b6154);
+    font-weight: var(--weight-medium);
+  }
+  .wrap .panel > h3:first-child { margin-top: 4px; }
+  .wrap p { opacity: 0.75; line-height: 1.45; margin: 0 0 10px; }
+  .wrap .scope { font-weight: var(--weight-medium); color: var(--verd, var(--ink)); }
+  .wrap .panel { margin-top: 4px; }
+  .wrap .panel[hidden] { display: none !important; }
+  .wrap .knob-block { margin: 0 0 12px; }
+  .wrap .setting-row {
+    display: grid;
+    justify-items: start;
+    gap: 5px;
+    margin: 0 0 14px;
+  }
+  .wrap .setting-row > .setting-control,
+  .wrap .setting-row > select,
+  .wrap .setting-row > input,
+  .wrap .setting-row > button {
+    justify-self: start;
+  }
+  .wrap .setting-row > .knob-select,
+  .wrap .setting-row > .knob-input {
+    width: min(100%, 24rem);
+  }
+  .wrap .setting-help {
+    max-width: 36rem;
+    margin: 0;
+  }
+  /* Face / stack emoji chips (pc-898) — one size for You, agents, jobs, WO, papers */
+  .glyph-presets,
+  .hand-glyph-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+  }
+  .glyph-preset,
+  .hand-glyph-preset,
+  .you-glyph-preset {
+    width: 2.25rem;
+    height: 2.25rem;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    box-sizing: border-box;
+    padding: 0 !important;
+    font-size: var(--type-heading);
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    border-radius: 8px !important;
+    line-height: 1;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .glyph-preset.is-on,
+  .glyph-preset[aria-pressed="true"],
+  .hand-glyph-preset.is-on,
+  .hand-glyph-preset[aria-pressed="true"],
+  .you-glyph-preset.is-on,
+  .you-glyph-preset[aria-pressed="true"] {
+    border-color: var(--finder-blue, #007AFF) !important;
+    color: inherit !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--finder-blue, #007AFF) 28%, transparent);
+  }
+  /* pc-994/pc-1000: dashed outline marks the shipped default chip (page + sheet) */
+  .glyph-preset[data-is-default="true"] {
+    outline: 1.5px dashed color-mix(in srgb, var(--ink, #2a241c) 28%, transparent);
+    outline-offset: 2px;
+  }
+  /* pc-1000: seat name is a normal themed text input, not an emoji chip input */
+  .seat-name-input {
+    width: min(100%, 11rem);
+    padding: 6px 10px;
+    font: inherit;
+    font-size: var(--type-body);
+    text-align: left;
+    border: 1px solid color-mix(in srgb, var(--ink, #2a241c) 14%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--card, #fffdf8) 96%, transparent);
+    color: var(--ink, #2a241c);
+  }
+  .seat-name-input:focus {
+    outline: none;
+    border-color: var(--finder-blue, #007AFF);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--finder-blue, #007AFF) 22%, transparent);
+  }
+  .glyph-custom,
+  .hand-glyph-custom {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--type-caption);
+    margin-left: 2px;
+  }
+  .glyph-custom .dim,
+  .hand-glyph-custom .dim {
+    opacity: 0.55;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: var(--type-caption);
+  }
+  .glyph-custom input,
+  .hand-glyph-custom input,
+  .glyph-custom-input {
+    width: 2.5rem;
+    height: 2.25rem;
+    min-width: 2.5rem;
+    box-sizing: border-box;
+    padding: 0 4px;
+    font-size: var(--type-heading);
+    line-height: 1;
+    text-align: center;
+    border: 1px solid color-mix(in srgb, var(--ink, #2a241c) 14%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--card, #fffdf8) 96%, transparent);
+    color: var(--ink, #2a241c);
+  }
+  .glyph-custom input.is-on,
+  .glyph-custom-input.is-on {
+    border-color: var(--finder-blue, #007AFF);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--finder-blue, #007AFF) 28%, transparent);
+  }
+  .glyph-custom input:focus,
+  .glyph-custom-input:focus {
+    outline: none;
+    border-color: var(--finder-blue, #007AFF);
+  }
+  .stack-glyph-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stack-glyph-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  /* Wide dig pane: keep label + chips + Custom on one line when possible */
+  @media (min-width: 1280px) {
+    .stack-glyph-row {
+      flex-wrap: nowrap;
+    }
+    .stack-glyph-row .glyph-presets {
+      flex-wrap: nowrap;
+    }
+  }
+  .stack-glyph-row > .stack-glyph-lab {
+    min-width: 5.75rem;
+    font-size: var(--type-caption);
+    opacity: 0.55;
+  }
+  .wrap .knob-block > label.knob-lab,
+  .wrap label.knob-lab {
+    display: block;
+    margin: 0 0 4px;
+    font-size: var(--type-body);
+    opacity: 0.9;
+  }
+  .wrap .mono {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--type-body);
+    word-break: break-all;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--ink, #2a241c) 12%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--card, #fffdf8) 88%, transparent);
+    margin: 0 0 10px;
+  }
+  .wrap .note {
+    font-size: var(--type-body);
+    opacity: 0.65;
+    letter-spacing: 0.03em;
+    margin-top: 6px;
+  }
+  .wrap .status-line {
+    font-size: var(--type-body);
+    margin: 0 0 8px;
+    opacity: 0.85;
+  }
+  .wrap .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0 4px; }
+  /* Buttons match map corner FABs / inspect doors — glass, not solid ink blocks */
+  .wrap button, .wrap .link-btn {
+    font: inherit;
+    font-size: var(--type-label);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    border: 1px solid color-mix(in srgb, var(--ink, #2a241c) 16%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--card, #fffdf8) 94%, transparent);
+    color: var(--ink, #2a241c);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .wrap button:hover, .wrap .link-btn:hover {
+    border-color: var(--finder-blue, #007AFF);
+    color: var(--finder-blue, #007AFF);
+  }
+  .wrap button.primary {
+    background: color-mix(in srgb, var(--finder-blue, #007AFF) 12%, var(--card, #fffdf8));
+    color: var(--finder-blue, #007AFF);
+    border-color: color-mix(in srgb, var(--finder-blue, #007AFF) 45%, transparent);
+  }
+  .wrap button.primary:hover {
+    background: color-mix(in srgb, var(--finder-blue, #007AFF) 18%, var(--card, #fffdf8));
+  }
+  .wrap button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .wrap button:focus-visible, .wrap .link-btn:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+  .wrap .quiet-link {
+    color: inherit;
+    font-size: var(--type-body);
+    text-underline-offset: 3px;
+    opacity: 0.68;
+  }
+  .wrap .quiet-link:hover { opacity: 1; }
+  .wrap .state-chip {
+    display: inline-block;
+    padding: 3px 7px;
+    border: 1px solid var(--border, var(--line-faint));
+    font-size: var(--type-label);
+    letter-spacing: 0.04em;
+    opacity: 0.78;
+  }
+  .wrap ul.knob-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 8px;
+    border: 1px solid var(--border, var(--line-faint));
+    background: var(--card, var(--paper-deep));
+  }
+  .wrap ul.knob-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border, var(--line-faint));
+    font-size: var(--type-body);
+  }
+  .wrap ul.knob-list li:last-child { border-bottom: none; }
+  .wrap ul.knob-list .slug {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--type-body);
+  }
+  .wrap ul.knob-list button {
+    padding: 4px 10px;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  .wrap .empty {
+    font-size: var(--type-body);
+    opacity: 0.65;
+    padding: 10px 12px;
+    border: 1px dashed var(--border, var(--line-faint));
+  }
+  .wrap .back-row { margin-top: 22px; }
+  .wrap .settings-page-only.settings-full-return { margin: 0 0 12px; }
+  .wrap select.knob-select,
+  .wrap input.knob-input {
+    width: 100%;
+    max-width: 32rem;
+    padding: 6px 8px;
+    border: 1px solid var(--border, #c4b8a4);
+    background: var(--card, #fff);
+    font: inherit;
+    font-size: var(--type-body);
+    color: var(--ink);
+  }
+  .wrap input.knob-input.narrow { max-width: 16rem; }
+  /*
+   * Segmented knobs — Map glass language (not inverted black blocks).
+   * Selected = soft blue wash + ink type, same family as map corner FABs.
+   */
+  .theme-seg, .paint-seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border: 1px solid color-mix(in srgb, var(--ink, #2a241c) 14%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--card, #fffdf8) 92%, transparent);
+    overflow: hidden;
+  }
+  .theme-seg label, .paint-seg label {
+    display: inline-block;
+    margin: 0;
+    cursor: pointer;
+  }
+  .theme-seg input, .paint-seg input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .theme-seg span, .paint-seg span {
+    display: inline-block;
+    padding: 8px 14px;
+    font-size: var(--type-label);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--ink, #2a241c) 72%, transparent);
+    border-right: 1px solid color-mix(in srgb, var(--ink, #2a241c) 10%, transparent);
+    background: transparent;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .theme-seg label:last-child span,
+  .paint-seg label:last-child span { border-right: none; }
+  .theme-seg label:hover span,
+  .paint-seg label:hover span {
+    color: var(--finder-blue, #007AFF);
+    background: color-mix(in srgb, var(--finder-blue, #007AFF) 6%, transparent);
+  }
+  .theme-seg input:checked + span,
+  .paint-seg input:checked + span {
+    color: var(--ink, #2a241c);
+    background: color-mix(in srgb, var(--finder-blue, #007AFF) 14%, var(--card, #fffdf8));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--finder-blue, #007AFF) 35%, transparent);
+  }
+  .theme-seg input:focus-visible + span,
+  .paint-seg input:focus-visible + span {
+    outline: 2px solid color-mix(in srgb, var(--finder-blue, #007AFF) 55%, transparent);
+    outline-offset: 1px;
+  }
+  /* pc-1291: About marks are the spine-paint control, not a catalog. */
+  .bp-about-mark-pair.paint-seg span {
+    padding: 8px 12px 6px;
+    text-align: center;
+  }
+  .bp-about-mark-pair.paint-seg img {
+    width: 56px;
+    height: auto;
+    display: block;
+    margin: 0 auto 4px;
+  }
+  .theme-note {
+    margin: 4px 0 0;
+    font-size: var(--type-caption);
+    opacity: 0.55;
+    letter-spacing: 0.02em;
+    line-height: 1.35;
+  }
+  .settings-sheet-blurb { display: none; } /* full page uses page blurbs; sheet unhides */
+  /* Section cards (map glass density — dig host CSS mirrors these) */
+  .settings-card {
+    margin: 0 0 12px;
+    padding: 12px 14px 14px;
+    border: 1px solid color-mix(in srgb, var(--ink, #2a241c) 12%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--card, #fffdf8) 88%, #f0ebe0 12%);
+  }
+  .settings-card > h3,
+  .settings-card .settings-card-h {
+    margin: 0 0 10px;
+    padding: 0 0 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink, #2a241c) 8%, transparent);
+    font-size: var(--type-caption);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.72;
+    color: var(--ink, #2a241c);
+    font-weight: var(--weight-medium);
+  }
+  .status-pill.is-up, .state-chip.is-up, .state-chip.is-ready {
+    color: #1f6b3a;
+    border-color: color-mix(in srgb, #2e7d4f 45%, transparent);
+    background: color-mix(in srgb, #2e7d4f 14%, var(--card, #fffdf8));
+  }
+  .status-pill.is-down, .state-chip.is-down {
+    color: #8a2e22;
+    border-color: color-mix(in srgb, #a33327 45%, transparent);
+    background: color-mix(in srgb, #a33327 12%, var(--card, #fffdf8));
+  }
+  .status-pill.is-checking, .state-chip.is-checking {
+    color: #7a5a10;
+    border-color: color-mix(in srgb, #c9a227 40%, transparent);
+    background: color-mix(in srgb, #c9a227 14%, var(--card, #fffdf8));
+  }
+  .engine-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin: 0 0 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--ink, #2a241c) 10%, transparent);
+    background: color-mix(in srgb, var(--card, #fffdf8) 96%, transparent);
+  }
+  .engine-row .engine-name {
+    font-size: var(--type-label);
+    font-weight: var(--weight-medium);
+    min-width: 5.5em;
+  }
+  .engine-row .mono { margin: 0; flex: 1 1 auto; min-width: 0; }
+</style>
+</head>
+<body>
+<aside id="suite-spine" class="suite-spine" aria-label="BluePrint">
+  <div class="suite-spine-brand">
+    <a class="suite-spine-lockup" href="/" aria-label="BluePrint">
+      <img class="suite-spine-mark" src="/brand/mark-cyanotype.svg?v=pc-1288" width="64" height="52" alt="">
+      <span class="suite-spine-word">BluePrint</span>
+    </a>
+  </div>
+  <nav aria-label="Lenses">
+    <a id="spine-overview" href="/overview" data-spine-lens="overview">Overview</a>
+    <a id="spine-map" href="/workspace-map" data-spine-lens="map">Map</a>
+    <a id="spine-calendar" href="/calendar" data-spine-lens="calendar">Calendar</a>
+    <a id="spine-settings" href="/settings" data-spine-lens="settings" class="here" aria-current="page">Settings</a>
+  </nav>
+  <p class="suite-spine-hint"><a href="https://github.com/protocolcity/BluePrint" target="_blank" rel="noopener"><span class="suite-powered-bolt" aria-hidden="true">⚡</span><span class="suite-powered-label">Powered by</span><span class="suite-powered-name">ProtocolCity</span></a></p>
+</aside>
+<header class="suite-head">
+  <div class="suite-mast">
+    <div class="suite-title">
+      <h1 id="mast">Settings</h1>
+      <div class="sub" id="sub">Workspace knobs</div>
+    </div>
+  </div>
+</header>
+<div id="suite-body" data-suite-room="settings">
+<div class="suite-meta">
+  <div id="suite-furniture" class="suite-furniture" hidden aria-hidden="true"></div>
+</div>
+<div class="wrap box" style="padding:18px 20px">
+  <!-- Payload for SuiteSettingsSheet (Map FAB) + citizen /settings view (pc-1267).
+       Title wall stays .settings-page-only so the sheet strips it. -->
+  <h2 class="settings-page-only">Settings · <span class="scope" id="scope-label">Workspace</span></h2>
+  <p id="blurb" class="settings-page-only settings-page-blurb">Workspace preferences for Map.</p>
+  <p class="theme-note settings-page-only settings-page-blurb" id="settings-apply-note" hidden></p>
+  <!-- Scan sheet: one short line under dig-in chrome (sheet unhides) -->
+  <p class="settings-sheet-blurb" hidden>Workspace knobs · status chips match Map language</p>
+
+  <!-- Workspace only (pc-666) — card sections (map glass density) -->
+  <div class="panel" id="panel-workspace" hidden>
+    <section class="settings-card" aria-labelledby="set-h-appearance">
+      <h3 id="set-h-appearance" class="settings-card-h">Appearance</h3>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Color theme</span>
+        <div class="theme-seg setting-control" data-setting-control role="radiogroup" aria-label="Color theme" id="theme-seg">
+          <label><input type="radio" name="suite-theme" value="system"><span>System</span></label>
+          <label><input type="radio" name="suite-theme" value="light"><span>Light</span></label>
+          <label><input type="radio" name="suite-theme" value="dark"><span>Dark</span></label>
+        </div>
+        <p class="theme-note setting-help" data-setting-help>Applies across the suite.</p>
+        <p class="theme-note" id="theme-note" hidden>suite.theme</p>
+      </div>
+      <!-- Faces — one block, uniform labeled rows (pc-1000). First chip in every
+           row is the shipped default (dashed outline). You / Agents are static
+           markup (pc-898 tests); stack rows injected below. -->
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Faces</span>
+        <div class="setting-control stack-glyph-rows" data-setting-control id="face-glyph-rows">
+          <div class="stack-glyph-row" id="you-glyph-control">
+            <span class="stack-glyph-lab">You</span>
+            <div class="glyph-presets" role="group" aria-label="You face presets">
+              <button type="button" class="glyph-preset" data-glyph="👤" data-is-default="true" title="Person (default)">👤</button>
+              <button type="button" class="glyph-preset" data-glyph="🧑" title="Adult">🧑</button>
+              <button type="button" class="glyph-preset" data-glyph="🏠" title="Home">🏠</button>
+              <button type="button" class="glyph-preset" data-glyph="🧭" title="Compass">🧭</button>
+              <button type="button" class="glyph-preset" data-glyph="🎩" title="Host">🎩</button>
+              <button type="button" class="glyph-preset" data-glyph="🪪" title="ID">🪪</button>
+            </div>
+            <label class="glyph-custom" title="Paste or pick any emoji (system emoji panel)">
+              <span class="dim">Custom</span>
+              <input type="text" id="you-glyph-input" class="glyph-custom-input" maxlength="8"
+                spellcheck="false" autocomplete="off" inputmode="text"
+                aria-label="Custom You emoji" placeholder="…" />
+            </label>
+          </div>
+          <div class="stack-glyph-row" id="you-label-control">
+            <label class="stack-glyph-lab" for="you-label-input">Seat name</label>
+            <input type="text" id="you-label-input" class="seat-name-input" maxlength="32" spellcheck="false"
+              autocomplete="off" aria-label="Seat name on Map" placeholder="YOU" />
+          </div>
+          <div class="stack-glyph-row" id="hand-glyph-control">
+            <span class="stack-glyph-lab">Agents</span>
+            <div class="glyph-presets" role="group" aria-label="Agent face presets">
+              <button type="button" class="glyph-preset" data-glyph="✋" data-is-default="true" title="Hand (default)">✋</button>
+              <button type="button" class="glyph-preset" data-glyph="🤖" title="Robot">🤖</button>
+              <button type="button" class="glyph-preset" data-glyph="🐱" title="Cat">🐱</button>
+              <button type="button" class="glyph-preset" data-glyph="🐾" title="Paw">🐾</button>
+              <button type="button" class="glyph-preset" data-glyph="🛠️" title="Tools">🛠️</button>
+              <button type="button" class="glyph-preset" data-glyph="⚡" title="Bolt">⚡</button>
+            </div>
+            <label class="glyph-custom" title="Paste or pick any emoji (system emoji panel)">
+              <span class="dim">Custom</span>
+              <input type="text" id="hand-glyph-input" class="glyph-custom-input" maxlength="8"
+                spellcheck="false" autocomplete="off" inputmode="text"
+                aria-label="Custom Agents emoji" placeholder="…" />
+            </label>
+          </div>
+          <div class="stack-glyph-rows" id="stack-glyph-control">
+            <!-- rows injected by wireFaceGlyphs STACK_GLYPH_REGISTRY (pc-986) -->
+          </div>
+        </div>
+        <p class="theme-note setting-help" data-setting-help>
+          First chip is the default · Custom for any emoji · status marks stay fixed
+        </p>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-overview">
+      <h3 id="set-h-overview" class="settings-card-h">Overview</h3>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Since-strip window</span>
+        <div class="theme-seg setting-control" data-setting-control role="radiogroup" aria-label="Overview since-strip window" id="overview-since-window">
+          <label><input type="radio" name="suite-overview-since" value="visit"><span>Since last visit</span></label>
+          <label><input type="radio" name="suite-overview-since" value="today"><span>Today</span></label>
+          <label><input type="radio" name="suite-overview-since" value="24h" checked><span>24 hours</span></label>
+          <label><input type="radio" name="suite-overview-since" value="7d"><span>7 days</span></label>
+        </div>
+        <p class="theme-note setting-help" data-setting-help>Filed and closed on Overview — default last 24 hours (clock, not a reload visit).</p>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-panes">
+      <h3 id="set-h-panes" class="settings-card-h">Pane sides</h3>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>List rail</span>
+        <div class="theme-seg setting-control" data-setting-control role="radiogroup" aria-label="Pane sides" id="map-rail-side">
+          <label><input type="radio" name="suite-map-rail" value="default"><span>List left</span></label>
+          <label><input type="radio" name="suite-map-rail" value="swapped"><span>List right</span></label>
+        </div>
+        <p class="theme-note setting-help" data-setting-help>Places lists opposite the dig-in pane.</p>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-dig">
+      <h3 id="set-h-dig" class="settings-card-h">Dig-in</h3>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Opens on</span>
+        <div class="theme-seg setting-control dig-open-seg" data-setting-control role="radiogroup" aria-label="Dig opens on" id="map-dig-open-slice">
+          <label><input type="radio" name="suite-map-dig-open" value="work"><span>Work</span></label>
+          <label><input type="radio" name="suite-map-dig-open" value="act"><span>For You</span></label>
+          <label><input type="radio" name="suite-map-dig-open" value="structure"><span>Structure</span></label>
+          <label><input type="radio" name="suite-map-dig-open" value="presence"><span>Presence</span></label>
+          <label><input type="radio" name="suite-map-dig-open" value="projects"><span>Projects</span></label>
+          <label><input type="radio" name="suite-map-dig-open" value="last"><span>Last pulse</span></label>
+        </div>
+        <p class="theme-note setting-help" data-setting-help>
+          First body for every place dig (default Work) — not context-smart
+        </p>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-theater">
+      <h3 id="set-h-theater" class="settings-card-h">Map theater</h3>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Cinema motion</span>
+        <div class="actions setting-control" data-setting-control>
+          <button type="button" id="btn-theater-pause" title="Freeze all map/rail animations so you can validate rings, counts, and rail state">
+            Pause cinema (validate)
+          </button>
+          <button type="button" id="btn-theater-resume" title="Resume live cinema pulse and motion">
+            Resume cinema
+          </button>
+        </div>
+        <p class="theme-note setting-help" data-setting-help>Pause to freeze map animations and validate that rings and rails reflect current state.</p>
+      </div>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Animation walkthrough</span>
+        <div class="actions setting-control" data-setting-control>
+          <button type="button" id="btn-theater-demo" title="Pause live, then step through each map animation">Run theater demo</button>
+        </div>
+        <p class="theme-note setting-help" data-setting-help>Teaching only — step each beat (filed / claim / done / approach…).</p>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-workspace">
+      <h3 id="set-h-workspace" class="settings-card-h">Workspace</h3>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Root folder</span>
+        <code class="mono setting-control" data-setting-control id="city-root">…</code>
+      </div>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Folder index</span>
+        <div class="actions setting-control" data-setting-control>
+          <span class="state-chip status-pill is-checking" id="survey-line">…</span>
+          <button type="button" class="primary" id="btn-resurvey">Rescan</button>
+        </div>
+      </div>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Hidden folders</span>
+        <div class="setting-control" data-setting-control>
+          <ul class="knob-list" id="hidden-list" aria-live="polite"></ul>
+          <div class="empty" id="hidden-empty" hidden>None hidden</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-engines">
+      <h3 id="set-h-engines" class="settings-card-h">Engines</h3>
+      <div class="engine-row setting-row" data-setting-row>
+        <span class="engine-name setting-label" data-setting-label>WorkLane</span>
+        <span class="setting-control" data-setting-control>
+          <span class="state-chip status-pill is-checking" id="wl-engine-status">…</span>
+          <code class="mono" id="wl-engine-line">:8799</code>
+        </span>
+      </div>
+      <div class="engine-row setting-row" data-setting-row>
+        <span class="engine-name setting-label" data-setting-label>WorkForce</span>
+        <span class="setting-control" data-setting-control>
+          <span class="state-chip status-pill is-checking" id="wf-engine-status">…</span>
+          <code class="mono" id="wf-engine-line">:8797</code>
+        </span>
+        <p class="theme-note setting-help" data-setting-help>Status only · configure via chat + WorkLane MCP / wl</p>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-about">
+      <h3 id="set-h-about" class="settings-card-h">About</h3>
+      <div class="knob-block setting-row bp-about-marks" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Spine paint</span>
+        <span class="paint-seg setting-control bp-about-mark-pair" data-setting-control id="spine-paint-seg" role="radiogroup" aria-label="Spine paint">
+          <label>
+            <input type="radio" name="suite-spine-paint" value="cream">
+            <span><img src="/brand/mark-cream.svg?v=pc-1291" width="56" height="45" alt="">Cream</span>
+          </label>
+          <label>
+            <input type="radio" name="suite-spine-paint" value="cyanotype" checked>
+            <span><img src="/brand/mark-cyanotype.svg?v=pc-1291" width="56" height="45" alt="">Cyanotype</span>
+          </label>
+        </span>
+        <p class="theme-note setting-help" data-setting-help>Paints the spine mark and the browser tab.</p>
+      </div>
+      <div class="knob-block setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>BluePrint version</span>
+        <code class="mono setting-control" data-setting-control id="about-version">…</code>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="set-h-reset">
+      <h3 id="set-h-reset" class="settings-card-h">Reset</h3>
+      <div class="setting-row" data-setting-row>
+        <span class="knob-lab setting-label" data-setting-label>Browser preferences</span>
+        <button class="setting-control" data-setting-control type="button" id="btn-reset-prefs">Reset preferences</button>
+        <p class="theme-note setting-help" data-setting-help>Clears this-browser display choices only.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="back-row" hidden>
+    <a id="back" href="/workspace-map">← Back</a>
+  </div>
+</div>
+
+<script>
+const Q = new URLSearchParams(location.search);
+/* pc-666: cold URLs ignore foreign scopes — sheet is Workspace-only. */
+const scope = "workspace";
+const PROJECT = Q.get("project") || "";
+const panelKey = "workspace";
+/*
+ * Map dig re-executes these scripts inside the live Map document
+ * (suite-settings-sheet applySettingsHtml). Never paint #mast / #sub /
+ * document.title on Map — that wiped folder + dogfood version chip and
+ * left the header as plain "Workspace · Settings" (glass lie).
+ */
+const SETTINGS_HOSTED_IN_MAP =
+  !!(document.documentElement &&
+    document.documentElement.classList.contains("suite-map-city")) ||
+  !!document.querySelector(
+    ".inspect-settings-host, #inspect-form .sss-hosted, .sss-hosted"
+  );
+(function paintSettingsChrome() {
+  var scopeLab = document.getElementById("scope-label");
+  if (scopeLab) scopeLab.textContent = "Workspace";
+  var blurb = document.getElementById("blurb");
+  if (blurb) blurb.textContent = "Workspace preferences for Map.";
+  if (SETTINGS_HOSTED_IN_MAP) return;
+  var mast = document.getElementById("mast");
+  if (mast) {
+    if (window.SuiteNav && typeof SuiteNav.setMastTitle === "function") {
+      var ver =
+        (function () {
+          try {
+            return (
+              localStorage.getItem("suite.suiteVersion") ||
+              sessionStorage.getItem("suite.suiteVersion") ||
+              ""
+            );
+          } catch (e) {
+            return "";
+          }
+        })() || null;
+      SuiteNav.setMastTitle(mast, "Settings", ver);
+    } else {
+      mast.textContent = "Settings";
+    }
+  }
+  var sub = document.getElementById("sub");
+  if (sub) sub.textContent = "Workspace knobs";
+  document.title =
+    window.SuiteNav && typeof SuiteNav.docTitle === "function"
+      ? SuiteNav.docTitle("Settings", "Settings")
+      : "BluePrint — Settings";
+})();
+const back = document.getElementById("back");
+if (back) {
+  back.href = PROJECT
+    ? "/workspace-map?project=" + encodeURIComponent(PROJECT)
+    : "/workspace-map";
+  back.textContent =
+    "← Back to " +
+    (PROJECT ? PROJECT + " map" : "Map");
+}
+const workspacePanel = document.getElementById("panel-workspace");
+if (workspacePanel) workspacePanel.hidden = false;
+
+/* Appearance radios (pc-324) */
+(function wireTheme() {
+  const nav = window.SuiteNav;
+  const pref = nav && typeof nav.getThemePref === "function" ? nav.getThemePref() : "system";
+  const inputs = document.querySelectorAll('input[name="suite-theme"]');
+  inputs.forEach(function (inp) {
+    inp.checked = inp.value === pref;
+    inp.addEventListener("change", function () {
+      if (!inp.checked) return;
+      if (nav && typeof nav.setThemePref === "function") nav.setThemePref(inp.value);
+      else {
+        try { localStorage.setItem("suite.theme", inp.value); } catch (e) {}
+        const root = document.documentElement;
+        root.setAttribute("data-theme-pref", inp.value);
+        if (inp.value === "light" || inp.value === "dark") root.setAttribute("data-theme", inp.value);
+        else root.removeAttribute("data-theme");
+      }
+    });
+  });
+})();
+
+/* Spine / tab paint (pc-1291) — About marks are the control. */
+(function wireSpinePaint() {
+  var host = document.getElementById("spine-paint-seg");
+  if (!host || host._spinePaintWired) return;
+  host._spinePaintWired = true;
+  var nav = window.SuiteNav;
+  var pref =
+    nav && typeof nav.getSpinePaintPref === "function"
+      ? nav.getSpinePaintPref()
+      : "cyanotype";
+  var inputs = host.querySelectorAll('input[name="suite-spine-paint"]');
+  Array.prototype.forEach.call(inputs, function (inp) {
+    inp.checked = inp.value === pref;
+    inp.addEventListener("change", function () {
+      if (!inp.checked) return;
+      if (nav && typeof nav.setSpinePaintPref === "function") {
+        nav.setSpinePaintPref(inp.value);
+      } else {
+        try {
+          localStorage.setItem("suite.spinePaint", inp.value);
+        } catch (e) {}
+      }
+    });
+  });
+})();
+
+/* Face / stack glyphs — You, agents, jobs, work orders, papers (pc-898) */
+(function wireFaceGlyphs() {
+  function firstGlyph(s) {
+    var t = String(s || "").trim();
+    if (!t) return "";
+    try {
+      if (typeof Intl !== "undefined" && Intl.Segmenter) {
+        var seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+        var it = seg.segment(t)[Symbol.iterator]();
+        var n = it.next();
+        if (!n.done && n.value && n.value.segment) return n.value.segment;
+      }
+    } catch (e) {}
+    try {
+      return Array.from(t)[0] || "";
+    } catch (e2) {
+      return t.charAt(0);
+    }
+  }
+  function readKey(key, fallback) {
+    try {
+      var g = firstGlyph(localStorage.getItem(key) || "");
+      if (g) return g;
+    } catch (e) {}
+    return fallback;
+  }
+  function writeKey(key, g, applyName, fallback) {
+    g = firstGlyph(g) || fallback;
+    try {
+      localStorage.setItem(key, g);
+    } catch (e) {}
+    try {
+      if (typeof window[applyName] === "function") window[applyName](g);
+    } catch (eApply) {}
+    return g;
+  }
+  /**
+   * One picker per host: curated chips (default first) + Custom emoji input.
+   * Custom accepts any emoji via paste / system emoji panel (full list).
+   * Scopes paint/click to host so You / Agent / stack rows never cross-talk.
+   */
+  function wireGlyphPicker(opts) {
+    var KEY = opts.key;
+    var DEFAULT = opts.fallback;
+    var hostId = opts.hostId;
+    var applyName = opts.applyName;
+    var inputId = opts.inputId || "";
+    var host = document.getElementById(hostId);
+    var inp = null;
+    if (inputId) inp = document.getElementById(inputId);
+    if (!inp && host) {
+      inp = host.querySelector(".glyph-custom-input, .glyph-custom input");
+    }
+    function presetGlyphs() {
+      var out = [];
+      if (!host) return out;
+      var presets = host.querySelectorAll(".glyph-preset[data-glyph]");
+      for (var i = 0; i < presets.length; i++) {
+        out.push(presets[i].getAttribute("data-glyph") || "");
+      }
+      return out;
+    }
+    function paintActive(g) {
+      if (!host) return;
+      var inList = false;
+      var presets = host.querySelectorAll(".glyph-preset, .hand-glyph-preset, .you-glyph-preset");
+      for (var i = 0; i < presets.length; i++) {
+        var btn = presets[i];
+        var on = btn.getAttribute("data-glyph") === g;
+        if (on) inList = true;
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.classList.toggle("is-on", on);
+      }
+      if (inp) {
+        /* Show saved glyph in custom field when not a curated chip */
+        if (!inList) {
+          if (inp.value !== g) inp.value = g || "";
+          inp.classList.add("is-on");
+        } else {
+          inp.classList.remove("is-on");
+          /* Keep custom field empty when a preset is selected, unless it matches */
+          if (presetGlyphs().indexOf(inp.value) >= 0 || !inp.value) {
+            /* leave value if user is typing */
+          }
+        }
+      }
+    }
+    function write(g) {
+      var v = writeKey(KEY, g, applyName, DEFAULT);
+      paintActive(v);
+      return v;
+    }
+    paintActive(readKey(KEY, DEFAULT));
+    if (host) {
+      host.addEventListener("click", function (ev) {
+        var btn = ev.target.closest
+          ? ev.target.closest(".glyph-preset, .hand-glyph-preset, .you-glyph-preset, [data-glyph]")
+          : null;
+        if (!btn || !host.contains(btn)) return;
+        if (ev.target && ev.target.closest && ev.target.closest(".glyph-custom")) {
+          /* click on custom label/input — don't treat as preset */
+          if (ev.target.tagName === "INPUT" || ev.target.classList.contains("glyph-custom-input"))
+            return;
+        }
+        if (!btn.getAttribute("data-glyph")) return;
+        ev.preventDefault();
+        write(btn.getAttribute("data-glyph") || DEFAULT);
+      });
+    }
+    if (inp) {
+      function commit() {
+        var raw = String(inp.value || "").trim();
+        if (!raw) {
+          write(DEFAULT);
+          return;
+        }
+        write(raw);
+      }
+      inp.addEventListener("change", commit);
+      inp.addEventListener("blur", commit);
+      inp.addEventListener("input", function () {
+        /* live preview once a grapheme is present */
+        var g = firstGlyph(inp.value);
+        if (g && g.length) {
+          var presets = host ? host.querySelectorAll(".glyph-preset") : [];
+          for (var i = 0; i < presets.length; i++) {
+            presets[i].classList.remove("is-on");
+            presets[i].setAttribute("aria-pressed", "false");
+          }
+          inp.classList.add("is-on");
+        }
+      });
+      inp.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          commit();
+          inp.blur();
+        }
+      });
+      inp.addEventListener("focus", function () {
+        /* Hint: system emoji panel works when focused */
+        try {
+          inp.setAttribute(
+            "title",
+            "Type/paste emoji · system panel often ⌃⌘Space (macOS) or Win+."
+          );
+        } catch (eT) {}
+      });
+    }
+  }
+  wireGlyphPicker({
+    key: "suite.youGlyph",
+    fallback: "👤",
+    hostId: "you-glyph-control",
+    inputId: "you-glyph-input",
+    applyName: "applyYouGlyph",
+  });
+  wireGlyphPicker({
+    key: "suite.handGlyph",
+    fallback: "✋",
+    hostId: "hand-glyph-control",
+    inputId: "hand-glyph-input",
+    applyName: "applyHandGlyph",
+  });
+  /*
+   * Stack-face registry: Staff = ops/coord · Jobs = scheduled clock ·
+   * Work = work orders · Papers = handbook · Instr = rules.
+   * First preset = shipped default (dashed outline). Custom input on every row.
+   * Order after You + Agents must match FOLDER_INTERIOR_SEATS (map-chrome-spec).
+   */
+  var STACK_GLYPH_REGISTRY = [
+    {
+      id: "staff",
+      label: "Staff",
+      key: "suite.staffGlyph",
+      fallback: "👔",
+      applyName: "applyStaffGlyph",
+      presets: [
+        { g: "👔", title: "Office / ops" },
+        { g: "🛡️", title: "Guard / patrol" },
+        { g: "🧰", title: "Toolkit" },
+        { g: "🗂️", title: "Coord files" },
+        { g: "📊", title: "Efficiency" },
+        { g: "⚙️", title: "Gear" },
+      ],
+    },
+    {
+      id: "job",
+      label: "Jobs",
+      key: "suite.jobGlyph",
+      fallback: "⏰",
+      applyName: "applyJobGlyph",
+      presets: [
+        { g: "⏰", title: "Alarm / schedule" },
+        { g: "⏱️", title: "Stopwatch" },
+        { g: "📅", title: "Calendar" },
+        { g: "🔄", title: "Recurring" },
+        { g: "📡", title: "Signal / cron" },
+        { g: "🎬", title: "Run / take" },
+      ],
+    },
+    {
+      id: "work",
+      label: "Work orders",
+      key: "suite.workGlyph",
+      fallback: "🎫",
+      applyName: "applyWorkGlyph",
+      presets: [
+        { g: "🎫", title: "Work order" },
+        { g: "📌", title: "Pin" },
+        { g: "🏷️", title: "Tag" },
+        { g: "📋", title: "Clipboard" },
+        { g: "✅", title: "Check" },
+        { g: "📎", title: "Attachment" },
+      ],
+    },
+    {
+      id: "paper",
+      label: "Papers",
+      key: "suite.paperGlyph",
+      fallback: "📄",
+      applyName: "applyPaperGlyph",
+      presets: [
+        { g: "📄", title: "Page" },
+        { g: "📝", title: "Memo" },
+        { g: "🗂️", title: "Card index" },
+        { g: "📚", title: "Books" },
+        { g: "📁", title: "Folder" },
+        { g: "🗒️", title: "Notepad" },
+      ],
+    },
+    {
+      id: "instr",
+      label: "Instructions",
+      key: "suite.instrGlyph",
+      fallback: "📜",
+      applyName: "applyInstrGlyph",
+      presets: [
+        { g: "📜", title: "Scroll / rules" },
+        { g: "📘", title: "Rule book" },
+        { g: "📖", title: "Open book" },
+        { g: "⚖️", title: "Scales" },
+        { g: "🔖", title: "Bookmark" },
+        { g: "ℹ️", title: "Info" },
+      ],
+    },
+  ];
+
+  /* Build stack rows: curated presets (default first) + Custom free-emoji input. */
+  function buildStackRows(host) {
+    if (!host) return;
+    var html = "";
+    for (var i = 0; i < STACK_GLYPH_REGISTRY.length; i++) {
+      var s = STACK_GLYPH_REGISTRY[i];
+      var btns = "";
+      var stored = "";
+      try {
+        stored = firstGlyph(localStorage.getItem(s.key) || "");
+      } catch (_e) {}
+      /* pc-1000: shipped default always renders first */
+      var ordered = s.presets.slice().sort(function (a, b) {
+        return (b.g === s.fallback ? 1 : 0) - (a.g === s.fallback ? 1 : 0);
+      });
+      for (var j = 0; j < ordered.length; j++) {
+        var p = ordered[j];
+        btns +=
+          '<button type="button" class="glyph-preset"' +
+          (p.g === s.fallback ? ' data-is-default="true"' : "") +
+          ' data-glyph="' +
+          p.g +
+          '" title="' +
+          p.title +
+          (p.g === s.fallback ? " (default)" : "") +
+          '">' +
+          p.g +
+          "</button>";
+      }
+      var customVal = "";
+      var inPresets = ordered.some(function (p) {
+        return p.g === stored;
+      });
+      if (stored && !inPresets) customVal = stored;
+      html +=
+        '<div class="stack-glyph-row" id="' +
+        s.id +
+        '-glyph-control">' +
+        '<span class="stack-glyph-lab">' +
+        s.label +
+        "</span>" +
+        '<div class="glyph-presets" role="group" aria-label="' +
+        s.label +
+        ' stack presets">' +
+        btns +
+        "</div>" +
+        '<label class="glyph-custom" title="Paste or pick any emoji (system emoji panel)">' +
+        '<span class="dim">Custom</span>' +
+        '<input type="text" id="' +
+        s.id +
+        '-glyph-input" class="glyph-custom-input" maxlength="8" ' +
+        'spellcheck="false" autocomplete="off" inputmode="text" ' +
+        'aria-label="Custom ' +
+        s.label +
+        ' emoji" placeholder="…" value="' +
+        (customVal ? customVal.replace(/"/g, "&quot;") : "") +
+        '" />' +
+        "</label></div>";
+    }
+    host.innerHTML = html;
+  }
+
+  var stackHost = document.getElementById("stack-glyph-control");
+  buildStackRows(stackHost);
+
+  for (var _si = 0; _si < STACK_GLYPH_REGISTRY.length; _si++) {
+    var _s = STACK_GLYPH_REGISTRY[_si];
+    wireGlyphPicker({
+      key: _s.key,
+      fallback: _s.fallback,
+      hostId: _s.id + "-glyph-control",
+      inputId: _s.id + "-glyph-input",
+      applyName: _s.applyName,
+    });
+  }
+
+  /* Smoke: every registered stack type must have a rendered picker row. */
+  (function smokeCheckStackCoverage() {
+    for (var _i = 0; _i < STACK_GLYPH_REGISTRY.length; _i++) {
+      var _id = STACK_GLYPH_REGISTRY[_i].id;
+      if (!document.getElementById(_id + "-glyph-control")) {
+        console.error("[pc-986] smoke FAIL: stack type '" + _id + "' has no picker row in Settings");
+      }
+    }
+  })();
+})();
+
+/* Seat name on Map — suite.youLabel (pc-882). You panel is For You only. */
+(function wireYouLabel() {
+  var inp = document.getElementById("you-label-input");
+  if (!inp) return;
+  function readLabel() {
+    try {
+      var L = String(localStorage.getItem("suite.youLabel") || "").trim();
+      if (!L || /^you$/i.test(L)) return "";
+      return L;
+    } catch (e) {
+      return "";
+    }
+  }
+  function saveLabel(raw) {
+    var v = String(raw || "").trim();
+    if (!v || /^you$/i.test(v)) {
+      try {
+        localStorage.removeItem("suite.youLabel");
+      } catch (e) {}
+      return "";
+    }
+    try {
+      localStorage.setItem("suite.youLabel", v);
+    } catch (e2) {}
+    return v;
+  }
+  function paint() {
+    var cur = readLabel();
+    if (inp.value !== cur) inp.value = cur;
+  }
+  function commit() {
+    var raw = inp.value;
+    try {
+      if (typeof window.applyYouLabel === "function") {
+        window.applyYouLabel(raw);
+      } else {
+        saveLabel(raw);
+      }
+    } catch (eApply) {
+      saveLabel(raw);
+    }
+    paint();
+  }
+  paint();
+  inp.addEventListener("change", commit);
+  inp.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      commit();
+      inp.blur();
+    }
+  });
+})();
+
+/* pc-1284 / pc-1313: Overview since-strip window (suite.overviewSince, default 24h). */
+(function wireOverviewSince() {
+  var group = document.getElementById("overview-since-window");
+  if (!group) return;
+  var pref = "24h";
+  try {
+    pref = String(localStorage.getItem("suite.overviewSince") || "24h")
+      .trim()
+      .toLowerCase();
+    if (pref === "since" || pref === "last" || pref === "left") pref = "visit";
+    if (pref === "24" || pref === "day") pref = "24h";
+    if (pref === "7" || pref === "week") pref = "7d";
+    if (pref !== "visit" && pref !== "today" && pref !== "24h" && pref !== "7d") {
+      pref = "24h";
+    }
+  } catch (eRead) {
+    pref = "24h";
+  }
+  var inputs = group.querySelectorAll('input[name="suite-overview-since"]');
+  inputs.forEach(function (inp) {
+    inp.checked = inp.value === pref;
+    inp.addEventListener("change", function () {
+      if (!inp.checked) return;
+      var v = String(inp.value || "24h").trim().toLowerCase();
+      if (v !== "visit" && v !== "today" && v !== "24h" && v !== "7d") v = "24h";
+      try {
+        localStorage.setItem("suite.overviewSince", v);
+      } catch (eSet) {}
+      try {
+        var note = document.getElementById("settings-apply-note");
+        if (note) {
+          note.hidden = false;
+          note.textContent = "Overview since-strip saved · next Overview load uses it";
+        }
+      } catch (eNote) {}
+    });
+  });
+})();
+
+/* Map prefs (pc-663): pane sides only — layout/depth/bullseye knobs retired. */
+(function wireMapLayout() {
+  /* Clear retired map chrome keys so old browsers land on hierarchy defaults. */
+  try {
+    localStorage.removeItem("suite.mapLayout");
+    localStorage.removeItem("suite.mapMdDepth");
+    localStorage.removeItem("suite.mapDigDepth");
+    localStorage.removeItem("suite.mapLandByAgents");
+    localStorage.removeItem("suite.mapScaleByOpen");
+    /* pc-664: identity knobs retired — wire id hard-defaults to you via SuiteNav. */
+    localStorage.removeItem("suite.youAliases");
+    localStorage.removeItem("suite.citizenId");
+    localStorage.setItem("suite.mapNode", "folder");
+  } catch (eClear) {}
+  /* pc-493 / pc-662: list rail vs dig-in — segmented (≤3 options) */
+  var railSideGroup = document.getElementById("map-rail-side");
+  if (railSideGroup) {
+    var rs = "default";
+    try {
+      rs = String(localStorage.getItem("suite.mapRailSide") || "default")
+        .trim()
+        .toLowerCase();
+      if (rs === "swap" || rs === "right") rs = "swapped";
+      if (rs !== "swapped") rs = "default";
+    } catch (eRs) {
+      rs = "default";
+    }
+    var railInputs = railSideGroup.querySelectorAll('input[name="suite-map-rail"]');
+    railInputs.forEach(function (inp) {
+      inp.checked = inp.value === rs;
+      inp.addEventListener("change", function () {
+        if (!inp.checked) return;
+        var v = String(inp.value || "default").trim().toLowerCase();
+        if (v !== "swapped") v = "default";
+        try {
+          localStorage.setItem("suite.mapRailSide", v);
+        } catch (e2) {}
+        /* Live apply when Settings sheet is open over Map */
+        try {
+          if (typeof window.applyMapRailSide === "function") {
+            window.applyMapRailSide();
+          }
+        } catch (eApply) {}
+      });
+    });
+  }
+
+  /* Dig opens on — first body slice for every place dig (default Work) */
+  var digOpenGroup = document.getElementById("map-dig-open-slice");
+  if (digOpenGroup) {
+    var digPref = "work";
+    try {
+      if (typeof window.readMapDigOpenPref === "function") {
+        digPref = window.readMapDigOpenPref();
+      } else {
+        digPref = String(
+          localStorage.getItem("suite.mapDigOpenSlice") || "work"
+        )
+          .trim()
+          .toLowerCase();
+        if (digPref === "for_you") digPref = "act";
+        if (
+          digPref !== "work" &&
+          digPref !== "act" &&
+          digPref !== "structure" &&
+          digPref !== "presence" &&
+          digPref !== "projects" &&
+          digPref !== "last"
+        )
+          digPref = "work";
+      }
+    } catch (eDig) {
+      digPref = "work";
+    }
+    var digInputs = digOpenGroup.querySelectorAll(
+      'input[name="suite-map-dig-open"]'
+    );
+    digInputs.forEach(function (inp) {
+      inp.checked = inp.value === digPref;
+      inp.addEventListener("change", function () {
+        if (!inp.checked) return;
+        var v = String(inp.value || "work").trim().toLowerCase();
+        try {
+          if (typeof window.writeMapDigOpenPref === "function") {
+            window.writeMapDigOpenPref(v);
+          } else {
+            if (v === "for_you") v = "act";
+            if (
+              v !== "work" &&
+              v !== "act" &&
+              v !== "structure" &&
+              v !== "presence" &&
+              v !== "projects" &&
+              v !== "last"
+            )
+              v = "work";
+            localStorage.setItem("suite.mapDigOpenSlice", v);
+          }
+        } catch (eSet) {}
+        try {
+          var note = document.getElementById("settings-apply-note");
+          if (note) {
+            note.hidden = false;
+            note.textContent =
+              "Dig opens on saved · next place dig uses the new default";
+          }
+        } catch (eNote) {}
+      });
+    });
+  }
+
+  /* Theater — pause/validate + step-through demo */
+  function closeSettingsForMap() {
+    try {
+      if (window.SuiteSettingsSheet && typeof window.SuiteSettingsSheet.close === "function") {
+        window.SuiteSettingsSheet.close();
+      } else if (typeof window.closeMapSettingsDig === "function") {
+        window.closeMapSettingsDig();
+      }
+    } catch (eClose) {}
+  }
+  var pauseBtn = document.getElementById("btn-theater-pause");
+  if (pauseBtn && !pauseBtn._wiredTheaterPause) {
+    pauseBtn._wiredTheaterPause = true;
+    pauseBtn.addEventListener("click", function () {
+      closeSettingsForMap();
+      try {
+        if (window.MapTheaterDemo && typeof window.MapTheaterDemo.pause === "function") {
+          window.MapTheaterDemo.pause("settings");
+          return;
+        }
+      } catch (eP) {}
+      try {
+        localStorage.setItem("suite.mapTheaterPaused", "1");
+        location.href =
+          "/workspace-map?theater_pause=1" +
+          (PROJECT ? "&project=" + encodeURIComponent(PROJECT) : "");
+      } catch (eNav) {}
+    });
+  }
+  var resumeBtn = document.getElementById("btn-theater-resume");
+  if (resumeBtn && !resumeBtn._wiredTheaterResume) {
+    resumeBtn._wiredTheaterResume = true;
+    resumeBtn.addEventListener("click", function () {
+      closeSettingsForMap();
+      try {
+        if (window.MapTheaterDemo && typeof window.MapTheaterDemo.resume === "function") {
+          window.MapTheaterDemo.resume();
+          return;
+        }
+      } catch (eR) {}
+      try {
+        localStorage.setItem("suite.mapTheaterPaused", "0");
+        location.href =
+          "/workspace-map" +
+          (PROJECT ? "?project=" + encodeURIComponent(PROJECT) : "");
+      } catch (eNav2) {}
+    });
+  }
+  var demoBtn = document.getElementById("btn-theater-demo");
+  if (demoBtn && !demoBtn._wiredTheater) {
+    demoBtn._wiredTheater = true;
+    demoBtn.addEventListener("click", function () {
+      closeSettingsForMap();
+      try {
+        if (window.MapTheaterDemo && typeof window.MapTheaterDemo.play === "function") {
+          window.MapTheaterDemo.play({ auto: false });
+          return;
+        }
+      } catch (ePlay) {}
+      /* Cold /settings page — send to Map with theater start hint */
+      try {
+        var dest = "/workspace-map?theater=1";
+        if (PROJECT) dest += "&project=" + encodeURIComponent(PROJECT);
+        location.href = dest;
+      } catch (eNav) {}
+    });
+  }
+})();
+
+/* ── Workspace: root · survey · hidden (pc-325 / pc-666) ── */
+function surveyLine(sv) {
+  sv = sv || {};
+  const st = String(sv.status || "idle");
+  const n = (sv.parcels) | 0;
+  if (st === "running") {
+    return n > 0
+      ? ("Scanning · " + n.toLocaleString())
+      : "Scanning";
+  }
+  if (st === "done" || st === "stale") {
+    return (st === "stale" ? "Stale" : "Ready") + " · " + n.toLocaleString();
+  }
+  return "Not indexed";
+}
+
+function setStatusPill(el, kind, text) {
+  if (!el) return;
+  el.textContent = text;
+  el.className =
+    "state-chip status-pill" +
+    (kind === "up" || kind === "ready"
+      ? " is-up is-ready"
+      : kind === "down"
+        ? " is-down"
+        : kind === "checking" || kind === "loading"
+          ? " is-checking"
+          : "");
+}
+
+function paintSurveyChip(lineEl, sv) {
+  if (!lineEl) return;
+  const st = String((sv && sv.status) || "idle");
+  const text = surveyLine(sv || {});
+  if (st === "running") setStatusPill(lineEl, "checking", text);
+  else if (st === "done") setStatusPill(lineEl, "ready", text);
+  else if (st === "stale") setStatusPill(lineEl, "checking", text);
+  else setStatusPill(lineEl, "checking", text);
+}
+
+function paintCityOntoSettings(city) {
+  city = city || {};
+  const rootEl = document.getElementById("city-root");
+  const lineEl = document.getElementById("survey-line");
+  const btn = document.getElementById("btn-resurvey");
+  if (rootEl) rootEl.textContent = city.city_root || "—";
+  if (city.version || city.suite_version) {
+    const av = document.getElementById("about-version");
+    if (av) {
+      const ver = String(city.version || city.suite_version);
+      av.textContent = ver;
+      if (/\+dogfood/i.test(ver)) {
+        av.setAttribute("data-channel", "dogfood");
+        av.title = "BluePrint suite version (dogfood). Click: next-ship notes.";
+        if (!av._nextShip) {
+          av._nextShip = true;
+          av.addEventListener("click", function () {
+            var href =
+              "/read?path=" + encodeURIComponent("ProtocolCity/NEXT_SHIP.md");
+            if (window.SuiteNav && typeof window._suiteNavTo === "function") {
+              window._suiteNavTo(href);
+            } else {
+              location.href = href;
+            }
+          });
+        }
+      } else {
+        av.setAttribute("data-channel", "release");
+        av.title = "BluePrint suite version (released package)";
+      }
+    }
+  }
+  paintSurveyChip(lineEl, city.survey || {});
+  const st = String((city.survey && city.survey.status) || "idle");
+  if (btn) {
+    btn.disabled = st === "running";
+    btn.textContent = st === "running" ? "Scanning…" : "Rescan";
+  }
+}
+
+async function refreshWorkspaceLand() {
+  const rootEl = document.getElementById("city-root");
+  if (!rootEl) return;
+  /* Optimistic paint from Map model if present (avoids blank wait) */
+  try {
+    if (window.model && model.city && model.city.city_root) {
+      paintCityOntoSettings(model.city);
+      refreshEngineStatus(model.city, true);
+    }
+  } catch (eOpt) {}
+  try {
+    const r = await fetch("/api/city", { cache: "no-store" });
+    if (!r.ok) throw new Error("city");
+    const city = await r.json();
+    paintCityOntoSettings(city);
+    refreshEngineStatus(city, false);
+  } catch (e) {
+    if (rootEl.textContent === "…" || rootEl.textContent === "Loading…") {
+      rootEl.textContent = "Unavailable";
+    }
+    setStatusPill(document.getElementById("survey-line"), "down", "Unavailable");
+    refreshEngineStatus(null, false);
+  }
+}
+
+/** pc-665: suite-proxied live check — never link out to engine HTML ports. */
+function portFromUrl(url, fallback) {
+  try {
+    const p = new URL(String(url || "")).port;
+    if (p) return p;
+  } catch (e) {}
+  return String(fallback || "");
+}
+
+function probeEngine(url, ms) {
+  const ctrl =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl
+    ? setTimeout(function () {
+        try {
+          ctrl.abort();
+        } catch (e) {}
+      }, ms || 900)
+    : null;
+  return fetch(url, {
+    cache: "no-store",
+    signal: ctrl ? ctrl.signal : undefined,
+  })
+    .then(function (r) {
+      return !!r.ok;
+    })
+    .catch(function () {
+      return false;
+    })
+    .finally(function () {
+      if (timer) clearTimeout(timer);
+    });
+}
+
+function paintEngineRow(lineId, statusId, port, up, version, checking) {
+  const line = document.getElementById(lineId);
+  const chip = document.getElementById(statusId);
+  const portLabel = port ? ":" + port : "port ?";
+  const ver =
+    version && String(version).trim() ? " · " + String(version).trim() : "";
+  if (checking) {
+    if (line) line.textContent = portLabel;
+    setStatusPill(chip, "checking", "Checking");
+    return;
+  }
+  if (line) line.textContent = portLabel + ver;
+  setStatusPill(chip, up ? "up" : "down", up ? "Up" : "Down");
+}
+
+/**
+ * @param {object|null} city
+ * @param {boolean} optimisticOnly — paint ports + assume live if Map LIVE badge green; skip probes
+ */
+function refreshEngineStatus(city, optimisticOnly) {
+  city = city || {};
+  const wlPort = portFromUrl(city.desk, "8799") || "8799";
+  const wfPort = portFromUrl(city.workforce, "8797") || "8797";
+  paintEngineRow("wl-engine-line", "wl-engine-status", wlPort, false, null, true);
+  paintEngineRow("wf-engine-line", "wf-engine-status", wfPort, false, null, true);
+
+  /* Optimistic: Map LIVE badge often already knows engines answer */
+  try {
+    const live = document.getElementById("map-live-label");
+    const liveText = live ? String(live.textContent || "").toUpperCase() : "";
+    if (liveText.indexOf("LIVE") >= 0 && liveText.indexOf("STALE") < 0) {
+      paintEngineRow("wl-engine-line", "wl-engine-status", wlPort, true, null, false);
+      paintEngineRow("wf-engine-line", "wf-engine-status", wfPort, true, null, false);
+    }
+  } catch (eLive) {}
+
+  if (optimisticOnly) return;
+
+  Promise.all([
+    probeEngine("/api/tp-scene", 900),
+    probeEngine("/api/people", 900),
+  ]).then(function (pair) {
+    paintEngineRow("wl-engine-line", "wl-engine-status", wlPort, !!pair[0], null, false);
+    paintEngineRow("wf-engine-line", "wf-engine-status", wfPort, !!pair[1], null, false);
+  });
+}
+
+/* pc-457: clear this-browser suite prefs (not disk / desks / employment) */
+(function wireResetPrefs() {
+  const btn = document.getElementById("btn-reset-prefs");
+  if (!btn) return;
+  const KEYS = [
+    "suite.theme",
+    "suite.spinePaint",
+    "suite.youGlyph",
+    "suite.handGlyph",
+    "suite.handGlyphById",
+    "suite.jobGlyph",
+    "suite.jobGlyphById",
+    "suite.staffGlyph",
+    "suite.workGlyph",
+    "suite.paperGlyph",
+    "suite.instrGlyph",
+    "suite.mapLayout",
+    /* suite.mapNode retired as citizen dual-mode; Map always folders on hierarchy */
+    "suite.mapRailSide",
+    "suite.mapDigOpenSlice",
+    "suite.mapDigOpenSliceLast",
+    "suite.overviewSince",
+    "suite.mapMdDepth",
+    "suite.mapDigDepth",
+    "suite.mapLandByAgents",
+    "suite.mapScaleByOpen",
+    "suite.mapFilter.managed",
+    "suite.mapFilter.unmanaged",
+    "suite.mapFilter.hidden",
+    "suite.youLabel",
+    "suite.youAliases",
+    "suite.citizenId",
+    "suite.mapLeftWidth",
+    "suite.mapRightWidth",
+    "suite.mapAgentsHeightPct",
+    "pc_map_estate_thresholds",
+  ];
+  btn.addEventListener("click", function () {
+    const ok = window.confirm(
+      "Reset suite preferences in this browser?\n\n" +
+        "Clears theme, filters, You face, and pane sizes.\n" +
+        "Files and hired agents stay unchanged."
+    );
+    if (!ok) return;
+    KEYS.forEach(function (k) {
+      try {
+        localStorage.removeItem(k);
+      } catch (e) {}
+    });
+    btn.textContent = "Reset";
+    try {
+      if (window.location && window.location.pathname.indexOf("settings") >= 0) {
+        window.location.reload();
+      }
+    } catch (e2) {}
+  });
+})();
+
+function renderHidden(slugs) {
+  const list = document.getElementById("hidden-list");
+  const empty = document.getElementById("hidden-empty");
+  if (!list) return;
+  list.innerHTML = "";
+  slugs = Array.isArray(slugs) ? slugs.slice().sort() : [];
+  if (!slugs.length) {
+    list.hidden = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  list.hidden = false;
+  if (empty) empty.hidden = true;
+  slugs.forEach(function (slug) {
+    const li = document.createElement("li");
+    const span = document.createElement("span");
+    span.className = "slug";
+    span.textContent = slug;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Show on map";
+    btn.title = "Restore this folder to Map";
+    btn.addEventListener("click", function () {
+      toggleHidden(slug, false);
+    });
+    li.appendChild(span);
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+async function refreshHidden() {
+  try {
+    const r = await fetch("/api/hidden", { cache: "no-store" });
+    if (!r.ok) throw new Error("hidden");
+    const data = await r.json();
+    renderHidden(data.hidden || []);
+  } catch (e) {
+    renderHidden([]);
+    const empty = document.getElementById("hidden-empty");
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = "Unavailable";
+    }
+  }
+}
+
+async function toggleHidden(slug, hide) {
+  try {
+    const r = await fetch("/api/hidden", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: slug, hidden: !!hide }),
+    });
+    if (!r.ok) throw new Error("post");
+    const data = await r.json();
+    renderHidden(data.hidden || []);
+  } catch (e) {
+    /* keep prior list */
+  }
+}
+
+function wireWorkspace() {
+  refreshWorkspaceLand();
+  refreshHidden();
+  const btn = document.getElementById("btn-resurvey");
+  if (btn) {
+    btn.addEventListener("click", async function () {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "Scanning…";
+      try {
+        await fetch("/api/survey", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+      } catch (e) {}
+      await refreshWorkspaceLand();
+    });
+  }
+}
+
+wireWorkspace();
+
+if (window.SuiteNav) {
+  SuiteNav.apply({
+    room: "settings",
+    project: PROJECT,
+    onSettings: true,
+  });
+}
+</script>
+</div>
+
+</body>
+</html>

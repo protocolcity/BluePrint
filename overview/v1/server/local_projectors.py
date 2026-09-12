@@ -13,10 +13,9 @@ Agents (WorkForce roster)::
 
 Jobs (WorkLane product stores)::
 
-    Prefer Desk HTTP ``http://127.0.0.1:8799/api/admin/products`` (+ tasks)
-    with a short timeout; fail → empty, never invent.
-    Else read SQLite ``<binder>/worklane/worklane/local/data/<slug>.db``
-    table ``tasks`` when present.
+    Read SQLite ``<binder>/worklane/worklane/local/data/<slug>.db``
+    table ``tasks`` when present. Never infer workspace ownership from a
+    server listening on localhost; it may serve a different workspace.
 
 Never invent seats or WOs. Missing / malformed → honest empty.
 ``overview.json`` (when present) still wins at the BinderOverview layer.
@@ -25,15 +24,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
-
-# Desk HTTP — short timeout, fail closed.
-_DESK_BASE = "http://127.0.0.1:8799"
-_DESK_TIMEOUT_S = 0.35
 
 # Open-family statuses we may paint. Terminal statuses are omitted.
 _TERMINAL = frozenset({"done", "canceled", "cancelled"})
@@ -254,57 +246,6 @@ def _buckets_from_jobs(jobs: list[dict]) -> dict:
     return buckets
 
 
-def _http_get_json(url: str) -> Any | None:
-    try:
-        req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=_DESK_TIMEOUT_S) as resp:
-            body = resp.read()
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-        return None
-    try:
-        return json.loads(body.decode("utf-8"))
-    except (ValueError, UnicodeError):
-        return None
-
-
-def _project_jobs_via_desk() -> list[dict] | None:
-    """Try live Desk HTTP. Returns ``None`` on any failure (caller falls through)."""
-    products_payload = _http_get_json(f"{_DESK_BASE}/api/admin/products")
-    if not isinstance(products_payload, dict) or not products_payload.get("ok"):
-        return None
-    products = products_payload.get("products")
-    if not isinstance(products, list):
-        return None
-
-    jobs: list[dict] = []
-    # Empty product list is a successful empty projection (not a fallthrough).
-    for prod in products:
-        if not isinstance(prod, dict):
-            continue
-        slug = str(prod.get("slug") or "").strip()
-        if not slug:
-            continue
-        # Open-family only — ask per status to avoid pulling done/canceled.
-        for status in ("backlog", "in_progress", "in_review"):
-            payload = _http_get_json(
-                f"{_DESK_BASE}/api/admin/tasks?project={urllib.parse.quote(slug)}"
-                f"&status={status}&limit=200"
-            )
-            if not isinstance(payload, dict):
-                return None  # mid-flight failure → degrade to SQLite / empty
-            tasks = payload.get("tasks")
-            if not isinstance(tasks, list):
-                return None
-            for task in tasks:
-                if not isinstance(task, dict):
-                    continue
-                job = _task_to_job(task)
-                if job is not None:
-                    jobs.append(job)
-    return jobs
-
-
-
 def _project_jobs_via_sqlite(binder: Path) -> list[dict]:
     jobs: list[dict] = []
     for db_path in _list_sqlite_dbs(binder):
@@ -352,15 +293,12 @@ def _project_jobs_via_sqlite(binder: Path) -> list[dict]:
 def project_jobs(binder: Path) -> tuple[list[dict], dict]:
     """Project WorkLane open tasks → ``(jobs, buckets)``.
 
-    Desk HTTP first (short timeout); on any failure, SQLite under the binder.
+    Read only the selected binder’s SQLite stores. An unrelated local
+    WorkLane service must never supply this workspace’s work orders.
     Missing stores → ``([], zeros)``.
     """
     binder = Path(binder)
-    desk = _project_jobs_via_desk()
-    if desk is not None:
-        jobs = desk
-    else:
-        jobs = _project_jobs_via_sqlite(binder)
+    jobs = _project_jobs_via_sqlite(binder)
     return jobs, _buckets_from_jobs(jobs)
 
 

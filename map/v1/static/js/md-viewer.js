@@ -21,6 +21,7 @@ export function createMdViewer({
   let titleEl = null;
   let isOpen = false;
   let currentPath = null;
+  let returnFocus = null;
 
   function mount() {
     if (overlay) return;
@@ -38,6 +39,8 @@ export function createMdViewer({
     panel.className = 'map-md-panel';
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', 'Document reader');
+    panel.tabIndex = -1;
 
     const bar = document.createElement('div');
     bar.className = 'map-md-bar';
@@ -86,10 +89,17 @@ export function createMdViewer({
   function onKeyDown(ev) {
     if (!isOpen) return;
     if (ev.key === 'Escape') { ev.preventDefault(); close(); }
+    if (ev.key === 'Tab') {
+      const nodes = [...overlay.panel.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')];
+      const first = nodes[0], last = nodes[nodes.length-1];
+      if (ev.shiftKey && (document.activeElement === first || !overlay.panel.contains(document.activeElement))) {ev.preventDefault();last?.focus();}
+      else if (!ev.shiftKey && (document.activeElement === last || !overlay.panel.contains(document.activeElement))) {ev.preventDefault();first?.focus();}
+    }
   }
 
   async function open(path, { label } = {}) {
     if (!overlay) mount();
+    if (!isOpen) returnFocus = document.activeElement;
     currentPath = path;
     isOpen = true;
     hostLayer.style.visibility = 'visible';
@@ -97,14 +107,17 @@ export function createMdViewer({
     titleEl.textContent = label || path || '';
     contentEl.textContent = '';
     contentEl.classList.add('is-loading');
+    overlay.panel.querySelector('button').focus();
     try {
       const url = `${endpoint}?path=${encodeURIComponent(path)}&render=html`;
       const res = await fetcher(url, { headers: { accept: 'text/html' } });
       if (!res || !res.ok) throw new Error(`md-viewer: ${res && res.status}`);
       const html = await res.text();
+      if (!isOpen || currentPath !== path) return;
       contentEl.classList.remove('is-loading');
       contentEl.innerHTML = html;
     } catch (err) {
+      if (!isOpen || currentPath !== path) return;
       contentEl.classList.remove('is-loading');
       contentEl.textContent = `Failed to load ${path}: ${err.message}`;
     }
@@ -119,6 +132,7 @@ export function createMdViewer({
       hostLayer.classList.remove('is-open');
     }
     if (contentEl) contentEl.textContent = '';
+    if (returnFocus?.isConnected) returnFocus.focus();
     if (typeof onClose === 'function') onClose();
   }
 

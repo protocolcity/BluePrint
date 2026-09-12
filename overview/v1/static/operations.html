@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BluePrint · Operations</title>
+<link rel="stylesheet" href="/css/overview.css"><link rel="stylesheet" href="/css/operations.css">
+</head>
+<body class="bp-operations">
+<a class="bp-skip" href="#content">Skip to content</a>
+<header class="bp-header">
+  <a class="bp-brand" href="/" aria-label="BluePrint home"><span class="bp-mark" aria-hidden="true">B</span> BluePrint <small>Operations</small></a>
+  <div class="bp-header-actions"><details id="desk-scope"><summary id="desk-name">Local desk</summary><div class="bp-scope"><strong>Connected workspace</strong><p id="scope-path">Reading workspace…</p><p>Projects and agents shown here come from this workspace. Remote operations require a connected source.</p><a href="/connections">Inspect sources</a></div></details><button id="refresh" type="button">Refresh</button></div>
+</header>
+<nav class="bp-nav" aria-label="Main navigation">
+<a href="/" data-page="overview">Overview</a><a href="/work" data-page="work">Work</a><a href="/projects" data-page="projects">Projects</a><a href="/agents" data-page="agents">Agents</a><a href="/activity" data-page="activity">Activity</a><a href="/map">Map</a><a href="/calendar" data-page="calendar">Calendar</a><a href="/connections" data-page="connections">Connections</a><a href="/settings" data-page="settings">Settings</a>
+</nav>
+<main id="content" class="bp-main">
+  <div class="bp-heading"><div><p class="bp-eyebrow" id="eyebrow">Your operation</p><h1 id="page-title">Overview</h1><p id="page-description" class="bp-muted">Work, people, and the sources behind them.</p></div><p id="freshness" class="bp-freshness" role="status">Connecting…</p></div>
+  <p id="source-warning" class="bp-warning" role="status" hidden></p>
+  <section id="overview-view" hidden>
+    <div id="metrics" class="bp-metrics" aria-label="Open work summary"></div>
+    <div class="bp-overview-grid"><section class="bp-panel"><div class="bp-section-head"><div><h2>Needs your attention</h2><p class="bp-muted">Work orders explicitly waiting on a human decision.</p></div><a href="/work?status=attention">View all</a></div><div id="attention-list"></div></section><aside class="bp-panel"><div class="bp-section-head"><h2>Source status</h2><a href="/connections">Details</a></div><div id="source-list"></div><p class="bp-muted bp-note">A fresh read is not proof that every service is healthy.</p></aside></div>
+    <section class="bp-panel"><div class="bp-section-head"><div><h2>Across your projects</h2><p class="bp-muted">Open work by local project store.</p></div><a href="/projects">All projects</a></div><div id="project-summary" class="bp-project-grid"></div></section>
+  </section>
+  <section id="work-view" hidden><form class="bp-filters" id="filters" role="search"><label>Search work<input id="search" type="search" placeholder="Title, ID, project or owner" autocomplete="off"></label><label>Project<select id="project-filter"><option value="">All projects</option></select></label><label>Status<select id="status-filter"><option value="">All open work</option><option value="attention">Needs you</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="backlog">Backlog</option><option value="in_review">In review</option><option value="deferred">Deferred</option></select></label></form><div class="bp-section-head"><p id="results" class="bp-muted" role="status"></p><p class="bp-muted">Open work · select to manage</p></div><div class="bp-panel" id="work-list"></div><div class="bp-pagination"><button id="previous" type="button">Previous</button><span id="page-count"></span><button id="next" type="button">Next</button></div></section>
+  <section id="projects-view" class="bp-project-grid" hidden></section>
+  <section id="agents-view" hidden><p class="bp-note bp-muted">These are registered local agents. Runtime state is unknown when the heartbeat is stale or missing.</p><div id="agent-list" class="bp-agent-grid"></div></section>
+  <section id="activity-view" hidden><p id="remote-status" role="status" class="bp-muted">Connecting to configured repositories…</p><p class="bp-note bp-muted">Pull requests, workflow runs, and releases reported by GitHub. These records do not prove an agent is currently running.</p><div id="remote-repositories"></div></section>
+  <section id="connections-view" hidden><div class="bp-panel"><h2>Data sources</h2><div id="connection-list"></div></div><div class="bp-panel bp-remote"><h2>Remote operations</h2><p id="github-connection-status">Reading connection state…</p><p class="bp-muted">GitHub provides repository activity. Direct remote-agent heartbeat reporting is not connected.</p><a href="/activity">View repository activity</a></div><div class="bp-panel"><h2>Running application</h2><dl class="bp-facts"><dt>Build</dt><dd id="build"></dd><dt>Workspace</dt><dd id="workspace-path"></dd><dt>Refresh</dt><dd id="refresh-description">Reading preference…</dd></dl></div></section>
+  <section id="calendar-view" hidden><p class="bp-note bp-muted">Upcoming agent runs are reported by WorkForce. Calendar dates use your browser’s timezone.</p><div class="bp-panel"><div class="bp-section-head"><h2>Dated work</h2><a href="/calendar.ics">Subscribe / export calendar</a></div><p class="bp-muted">Deadlines and holds from WorkLane. Select an item to open its work order.</p><div id="dated-work"></div></div><div class="bp-panel"><h2>Next scheduled runs</h2><div id="schedule-list"></div></div><div class="bp-panel"><h2>Calendar events</h2><div id="event-list"></div></div></section>
+  <section id="settings-view" hidden><div class="bp-panel"><h2>Display preferences</h2><p class="bp-muted">Saved in this browser. These do not change agents or services.</p><form class="bp-filters" id="preferences"><label>Automatic refresh<select id="refresh-preference"><option value="15">Every 15 seconds</option><option value="30">Every 30 seconds</option><option value="0">Manual only</option></select></label><label>Motion<select id="motion-preference"><option value="system">Follow system preference</option><option value="off">Reduce motion</option></select></label></form><p id="preference-status" role="status" class="bp-muted"></p></div><div class="bp-panel"><h2>Workspace and application</h2><dl class="bp-facts"><dt>Workspace</dt><dd id="settings-workspace"></dd><dt>Running build</dt><dd id="settings-build"></dd><dt>Appearance</dt><dd>BluePrint dark</dd><dt>Data access</dt><dd>Local reads; work-order changes through WorkLane</dd></dl><p class="bp-note"><a href="/connections">Inspect connections and source freshness</a></p></div></section>
+</main>
+<footer class="bp-footer"><span>BluePrint · local operations</span><span id="footer-status">Waiting for source data</span></footer>
+<script src="/js/operations.js" defer></script>
+</body></html>
