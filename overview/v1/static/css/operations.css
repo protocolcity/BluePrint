@@ -77,3 +77,7 @@
 .bp-map-page > .bp-workspace-search { width: 100%; max-width: 1440px; margin-inline: auto; padding: 12px 32px; flex-shrink: 0; }
 .bp-map-page > .bp-workspace-search .bp-panel { position: absolute; z-index: 30; left: 32px; right: 32px; background: var(--ov-bg); }
 @media(max-width:560px) { .bp-map-page > .bp-workspace-search { padding-inline: 16px; }.bp-map-page > .bp-workspace-search .bp-panel { left: 16px; right: 16px; } }
+
+#map-project-context { padding-bottom: 14px; margin-block: 12px; border-bottom: 1px solid var(--ov-tile-border); }
+#map-project-context p,#map-project-context small { color: var(--ov-muted); line-height:1.5; font-size:12px; }
+#map-project-context nav { display:flex; flex-wrap:wrap; gap:10px 14px; margin-block:12px; }

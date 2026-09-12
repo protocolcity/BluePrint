@@ -70,3 +70,9 @@ mirrors. Synchronization updates only Cursor servers already configured there;
 it does not enroll additional servers or infer session approval/authentication.
 A passing mirror check and successful server handshake do not prove an
 unattended worker has been configured.
+
+## Map context and prior FAST implementation
+
+The active Map shares the application header, workspace search and operations projection. Folder navigation exposes project-scoped work, human attention, papers and existing instructions, plus the workspace Agents and jobs surface. Open work includes deferred/tracking orders; in-progress status is labeled as status, never live agent activity. Missing sources remain unavailable and truncated details are disclosed. The project/paper outline and breadcrumbs work independently of the SVG scene.
+
+The prior FAST layer, theater, folder-seat stack and four-lens host are retired implementation recipes. Their useful access and truthfulness outcomes are carried by these current controls; they must not be restored as a second projection or an apparent live activity layer. This decision does not claim every optional historical visual treatment is implemented.

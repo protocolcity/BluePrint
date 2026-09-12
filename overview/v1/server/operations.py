@@ -49,7 +49,8 @@ def project_registry(root):
         if row and isinstance(row.get('slug'), str):
             result[row['slug']] = {'name': str(row.get('display') or row['slug']),
                                    'prefix': str(row.get('prefix') or '').rstrip('-'),
-                                   'folder': str(path.parent.parent.relative_to(root))}
+                                   'folder': str(path.parent.parent.relative_to(root)),
+                                   'has_instructions': (path.parent.parent/'AGENTS.md').is_file()}
     return result
 
 

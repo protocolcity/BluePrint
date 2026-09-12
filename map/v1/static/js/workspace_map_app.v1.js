@@ -3,9 +3,8 @@
 // Wires: snapshot fetch (map-tree) → paint (map-paint) → hit routing
 // (map-hit-router) → view state (view-state) → reader (md-viewer).
 //
-// Glass §Non-goals: host stays under ~2k LOC; no cinema, no store polling,
-// no live loop, no second projection. If you find yourself importing an
-// inspect-* rail, an agents-panel, or a WO tape module — you are outside V1.
+// Project context consumes the shared operations projection. No scheduler or
+// independent work-state cache belongs in this host.
 //
 // Load order: this file is the entry. All modules are loaded as ES modules.
 
@@ -102,6 +101,7 @@ export async function boot(opts = {}) {
     const list = document.getElementById('map-browser-list');
     if (!list) return;
     const snap = viewState.snapshot();
+    document.dispatchEvent(new CustomEvent('bp:map-location', {detail:{path:snap.dig?.relPath || ''}}));
     const key = JSON.stringify([snap.dig?.relPath || '', snap.filters, page]);
     if (key === browserKey) return;
     const version = ++browseVersion;
