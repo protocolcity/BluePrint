@@ -231,6 +231,13 @@ class Handler(BaseHTTPRequestHandler):
         if route in ("/work-order", "/work-order/", "/ticket", "/ticket/"):
             self._serve_static(_OV_STATIC_DIR, "work-order.html")
             return
+        if route == '/api/find':
+            from server.workspace_search import find
+            try:
+                self._send_json(200, find(self.binder_root, query.get('q', ''), query.get('offset', 0), project=query.get('project', '')))
+            except ValueError as exc:
+                self._send_json(400, {'error':str(exc)})
+            return
         if route == "/api/work-order":
             from server.work_order import read_work_order
             import sqlite3
@@ -407,7 +414,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send_text(404, "not found")
             return
         ctype = _MIME_BY_SUFFIX.get(candidate.suffix.lower(), "application/octet-stream")
-        self._send_bytes(200, candidate.read_bytes(), ctype)
+        if candidate.name == 'operations.html':
+            text = candidate.read_text(encoding='utf-8')
+            search = (_OV_STATIC_DIR / 'workspace-search.html').read_text(encoding='utf-8')
+            text = text.replace('<section id="overview-view" hidden>', '<section id="overview-view" hidden>' + search)
+            text = text.replace('</body>', '<script src="/js/workspace-search.js"></script></body>')
+            self._send_text(200, text, ctype)
+        else:
+            self._send_bytes(200, candidate.read_bytes(), ctype)
 
     def _serve_map_shell(self) -> None:
         shell = _MAP_STATIC_DIR / "workspace_map.html"
@@ -418,8 +432,11 @@ class Handler(BaseHTTPRequestHandler):
         operations = (_OV_STATIC_DIR / "operations.html").read_text(encoding="utf-8")
         nav = '<nav class="bp-nav"' + operations.split('<nav class="bp-nav"', 1)[1].split('</nav>', 1)[0] + '</nav>'
         nav = nav.replace('href="/map"', 'href="/map" aria-current="page"')
+        header = '<header class="bp-header">' + operations.split('<header class="bp-header">', 1)[1].split('</header>', 1)[0] + '</header>'
+        search = (_OV_STATIC_DIR / 'workspace-search.html').read_text(encoding='utf-8')
         text = text.replace('</head>', '<link rel="stylesheet" href="/css/overview.css"><link rel="stylesheet" href="/css/operations.css"></head>')
-        text = text.replace('<body>', '<body class="bp-operations bp-map-page">' + nav)
+        text = text.replace('<body>', '<body class="bp-operations bp-map-page">' + header + nav + search)
+        text = text.replace('</body>', '<script src="/js/workspace-search.js"></script><script src="/js/map-shell.js"></script></body>')
         self._send_text(200, text, "text/html; charset=utf-8")
 
 
