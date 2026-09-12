@@ -49,7 +49,8 @@ def project_registry(root):
         if row and isinstance(row.get('slug'), str):
             result[row['slug']] = {'name': str(row.get('display') or row['slug']),
                                    'prefix': str(row.get('prefix') or '').rstrip('-'),
-                                   'folder': str(path.parent.parent.relative_to(root))}
+                                   'folder': str(path.parent.parent.relative_to(root)),
+                                   'has_instructions': (path.parent.parent/'AGENTS.md').is_file()}
     return result
 
 
@@ -107,7 +108,9 @@ def operations_snapshot(binder):
                         labels = []
                     labels = labels if isinstance(labels, list) else []
                     workers = [x[7:] for x in labels if isinstance(x, str) and x.startswith('worker:') and x[7:]]
-                    attention = item.get('gate_type') == 'human' or 'gate:human' in labels
+                    from .attention_view import face
+                    attention_face = face(item, labels, now)
+                    attention = attention_face in ('decide','read')
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
                     from suite.api.calendar import events_from_task
                     for event in events_from_task({**item, 'id':order_id, 'labels':labels, 'product':path.stem}):
@@ -115,7 +118,8 @@ def operations_snapshot(binder):
                     result['orders'].append({'id': order_id, 'project': path.stem, 'project_name': project['name'],
                         'title': item.get('title') or order_id, 'status': item.get('status'),
                         'priority': item.get('priority'), 'updated_at': item.get('updated_at'),
-                        'attention': attention, 'gate_type': item.get('gate_type') or '',
+                        'attention': attention, 'attention_face': attention_face, 'gate_until':item.get('gate_until'),
+                        'gate_type': item.get('gate_type') or '',
                         'gate_note': item.get('gate_note') or '',
                         'workers': workers, 'needs_routing': not workers or 'needs:routing' in labels,
                         'owner': ', '.join(str(x)[7:] for x in labels if isinstance(x,str) and x.startswith('worker:')) or 'Unassigned'})

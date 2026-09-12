@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         from server.work_actions import add_note, work_action
         import sqlite3
-        if self.path not in ("/api/work-order/note", "/api/work-order/action", "/api/agents/dispatch"):
+        if self.path not in ("/api/work-order/note", "/api/work-order/action", "/api/agents/dispatch", "/api/work-order/reveal"):
             self._send_json(404, {"error": "Unknown action."})
             return
         # A local browser write must originate on this exact local origin.
@@ -202,6 +202,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/api/agents/dispatch":
                 from server.agent_actions import dispatch_agent
                 result = dispatch_agent(self.binder_root, payload.get("identity"))
+            elif self.path.endswith('/reveal'):
+                from server.work_order import reveal_reference
+                result = reveal_reference(self.binder_root, payload.get('project'), payload.get('id'), payload.get('path'))
             elif self.path.endswith("/note"):
                 result = add_note(self.binder_root, payload.get("project"), payload.get("id"), payload.get("body"))
             else:
@@ -244,6 +247,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 result = read_work_order(self.binder_root, query.get("project", ""), query.get("id", ""))
                 from server.work_actions import assignment_options
+                result['reveal_supported'] = sys.platform == 'darwin'
                 result["assignment_options"] = assignment_options(self.binder_root, result["project"])
                 self._send_json(200, result)
             except ValueError as exc:
