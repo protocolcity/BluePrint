@@ -2,6 +2,7 @@
 (async()=>{
   const name=document.getElementById('desk-name'), path=document.getElementById('scope-path');
   const context=document.getElementById('map-project-context');
+  try { document.body.classList.toggle('bp-reduce-motion', JSON.parse(localStorage.getItem('bp-display') || '{}').motion === 'off'); } catch (_) { /* System preference applies when storage is unavailable. */ }
   let data=null, locationPath=new URLSearchParams(location.search).get('path') || '';
   document.getElementById('refresh')?.addEventListener('click',()=>location.reload());
   function render() {
