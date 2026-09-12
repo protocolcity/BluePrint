@@ -223,3 +223,17 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
   #map-svg { display: none; }
   #map-page-controls { display: none; }
 }
+
+/* Folder and paper groups stay scannable without depending on color. */
+.map-browser-group { margin: 12px 8px 3px; color: var(--map-muted); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.map-browser-icon { display: inline-flex; width: 20px; margin-right: 5px; vertical-align: middle; color: var(--map-muted); }
+.map-browser-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+@keyframes map-content-arrive { from { opacity: .45; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  #map-browser-list > button, #map-browser-list > .map-browser-group { animation: map-content-arrive 130ms ease-out both; }
+  #map-browser-list button { transition: background-color 100ms ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #map-browser-list *, .map-md-panel { animation: none !important; transition: none !important; }
+}
+.bp-reduce-motion #map-browser-list *, .bp-reduce-motion .map-md-panel { animation: none !important; transition: none !important; }
