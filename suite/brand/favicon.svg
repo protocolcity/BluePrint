@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="BluePrint">
+  <rect width="48" height="48" rx="9" fill="#faf6ec"/>
+  <g transform="translate(-2,3)">
+    <path fill="#efe8d5" stroke="rgba(42,36,28,0.38)" stroke-width="1.35" stroke-linejoin="round"
+      d="M2 12 L2 7 Q2 5 4 5 L18 5 L22 12 Z"/>
+    <path fill="#1b4a73" stroke="rgba(42,36,28,0.38)" stroke-width="1.35" stroke-linejoin="round"
+      d="M2 12 L48 12 Q50 12 50 14 L50 37 Q50 40 47 40 L3 40 Q0 40 0 37 L0 14 Q0 12 2 12 Z"/>
+    <g fill="none" stroke="#fffdf8" stroke-width="1.45" stroke-linejoin="miter" stroke-linecap="square">
+      <path d="M11 24 L26 16.6 L41 24"/>
+      <path d="M15 24 H37 V34.8 H15 Z"/>
+      <path d="M28.2 24 V34.8"/>
+      <path d="M28.2 29.4 H37"/>
+      <rect x="19.2" y="29.6" width="3.6" height="5.2"/>
+    </g>
+  </g>
+</svg>

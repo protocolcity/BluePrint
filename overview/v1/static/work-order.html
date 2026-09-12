@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BluePrint — Work order</title>
+  <link rel="stylesheet" href="/css/overview.css" />
+<link rel="stylesheet" href="/css/operations.css"></head>
+<body class="bp-operations">
+  <main id="work-order-shell" class="bp-reader-shell" aria-label="Work order">
+<header class="bp-header"><a class="bp-brand" href="/">BluePrint <small>Work order</small></a><a href="/work">Back to work</a></header><nav class="bp-nav" aria-label="Main navigation">
+<a href="/" data-page="overview">Overview</a><a href="/work" data-page="work">Work</a><a href="/projects" data-page="projects">Projects</a><a href="/agents" data-page="agents">Agents</a><a href="/activity">Activity</a><a href="/map">Map</a><a href="/calendar" data-page="calendar">Calendar</a><a href="/connections" data-page="connections">Connections</a><a href="/settings" data-page="settings">Settings</a>
+</nav>    <section class="bp-panel bp-reader" aria-live="polite" id="detail">
+      <p id="message" role="status">Loading work order…</p>
+      <article id="order" hidden>
+        <p id="identity"></p><h1 id="title"></h1><p id="state"></p>
+        <details class="bp-event" id="work-controls"><summary>Manage work order</summary>
+          <p class="bp-muted">Changes are recorded by WorkLane as you. Releasing a hold or assigning an agent can wake ready work.</p>
+          <form id="action-form" class="bp-note-form">
+            <label for="work-action">Action</label>
+            <select id="work-action"><option value="priority">Change priority</option><option value="hold">Request your decision</option><option value="resume">Release hold</option><option value="assign">Assign agent</option></select>
+            <label for="action-priority" id="priority-label">Priority</label>
+            <select id="action-priority"><option value="1">1 · Urgent</option><option value="2">2 · High</option><option value="3">3 · Normal</option><option value="4">4 · Low</option></select>
+            <label for="action-reason" id="reason-label" hidden>Decision needed</label><textarea id="action-reason" maxlength="2000" rows="3" hidden></textarea>
+            <label for="action-agent" id="agent-label" hidden>Agent registered for this project</label><select id="action-agent" hidden></select>
+            <p id="action-explanation" class="bp-muted"></p>
+            <button id="action-submit" type="submit">Apply change</button><p id="action-result" role="status"></p>
+          </form>
+        </details>
+        <h2>Description</h2><div id="description" style="white-space:pre-wrap;overflow-wrap:anywhere"></div>
+        <h2>Comments</h2><div id="comments"></div>
+        <form id="note-form" class="bp-note-form">
+          <label for="note-body">Add a note as you</label>
+          <textarea id="note-body" rows="4" maxlength="12000" required placeholder="Add context, a decision, or a progress note"></textarea>
+          <p class="bp-muted">Saved through WorkLane. This control adds ordinary notes; it does not approve, dispatch, or close work.</p>
+          <button id="note-submit" type="submit">Save note</button>
+          <p id="note-result" role="status"></p>
+        </form>
+      </article>
+    </section>
+  </main>
+  <script src="/js/work-order.js"></script>
+</body>
+</html>

@@ -215,10 +215,31 @@ def _render_markdown(text: str) -> str:
     return "\n".join(out)
 
 
+_PRIVATE_DOCUMENT_DIRS = frozenset({"local", "data", "runtime", "secrets", "credentials", "backups"})
+_SKILL_SHELVES = frozenset({".agents", ".claude", ".codex"})
+
+
+def _check_document_path(path: Path) -> None:
+    """Allow project Markdown and skill papers, not runtime/private storage."""
+    parts = path.parts
+    if path.suffix.lower() not in _MD_SUFFIXES:
+        raise ValueError("file reader supports Markdown documents only")
+    for index, part in enumerate(parts):
+        lower = part.lower()
+        if lower in _PRIVATE_DOCUMENT_DIRS:
+            raise ValueError("document is in a protected directory")
+        if part.startswith("."):
+            if lower in _SKILL_SHELVES and parts[index + 1:index + 2] == ("skills",):
+                continue
+            raise ValueError("document is in a protected directory")
+
+
 def render_file(root: Path, rel_path: str, *, render: str = "html") -> tuple[str, str]:
-    """Return (content, content_type) for a file under the binder."""
+    """Return permitted Markdown under the binder, checking symlink targets too."""
     root = Path(root).resolve()
     target = _safe_join(root, rel_path)
+    _check_document_path(Path(rel_path))
+    _check_document_path(target.relative_to(root))
     if not target.is_file():
         raise FileNotFoundError(rel_path)
     text = target.read_text(encoding="utf-8", errors="replace")

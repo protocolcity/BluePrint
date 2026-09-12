@@ -94,9 +94,10 @@ the code or amend the Glass and update the test.
 
 ## Non-goals when running
 
-- Do **not** point the dogfood server at a workspace that hosts secrets —
-  `/api/file` serves any readable file under the binder root by design.
-  Use a scratch folder or a public repo checkout for demos.
+- The file reader serves Markdown only. Runtime/data/credential directories and
+  hidden directories are blocked, except explicit agent skill shelves. Both
+  requested paths and resolved symlink targets are checked. This is not a
+  content classifier: do not put credentials in ordinary project Markdown.
 - Do **not** wire in the pre-V1 `workspace_map_app.js` (the 28k-line host).
   That file is not in this repo; if you find yourself importing it you are
   in a different peel.

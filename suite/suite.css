@@ -1,0 +1,2421 @@
+/* suite.css — shared paper aesthetic (Explorer · Desk · Agents)
+   2026-07-22: retired navy blueprint plat for readability.
+   pc-324: light / dark tokens; default follows system (prefers-color-scheme).
+   Manual override: html[data-theme=light|dark] from suite.theme localStorage. */
+:root {
+  color-scheme: light;
+  /*
+   * Suite type ramp (pc-635 / pc-1392) — the only numeric type values in ship chrome.
+   * Caption floors at 11px (same as label): 9px was below brand 11–13px labels.
+   * Display is room mast only — not pane interiors.
+   * SVG Map descendants reuse these role names with fitted-view world values.
+   */
+  --type-display: 26px;
+  --type-heading: 16px;
+  --type-body: 13px;
+  --type-label: 11px;
+  --type-caption: 11px;
+  --weight-regular: 400;
+  --weight-medium: 600;
+  --page: #faf6ec;
+  --paper: #faf6ec;           /* body / page wash (legacy name kept) */
+  --paper-deep: #fffdf8;      /* cards, boxes, panels */
+  --paper-top: #efe8d5;
+  --card: #fffdf8;
+  --ink: #2a241c;
+  --line: #2a241c;            /* primary text + strong borders (legacy name) */
+  --line-faint: rgba(42, 36, 28, 0.16);
+  --line-ghost: rgba(42, 36, 28, 0.045);
+  --dim: #6b6154;
+  --border: #c4b8a4;
+  --verd: #3d7a6a;
+  --gold: #b8860b;            /* darker gold — readable on light paper */
+  --on-gold: #1d1503;         /* ink on gold chips */
+  --alive: #2e7d4f;
+  --warn: #a33327;
+  --suite-scan-dim: rgba(42, 36, 28, 0.28);
+  --suite-stage-dim: rgba(42, 36, 28, 0.4);
+  --gold-wash: rgba(233, 196, 106, 0.12);
+  --prussian: #1b4a73;        /* brand (C mark). Not Finder-blue selection. */
+}
+
+/* Dark token set — shared by system dark + manual dark (pc-324).
+   Warm charcoal paper, not the retired navy plat. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #161410;
+  --paper: #161410;
+  --paper-deep: #1f1c16;
+  --paper-top: #2a251c;
+  --card: #1f1c16;
+  --ink: #f0e8d8;
+  --line: #e8dfd0;
+  --line-faint: rgba(240, 232, 216, 0.16);
+  --line-ghost: rgba(240, 232, 216, 0.05);
+  --dim: #a89f90;
+  --border: #4a453c;
+  --verd: #5a9a88;
+  --gold: #e9c46a;
+  --on-gold: #1a1508;
+  --alive: #5ecf8a;
+  --warn: #e07060;
+  --suite-scan-dim: rgba(0, 0, 0, 0.45);
+  --suite-stage-dim: rgba(0, 0, 0, 0.58);
+  --gold-wash: rgba(233, 196, 106, 0.14);
+  --prussian: #7aa0c4;
+}
+
+/* System dark when preference is System (no data-theme) or explicit dark already covered. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #161410;
+    --paper: #161410;
+    --paper-deep: #1f1c16;
+    --paper-top: #2a251c;
+    --card: #1f1c16;
+    --ink: #f0e8d8;
+    --line: #e8dfd0;
+    --line-faint: rgba(240, 232, 216, 0.16);
+    --line-ghost: rgba(240, 232, 216, 0.05);
+    --dim: #a89f90;
+    --border: #4a453c;
+    --verd: #5a9a88;
+    --gold: #e9c46a;
+    --on-gold: #1a1508;
+    --alive: #5ecf8a;
+    --warn: #e07060;
+    --suite-scan-dim: rgba(0, 0, 0, 0.45);
+    --suite-stage-dim: rgba(0, 0, 0, 0.58);
+    --gold-wash: rgba(233, 196, 106, 0.14);
+    --prussian: #7aa0c4;
+  }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  background: var(--page);
+  /* Soft grid only — dim enough to not fight text (was heavy blueprint lines) */
+  background-image:
+    linear-gradient(var(--line-ghost) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-ghost) 1px, transparent 1px);
+  background-size: 48px 48px;
+  color: var(--ink);
+  font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+  font-size: var(--type-body);
+  font-weight: var(--weight-regular);
+  line-height: 1.5;
+  min-height: 100dvh;
+  padding: 28px 36px 120px;
+}
+/*
+ * Header hierarchy:
+ *   Row 1 (suite-head) — mast left · peer doors right (Explorer · Desk · Agents)
+ *   Row 2 (suite-meta) — path/context left · Overview right
+ * Overview is a mode of the current view, not a fourth product door.
+ */
+header.suite-head,
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px 24px;
+  border-bottom: 1.5px solid var(--border, var(--line-faint));
+  padding-bottom: 14px;
+  flex-wrap: wrap;
+}
+.suite-mast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 14px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.suite-mast .suite-title { min-width: 0; }
+h1 {
+  font-size: var(--type-display); font-weight: var(--weight-medium); letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+/* pc-1277c: one mast on every spine view — sentence case, display size, left. */
+html.suite-has-spine h1,
+html.suite-map-city header.suite-head h1,
+html.suite-wall-view .mast-id h1,
+html.suite-settings-view h1,
+html.suite-calendar-view h1,
+html.suite-person-view h1 {
+  font-size: var(--type-display);
+  letter-spacing: -0.03em;
+  text-transform: none;
+  font-weight: var(--weight-medium);
+  text-align: left;
+}
+html.suite-settings-view h1.mast-has-version,
+html.suite-settings-view h1:has(.mast-version),
+html.suite-calendar-view h1.mast-has-version,
+html.suite-calendar-view h1:has(.mast-version) {
+  align-items: flex-start;
+}
+html.suite-has-spine {
+  --suite-mast-gutter: 20px;
+  --suite-spine-w: 184px;
+  --suite-spine-peek: 56px;
+}
+html.suite-has-spine header.suite-head,
+html.suite-has-spine header,
+html.suite-wall-view .wall-shell {
+  padding-left: var(--suite-mast-gutter) !important;
+  padding-right: var(--suite-mast-gutter) !important;
+}
+html.suite-settings-view .suite-head,
+html.suite-calendar-view .suite-head,
+html.suite-person-view .suite-head,
+html.suite-ticket-view .suite-head,
+html.suite-read-view .suite-head {
+  align-items: flex-end;
+  padding-top: 14px !important;
+  padding-bottom: 12px !important;
+  margin: 0;
+  box-sizing: border-box;
+}
+html.suite-person-view.suite-has-spine #suite-body,
+html.suite-ticket-view.suite-has-spine #suite-body,
+html.suite-read-view.suite-has-spine #suite-body,
+html.suite-settings-view.suite-has-spine #suite-body {
+  padding-left: var(--suite-mast-gutter, 20px);
+  padding-right: var(--suite-mast-gutter, 20px);
+  box-sizing: border-box;
+}
+html.suite-settings-view.suite-has-spine body,
+html.suite-calendar-view.suite-has-spine body,
+html.suite-person-view.suite-has-spine body {
+  padding-top: 0 !important;
+  padding-right: 0 !important;
+  padding-bottom: 48px;
+}
+html.suite-settings-view .suite-doors,
+html.suite-person-view .suite-doors {
+  display: none !important;
+}
+/* pc-1290: spine rooms do not wear header peer doors. Calendar keeps ICS. */
+html.suite-has-spine #suite-home-door,
+html.suite-has-spine #nav-home {
+  display: none !important;
+}
+html.suite-map-city .suite-nav-cluster,
+html.suite-wall-view .suite-nav-cluster,
+html.suite-settings-view .suite-nav-cluster {
+  display: none !important;
+}
+html.suite-map-city nav.suite-doors {
+  display: none !important;
+}
+html.suite-settings-view .suite-mast .sub,
+html.suite-calendar-view .suite-mast .sub {
+  font-size: var(--type-label);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--dim);
+}
+/* Mast: folder title centered; version chip on its own line below (not side) */
+h1.mast-has-version,
+h1:has(.mast-version) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: normal;
+  line-height: 1.15;
+}
+h1 .mast-name {
+  font: inherit;
+  letter-spacing: inherit;
+  font-weight: inherit;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+/* Separator unused when version stacks below — keep for a11y if present */
+h1 .mast-sep {
+  display: none;
+}
+h1 .mast-version {
+  display: inline-block;
+  font-weight: var(--weight-medium);
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  /* Soft pill — Powered by family, not title weight */
+  padding: 0.2em 0.65em 0.18em;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 999px;
+  margin: 0;
+  line-height: 1.2;
+}
+h1 .mast-version:hover {
+  opacity: 0.75;
+}
+/* Full-page paper room (short path /read — shared .md paint with overlay) */
+.suite-read-room {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 8px 18px 48px;
+}
+.suite-read-pathbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 4px;
+  margin: 12px 0 8px;
+  font-size: var(--type-body);
+  letter-spacing: 0.06em;
+  opacity: 0.9;
+}
+.suite-read-pathbar a {
+  color: var(--line);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-faint);
+}
+.suite-read-pathbar a:hover {
+  border-bottom-color: var(--line);
+}
+.suite-read-pathbar .sep {
+  opacity: 0.45;
+  margin: 0 2px;
+}
+.suite-read-pathbar .here {
+  opacity: 1;
+  font-weight: var(--weight-medium);
+}
+.suite-read-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+.suite-read-meta .badge {
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  padding: 1px 8px;
+  letter-spacing: 0.12em;
+  font-size: var(--type-label);
+  text-transform: uppercase;
+}
+.suite-read-meta a {
+  color: var(--line);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+.suite-read-sheet {
+  border: 1.5px solid var(--line);
+  background: var(--paper-deep, var(--card, #fffdf8));
+  padding: 28px 32px 40px;
+  position: relative;
+}
+.suite-read-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.suite-read-toolbar .raw-toggle {
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--line);
+}
+.suite-read-toolbar .raw-toggle:hover {
+  opacity: 1;
+}
+.suite-read-raw {
+  white-space: pre-wrap;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--type-body);
+  line-height: 1.5;
+  margin: 0;
+}
+.suite-read-err {
+  color: var(--danger, #b00020);
+  margin-top: 16px;
+}
+.suite-paper-truncate {
+  margin-top: 1.2em;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-faint);
+  opacity: 0.9;
+}
+.suite-paper-render-full {
+  font: inherit;
+  cursor: pointer;
+  color: var(--finder-blue, #007aff);
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* Dogfood: clickable door to NEXT_SHIP.md (notes live in the paper, not the tooltip) */
+h1 .mast-version[data-channel="dogfood"] {
+  cursor: pointer;
+}
+h1 .mast-version[data-channel="dogfood"]:hover {
+  opacity: 0.9;
+  border-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+h1 .mast-version[data-channel="dogfood"]:focus-visible {
+  outline: 2px solid var(--finder-blue, #007aff);
+  outline-offset: 2px;
+}
+.sub {
+  font-size: var(--type-body); letter-spacing: 0.08em; opacity: 0.75; margin-top: 4px;
+}
+/* Soft-nav busy (pc-266) — brief dim while #suite-body swaps; no white flash */
+.suite-nav-busy #suite-body {
+  opacity: 0.5;
+  transition: opacity 80ms;
+  pointer-events: none;
+}
+/* Meta band under the bar: place path (optional) left, Overview right */
+.suite-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 10px 0 4px;
+  min-height: 1.25em;
+  flex-wrap: wrap;
+}
+.suite-meta .pathbar {
+  margin: 0;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+/*
+ * Place + seat context (pc-248) — always answers "where am I / whose work / which law"
+ * Room doors stay top-right; this strip is the Finder-like path + seat chip.
+ * Axes: City › House › Room › Seat (You | worker)
+ */
+.suite-context {
+  flex: 1 1 18rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--type-body);
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+}
+.suite-context .ctx-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 2px;
+  min-width: 0;
+}
+.suite-context .ctx-k {
+  font-size: var(--type-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-right: 6px;
+  flex: 0 0 auto;
+}
+.suite-context a {
+  color: var(--line);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-faint);
+  opacity: 0.9;
+}
+.suite-context a:hover {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  opacity: 1;
+}
+.suite-context .ctx-sep {
+  opacity: 0.35;
+  margin: 0 4px;
+  user-select: none;
+}
+.suite-context .ctx-here {
+  font-weight: var(--weight-medium);
+  color: var(--gold);
+  opacity: 1;
+  border-bottom: none;
+}
+.suite-context .ctx-place {
+  font-weight: var(--weight-medium);
+  opacity: 0.7;
+  border-bottom: none;
+}
+.suite-context .ctx-finder,
+button.ctx-finder,
+button.finder-link {
+  font: inherit;
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-left: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  border: 1px solid var(--border, var(--line-faint));
+  background: transparent;
+  color: var(--verd, var(--ink));
+  opacity: 0.65;
+  border-radius: 3px;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+.suite-context .ctx-finder:hover,
+button.ctx-finder:hover,
+button.finder-link:hover {
+  opacity: 1;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+a.pc-brand-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  opacity: 0.85;
+  transition: color 0.15s, opacity 0.15s, border-color 0.15s;
+}
+a.pc-brand-link:hover {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  opacity: 1;
+}
+.suite-context .ctx-seat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  font-size: var(--type-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.suite-context .ctx-seat.you {
+  background: var(--gold-wash, rgba(233, 196, 106, 0.12));
+}
+.suite-context .ctx-seat a.clear {
+  border: none;
+  opacity: 0.7;
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--line);
+}
+.suite-context .ctx-seat a.clear:hover {
+  color: var(--gold);
+  opacity: 1;
+}
+.suite-context .ctx-law {
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+.suite-context .ctx-law b {
+  font-weight: var(--weight-medium);
+  opacity: 0.9;
+  color: var(--line);
+}
+/* Law-at-level paper links (pc-330) — same /read?path= as Explorer gold papers */
+.suite-context .ctx-law a.ctx-paper {
+  color: var(--line);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 122, 255, 0.35);
+  opacity: 0.95;
+}
+.suite-context .ctx-law a.ctx-paper:hover {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  opacity: 1;
+}
+.suite-context .ctx-law a.ctx-paper b {
+  color: inherit;
+}
+/* Ticket jump — fast id lookup (tp-207, ts-1100, …) */
+.suite-jump {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 16rem;
+  min-width: 10rem;
+  margin-left: auto;
+}
+.suite-jump input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--type-body);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--paper-deep);
+  border: 1px solid var(--border, var(--line-faint));
+  padding: 5px 10px;
+  outline: none;
+}
+.suite-jump input[type="search"]::placeholder {
+  color: var(--line);
+  opacity: 0.45;
+  letter-spacing: 0.06em;
+}
+.suite-jump input[type="search"]:focus {
+  border-color: var(--gold);
+}
+.suite-jump button {
+  font: inherit;
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.suite-jump button:hover {
+  background: var(--ink);
+  color: var(--page);
+}
+.suite-jump button:active {
+  transform: scale(0.97);
+}
+.suite-jump.is-err input[type="search"] {
+  border-color: var(--warn, #f0997b);
+}
+.suite-jump-msg {
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  color: var(--warn, #f0997b);
+  white-space: nowrap;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Overview: quiet text link — not boxed; more findable on the meta row */
+a.overview-link,
+.suite-meta a.overview-link,
+.suite-meta .overview-link {
+  font-size: var(--type-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--line);
+  opacity: 0.72;
+  border: none;
+  border-bottom: 1px solid var(--line-faint);
+  padding: 0 0 1px;
+  margin: 0;
+  background: transparent;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  align-self: center;
+}
+a.overview-link:hover,
+.suite-meta a.overview-link:hover {
+  opacity: 1;
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  background: transparent;
+}
+.suite-meta .overview-link.is-here {
+  opacity: 0.9;
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  cursor: default;
+}
+/* Right cluster: peer doors + optional planned chips, one wrapping row */
+.suite-nav-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 6px;
+  flex: 1 1 280px;
+}
+nav.suite-doors,
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+nav.suite-doors a,
+nav a {
+  color: var(--verd, var(--ink));
+  text-decoration: none;
+  border: 1px solid var(--border, var(--line-faint));
+  background: var(--card, var(--paper-deep));
+  padding: 6px 14px;
+  margin: 0;
+  font-size: var(--type-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+
+  transition: background 0.15s, color 0.15s, border-color 0.15s;}
+nav.suite-doors a:hover,
+nav.suite-doors a.here,
+nav a:hover,
+nav a.here {
+  background: var(--verd, var(--ink));
+  color: var(--page);
+  border-color: var(--verd, var(--ink));
+}
+/* pc-350 / pc-376: Overview + Map only as first-user peer doors.
+   Work orders / Agents are deep-link routes — never mast peers. */
+nav.suite-doors.suite-doors-demoted {
+  display: none;
+}
+nav.suite-doors a.suite-peer-demoted,
+nav.suite-doors a[data-demoted="1"],
+nav.suite-doors a[hidden],
+nav.suite-doors.suite-doors-map-primary a.suite-peer-demoted,
+nav.suite-doors.suite-doors-map-primary a[data-demoted="1"] {
+  display: none !important;
+}
+a.suite-peer-demoted {
+  opacity: 0.55;
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+}
+/* Planned horizon — same line as doors when space allows; never peer weight */
+nav.suite-horizon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+nav.suite-horizon a.planned,
+nav a.planned {
+  border: 1px dashed var(--line-faint);
+  opacity: 0.42;
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  padding: 4px 8px;
+  margin: 0;
+  text-transform: uppercase;
+  color: var(--line);
+  text-decoration: none;
+  background: transparent;
+}
+nav.suite-horizon a.planned:hover,
+nav a.planned:hover {
+  opacity: 0.9;
+  background: transparent;
+  color: var(--line);
+  border-color: var(--line);
+}
+.band-label { margin: 30px 0 12px; font-size: var(--type-label); letter-spacing: 0.2em;
+              text-transform: uppercase; opacity: 0.6; }
+.box {
+  border: 1.5px solid var(--border, var(--line-faint));
+  background: var(--paper-deep);
+  position: relative;
+  color: var(--ink);
+}
+.corner { position: absolute; width: 7px; height: 7px; border: 1.5px solid var(--line); }
+.corner.tl { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+.corner.br { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+.gold { color: var(--on-gold, #1d1503); background: var(--gold); font-size: var(--type-label); font-weight: var(--weight-medium);
+        padding: 2px 8px; letter-spacing: 0.06em; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--alive); }
+.dot.off { background: transparent; border: 1px solid var(--line-faint); }
+.dot.warn { background: var(--warn); }
+.err { margin-top: 40px; font-size: var(--type-body); color: var(--gold); }
+a { color: var(--ink); }
+[hidden] { display: none !important; }
+
+/* Dimmer paper panels on Overview / bands */
+.panel.box,
+.box.panel {
+  background: var(--card, var(--paper-deep));
+  border-color: var(--border, var(--line-faint));
+}
+
+/* ── Paper / slip Summary (suite-paper.js) — Scan rail · Read stage (pc-272) ── */
+/* Attention densities share one primitive; Full remains the recoverable page.
+   Dim tokens live with the light/dark set above (pc-324). */
+:root {
+  --suite-scan-width: min(560px, 100vw);
+  --suite-stage-width: min(48rem, calc(100vw - 2.5rem));
+  --suite-stage-max-h: min(92vh, 56rem);
+  /* Inbox reports: wider + taller so MD body fills the stage (pc-895) */
+  --suite-report-stage-width: min(56rem, calc(100vw - 1.75rem));
+  --suite-report-stage-max-h: min(94vh, 62rem);
+}
+/* Full-pane report inbox dig */
+.suite-paper.is-stage.is-report-inbox .suite-paper-sheet {
+  width: var(--suite-report-stage-width);
+  max-width: calc(100vw - 1.5rem);
+  max-height: var(--suite-report-stage-max-h);
+  height: var(--suite-report-stage-max-h);
+}
+.suite-paper.is-report-inbox .suite-paper-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.suite-paper.is-report-inbox .suite-ticket-report {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  width: 100%;
+}
+.suite-paper.is-report-inbox .suite-ticket-report-inline {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+}
+.suite-paper.is-report-inbox .suite-ticket-report-full {
+  flex: 1 1 auto;
+  max-width: none;
+  width: 100%;
+}
+.suite-paper.is-report-inbox .suite-ticket-report-frame {
+  height: min(70vh, 520px);
+}
+.suite-ticket-report-inbox-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.14));
+  background: color-mix(in srgb, var(--finder-blue, #007AFF) 6%, var(--page, #faf6ec));
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.suite-ticket-report-act {
+  font: inherit;
+  font-size: var(--type-body);
+  letter-spacing: 0.02em;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--finder-blue, #007AFF);
+  border: 1px solid color-mix(in srgb, var(--finder-blue, #007AFF) 35%, transparent);
+  background: color-mix(in srgb, var(--finder-blue, #007AFF) 8%, transparent);
+}
+.suite-ticket-report-act:hover:not(:disabled) {
+  border-color: var(--finder-blue, #007AFF);
+  background: color-mix(in srgb, var(--finder-blue, #007AFF) 14%, transparent);
+}
+.suite-ticket-report-act.is-primary {
+  color: color-mix(in srgb, var(--gold, #c9a227) 12%, #1a1a1a);
+  border-color: color-mix(in srgb, var(--gold, #c9a227) 55%, transparent);
+  background: color-mix(in srgb, var(--gold, #c9a227) 16%, transparent);
+  font-weight: var(--weight-medium);
+}
+.suite-ticket-report-act:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.suite-ticket-report-act-status {
+  font-size: var(--type-caption);
+  opacity: 0.8;
+  margin-left: 4px;
+}
+.suite-ticket-report-act-status.is-err {
+  color: var(--warn, #a33327);
+  opacity: 1;
+}
+/* pc-1148: Remind me on… (Decide dig → timer / Watch) */
+.suite-ticket-remind-label {
+  font-size: var(--type-caption);
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+  margin-right: 2px;
+}
+.suite-ticket-remind-date {
+  font: inherit;
+  font-size: var(--type-body);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.18));
+  background: var(--page, #faf6ec);
+  color: inherit;
+  min-width: 9.5rem;
+}
+.suite-ticket-remind-date:focus {
+  outline: 2px solid color-mix(in srgb, var(--finder-blue, #007AFF) 45%, transparent);
+  outline-offset: 1px;
+}
+.suite-paper {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+.suite-paper.on { pointer-events: auto; }
+.suite-paper-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--suite-scan-dim);
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.18s ease;
+}
+.suite-paper.on .suite-paper-bg { opacity: 1; }
+.suite-paper.is-stage .suite-paper-bg {
+  background: var(--suite-stage-dim);
+}
+/* Scan density — edge rail (default) */
+.suite-paper-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--suite-scan-width);
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-deep);
+  border-left: 2px solid var(--line);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
+  transform: translateX(100%);
+  transition: transform 0.2s ease, width 0.2s ease, top 0.2s ease,
+    bottom 0.2s ease, left 0.2s ease, right 0.2s ease, max-height 0.2s ease,
+    border-radius 0.2s ease, box-shadow 0.2s ease;
+}
+.suite-paper.on .suite-paper-sheet { transform: translateX(0); }
+/* Read stage — clearly NOT the right rail: centered floating sheet */
+.suite-paper.is-stage .suite-paper-sheet {
+  top: 50%;
+  right: auto;
+  left: 50%;
+  bottom: auto;
+  width: var(--suite-stage-width);
+  max-width: calc(100vw - 3rem);
+  max-height: var(--suite-stage-max-h);
+  height: var(--suite-stage-max-h);
+  overflow: hidden;
+  border-left: none;
+  border: 2px solid var(--gold);
+  border-radius: 6px;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(233, 196, 106, 0.15);
+  transform: translate(-50%, -50%) scale(0.98);
+  opacity: 0;
+}
+.suite-paper.is-stage.on .suite-paper-sheet {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+/* Gold kicker when staged so density is obvious */
+.suite-paper.is-stage .suite-paper-kicker {
+  color: var(--gold);
+}
+@media (max-width: 640px) {
+  /* Narrow ≈ full-bleed stage (still Esc-close overlay, not a Full page) */
+  .suite-paper.is-stage .suite-paper-sheet {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-height: 100vh;
+    height: 100%;
+    border-radius: 0;
+    border-width: 0;
+    transform: translateY(8px);
+  }
+  .suite-paper.is-stage.on .suite-paper-sheet {
+    transform: none;
+  }
+}
+.suite-paper-density {
+  font: inherit;
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: transparent;
+  border: 1px solid var(--line-faint);
+  padding: 5px 10px;
+  cursor: pointer;
+
+  transition: border-color 0.15s, color 0.15s;}
+.suite-paper-density:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.suite-paper.is-stage .suite-paper-density {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.suite-paper-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line-faint);
+}
+.suite-paper-head-main { min-width: 0; flex: 1 1 auto; }
+.suite-paper-kicker {
+  font-size: var(--type-label);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+.suite-paper-head h2 {
+  font-size: var(--type-heading);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  margin: 0;
+  word-break: break-word;
+}
+.suite-paper-path {
+  font-size: var(--type-label);
+  opacity: 0.55;
+  margin-top: 4px;
+  word-break: break-all;
+}
+.suite-paper-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.suite-paper-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+}
+.suite-paper-nav-btn {
+  font: inherit;
+  font-size: var(--type-heading);
+  line-height: 1;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  color: var(--line);
+  background: transparent;
+  border: 1px solid var(--line-faint);
+  cursor: pointer;
+
+  transition: border-color 0.15s, color 0.15s;}
+.suite-paper-nav-btn:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.suite-paper-nav-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.suite-paper-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.suite-paper-nav-pos {
+  font-size: var(--type-label);
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+  min-width: 3.2em;
+  text-align: center;
+  white-space: nowrap;
+}
+.suite-paper-raw,
+.suite-paper-full,
+.suite-paper-x {
+  font: inherit;
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: transparent;
+  border: 1px solid var(--line-faint);
+  padding: 5px 10px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.suite-paper-raw:hover,
+.suite-paper-full:hover,
+.suite-paper-x:hover,
+.suite-paper-density:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.suite-paper-raw.on { border-color: var(--line); background: rgba(0,0,0,0.2); }
+.suite-paper-x {
+  width: 32px;
+  padding: 4px 0;
+  font-size: var(--type-heading);
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+}
+/* Ticket body inside the drawer — citizen dig-in (pc-714 / pc-816).
+ * Face paint = Map tape slip-pill register (st-done / st-ready / …). */
+.suite-ticket-status {
+  font-size: var(--type-body);
+  opacity: 0.75;
+  margin-bottom: 14px;
+}
+/* Map-face status strip — one lead face-pill + meta chips */
+.suite-ticket-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  opacity: 1;
+  margin-bottom: 12px;
+}
+.suite-ticket-chip {
+  display: inline-block;
+  font-size: var(--type-label);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  padding: 2px 8px 1px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  background: color-mix(in srgb, var(--ink) 7%, var(--card));
+  color: var(--ink);
+  line-height: 1.3;
+  white-space: nowrap;
+  opacity: 1;
+}
+/* Shared face tints (same recipe as .map-tape .slip-pill.st-*) */
+.suite-ticket-chip.face-pill.st-you,
+.face-pill.st-you {
+  color: #7a5806;
+  background: color-mix(in srgb, var(--gold) 28%, var(--card));
+  border-color: color-mix(in srgb, var(--gold) 48%, transparent);
+}
+.suite-ticket-chip.face-pill.st-live,
+.suite-ticket-chip.face-pill.st-progress,
+.face-pill.st-live {
+  color: #1f6b42;
+  background: color-mix(in srgb, var(--alive) 18%, var(--card));
+  border-color: color-mix(in srgb, var(--alive) 40%, transparent);
+}
+.suite-ticket-chip.face-pill.st-review,
+.face-pill.st-review {
+  color: #4a3a8a;
+  background: color-mix(in srgb, rgba(120, 100, 200, 0.55) 22%, var(--card));
+  border-color: color-mix(in srgb, rgba(100, 80, 180, 0.55) 48%, transparent);
+}
+.suite-ticket-chip.face-pill.st-done,
+.face-pill.st-done {
+  color: #2f5d48;
+  background: color-mix(in srgb, #5a9e7a 22%, var(--card));
+  border-color: color-mix(in srgb, #3d7a5c 42%, transparent);
+}
+.suite-ticket-chip.face-pill.st-canceled,
+.face-pill.st-canceled {
+  color: #7a3d42;
+  background: color-mix(in srgb, #c97880 18%, var(--card));
+  border-color: color-mix(in srgb, #a85860 38%, transparent);
+}
+.suite-ticket-chip.face-pill.st-stalled,
+.face-pill.st-stalled {
+  color: #7a5a12;
+  background: color-mix(in srgb, rgba(200, 160, 60, 0.55) 28%, var(--card));
+  border-color: color-mix(in srgb, rgba(160, 120, 40, 0.7) 50%, transparent);
+}
+.suite-ticket-chip.face-pill.st-open,
+.suite-ticket-chip.face-pill.st-filed,
+.face-pill.st-open {
+  color: #1a5a9a;
+  background: color-mix(in srgb, var(--finder-blue, #007aff) 14%, var(--card));
+  border-color: color-mix(in srgb, var(--finder-blue, #007aff) 36%, transparent);
+}
+.suite-ticket-chip.face-pill.st-ready,
+.face-pill.st-ready {
+  color: #1a6a62;
+  background: color-mix(in srgb, #3aa89a 18%, var(--card));
+  border-color: color-mix(in srgb, #2a8a7c 40%, transparent);
+}
+.suite-ticket-chip.face-pill.st-deferred,
+.face-pill.st-deferred {
+  color: #4a5568;
+  background: color-mix(in srgb, #8a9bb0 18%, var(--card));
+  border-color: color-mix(in srgb, #6a7a90 40%, transparent);
+}
+/* Dual stamp: Filed by · Seat · hand (pc-929) */
+.suite-ticket-dual-stamp {
+  font-size: var(--type-body);
+  color: var(--dim);
+  margin: -4px 0 14px;
+  line-height: 1.45;
+}
+.suite-ticket-dual-stamp.is-unrouted {
+  color: var(--warn, #a33327);
+}
+/* Meta chips (p2 · project · hand) stay quieter than face */
+.suite-ticket-chip:not(.face-pill) {
+  opacity: 0.78;
+  font-weight: var(--weight-regular);
+  border-radius: 2px;
+}
+/* Place pulse line — dig panel glass */
+.suite-ticket-place {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-faint);
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+  border-radius: 2px;
+}
+.suite-ticket-place-label {
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 4px;
+  color: var(--dim);
+}
+.suite-ticket-place-body {
+  font-size: var(--type-body);
+  line-height: 1.4;
+  opacity: 0.92;
+  word-break: break-word;
+  color: var(--ink);
+}
+.suite-ticket-gate-note {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-faint);
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+  border-radius: 2px;
+}
+.suite-ticket-deferred-note {
+  border-color: color-mix(in srgb, #6a7a90 40%, transparent);
+  background: color-mix(in srgb, #8a9bb0 12%, var(--card));
+}
+.suite-ticket-timed-note {
+  border-color: var(--line-faint);
+}
+/* pc-752 / pc-816: Where — same paper tokens as Place */
+.suite-ticket-where {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-faint);
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+  border-radius: 2px;
+}
+.suite-ticket-where-label {
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+.suite-ticket-where-target {
+  font-size: var(--type-body);
+  line-height: 1.4;
+  word-break: break-word;
+  margin-bottom: 10px;
+  opacity: 0.92;
+}
+/* pc-1246: path atoms in the WHERE target — text links, not chips */
+.suite-ticket-where-ref {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-faint);
+  border-radius: 0;
+  letter-spacing: inherit;
+  text-transform: none;
+}
+.suite-ticket-where-ref:hover {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+.suite-ticket-where-sep {
+  opacity: 0.45;
+}
+.suite-ticket-where-note {
+  opacity: 0.88;
+}
+.suite-ticket-room-plate {
+  margin: 8px 0 16px;
+  border: 1.5px solid var(--gold);
+  background: var(--paper-deep, var(--card, #fffdf8));
+  padding: 18px 20px;
+}
+.suite-ticket-room-plate h2 {
+  font-size: var(--type-heading);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.03em;
+  line-height: 1.35;
+  margin: 0;
+}
+.suite-ticket-room-meta {
+  font-size: var(--type-body);
+  opacity: 0.7;
+  margin-top: 8px;
+}
+.suite-ticket-room-doors {
+  margin-top: 14px;
+}
+.suite-ticket-room-doors a {
+  margin-right: 14px;
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-faint);
+  color: inherit;
+}
+.suite-ticket-room-doors a:hover {
+  border-bottom-color: var(--gold);
+  color: var(--gold);
+}
+.suite-ticket-room-sheet {
+  max-width: 720px;
+  padding: 22px 24px 32px;
+}
+.suite-ticket-where-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.suite-ticket-where-btn {
+  display: inline-block;
+  font-size: var(--type-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--line);
+  border: 1px solid var(--line-faint);
+  background: rgba(0, 0, 0, 0.18);
+  padding: 5px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+
+  transition: border-color 0.15s, color 0.15s;}
+.suite-ticket-where-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.suite-ticket-where-btn:active {
+  transform: scale(0.97);
+}
+a.suite-ticket-where-link {
+  color: var(--line);
+}
+/* Legacy engine property table — kept for any residual callers; dig-in no longer uses it */
+.suite-ticket-panel {
+  border: 1px solid var(--line-faint);
+  background: rgba(0, 0, 0, 0.15);
+  padding: 8px 12px;
+  margin-bottom: 18px;
+}
+.suite-ticket-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--type-body);
+  padding: 5px 0;
+  border-top: 1px solid var(--line-faint);
+}
+.suite-ticket-row:first-child { border-top: none; }
+.suite-ticket-row .k { opacity: 0.55; flex-shrink: 0; }
+.suite-ticket-row .v { text-align: right; word-break: break-word; }
+.suite-ticket-h {
+  font-size: var(--type-label);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin: 16px 0 8px;
+}
+.suite-ticket-citizen .suite-ticket-glance {
+  font-size: var(--type-body);
+  line-height: 1.55;
+  margin: 0 0 12px;
+}
+.suite-ticket-citizen .suite-ticket-glance p { margin: 0.35em 0; }
+.suite-ticket-citizen .suite-ticket-glance p:first-child { margin-top: 0; }
+
+/* Inbox report dig-in — not work-order chrome (pc-884 · pc-894 inline body) */
+.suite-ticket-report {
+  padding-top: 2px;
+  border-left: 3px solid color-mix(in srgb, var(--finder-blue, #007AFF) 55%, transparent);
+  padding-left: 12px;
+  margin-left: -2px;
+}
+.suite-ticket-chip.suite-ticket-chip-muted {
+  opacity: 0.72;
+  border-style: dashed;
+}
+.suite-ticket-report-inline {
+  margin: 0 0 14px;
+  min-height: 4rem;
+}
+.suite-ticket-report-inline-status {
+  margin: 0 0 10px;
+  font-size: var(--type-body);
+  line-height: 1.45;
+  opacity: 0.75;
+}
+.suite-ticket-report-inline-status.is-error {
+  opacity: 1;
+  color: var(--warn, #a33327);
+}
+.suite-ticket-report-full {
+  font-size: var(--type-body);
+  line-height: 1.5;
+  max-width: none; /* fill dig pane (pc-895); was 72ch leaving empty white */
+  width: 100%;
+  box-sizing: border-box;
+}
+.suite-ticket-report-full h1,
+.suite-ticket-report-full h2,
+.suite-ticket-report-full h3 {
+  line-height: 1.3;
+  margin: 1em 0 0.45em;
+}
+.suite-ticket-report-full h1:first-child,
+.suite-ticket-report-full h2:first-child,
+.suite-ticket-report-full h3:first-child {
+  margin-top: 0;
+}
+.suite-ticket-report-full table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-caption);
+  margin: 0.75em 0;
+}
+.suite-ticket-report-full th,
+.suite-ticket-report-full td {
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.14));
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.suite-ticket-report-paths-secondary {
+  margin-top: 8px;
+  opacity: 0.95;
+}
+.suite-ticket-report-path-meta {
+  margin: 8px 0 0;
+  font-size: var(--type-caption);
+  opacity: 0.55;
+  word-break: break-all;
+}
+.suite-ticket-report-path-meta code {
+  font-size: inherit;
+}
+.suite-ticket-report-foot {
+  opacity: 0.45;
+  font-size: var(--type-caption);
+  letter-spacing: 0.02em;
+}
+.suite-ticket-report[data-report-kind="decision"] {
+  border-left-color: color-mix(in srgb, var(--gold, #c9a227) 70%, transparent);
+}
+.suite-ticket-report[data-report-kind="desk-brief"],
+.suite-ticket-report[data-report-kind="glance"] {
+  border-left-color: color-mix(in srgb, #5a9e7a 65%, transparent);
+}
+.suite-ticket-report[data-report-kind="efficiency"] {
+  border-left-color: color-mix(in srgb, var(--finder-blue, #007AFF) 65%, transparent);
+}
+.suite-ticket-report[data-report-kind="board"] {
+  border-left-color: color-mix(in srgb, #b07040 60%, transparent);
+}
+.suite-ticket-chip.face-pill.st-report {
+  border-color: color-mix(in srgb, var(--finder-blue, #007AFF) 45%, transparent);
+  color: var(--finder-blue, #007AFF);
+  background: color-mix(in srgb, var(--finder-blue, #007AFF) 10%, transparent);
+}
+.suite-ticket-report[data-report-kind="decision"] .face-pill.st-report {
+  border-color: color-mix(in srgb, var(--gold, #c9a227) 55%, transparent);
+  color: color-mix(in srgb, var(--gold, #c9a227) 85%, var(--line));
+  background: color-mix(in srgb, var(--gold, #c9a227) 12%, transparent);
+}
+.suite-ticket-report[data-report-kind="desk-brief"] .face-pill.st-report,
+.suite-ticket-report[data-report-kind="glance"] .face-pill.st-report {
+  border-color: color-mix(in srgb, #5a9e7a 50%, transparent);
+  color: #3d7a5a;
+  background: color-mix(in srgb, #5a9e7a 12%, transparent);
+}
+.suite-ticket-report-paths {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.12));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--page, #faf6ec) 82%, #fff);
+}
+.suite-ticket-report-paths .suite-ticket-where-label,
+.suite-ticket-report-frame-wrap .suite-ticket-where-label {
+  margin-bottom: 8px;
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.suite-ticket-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+a.suite-ticket-report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: var(--type-body);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  color: var(--finder-blue, #007AFF);
+  border: 1px solid color-mix(in srgb, var(--finder-blue, #007AFF) 35%, transparent);
+  background: color-mix(in srgb, var(--finder-blue, #007AFF) 8%, transparent);
+  cursor: pointer;
+}
+a.suite-ticket-report-link:hover {
+  border-color: var(--finder-blue, #007AFF);
+  background: color-mix(in srgb, var(--finder-blue, #007AFF) 14%, transparent);
+  text-decoration: underline;
+}
+a.suite-ticket-report-link.is-primary {
+  color: color-mix(in srgb, var(--gold, #c9a227) 15%, #1a1a1a);
+  border-color: color-mix(in srgb, var(--gold, #c9a227) 55%, transparent);
+  background: color-mix(in srgb, var(--gold, #c9a227) 16%, transparent);
+  font-weight: var(--weight-medium);
+}
+a.suite-ticket-report-link.is-primary:hover {
+  border-color: var(--gold, #c9a227);
+  background: color-mix(in srgb, var(--gold, #c9a227) 24%, transparent);
+}
+a.suite-ticket-report-link.is-visual::before {
+  content: "◉";
+  font-size: var(--type-caption);
+  opacity: 0.7;
+  margin-right: 2px;
+}
+.suite-ticket-report-secondary {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 2px;
+  font-size: var(--type-body);
+  line-height: 1.45;
+}
+a.suite-ticket-report-sec-link {
+  color: var(--finder-blue, #007AFF);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 2px 4px;
+}
+a.suite-ticket-report-sec-link:hover {
+  color: color-mix(in srgb, var(--finder-blue, #007AFF) 70%, #000);
+}
+.suite-ticket-report-sec-sep {
+  opacity: 0.35;
+  margin: 0 2px;
+  user-select: none;
+}
+.suite-ticket-report-strip {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.12));
+  background: color-mix(in srgb, #5a9e7a 6%, var(--page, #faf6ec));
+}
+.suite-ticket-report-strip .suite-ticket-where-label {
+  margin-bottom: 8px;
+}
+.suite-ticket-report-strip ul {
+  margin: 0;
+  padding-left: 1.15em;
+}
+.suite-ticket-report-strip li {
+  margin: 0.35em 0;
+  font-size: var(--type-body);
+  line-height: 1.45;
+  max-width: 72ch;
+}
+.suite-ticket-report-frame-wrap {
+  margin: 0 0 16px;
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.14));
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--page, #faf6ec) 92%, #ddd);
+}
+.suite-ticket-report-frame-wrap.is-idle,
+.suite-ticket-report-frame-wrap.is-loading {
+  background: color-mix(in srgb, var(--page, #faf6ec) 94%, #e8e0d0);
+}
+/* Ready chrome follows suite paper tokens (pc-887) — not a fixed dark brick. */
+.suite-ticket-report-frame-wrap.is-ready {
+  background: var(--paper-deep, #fffdf8);
+}
+.suite-ticket-report-load-visual {
+  display: inline-flex;
+  margin: 0 14px 14px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: var(--type-body);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--gold, #c9a227) 20%, var(--ink, #1a1a1a));
+  border: 1px solid color-mix(in srgb, var(--gold, #c9a227) 50%, transparent);
+  background: color-mix(in srgb, var(--gold, #c9a227) 12%, transparent);
+  border-radius: 6px;
+}
+.suite-ticket-report-load-visual:hover {
+  border-color: var(--gold, #c9a227);
+  background: color-mix(in srgb, var(--gold, #c9a227) 20%, transparent);
+}
+.suite-ticket-report-load-visual[hidden] {
+  display: none;
+}
+.suite-ticket-report-frame-wrap .suite-ticket-where-label {
+  margin: 0;
+  padding: 8px 12px 0;
+  color: inherit;
+  opacity: 0.55;
+}
+.suite-ticket-report-frame-wrap.is-ready .suite-ticket-where-label {
+  color: var(--dim, #6b6154);
+  opacity: 1;
+  background: var(--paper-deep, #fffdf8);
+}
+.suite-ticket-report-frame-status {
+  margin: 0;
+  padding: 20px 14px 24px;
+  font-size: var(--type-body);
+  line-height: 1.45;
+  opacity: 0.75;
+}
+.suite-ticket-report-frame-status code {
+  font-size: var(--type-caption);
+  word-break: break-all;
+}
+.suite-ticket-report-frame-wrap.is-loading .suite-ticket-report-frame {
+  display: none;
+}
+.suite-ticket-report-frame-wrap.is-error {
+  background: color-mix(in srgb, #c9a227 8%, var(--page, #faf6ec));
+}
+.suite-ticket-report-frame {
+  display: none;
+  width: 100%;
+  height: min(42vh, 360px);
+  border: 0;
+  background: var(--page, #faf6ec);
+  color-scheme: light dark;
+}
+.suite-ticket-report-frame-wrap.is-ready .suite-ticket-report-frame {
+  display: block;
+}
+a.suite-ticket-report-frame-open {
+  display: block;
+  padding: 8px 12px 10px;
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--verd, #3d7a6a);
+  text-decoration: none;
+  background: var(--paper-top, #efe8d5);
+  border-top: 1px solid var(--border, #c4b8a4);
+}
+a.suite-ticket-report-frame-open:hover {
+  color: var(--ink, #2a241c);
+  text-decoration: underline;
+}
+a.suite-ticket-report-frame-open[hidden] {
+  display: none;
+}
+.suite-ticket-report-body {
+  margin: 0 0 12px;
+}
+.suite-ticket-report-body h1 {
+  font-size: var(--type-heading);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+  margin: 0 0 0.6em;
+}
+.suite-ticket-report-body h2 {
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin: 1.1em 0 0.4em;
+  border-bottom: 1px solid var(--line-faint, rgba(42, 36, 28, 0.1));
+  padding-bottom: 4px;
+}
+.suite-ticket-report-body table {
+  font-size: var(--type-label);
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0 1em;
+}
+.suite-ticket-report-body th,
+.suite-ticket-report-body td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line-faint, rgba(42, 36, 28, 0.1));
+}
+.suite-ticket-report-body a {
+  color: var(--finder-blue, #007AFF);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Report head escape — same chrome control, report wording set in JS */
+.suite-paper-full[href*="city-asset"] {
+  border-color: color-mix(in srgb, var(--gold, #c9a227) 40%, transparent);
+  color: color-mix(in srgb, var(--gold, #c9a227) 80%, var(--line));
+}
+.suite-ticket-needs-you {
+  border: 1px solid var(--gold);
+  background: rgba(201, 162, 39, 0.07);
+  padding: 10px 12px;
+  margin: 0 0 16px;
+  border-radius: 2px;
+}
+.suite-ticket-needs-you-label {
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.suite-ticket-needs-you-body {
+  font-size: var(--type-body);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.suite-ticket-detail {
+  margin: 12px 0 8px;
+  border-top: 1px solid var(--line-faint);
+  padding-top: 8px;
+}
+.suite-ticket-detail summary {
+  cursor: pointer;
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  list-style: none;
+  user-select: none;
+}
+.suite-ticket-detail summary::-webkit-details-marker { display: none; }
+.suite-ticket-detail summary::before {
+  content: "▸ ";
+  opacity: 0.7;
+}
+.suite-ticket-detail[open] summary::before { content: "▾ "; }
+.suite-ticket-detail .md { margin-top: 10px; }
+.suite-ticket-foot {
+  margin: 22px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-faint);
+  font-size: var(--type-label);
+  opacity: 0.5;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.suite-paper-body,
+.suite-paper-source {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 22px 40px;
+  -webkit-overflow-scrolling: touch;
+}
+.suite-paper-source {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--type-body);
+  line-height: 1.5;
+  color: var(--line);
+}
+.suite-paper-muted { opacity: 0.6; font-style: italic; }
+.suite-paper-err { color: var(--gold); }
+/*
+ * Markdown paint — overlay (.suite-paper-body.md) + full-page (.suite-read-sheet .md).
+ * CRITICAL: list BOTH roots with the SAME descendant each time.
+ * Wrong:  .suite-paper-body.md, .suite-read-sheet .md a  → paints whole body gold
+ * Right:  .suite-paper-body.md a, .suite-read-sheet .md a
+ */
+.suite-paper-body.md,
+.suite-read-sheet .md {
+  font-size: var(--type-body);
+  line-height: 1.65;
+  color: var(--ink, var(--line));
+  word-wrap: break-word;
+}
+.suite-paper-body.md h1,
+.suite-paper-body.md h2,
+.suite-paper-body.md h3,
+.suite-paper-body.md h4,
+.suite-read-sheet .md h1,
+.suite-read-sheet .md h2,
+.suite-read-sheet .md h3,
+.suite-read-sheet .md h4 {
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  margin: 1.15em 0 0.45em;
+  line-height: 1.3;
+  color: inherit;
+}
+.suite-paper-body.md h1,
+.suite-read-sheet .md h1 {
+  font-size: var(--type-display);
+  border-bottom: 1px solid var(--line-faint);
+  padding-bottom: 0.3em;
+}
+.suite-paper-body.md h2,
+.suite-read-sheet .md h2 {
+  font-size: var(--type-heading);
+}
+.suite-paper-body.md h3,
+.suite-read-sheet .md h3 {
+  font-size: var(--type-body);
+  opacity: 0.95;
+}
+.suite-paper-body.md p,
+.suite-read-sheet .md p {
+  margin: 0.65em 0;
+}
+.suite-paper-body.md ul,
+.suite-paper-body.md ol,
+.suite-read-sheet .md ul,
+.suite-read-sheet .md ol {
+  margin: 0.55em 0;
+  padding-left: 1.35em;
+}
+.suite-paper-body.md li,
+.suite-read-sheet .md li {
+  margin: 0.2em 0;
+}
+.suite-paper-body.md code,
+.suite-read-sheet .md code {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--type-caption);
+  background: rgba(0, 0, 0, 0.22);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+}
+.suite-paper-body.md pre,
+.suite-read-sheet .md pre {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line-faint);
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0.85em 0;
+  font-size: var(--type-body);
+  line-height: 1.45;
+}
+.suite-paper-body.md pre code,
+.suite-read-sheet .md pre code {
+  background: none;
+  padding: 0;
+}
+.suite-paper-body.md blockquote,
+.suite-read-sheet .md blockquote {
+  border-left: 3px solid var(--line-faint);
+  margin: 0.75em 0;
+  padding: 0.15em 0 0.15em 1em;
+  opacity: 0.9;
+}
+.suite-paper-body.md table,
+.suite-read-sheet .md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.85em 0;
+  font-size: var(--type-body);
+}
+.suite-paper-body.md th,
+.suite-paper-body.md td,
+.suite-read-sheet .md th,
+.suite-read-sheet .md td {
+  border: 1px solid var(--line-faint);
+  padding: 6px 10px;
+  text-align: left;
+}
+.suite-paper-body.md th,
+.suite-read-sheet .md th {
+  background: rgba(0, 0, 0, 0.18);
+}
+/* Links only — never apply gold to the whole .md root */
+.suite-paper-body.md a,
+.suite-read-sheet .md a {
+  color: var(--gold);
+}
+.suite-paper-link-dead {
+  color: var(--line-faint);
+  cursor: default;
+  font-style: italic;
+}
+.suite-paper-link-dead::after {
+  content: " (not found)";
+  font-size: var(--type-label);
+  opacity: 0.65;
+}
+.suite-paper-body.md hr,
+.suite-read-sheet .md hr {
+  border: none;
+  border-top: 1px solid var(--line-faint);
+  margin: 1.3em 0;
+}
+.suite-paper-body.md > *:first-child,
+.suite-read-sheet .md > *:first-child {
+  margin-top: 0;
+}
+@media (max-width: 640px) {
+  .suite-paper-sheet { width: 100vw; border-left: none; }
+}
+
+
+/* Workspace Home door — left of operate peers (suite IA 2026-07-22) */
+.suite-home-door {
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border, var(--line-faint));
+}
+.suite-home-door a {
+  color: var(--ink);
+  text-decoration: none;
+  border: 1px solid var(--border, var(--line-faint));
+  background: var(--card, var(--paper-deep));
+  padding: 6px 14px;
+  font-size: var(--type-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+
+  transition: background 0.15s, color 0.15s, border-color 0.15s;}
+.suite-home-door a:hover,
+.suite-home-door a.here {
+  background: var(--ink);
+  color: var(--page);
+  border-color: var(--ink);
+}
+.suite-home-door a:active {
+  transform: scale(0.98);
+}
+a.settings-link {
+  font-size: var(--type-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink);
+  opacity: 0.72;
+  border-bottom: 1px solid var(--line-faint);
+  padding: 0 0 1px;
+  margin-left: 12px;
+  white-space: nowrap;
+
+  transition: color 0.15s, opacity 0.15s, border-color 0.15s;}
+a.settings-link:hover,
+a.settings-link.is-here {
+  opacity: 1;
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+
+/* Surface furniture: Overview · Operate · Settings (Settings last) */
+.suite-furniture {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-left: auto;
+}
+.suite-furniture a {
+  font-size: var(--type-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink);
+  opacity: 0.72;
+  border: none;
+  border-bottom: 1px solid var(--line-faint);
+  padding: 0 0 1px;
+  background: transparent;
+  white-space: nowrap;
+}
+.suite-furniture a:hover {
+  opacity: 1;
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+.suite-furniture a.is-here,
+.suite-furniture a.here {
+  opacity: 1;
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  font-weight: var(--weight-medium);
+  cursor: default;
+}
+.suite-furniture a[hidden] {
+  display: none !important;
+}
+/* legacy single-link classes still ok if outside strip */
+a.settings-link,
+a.operate-link,
+a.overview-link {
+  font-size: var(--type-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink);
+  opacity: 0.72;
+  border-bottom: 1px solid var(--line-faint);
+  padding: 0 0 1px;
+  white-space: nowrap;
+}
+a.settings-link:hover,
+a.operate-link:hover,
+a.overview-link:hover,
+a.settings-link.is-here,
+a.operate-link.is-here,
+a.overview-link.is-here {
+  opacity: 1;
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+.suite-meta .pathbar:empty,
+.suite-meta .pathbar[hidden] { display: none !important; }
+.back-home:empty,
+.back-home[hidden] { display: none !important; }
+
+html.suite-live-tick .kpis .kpi.gold {
+  animation: kpi-tick 0.55s ease;
+}
+
+/*
+ * pc-1266 — four-lens spine (Overview · Map · Calendar · Settings).
+ * pc-1267 — same rail on Settings view (html.suite-settings-view).
+ * pc-1296 — desktop hover-reveal peek (mark + current pip); full rail
+ * overlays the stage. Not a drawer: no scrim, not modal.
+ * Visual register matches Wall's first sidebar (pc-1265). Work orders /
+ * Agents / Files stay off this rail.
+ *
+ * Fixed + body pad (not a body grid): Map parks #suite-body as a sibling
+ * and overlays append to body. A grid would shuffle those extras.
+ */
+.suite-spine {
+  --suite-spine-inset: 10px;
+  border-right: 1.5px solid var(--border);
+  background: var(--paper-deep);
+  padding: 18px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.suite-spine-brand {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.03em;
+  padding: 2px var(--suite-spine-inset) 14px;
+  margin: 0 2px 2px;
+  color: var(--ink);
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+}
+.suite-spine-lockup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.suite-spine-lockup:hover .suite-spine-word {
+  color: var(--prussian);
+}
+.suite-spine-mark {
+  display: block;
+  width: 64px;
+  height: 52px;
+  flex: 0 0 auto;
+}
+.suite-spine-brand .suite-spine-word {
+  display: block;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.1;
+}
+/* pc-1285: version lives in Settings → About, not the brand seat. */
+.suite-spine-brand .mast-version {
+  display: none !important;
+}
+.bp-about-mark-pair {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.bp-about-mark-pair img {
+  width: 78px;
+  height: auto;
+  display: block;
+}
+#about-version[data-channel="dogfood"] {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+html.suite-has-spine h1 .mast-version {
+  display: none !important;
+}
+.suite-spine nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.suite-spine nav a {
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.02em;
+  text-transform: none;
+  text-decoration: none;
+  color: var(--dim);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+.suite-spine nav a:hover { color: var(--ink); }
+.suite-spine nav a.here {
+  color: var(--ink);
+  background: var(--page);
+  border-color: var(--border);
+}
+.suite-spine-hint {
+  margin-top: auto;
+  margin-bottom: 0;
+  font-size: var(--type-caption);
+  color: var(--dim);
+  padding: 8px 10px;
+}
+
+html.suite-map-city.suite-has-spine body,
+html.suite-settings-view.suite-has-spine body,
+html.suite-calendar-view.suite-has-spine body,
+html.suite-wall-view.suite-has-spine body,
+html.suite-ticket-view.suite-has-spine body,
+html.suite-read-view.suite-has-spine body,
+html.suite-person-view.suite-has-spine body {
+  padding-left: var(--suite-spine-w) !important;
+}
+html.suite-map-city.suite-has-spine .suite-spine,
+html.suite-settings-view.suite-has-spine .suite-spine,
+html.suite-calendar-view.suite-has-spine .suite-spine,
+html.suite-wall-view.suite-has-spine .suite-spine,
+html.suite-ticket-view.suite-has-spine .suite-spine,
+html.suite-read-view.suite-has-spine .suite-spine,
+html.suite-person-view.suite-has-spine .suite-spine {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--suite-spine-w);
+  z-index: 20;
+  overflow: hidden;
+}
+
+/*
+ * pc-1296: hover-reveal peek. Fine-pointer desktops keep a 56px mark strip
+ * and overlay the full rail on hover / keyboard focus. Coarse / no-hover
+ * pointers keep the permanent 184px rail. Phone-width stays the compact row.
+ * pc-1297: peek sits on the paper grid — not an empty cream slab.
+ * pc-1298: peek uses four stroke icons, not O/M/C/S letters.
+ * pc-1390: overlay widens only. Brand + lens row height stay put so Map
+ * does not slide onto Overview under the cursor.
+ * pc-1391: peek clips the label column (0fr + font-size 0) so Overview/Map
+ * stems do not paint beside the icons at idle.
+ */
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) {
+  html.suite-map-city.suite-has-spine body,
+  html.suite-settings-view.suite-has-spine body,
+  html.suite-calendar-view.suite-has-spine body,
+  html.suite-wall-view.suite-has-spine body,
+  html.suite-ticket-view.suite-has-spine body,
+  html.suite-read-view.suite-has-spine body,
+  html.suite-person-view.suite-has-spine body {
+    padding-left: var(--suite-spine-peek) !important;
+  }
+  html.suite-map-city.suite-has-spine .suite-spine,
+  html.suite-settings-view.suite-has-spine .suite-spine,
+  html.suite-calendar-view.suite-has-spine .suite-spine,
+  html.suite-wall-view.suite-has-spine .suite-spine,
+  html.suite-ticket-view.suite-has-spine .suite-spine,
+  html.suite-read-view.suite-has-spine .suite-spine,
+  html.suite-person-view.suite-has-spine .suite-spine {
+    width: var(--suite-spine-peek);
+    padding: 16px 8px 14px;
+    gap: 10px;
+    background: transparent;
+    border-right-color: transparent;
+    overflow: hidden;
+    transition: width 0.16s ease 0.1s, box-shadow 0.16s ease 0.1s,
+      background-color 0.16s ease 0.1s, border-color 0.16s ease 0.1s;
+  }
+  html.suite-has-spine .suite-spine-mark {
+    width: 40px;
+    height: 32px;
+  }
+  html.suite-has-spine .suite-spine-brand {
+    padding: 2px 0 10px;
+    margin: 0;
+  }
+  html.suite-has-spine .suite-spine-word,
+  html.suite-has-spine .suite-spine-hint {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  html.suite-has-spine .suite-spine nav {
+    align-items: stretch;
+    gap: 4px;
+  }
+  html.suite-has-spine .suite-spine nav a {
+    display: grid;
+    grid-template-columns: 28px 0fr;
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    height: 32px;
+    max-height: 32px;
+    min-height: 32px;
+    padding: 0 6px;
+    margin: 0;
+    overflow: hidden;
+    font-size: 0;
+    line-height: 1.5;
+    white-space: nowrap;
+    color: var(--dim);
+    pointer-events: auto;
+  }
+  /* pc-1298: stroke icons, not O/M/C/S. Mask + currentColor follows ink/dim. */
+  html.suite-has-spine .suite-spine nav a[data-spine-lens="overview"] {
+    --spine-lens-icon: url("/brand/lens-overview.svg?v=pc-1298");
+  }
+  html.suite-has-spine .suite-spine nav a[data-spine-lens="map"] {
+    --spine-lens-icon: url("/brand/lens-map.svg?v=pc-1298");
+  }
+  html.suite-has-spine .suite-spine nav a[data-spine-lens="calendar"] {
+    --spine-lens-icon: url("/brand/lens-calendar.svg?v=pc-1298");
+  }
+  html.suite-has-spine .suite-spine nav a[data-spine-lens="settings"] {
+    --spine-lens-icon: url("/brand/lens-settings.svg?v=pc-1298");
+  }
+  html.suite-has-spine .suite-spine nav a::before {
+    content: "";
+    display: block;
+    width: 16px;
+    height: 16px;
+    justify-self: center;
+    background-color: currentColor;
+    -webkit-mask: var(--spine-lens-icon) center / 16px 16px no-repeat;
+    mask: var(--spine-lens-icon) center / 16px 16px no-repeat;
+  }
+  html.suite-has-spine .suite-spine nav a.here {
+    color: var(--ink);
+    background: var(--paper-deep);
+    border-color: var(--border);
+  }
+  html.suite-map-city.suite-has-spine .suite-spine:hover,
+  html.suite-map-city.suite-has-spine .suite-spine:focus-within,
+  html.suite-settings-view.suite-has-spine .suite-spine:hover,
+  html.suite-settings-view.suite-has-spine .suite-spine:focus-within,
+  html.suite-calendar-view.suite-has-spine .suite-spine:hover,
+  html.suite-calendar-view.suite-has-spine .suite-spine:focus-within,
+  html.suite-wall-view.suite-has-spine .suite-spine:hover,
+  html.suite-wall-view.suite-has-spine .suite-spine:focus-within,
+  html.suite-ticket-view.suite-has-spine .suite-spine:hover,
+  html.suite-ticket-view.suite-has-spine .suite-spine:focus-within,
+  html.suite-read-view.suite-has-spine .suite-spine:hover,
+  html.suite-read-view.suite-has-spine .suite-spine:focus-within,
+  html.suite-person-view.suite-has-spine .suite-spine:hover,
+  html.suite-person-view.suite-has-spine .suite-spine:focus-within {
+    width: var(--suite-spine-w);
+    z-index: 50;
+    background: var(--paper-deep);
+    border-right-color: var(--border);
+    box-shadow: 8px 0 24px color-mix(in srgb, var(--ink) 10%, transparent);
+    transition-delay: 0s;
+  }
+  html.suite-has-spine .suite-spine:hover .suite-spine-word,
+  html.suite-has-spine .suite-spine:focus-within .suite-spine-word,
+  html.suite-has-spine .suite-spine:hover .suite-spine-hint,
+  html.suite-has-spine .suite-spine:focus-within .suite-spine-hint {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  html.suite-has-spine .suite-spine:hover nav a,
+  html.suite-has-spine .suite-spine:focus-within nav a {
+    grid-template-columns: 28px minmax(0, 1fr);
+    font-size: var(--type-body);
+  }
+  html.suite-has-spine .suite-spine:hover nav a.here,
+  html.suite-has-spine .suite-spine:focus-within nav a.here {
+    color: var(--ink);
+    background: var(--page);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (prefers-reduced-motion: reduce) {
+  html.suite-map-city.suite-has-spine .suite-spine,
+  html.suite-settings-view.suite-has-spine .suite-spine,
+  html.suite-calendar-view.suite-has-spine .suite-spine,
+  html.suite-wall-view.suite-has-spine .suite-spine,
+  html.suite-ticket-view.suite-has-spine .suite-spine,
+  html.suite-read-view.suite-has-spine .suite-spine,
+  html.suite-person-view.suite-has-spine .suite-spine {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  html.suite-map-city.suite-has-spine body,
+  html.suite-settings-view.suite-has-spine body,
+  html.suite-calendar-view.suite-has-spine body,
+  html.suite-wall-view.suite-has-spine body,
+  html.suite-ticket-view.suite-has-spine body,
+  html.suite-read-view.suite-has-spine body,
+  html.suite-person-view.suite-has-spine body {
+    padding-left: 0 !important;
+  }
+  html.suite-map-city.suite-has-spine .suite-spine,
+  html.suite-settings-view.suite-has-spine .suite-spine,
+  html.suite-calendar-view.suite-has-spine .suite-spine,
+  html.suite-wall-view.suite-has-spine .suite-spine,
+  html.suite-ticket-view.suite-has-spine .suite-spine,
+  html.suite-read-view.suite-has-spine .suite-spine,
+  html.suite-person-view.suite-has-spine .suite-spine {
+    position: relative;
+    top: auto;
+    left: auto;
+    bottom: auto;
+    width: auto;
+    z-index: auto;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1.5px solid var(--border);
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 12px;
+    gap: 12px;
+  }
+  html.suite-map-city.suite-has-spine .suite-spine nav,
+  html.suite-settings-view.suite-has-spine .suite-spine nav,
+  html.suite-calendar-view.suite-has-spine .suite-spine nav,
+  html.suite-wall-view.suite-has-spine .suite-spine nav,
+  html.suite-ticket-view.suite-has-spine .suite-spine nav,
+  html.suite-read-view.suite-has-spine .suite-spine nav,
+  html.suite-person-view.suite-has-spine .suite-spine nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  /* pc-1288: stacked brand is a desktop rail. Compact row on the mobile bar. */
+  html.suite-has-spine .suite-spine-brand {
+    flex-direction: row;
+    align-items: center;
+    border-bottom: 0;
+    border-right: 1px solid var(--border);
+    padding: 0 12px 0 0;
+    margin: 0;
+  }
+  html.suite-has-spine .suite-spine-lockup {
+    flex-direction: row;
+    gap: 8px;
+  }
+  html.suite-has-spine .suite-spine-mark {
+    width: 32px;
+    height: 26px;
+  }
+}
+
+/* pc-1277: engine brand lives on the spine, not the Map/Calendar mast. */
+html.suite-has-spine .suite-brand,
+html.suite-map-city .suite-brand,
+html.suite-calendar-view .suite-brand,
+html.suite-settings-view .suite-brand,
+html.suite-wall-view .suite-brand,
+html.suite-person-view .suite-brand {
+  display: none !important;
+}
+
+html.suite-person-view .suite-doors,
+html.suite-ticket-view .suite-doors,
+html.suite-read-view .suite-doors,
+html.suite-person-view #nav-home,
+html.suite-calendar-view #nav-home,
+html.suite-calendar-view .suite-doors a:not([href*="ics"]) {
+  display: none !important;
+}
+
+.suite-spine-hint a {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.suite-spine-hint a:hover { color: var(--ink); }
+.suite-spine-hint .suite-powered-bolt {
+  font-size: var(--type-body);
+  letter-spacing: 0;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+/* "Powered by" is redundant next to BluePrint — bolt + name on one line. */
+.suite-spine-hint .suite-powered-label { display: none; }
+.suite-spine-hint .suite-powered-name { letter-spacing: 0.1em; }

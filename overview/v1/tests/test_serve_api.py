@@ -136,62 +136,33 @@ class HonestEmptyServeTests(unittest.TestCase):
         _, body, _ = _get(self.port, "/api/overview/charter")
         self.assertEqual(json.loads(body), {})
 
-    def test_overview_html_paints_full_glass_hosts(self) -> None:
+    def test_overview_html_paints_operations_shell(self) -> None:
         status, body, ctype = _get(self.port, "/")
         self.assertEqual(status, 200)
         self.assertIn("text/html", ctype)
-        text = body.decode("utf-8")
-        # Writer lock — Agents / Jobs empty copy verbatim.
-        self.assertIn("No agents", text)
-        self.assertIn("No open jobs", text)
-        # Local-only honesty banner — the exact string, never `workspace`.
-        self.assertIn("Local desk", text)
-        self.assertNotIn("Local workspace", text)
-        # Case-insensitive `workspace` guard — no theme carryover.
-        self.assertNotIn("workspace", text.lower())
-        # Four-lens top nav — Overview is the current lens.
-        self.assertIn('data-lens="overview"', text)
-        self.assertIn('data-lens="map"', text)
-        self.assertIn('data-lens="calendar"', text)
-        self.assertIn('data-lens="settings"', text)
-        self.assertIn('aria-current="page"', text)
-        # Chip verbs — Map, never `Dig here`.
-        self.assertNotIn("Dig here", text)
-        # Peer tile hosts + drawer + project card + footer roles present.
-        for role in (
-            "agents-body", "jobs-body", "pulse-body",
-            "agents-links", "jobs-buckets", "pulse-meta",
-            "project-card", "project-badges", "project-excerpt",
-            "charter-drawer", "charter-body", "charter-footer",
-            "footer-row", "footer-quiet",
-        ):
-            self.assertIn(f'data-role="{role}"', text, f"missing role {role!r}")
+        text = body.decode()
+        for name in ("overview", "work", "projects", "agents", "connections", "calendar", "settings"):
+            self.assertIn(f'id="{name}-view"', text)
+        self.assertIn('/js/operations.js', text)
+        self.assertIn('id="source-warning"', text)
 
-    def test_overview_tile_bodies_are_keyboard_focusable(self) -> None:
+    def test_operations_controls_use_native_keyboard_elements(self) -> None:
         _, body, _ = _get(self.port, "/")
-        text = body.decode("utf-8")
-        for role in ("agents-body", "jobs-body", "pulse-body"):
-            self.assertRegex(
-                text,
-                rf'data-role="{role}"[^>]*tabindex="0"',
-                f"Overview tile body {role!r} must be focusable",
-            )
+        text = body.decode()
+        self.assertIn('<details id="desk-scope">', text)
+        self.assertIn('<input id="search" type="search"', text)
+        self.assertIn('<select id="project-filter">', text)
+        self.assertIn('href="#content"', text)
 
-    def test_overview_html_hides_project_and_charter_by_default(self) -> None:
-        """Honest default — no project card, no charter drawer until state
-        says otherwise. The elements exist as hosts but stay hidden."""
+    def test_operations_cold_state_does_not_claim_healthy_sources(self) -> None:
         _, body, _ = _get(self.port, "/")
-        text = body.decode("utf-8")
-        self.assertRegex(
-            text,
-            r'data-role="project-card"[^>]*hidden',
-            "Project card must be hidden by default",
-        )
-        self.assertRegex(
-            text,
-            r'data-role="charter-drawer"[^>]*hidden',
-            "Charter drawer must be hidden by default",
-        )
+        text = body.decode()
+        self.assertIn('Waiting for source data', text)
+        self.assertNotIn('All systems quiet', text)
+        _, body, _ = _get(self.port, "/api/operations")
+        payload = json.loads(body)
+        self.assertEqual(payload['sources'][0]['state'], 'unavailable')
+        self.assertEqual(payload['orders'], [])
 
     def test_overview_css_shares_focus_ring_across_interactive_elements(self) -> None:
         _, body, _ = _get(self.port, "/css/overview.css")
