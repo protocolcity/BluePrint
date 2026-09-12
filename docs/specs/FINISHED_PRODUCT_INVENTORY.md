@@ -41,9 +41,12 @@ Overview surfaces the INTENT spec locks. Nothing else is V1.
 | **Overview** — Jobs surface (launched · tracked · status) | INTENT V1 | Local job store |
 | **Overview** — Pulse (single-glance heartbeat) | INTENT V1 | Local event tick |
 | **Overview** — Local-only honesty banner | INTENT V1 | Constant affordance |
+| **Calendar** — week list + honest empty `No events` + event rows (title · when · source · status) | `OVERVIEW_CALENDAR_SETTINGS.md` Glass DoD | `/api/calendar/events` ← `<binder>/.blueprint/calendar.json` |
+| **Settings** — Desk · Appearance · Privacy/Local-only · About/Cellar (brew tip) | `OVERVIEW_CALENDAR_SETTINGS.md` Glass DoD | `/api/settings/desk` + `/api/overview/pulse` cellar_tip |
 
 Everything on this list must read legible with **zero** entries. Honest empty
-is first-class.
+is first-class. Calendar **detail sheet** (click-row notes) is still out of
+this KEEP — next Track A peel after glass DoD holds.
 
 ---
 
@@ -73,8 +76,7 @@ citing which V1 invariant it must not regress.
 | Skills library corner panel | Map / Overview | First-class **AGENTS.md / skills / PROGRAMS** re-lands as a Map surface (see NET-NEW) |
 | Landing surface: for-you / comeback stacks | **Not restored on Overview** — see DROP row | For-you inbox is a separate lens candidate |
 | Wall — project filter · density · notices · WO search · face boxes · note · regroup · parked hop · since-window | **Not restored as Overview** — parked | If any row returns it lands on its own lens, not on the landing glass |
-| Calendar | Calendar lens | Later spec |
-| Settings | Settings lens | Later spec |
+| Calendar detail sheet (click row → title · time · notes) | Calendar | V1 surface named; Glass DoD does not include it — next Track A peel |
 
 Split of the six inspects: **person → `/person` route** (already separate); 
 **you → Overview voice** (already there in Agents + Pulse); **project ·

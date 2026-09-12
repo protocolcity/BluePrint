@@ -166,6 +166,57 @@ class FourLensNavTests(unittest.TestCase):
                 f"Calendar HTML must not use Map verb {verb!r}",
             )
 
+    def test_settings_never_speaks_map_verbs(self) -> None:
+        """Label lock: Settings never uses Map verbs. ``binder`` is legal
+        here — Desk group names the binder path (IA spec), unlike Overview."""
+        import re
+
+        _, body, _ = _get(self.port, "/settings")
+        text = body.decode("utf-8").lower()
+        for verb in ("dig", "lot", "hub", "fan", "trail", "md-viewer", "crumb"):
+            pattern = re.compile(rf"\b{re.escape(verb)}\b")
+            self.assertIsNone(
+                pattern.search(text),
+                f"Settings HTML must not use Map verb {verb!r}",
+            )
+
+    def test_settings_groups_paint_in_spec_order(self) -> None:
+        """Glass DoD: Desk · Appearance · Privacy/Local-only · About/Cellar."""
+        _, body, _ = _get(self.port, "/settings")
+        text = body.decode("utf-8")
+        desk = text.index("ov-set-desk-title")
+        appearance = text.index("ov-set-appearance-title")
+        privacy = text.index("ov-set-privacy-title")
+        about = text.index("ov-set-about-title")
+        self.assertLess(desk, appearance)
+        self.assertLess(appearance, privacy)
+        self.assertLess(privacy, about)
+        self.assertIn("Dark PC", text)
+        self.assertIn("Cellar tip", text)
+
+    def test_calendar_and_settings_do_not_duplicate_overview_tiles(self) -> None:
+        """Settings / Calendar are lenses — no Agents · Jobs · Pulse tiles."""
+        for path in ("/calendar", "/settings"):
+            _, body, _ = _get(self.port, path)
+            text = body.decode("utf-8")
+            self.assertNotIn('id="overview-shell"', text)
+            self.assertNotIn("No agents", text)
+            self.assertNotIn("No open jobs", text)
+
+    def test_shared_css_is_dark_pc_only(self) -> None:
+        """Glass DoD: dark PC tokens, no cream / LLC palette in the token set.
+
+        Header comments may say "no cream" — only the ``:root`` values count.
+        """
+        status, body, _ = _get(self.port, "/css/overview.css")
+        self.assertEqual(status, 200)
+        css = body.decode("utf-8")
+        self.assertIn("--ov-bg: #0f1114", css)
+        root = css.split(":root", 1)[-1].split("}", 1)[0].lower()
+        self.assertNotIn("cream", root)
+        self.assertNotIn("llc", root)
+        self.assertNotIn("oneseollc", root)
+
 
 class LocalTruthApiTests(unittest.TestCase):
     """Local-only APIs paint honest empty by default; binder truth when present."""
@@ -226,14 +277,9 @@ class BinderTruthTests(unittest.TestCase):
             }),
             encoding="utf-8",
         )
+        calendar_fixture = _HERE / "fixtures" / "calendar.json"
         (self.binder / ".blueprint" / "calendar.json").write_text(
-            json.dumps({
-                "range": "2026-09-07 → 2026-09-13",
-                "events": [
-                    {"title": "Standup", "at": "2026-09-11T09:00", "source": "routine", "state": "scheduled"},
-                    {"title": "Ship peel", "at": "2026-09-11T16:00", "source": "WO", "state": "due"},
-                ],
-            }),
+            calendar_fixture.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
         # Add a lot so /api/map/tree returns something.
@@ -265,15 +311,15 @@ class BinderTruthTests(unittest.TestCase):
         _, body, _ = _get(self.port, "/api/calendar/events")
         payload = json.loads(body)
         titles = [e["title"] for e in payload["events"]]
-        self.assertEqual(titles, ["Standup", "Ship peel"])
+        self.assertEqual(titles, ["Standup", "Ship peel", "Filed note"])
         states = {e["state"] for e in payload["events"]}
-        self.assertEqual(states, {"scheduled", "due"})
+        self.assertEqual(states, {"scheduled", "due", "done"})
         self.assertEqual(payload["range"], "2026-09-07 → 2026-09-13")
 
     def test_settings_desk_reports_binder_path(self) -> None:
         _, body, _ = _get(self.port, "/api/settings/desk")
         payload = json.loads(body)
-        self.assertEqual(payload["binder_path"], str(self.binder))
+        self.assertEqual(payload["binder_path"], str(self.binder.resolve()))
         self.assertEqual(payload["desk_label"], "Local desk")
 
     def test_map_tree_reads_binder(self) -> None:

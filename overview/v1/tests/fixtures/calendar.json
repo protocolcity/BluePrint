@@ -1,0 +1,23 @@
+{
+  "range": "2026-09-07 → 2026-09-13",
+  "events": [
+    {
+      "title": "Standup",
+      "at": "2026-09-11T09:00",
+      "source": "routine",
+      "state": "scheduled"
+    },
+    {
+      "title": "Ship peel",
+      "at": "2026-09-11T16:00",
+      "source": "WO",
+      "state": "due"
+    },
+    {
+      "title": "Filed note",
+      "at": "2026-09-12T11:30",
+      "source": "manual",
+      "state": "done"
+    }
+  ]
+}
