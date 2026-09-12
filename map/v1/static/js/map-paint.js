@@ -257,21 +257,21 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
   const layer = world.querySelector('#dig-in-layer');
   layer.replaceChildren();
   if (!digNode || !children || children.length === 0) return;
-  // Soft nit: fat dig fans — grow radius + hide-until-hover (same density tools).
+  // Fat dig fans — same density tools as hub: grow radius, stagger, hide
+  // labels until hover/focus. Hide kicks in with stagger (>8), not only ≥12.
   const fat = children.length >= 12;
-  const digRadius = fat ? radius * 1.28 : (children.length > 8 ? radius * 1.12 : radius);
+  const stagger = children.length > 8;
+  const digRadius = fat ? radius * 1.28 : (stagger ? radius * 1.12 : radius);
   const positions = ringPositions(children.length, digRadius);
   const ox = (origin && Number.isFinite(origin.x)) ? origin.x : 0;
   const oy = (origin && Number.isFinite(origin.y)) ? origin.y : 0;
-  // Dense fans (>8 children) get their labels staggered above/below the
-  // plate so neighbor labels do not collide along the ring.
-  const stagger = children.length > 8;
   children.forEach((child, i) => {
     const { x, y } = positions[i];
     const kind = child.isDir === false ? 'file' : 'folder';
     const relPath = child.relPath || `${digNode.relPath}/${child.name}`;
     const group = el('g', {
-      class: `map-hit map-dig-child map-dig-${kind}${child.hasMd ? ' map-dig-md' : ''}${fat ? ' map-dig-dense' : ''}`,
+      class: `map-hit map-dig-child map-dig-${kind}${child.hasMd ? ' map-dig-md' : ''}${stagger ? ' map-dig-dense' : ''}`,
+      tabindex: '0',
       transform: `translate(${(ox + x).toFixed(2)},${(oy + y).toFixed(2)})`,
       'data-rel-path': relPath,
       'data-name': child.name,

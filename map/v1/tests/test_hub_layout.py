@@ -133,6 +133,29 @@ class HubCrowdingV2Tests(unittest.TestCase):
     def test_dig_fat_fan_density_tools(self) -> None:
         self.assertIn("map-dig-dense", self.paint)
         self.assertIn("digRadius", self.paint)
+        # Hide-until-hover follows stagger (>8), not only fat (≥12).
+        self.assertIn("stagger ? ' map-dig-dense'", self.paint)
+        self.assertIn(".map-dig-child.map-dig-dense .map-dig-label", self.css)
+
+
+class MdViewerClipTests(unittest.TestCase):
+    """Parked nit: md-viewer stays inside the stage, not clipped by camera."""
+
+    def setUp(self) -> None:
+        root = _HERE.parent
+        self.html = (root / "static" / "workspace_map.html").read_text(encoding="utf-8")
+        self.css = _CSS.read_text(encoding="utf-8")
+        self.viewer = (root / "static" / "js" / "md-viewer.js").read_text(encoding="utf-8")
+
+    def test_html_host_on_stage(self) -> None:
+        self.assertIn('id="md-viewer-host"', self.html)
+        self.assertIn("layerId = 'md-viewer-host'", self.viewer)
+
+    def test_host_inset_inside_stage(self) -> None:
+        self.assertIn(".map-md-host", self.css)
+        self.assertIn("inset: 56px 16px 16px 16px", self.css)
+        self.assertIn("max-width: 100%", self.css)
+        self.assertIn("max-height: 100%", self.css)
 
 
 if __name__ == "__main__":

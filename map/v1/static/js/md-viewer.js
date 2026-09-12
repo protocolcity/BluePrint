@@ -10,7 +10,7 @@
 const DEFAULT_ENDPOINT = '/api/file';
 
 export function createMdViewer({
-  layerId = 'md-viewer-layer',
+  layerId = 'md-viewer-host',
   fetcher = fetch,
   endpoint = DEFAULT_ENDPOINT,
   onClose,
@@ -29,16 +29,6 @@ export function createMdViewer({
     hostLayer.setAttribute('data-hit-layer', 'md-viewer');
     hostLayer.style.visibility = 'hidden';
     hostLayer.replaceChildren();
-
-    // Use a foreignObject so the reader nests inside the SVG paint stack
-    // (Glass §Paint stack) but hosts real HTML for content rendering.
-    const svgNs = 'http://www.w3.org/2000/svg';
-    const fo = document.createElementNS(svgNs, 'foreignObject');
-    fo.setAttribute('x', '0');
-    fo.setAttribute('y', '0');
-    fo.setAttribute('width', '100%');
-    fo.setAttribute('height', '100%');
-    fo.classList.add('map-md-fo');
 
     const backdrop = document.createElement('div');
     backdrop.className = 'map-md-backdrop';
@@ -67,8 +57,23 @@ export function createMdViewer({
     panel.appendChild(bar);
     panel.appendChild(contentEl);
     backdrop.appendChild(panel);
-    fo.appendChild(backdrop);
-    hostLayer.appendChild(fo);
+
+    // Prefer an HTML host on #map-stage (viewport-fixed, inset from chrome)
+    // so pan/zoom/dig never clip the panel. SVG <g> hosts keep a foreignObject
+    // so the Glass paint-stack id still works in tests.
+    if (hostLayer.namespaceURI === 'http://www.w3.org/2000/svg') {
+      const svgNs = 'http://www.w3.org/2000/svg';
+      const fo = document.createElementNS(svgNs, 'foreignObject');
+      fo.setAttribute('x', '0');
+      fo.setAttribute('y', '0');
+      fo.setAttribute('width', '100%');
+      fo.setAttribute('height', '100%');
+      fo.classList.add('map-md-fo');
+      fo.appendChild(backdrop);
+      hostLayer.appendChild(fo);
+    } else {
+      hostLayer.appendChild(backdrop);
+    }
     overlay = { backdrop, panel };
 
     backdrop.addEventListener('click', (ev) => {
@@ -88,6 +93,7 @@ export function createMdViewer({
     currentPath = path;
     isOpen = true;
     hostLayer.style.visibility = 'visible';
+    hostLayer.classList.add('is-open');
     titleEl.textContent = label || path || '';
     contentEl.textContent = '';
     contentEl.classList.add('is-loading');
@@ -108,7 +114,10 @@ export function createMdViewer({
     if (!isOpen) return;
     isOpen = false;
     currentPath = null;
-    if (hostLayer) hostLayer.style.visibility = 'hidden';
+    if (hostLayer) {
+      hostLayer.style.visibility = 'hidden';
+      hostLayer.classList.remove('is-open');
+    }
     if (contentEl) contentEl.textContent = '';
     if (typeof onClose === 'function') onClose();
   }

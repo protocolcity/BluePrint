@@ -86,13 +86,13 @@ to match — that is a separate, currently-frozen lane.
 
 **Sealed: `0.1.50_12` @ tip `4cc69b3e`** — covers PRs **#50–#55**.
 
-Soft nits are **parked** against that seal, deliberately, until there is a JS
-peel that earns them:
+Soft nits still **parked** against that seal (not this Map peel):
 
 - Calendar lead-flex
-- dig-fan
-- md-clip
 - Settings cold tip
+
+Map nits **dig-fan** and **md-clip** land on Path B `main` after the crowding
+follow-up peel; Cellar still shows them until the next drink.
 
 Parked means *do not re-open them as drive-by fixes*. They are known, they are
 written down, and they wait for their own work order.

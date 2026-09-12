@@ -26,11 +26,15 @@ Then in the browser:
    dig deeper; **Backspace** pops one trail level.
 4. **DoD 4 — MD reader.** Click a `.md` lot (root or dig-in). Overlay opens,
    server renders markdown → HTML. `Esc`, `×`, or backdrop click closes it.
-   The reader does **not** touch dig state.
-5. **DoD 5 — View Options.** Top-left `View` panel toggles
+   The reader does **not** touch dig state. The panel sits in the HTML host
+   (`#md-viewer-host`) inset inside the stage — pan / zoom / dig must not
+   clip it off the right edge.
+5. **Dig fan density.** A fat folder (≥9 children) staggers labels and hides
+   them until hover/focus. Dig sibling REPLACE still holds.
+6. **DoD 5 — View Options.** Top-left `View` panel toggles
    Managed / Unmanaged / Hidden. Lots repaint immediately; state lives in
    `MapViewState`, not a second store.
-6. **Hit SoT.** Only one classifier decides where hits land — verify by
+7. **Hit SoT.** Only one classifier decides where hits land — verify by
    confirming panning does not fire while the reader is open, chrome
    buttons never eat lot clicks, and dig-in children win over the lot they
    were fanned from.

@@ -66,5 +66,5 @@ If plates still kiss after radius + multi-orbit: shrink lot plate size ~10–15%
 
 ## Soft nits (Local — non-blocking; same peel or follow-up)
 
-- **Dig-fan overlap on fat folders** — dense dig REPLACE still PASS, but fan labels/plates can overlap on wide children. Prefer same density tools: grow dig radius, hide-until-hover labels, stagger. Don’t break dig REPLACE.
-- **md-viewer right clip** — viewer can clip on the right edge at dig depth. Keep panel inside stage; slight max-width / inset from chrome. Matches #36 enhance note (md-viewer width).
+- **Dig-fan overlap on fat folders** — **Landed** (Path B): grow radius + stagger + hide-until-hover when children > 8. Dig REPLACE stays PASS.
+- **md-viewer right clip** — **Landed** (Path B): HTML host on `#map-stage` (viewport-fixed), inset from chrome. Panel `max-width/max-height: 100%` of the host. SVG `#md-viewer-layer` remains an empty paint-stack id.
