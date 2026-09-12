@@ -111,7 +111,7 @@ for(const target of [work,map,...unsafe.filter(x=>typeof x==='string')]) {
   assert.equal(env.context.location.searchParams.has('md'),false);
   await app.digInto({relPath:'other',name:'Other'});await settle();
   assert.equal(env.context.location.searchParams.get('path'),'other');
-  await env.get('map-browser-list').children[0].fire('click');
+  await env.get('map-browser-list').children.find(node=>node.listeners.click).fire('click');
   assert.equal(env.context.location.searchParams.get('md'),'other/Guide.md');
   app.viewer.close();app.resetView();await settle();
   assert.equal(env.context.location.pathname,'/map');
