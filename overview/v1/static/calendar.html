@@ -51,6 +51,22 @@
       <div class="ov-footer-row" data-role="footer-row"></div>
       <span class="ov-footer-quiet" data-role="footer-quiet">All systems quiet</span>
     </footer>
+
+    <dialog
+      class="ov-cal-sheet"
+      data-role="cal-sheet"
+      aria-labelledby="ov-cal-sheet-title"
+    >
+      <button
+        type="button"
+        class="ov-cal-sheet-close"
+        data-role="cal-sheet-close"
+        aria-label="Close"
+      >×</button>
+      <h2 class="ov-cal-sheet-title" id="ov-cal-sheet-title" data-role="cal-sheet-title"></h2>
+      <p class="ov-cal-sheet-when" data-role="cal-sheet-when"></p>
+      <p class="ov-cal-sheet-notes" data-role="cal-sheet-notes"></p>
+    </dialog>
   </main>
 
   <script type="module" src="/js/calendar.v1.js"></script>

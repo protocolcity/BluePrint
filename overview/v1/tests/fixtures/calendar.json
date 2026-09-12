@@ -5,13 +5,15 @@
       "title": "Standup",
       "at": "2026-09-11T09:00",
       "source": "routine",
-      "state": "scheduled"
+      "state": "scheduled",
+      "notes": "Local desk check-in."
     },
     {
       "title": "Ship peel",
       "at": "2026-09-11T16:00",
       "source": "WO",
-      "state": "due"
+      "state": "due",
+      "notes": "Glass DoD lock."
     },
     {
       "title": "Filed note",
