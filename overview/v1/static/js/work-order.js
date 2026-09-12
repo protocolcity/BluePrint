@@ -2,6 +2,10 @@
 (async () => {
   const message = document.getElementById('message');
   const params = new URLSearchParams(location.search);
+  const {safeReturnTo} = await import('/js/reader-navigation.mjs');
+  const back = document.getElementById('reader-back');
+  back.href = safeReturnTo(params.get('return_to'));
+  back.textContent = new URL(back.href, location.href).pathname.replace(/\/$/, '') === '/map' ? 'Back to Map' : 'Back to Work';
   try {
     const query = new URLSearchParams({id: params.get('id') || '', project: params.get('project') || ''});
     const response = await fetch('/api/work-order?' + query);
