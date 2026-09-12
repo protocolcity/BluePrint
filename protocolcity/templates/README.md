@@ -40,3 +40,20 @@ Product law: `docs/INSTRUCTION_LADDER.md` §Skills.
 
 Filled examples of every template live under product `example/` when present
 in this checkout.
+
+## Loading and verification
+
+`protocolcity.found._template` and `protocolcity.seed_ops._templates_dir` prefer
+`protocolcity/templates/`; the root tree is a fallback when packaged templates
+are absent. `pyproject.toml` includes the mirror as package data; setuptools
+does not synchronize it. Run `bash scripts/templates_sync.sh` after authoring,
+and `bash scripts/templates_sync.sh --check` before building. Unknown files in
+the mirror are reported and preserved for review rather than deleted.
+
+`overview/v1/tests/test_template_packaging.py` checks every template's bytes,
+builds a wheel outside the checkout, and exercises the actual hire and seed
+planting functions from the extracted wheel in a disposable workspace with
+network/SQLite access denied. It also verifies existing customized papers are
+preserved. CI runs these checks in the overview suite. Existing workspaces are
+not rewritten by a template update; host review must verify a fresh installed
+sample before treating an installed founding outcome as accepted.

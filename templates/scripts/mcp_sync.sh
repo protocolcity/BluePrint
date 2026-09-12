@@ -113,6 +113,10 @@ if [ ${#EXTRA[@]} -gt 0 ]; then
   PY_ARGS+=("${EXTRA[@]}")
 fi
 
+if [ -x "$WS_ROOT/local/blueprint/current/venv/bin/python" ]; then
+  exec "$WS_ROOT/local/blueprint/current/venv/bin/python" -m protocolcity.mcp_sync "${PY_ARGS[@]}"
+fi
+
 if python3 -c "import protocolcity.mcp_sync" 2>/dev/null; then
   exec python3 -m protocolcity.mcp_sync "${PY_ARGS[@]}"
 fi

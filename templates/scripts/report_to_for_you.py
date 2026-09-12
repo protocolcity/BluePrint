@@ -16,7 +16,7 @@ Reports that only land on disk are invisible. This tool creates or refreshes a
   # scan common report slots and drop missing inbox items for today
   python3 scripts/report_to_for_you.py --scan --workspace /path/to/workspace
 
-  # per-product efficiency stays disk-only unless act-now smell 
+  # per-product efficiency stays disk-only unless act-now smell
   python3 scripts/report_to_for_you.py --scan --workspace /path/to/workspace --act-now
 
 Idempotent: label ``inbox-report:<project>:<key>:<date>`` — re-run updates
@@ -923,7 +923,7 @@ def scan_and_drop(
             )
         )
 
-    # Resolve Trading desk brief + RSU once so we can fold 
+    # Resolve Trading desk brief + RSU once so we can fold
     desk_brief_path = _first_existing(
         workspace,
         [

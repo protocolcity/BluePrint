@@ -21,16 +21,16 @@ then agent instructions). Optional `references/` and `scripts/`.
 
 ## Promote to L0 only if all hold
 
-1. Useful in ≥2 projects in this workspace  
-2. No product-private secrets or live money rules  
-3. Workspace-neutral description  
-4. No duplicate under another name at L0  
+1. Useful in ≥2 projects in this workspace
+2. No product-private secrets or live money rules
+3. Workspace-neutral description
+4. No duplicate under another name at L0
 
 ## L0 skills in this workspace
 
 | id | Role |
 |---|---|
-| `workspace-efficiency` | Drain hygiene — ready-by-seat, You-starve, assign≠escalate, skills bridge |
+| `workspace-efficiency` | Inspection/reporting — ready feeds, execution evidence, routing and skills bridge |
 | _(add more)_ | Folders under `.agents/skills/<id>/` + list here |
 
 ## L0 must load inside project sessions
@@ -86,13 +86,15 @@ Do not hand-edit the generated settings file. Host-only grants go in
 | **Your list** | `worker:you` + `you:note\|todo\|remind\|host` |
 | **Escalate to You** | **Keep** hand seat + `gate_type=human` / Blocked — never re-seat to You |
 
-Bare `worker:you` on implement work is **starve** (cron never claims You).
-Cadence: L0 skill + job `workspace-efficiency` (seeded by `blueprint seed-ops`).
+Inspect the actual assignment and authorization before reporting a routing gap.
+`worker:you` with `you:host` can identify authorized host implementation.
+The planted efficiency skill provides inspection/reporting; execution requires
+a configured runner and trigger. Empty feeds stop without refill or gate changes.
 
 ## Agents: where to put a new skill
 
-1. Cross-project → L0 under `.agents/skills/<id>/` + `scripts/skills_sync.sh`  
-2. One project only → L1 under that project’s `.claude/skills/<id>/`  
+1. Cross-project → L0 under `.agents/skills/<id>/` + `scripts/skills_sync.sh`
+2. One project only → L1 under that project’s `.claude/skills/<id>/`
 3. After adding L0, re-run skills_sync (Grok `paths` already covers the whole tree)
 
 Product law: BluePrint `INSTRUCTION_LADDER.md` §Skills (when installed with the package docs).

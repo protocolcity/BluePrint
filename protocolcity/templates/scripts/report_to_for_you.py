@@ -42,8 +42,10 @@ second ``maru-desk-brief`` or a separate ``rsu-window`` gold. RSU alone
 (no desk brief file) still golds once under ``desk-brief``. Efficiency /
 board-validation and all efficiency keys stay disk-only unless ``--act-now``.
 
-Requires Desk up (default http://127.0.0.1:8799). Sign as author=you (system
-drop) or REPORT_TO_FOR_YOU_AUTHOR.
+Requires Desk up (default http://127.0.0.1:8799). Before claiming a For You
+drop, GET attention on ``WL_DESK_URL`` / ``SUITE_DESK_URL`` / ``CITY_DESK``.
+On fail, say desk unreachable — do not claim the drop succeeded.
+Sign as author=you (system drop) or REPORT_TO_FOR_YOU_AUTHOR.
 """
 
 from __future__ import annotations
@@ -61,10 +63,26 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-DEFAULT_DESK = os.environ.get("WL_DESK_URL") or os.environ.get(
-    "TP_DESK_URL", "http://127.0.0.1:8799"
-)
 DEFAULT_AUTHOR = os.environ.get("REPORT_TO_FOR_YOU_AUTHOR") or "you"
+_FALLBACK_DESK = "http://127.0.0.1:8799"
+_ATTENTION_PATHS = ("/api/dev/attention", "/api/attention")
+
+
+def resolve_desk_url(explicit: Optional[str] = None) -> str:
+    """First non-empty among explicit and the known desk env names."""
+    for cand in (
+        explicit,
+        os.environ.get("WL_DESK_URL"),
+        os.environ.get("SUITE_DESK_URL"),
+        os.environ.get("CITY_DESK"),
+        os.environ.get("TP_DESK_URL"),
+    ):
+        if cand and str(cand).strip():
+            return str(cand).strip().rstrip("/")
+    return _FALLBACK_DESK
+
+
+DEFAULT_DESK = resolve_desk_url()
 
 
 def _utc_today() -> str:
@@ -103,6 +121,61 @@ def _req(
             return {"ok": False, "error": err or str(e)}
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return {"ok": False, "error": str(e)}
+
+
+def probe_desk_attention(
+    desk: str, timeout: float = 4.0
+) -> Dict[str, Any]:
+    """GET attention before claiming a For You drop succeeded.
+
+    WorkLane serves ``/api/dev/attention``; suite serves ``/api/attention``.
+    Connection / timeout / empty-URL failure → desk unreachable.
+    """
+    base = (desk or "").strip().rstrip("/")
+    if not base:
+        return {
+            "ok": False,
+            "error": "desk unreachable",
+            "detail": "no desk URL",
+        }
+    last = "attention GET failed"
+    for path in _ATTENTION_PATHS:
+        out = _req("GET", base + path, timeout=timeout)
+        if not isinstance(out, dict):
+            last = "unexpected attention payload"
+            continue
+        err = str(out.get("error") or "").strip()
+        if err and out.get("ok") is False and "items" not in out and "count" not in out:
+            last = err
+            continue
+        if "items" in out or "count" in out or out.get("ok") is True:
+            return {"ok": True, "desk": base, "path": path}
+        if out.get("ok") is not False:
+            return {"ok": True, "desk": base, "path": path}
+        last = err or "attention GET failed"
+    return {
+        "ok": False,
+        "error": "desk unreachable",
+        "detail": last,
+        "desk": base,
+    }
+
+
+def desk_unreachable_receipt(
+    *,
+    desk: str = "",
+    detail: str = "",
+    **extra: Any,
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "ok": False,
+        "action": "desk_unreachable",
+        "error": "desk unreachable",
+        "detail": detail or "attention GET failed",
+        "desk": desk,
+    }
+    out.update(extra)
+    return out
 
 
 def _slug_key(s: str) -> str:
@@ -496,12 +569,25 @@ def drop_report(
         "label": label,
         "path": rel,
         "action": "none",
+        "desk": desk,
     }
 
     if dry_run:
         receipt["action"] = "would_update" if existing else "would_create"
         receipt["existing_id"] = (existing or {}).get("id")
         return receipt
+
+    probe = probe_desk_attention(desk)
+    if not probe.get("ok"):
+        return desk_unreachable_receipt(
+            desk=desk,
+            detail=str(probe.get("detail") or ""),
+            project=project,
+            key=key,
+            day=day,
+            label=label,
+            path=rel,
+        )
 
     if existing:
         tid = str(existing.get("id") or "")
@@ -529,8 +615,15 @@ def drop_report(
                 % (desk.rstrip("/"), bare, project),
                 body,
             )
+        task = out.get("task") if isinstance(out.get("task"), dict) else None
+        if not out.get("ok") and task is None:
+            receipt["ok"] = False
+            receipt["action"] = "update_failed"
+            receipt["error"] = out.get("error") or "desk unreachable"
+            receipt["api"] = out
+            return receipt
         receipt["action"] = "updated"
-        receipt["task_id"] = (out.get("task") or existing).get("id")
+        receipt["task_id"] = (task or existing).get("id")
         receipt["api"] = out
         return receipt
 
@@ -640,6 +733,19 @@ def scan_and_drop(
     day_utc = _utc_today()
     results: List[Dict[str, Any]] = []
     thin_hits: List[Tuple[str, str, Path]] = []  # project, key, path
+
+    if not dry_run:
+        probe = probe_desk_attention(desk)
+        if not probe.get("ok"):
+            return [
+                desk_unreachable_receipt(
+                    desk=desk,
+                    detail=str(probe.get("detail") or ""),
+                    project="workspace",
+                    key="scan",
+                    day=day,
+                )
+            ]
 
     # (project, key, title, path candidates, optional visual)
     # Disk-only efficiency keys still listed so --scan can report them as
@@ -1019,7 +1125,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(json.dumps({"ok": True, "results": results}, indent=2, default=str))
         else:
             for r in results:
-                if r.get("skipped"):
+                if r.get("action") == "desk_unreachable":
+                    print(
+                        "desk unreachable — %s"
+                        % (r.get("detail") or r.get("error") or "attention GET failed")
+                    )
+                elif r.get("skipped"):
                     print("skip  %s/%s — %s" % (r.get("project"), r.get("key"), r.get("reason")))
                 else:
                     print(
@@ -1104,6 +1215,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     if args.json:
         print(json.dumps(r, indent=2, default=str))
+    elif r.get("action") == "desk_unreachable":
+        print(
+            "desk unreachable — %s"
+            % (r.get("detail") or r.get("error") or "attention GET failed")
+        )
     else:
         print(
             "%s %s → %s"

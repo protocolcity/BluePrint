@@ -1,7 +1,7 @@
 # Coherence-pass work order — {{PROJECT}} · {{LAW_CHANGE_ID}}
 
-> Instrument: architecture-first companion (ALWAYS_WORK §2l).  
-> Filed by: {{FILER}} as follow-up to {{LAW_CHANGE_WO}}.  
+> Instrument: architecture-first companion (ALWAYS_WORK §2l).
+> Filed by: {{FILER}} as follow-up to {{LAW_CHANGE_WO}}.
 > Early instances: POS · trading · BP suite architecture passes.
 
 ## Why
@@ -50,7 +50,7 @@ Filed as follow-ups from this ticket (log ids in a comment here):
 - Route `worker:<hand>` on create; do not leave unrouted.
 - Attach `parent:{{THIS-WO}}` label on each child.
 - Log all child ids in a comment on this ticket immediately after filing.
-- Children drain under runway rules — no forced serialization.
+- Children follow their own assignment, readiness and bounded dispatch contracts.
 - Minor items: file a deferred child or add a thaw note here; do not silently drop.
 
 ## Sequencing

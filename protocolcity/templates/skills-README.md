@@ -30,7 +30,7 @@ then agent instructions). Optional `references/` and `scripts/`.
 
 | id | Role |
 |---|---|
-| `workspace-efficiency` | Drain hygiene — ready-by-seat, You-starve, assign≠escalate, skills bridge |
+| `workspace-efficiency` | Inspection/reporting — ready feeds, execution evidence, routing and skills bridge |
 | _(add more)_ | Folders under `.agents/skills/<id>/` + list here |
 
 ## L0 must load inside project sessions
@@ -86,8 +86,10 @@ Do not hand-edit the generated settings file. Host-only grants go in
 | **Your list** | `worker:you` + `you:note\|todo\|remind\|host` |
 | **Escalate to You** | **Keep** hand seat + `gate_type=human` / Blocked — never re-seat to You |
 
-Bare `worker:you` on implement work is **starve** (cron never claims You).
-Cadence: L0 skill + job `workspace-efficiency` (seeded by `blueprint seed-ops`).
+Inspect the actual assignment and authorization before reporting a routing gap.
+`worker:you` with `you:host` can identify authorized host implementation.
+The planted efficiency skill provides inspection/reporting; execution requires
+a configured runner and trigger. Empty feeds stop without refill or gate changes.
 
 ## Agents: where to put a new skill
 

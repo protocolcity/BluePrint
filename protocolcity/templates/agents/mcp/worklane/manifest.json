@@ -22,5 +22,5 @@
   "level": "L0",
   "vendor_locked": false,
   "enabled": true,
-  "notes": "Bottle entrypoint (python3 -m worklane.mcp) with runtime under .protocolcity/worklane. Legacy sibling checkout (…/worklane/.venv/bin/python) and ticketingprotocol.mcp are rewritten on seed / doctor --fix when the command path is dead (pc-1425 / GH #33). Cursor mcp_auth on a failed local stdio start is not an OAuth grant."
+  "notes": "Bottle entrypoint (python3 -m worklane.mcp) with runtime under .protocolcity/worklane. Legacy sibling checkout (…/worklane/.venv/bin/python) and the prior package-module name are rewritten on seed / doctor --fix when the command path is dead. Cursor mcp_auth on a failed local stdio start is not an OAuth grant."
 }
