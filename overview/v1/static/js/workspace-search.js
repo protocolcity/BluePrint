@@ -18,7 +18,7 @@
       const response=await fetch('/api/find?'+params,{signal:controller.signal});
       const data=await response.json();if(!response.ok)throw new Error(data.error || 'Search unavailable.');
       if(version!==sequence)return;
-      $('workspace-search-status').textContent=`${data.total} matches${data.issues.length?' · Some sources incomplete':''}`;
+      $('workspace-search-status').textContent=`${data.total} ${data.total===1?'match':'matches'}${data.issues.length?' · Some sources incomplete':''}`;
       $('workspace-search-scope').textContent=[data.scope,...data.issues].join(' ');
       for(const hit of data.results) {
         const link=document.createElement('a');link.className='bp-paper-row';link.href=hit.href;
@@ -30,7 +30,7 @@
       $('workspace-search-next').disabled=offset+data.limit>=data.total;
     } catch(error) {if(error.name!=='AbortError' && version===sequence)$('workspace-search-status').textContent=error.message;}
   }
-  input.addEventListener('input',()=>{clearTimeout(timer);offset=0;timer=setTimeout(search,200);});
+  input.addEventListener('input',()=>{clearTimeout(timer);++sequence;controller?.abort();offset=0;timer=setTimeout(search,200);});
   $('workspace-search-form').addEventListener('submit',event=>{event.preventDefault();clearTimeout(timer);offset=0;search();});
   input.addEventListener('keydown',event=>{if(event.key==='Escape'){input.value='';search();}});
   $('workspace-search-prev').addEventListener('click',()=>{offset=Math.max(0,offset-50);search();});
