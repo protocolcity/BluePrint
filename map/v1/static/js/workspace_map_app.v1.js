@@ -41,14 +41,31 @@ export async function boot(opts = {}) {
 
   ensureLayers(world);
 
+  const initial = new URLSearchParams(location.search);
+  let restoring = true;
   const viewState = createViewState();
   const tree = createMapTree({ fetcher: opts.fetcher || fetch, endpoints: opts.endpoints });
   const viewer = createMdViewer({
     fetcher: opts.fetcher || fetch,
     endpoint: (opts.endpoints && opts.endpoints.file) || '/api/file',
-    onClose: () => scheduleRepaint(),
+    onClose: () => { syncUrl(); scheduleRepaint(); },
   });
   viewer.mount();
+
+  function syncUrl() {
+    if (restoring) return;
+    const url = new URL(location.href);
+    const path = viewState.snapshot().dig?.relPath;
+    const md = viewer.currentPath();
+    if (path) url.searchParams.set('path', path); else url.searchParams.delete('path');
+    if (md) url.searchParams.set('md', md); else url.searchParams.delete('md');
+    history.replaceState(history.state, '', '/map' + url.search + url.hash);
+  }
+  function openPaper(path, options) {
+    const opening = viewer.open(path, options);
+    syncUrl();
+    return opening;
+  }
 
   const hitRouter = createHitRouter({
     isMdViewerOpen: () => viewer.isOpen(),
@@ -128,7 +145,7 @@ export async function boot(opts = {}) {
         button.addEventListener('click', async () => {
           try {
             if (node.isDir) await digInto(node, {mode:snap.dig ? 'nest' : 'root'});
-            else await viewer.open(node.relPath, {label:node.name});
+            else await openPaper(node.relPath, {label:node.name});
           } catch (error) { document.getElementById('map-browser-path').textContent = 'Unable to open this folder.'; }
         });
         list.append(button);
@@ -177,6 +194,7 @@ export async function boot(opts = {}) {
   }
 
   function renderTrail() {
+    syncUrl();
     const el = document.getElementById(cfg.chromeIds.trail);
     if (!el) return;
     const trail = viewState.snapshot().trail;
@@ -235,7 +253,7 @@ export async function boot(opts = {}) {
         const isDir = root.getAttribute('data-is-dir') !== '0';
         const hasMd = root.getAttribute('data-has-md') === '1';
         if (!isDir && hasMd) {
-          viewer.open(relPath, { label: name });
+          openPaper(relPath, { label: name });
           return;
         }
         if (!isDir) return; // non-md file: no verb in V1
@@ -335,7 +353,6 @@ export async function boot(opts = {}) {
   window.addEventListener('resize', applyCamera);
   await tree.load();
   repaint();
-  const initial=new URLSearchParams(location.search);
   if(initial.get('path')) {
     let relative='';
     for(const part of initial.get('path').split('/').filter(Boolean)) {
@@ -343,7 +360,9 @@ export async function boot(opts = {}) {
       await digInto({relPath:relative,name:part},{mode:relative.includes('/')?'nest':'root'});
     }
   }
-  if(initial.get('md'))await viewer.open(initial.get('md'),{label:initial.get('md').split('/').pop()});
+  if(initial.get('md'))await openPaper(initial.get('md'),{label:initial.get('md').split('/').pop()});
+  restoring = false;
+  syncUrl();
 
   return {
     // Exposed for smoke tests + dogfood introspection.
