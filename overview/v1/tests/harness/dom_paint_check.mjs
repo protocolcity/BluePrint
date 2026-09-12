@@ -1,9 +1,13 @@
-// Minimal DOM harness for the overview.v1.js paint functions.
+// Minimal DOM harness for Overview / Calendar / Settings paint functions.
 //
 // Renders paintAgents / paintProject / paintCharter against an empty
 // wire payload and reports on the DOM shape via stdout JSON. Used by
 // test_paint_dom.py to lock the honest-empty invariants that live
 // on the JS side (no builder anchors, hidden shells).
+//
+// Also locks Calendar + Settings V1 glass DoD paint:
+//   paintEvents empty → `No events`; populated → title · when · source · status
+//   paintDesk / paintCellarTip → binder path + brew-face tip (never a fake SHA)
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -254,6 +258,127 @@ const cases = {};
     visible: ranked.visible.length,
     more: ranked.more,
     order: ranked.visible.map((r) => r.state),
+  };
+}
+
+// ── Calendar + Settings V1 glass (OVERVIEW_CALENDAR_SETTINGS.md) ──────────
+
+function makeCalendarShell() {
+  const root = new El("main");
+  root.setAttribute("id", "calendar-shell");
+  const list = new El("div");
+  list.setAttribute("data-role", "cal-list");
+  const empty = new El("p");
+  empty.className = "ov-empty";
+  empty.textContent = "No events";
+  list.appendChild(empty);
+  root.appendChild(list);
+  const range = new El("span");
+  range.setAttribute("data-role", "cal-range");
+  root.appendChild(range);
+  return root;
+}
+
+function makeSettingsShell() {
+  const root = new El("main");
+  root.setAttribute("id", "settings-shell");
+  const path = new El("span");
+  path.setAttribute("data-role", "set-binder-path");
+  path.textContent = "on this desk";
+  const label = new El("span");
+  label.setAttribute("data-role", "set-desk-label");
+  label.textContent = "Local desk";
+  const tip = new El("span");
+  tip.setAttribute("data-role", "set-cellar-tip");
+  tip.textContent = "";
+  root.append(path, label, tip);
+  return root;
+}
+
+function eventFields(li) {
+  return li.children.map((c) => ({
+    className: c.className,
+    text: c.textContent,
+    source: c.dataset.source || null,
+    state: c.dataset.state || null,
+  }));
+}
+
+const cal = await import(
+  join(HERE, "..", "..", "static", "js", "calendar.v1.js")
+);
+const settings = await import(
+  join(HERE, "..", "..", "static", "js", "settings.v1.js")
+);
+
+// Honest empty — Writer copy, no fabricated rows.
+{
+  const root = makeCalendarShell();
+  cal.paintEvents(root, []);
+  cal.paintRange(root, "");
+  const list = root.querySelector('[data-role="cal-list"]');
+  const range = root.querySelector('[data-role="cal-range"]');
+  cases.calendar_empty = {
+    child_count: list.children.length,
+    empty_text: list.children[0] ? list.children[0].textContent : null,
+    empty_class: list.children[0] ? list.children[0].className : null,
+    ul_count: list.countByTag("ul"),
+    range: range.textContent,
+  };
+}
+
+// Populated rows — title · when · source · status (Glass DoD 3).
+{
+  const root = makeCalendarShell();
+  cal.paintEvents(root, [
+    { title: "Standup", at: "2026-09-11T09:00", source: "routine", state: "scheduled" },
+    { title: "Ship peel", at: "2026-09-11T16:00", source: "WO", state: "due" },
+    { title: "Filed note", at: "2026-09-12T11:30", source: "manual", state: "done" },
+  ]);
+  cal.paintRange(root, "2026-09-07 → 2026-09-13");
+  const list = root.querySelector('[data-role="cal-list"]');
+  const ul = list.children.find((c) => c.tagName === "UL");
+  const rows = ul ? ul.children : [];
+  cases.calendar_rows = {
+    row_count: rows.length,
+    fields: rows.map(eventFields),
+    range: root.querySelector('[data-role="cal-range"]').textContent,
+    empty_count: list.children.filter((c) => c.className === "ov-empty").length,
+  };
+}
+
+// Unknown source/state fall back — never invent a fourth source or status.
+{
+  const root = makeCalendarShell();
+  cal.paintEvents(root, [
+    { title: "Odd", at: "2026-09-11T12:00", source: "cloud", state: "busy" },
+  ]);
+  const list = root.querySelector('[data-role="cal-list"]');
+  const ul = list.children.find((c) => c.tagName === "UL");
+  const fields = ul ? eventFields(ul.children[0]) : [];
+  cases.calendar_fallback = { fields };
+}
+
+// Settings desk + Cellar brew face. Empty tip does not invent a version.
+{
+  const root = makeSettingsShell();
+  settings.paintDesk(root, {
+    binder_path: "/tmp/local-desk",
+    desk_label: "Local desk",
+  });
+  settings.paintCellarTip(root, { cellar_tip: "blueprint 0.1.50_12" });
+  cases.settings_desk = {
+    binder_path: root.querySelector('[data-role="set-binder-path"]').textContent,
+    desk_label: root.querySelector('[data-role="set-desk-label"]').textContent,
+    cellar_tip: root.querySelector('[data-role="set-cellar-tip"]').textContent,
+  };
+}
+
+{
+  const root = makeSettingsShell();
+  settings.paintCellarTip(root, { cellar_tip: "" });
+  cases.settings_cellar_empty = {
+    cellar_tip: root.querySelector('[data-role="set-cellar-tip"]').textContent,
   };
 }
 

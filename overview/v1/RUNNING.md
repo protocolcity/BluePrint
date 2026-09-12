@@ -52,6 +52,35 @@ Then in the browser:
    banner says `Local desk`, never `workspace`. The chip says `Map`,
    never `Dig here`.
 
+## Calendar + Settings glass DoD
+
+Against [`OVERVIEW_CALENDAR_SETTINGS.md`](../../docs/specs/OVERVIEW_CALENDAR_SETTINGS.md).
+Mini dogfood uses `--binder ~/OneSeo` on `:8803`. Missing
+`<binder>/.blueprint/calendar.json` is the honest-empty Calendar (this desk
+has no events until local truth is planted).
+
+### Calendar — `http://127.0.0.1:8803/calendar`
+
+1. Four-lens nav live — Calendar is the current lens (`aria-current="page"`).
+2. Empty paints **`No events`**. No shimmer, no spinner, no fabricated rows.
+3. Populated rows (when `calendar.json` is present) show **title · when ·
+   source · status**. Source ∈ `routine` · `WO` · `manual`; status ∈
+   `scheduled` · `due` · `done`. Shape: `overview/v1/tests/fixtures/calendar.json`.
+4. Dark PC desk (`#0f1114` family) — no cream.
+5. No Map verbs (`dig` · `lot` · `hub` · `fan` · `trail` · `md-viewer` ·
+   `crumb`) and no Wall feed.
+
+### Settings — `http://127.0.0.1:8803/settings`
+
+1. Four-lens nav live — Settings is the current lens.
+2. Four groups in order: **Desk · Appearance · Privacy/Local-only · About/Cellar**.
+3. About/Cellar shows the brew-face Cellar tip (from `/api/overview/pulse`),
+   never a private ProtocolCity SHA. HTML cold-empty until JS is a parked nit.
+4. Dark PC only — Appearance reads **Dark PC**, no cream toggle.
+5. No Overview tile duplication (no Agents · Jobs · Pulse tiles) and no Wall.
+
+Shared pulse footer (`All systems quiet`) is desk chrome, not an Overview tile.
+
 ## Dogfood the populated fixture (tests / demo only)
 
 The default serve is honest-empty; that's the correct paint per
@@ -96,6 +125,9 @@ The suite runs in <2s and covers:
 - End-to-end HTTP — the three V1 endpoints against a live
   ThreadingHTTPServer + the HTML lock (Writer copy, `Local desk`, no
   `workspace`, no Map verbs).
+- Calendar + Settings glass DoD — `No events` empty, populated
+  title · when · source · status, Settings group order, brew-face Cellar
+  tip, no Map verbs, no Overview tile duplication.
 
 If `test_serve_api::test_overview_html_never_speaks_map_verbs` fails, the
 shell has drifted from the label lock — either fix the copy or amend
