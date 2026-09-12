@@ -41,8 +41,8 @@ with no roster/scene change is always a no-op. Output (stdout) is appended to
 
 ## Citizen gate (install)
 
-This seat is **optional** — not part of the default seed-ops trio. Hire and
-install are citizen-present actions.
+This seat is **optional**. Planting papers does not register or dispatch it. Hire and
+installation require applicable workspace authorization.
 
 ### Public path (pip / brew BluePrint)
 
@@ -67,8 +67,9 @@ blueprint hire papers-sync \
   --schedule '0 9 * * 1'
 ```
 
-Without a host LaunchAgent, WorkForce fires the job when the suite engines
-are up; the plist path is for always-on weekly refresh while the laptop is on.
+A running suite does not establish scheduled execution. Verify the configured
+WorkForce command, trigger and execution record, or the authorized host agent.
+Use one configured execution path to avoid duplicate refreshes.
 
 ## Failure posture
 

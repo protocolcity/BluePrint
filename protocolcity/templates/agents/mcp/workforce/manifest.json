@@ -19,5 +19,5 @@
   "level": "L0",
   "vendor_locked": false,
   "enabled": true,
-  "notes": "Optional L0. Seed only when workforce/ is present and MCP module importable (pc-1079). Prefer host venv path with {{WORKSPACE_ROOT}} tokens."
+  "notes": "Optional L0. Seed only when workforce/ is present and MCP module importable. Prefer host venv path with {{WORKSPACE_ROOT}} tokens."
 }
