@@ -69,7 +69,8 @@ def add_note(binder, project, order_id, body):
 
 
 def _invoke(root, project, order, action):
-    executable = root / 'worklane' / '.venv' / 'bin' / 'python'
+    installed = root / 'local/worklane/current/venv/bin/python'
+    executable = installed if installed.is_file() else root / 'worklane/.venv/bin/python'
     if not executable.is_file():
         raise RuntimeError('The workspace WorkLane runtime is unavailable.')
     db = root / 'worklane/worklane/local/data' / (project + '.db')

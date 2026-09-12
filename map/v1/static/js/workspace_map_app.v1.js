@@ -85,9 +85,40 @@ export async function boot(opts = {}) {
     if (!snap.dig) { clearDigIn(world); }
     applyCamera();
     renderTrail();
+    renderBrowser();
   }
 
   let repaintScheduled = false;
+  let browseVersion = 0;
+  let browserKey = null;
+  async function renderBrowser() {
+    const list = document.getElementById('map-browser-list');
+    if (!list) return;
+    const version = ++browseVersion;
+    const snap = viewState.snapshot();
+    const key = JSON.stringify([snap.dig?.relPath || '', snap.filters]);
+    if (key === browserKey) return;
+    document.getElementById('map-browser-path').textContent = snap.dig?.relPath || tree.binder?.name || 'Workspace';
+    try {
+      const nodes = snap.dig ? await tree.childrenAt(snap.dig.relPath) : tree.topLots(snap.filters);
+      if (version !== browseVersion) return;
+      browserKey = key;
+      list.replaceChildren();
+      for (const node of nodes) {
+        if (!node.isDir && !node.hasMd) continue;
+        const button = document.createElement('button');
+        button.type = 'button'; button.textContent = (node.isDir ? 'Folder · ' : 'Paper · ') + node.name;
+        button.addEventListener('click', async () => {
+          try {
+            if (node.isDir) await digInto(node, {mode:snap.dig ? 'nest' : 'root'});
+            else await viewer.open(node.relPath, {label:node.name});
+          } catch (error) { document.getElementById('map-browser-path').textContent = 'Unable to open this folder.'; }
+        });
+        list.append(button);
+      }
+      if (!list.children.length) list.textContent = 'No folders or readable Markdown papers here.';
+    } catch (error) { if(version === browseVersion)list.textContent = 'Folder source unavailable.'; }
+  }
   function scheduleRepaint() {
     if (repaintScheduled) return;
     repaintScheduled = true;
@@ -108,6 +139,7 @@ export async function boot(opts = {}) {
     // focus ring (paintLots reads selectedRelPath from the trail root).
     scheduleRepaint();
     const kids = await tree.childrenAt(node.relPath);
+    if (viewState.snapshot().dig?.relPath !== node.relPath) return;
     // Belt-and-braces: clear the fan layer before every paint so a racing
     // second click cannot leave A's ring layered under B's.
     clearDigIn(world);
