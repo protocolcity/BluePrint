@@ -17,6 +17,16 @@ def _request(url, data=None):
         with urlopen(request, timeout=5) as response:
             return json.load(response)
     except HTTPError as exc:
+        if exc.code == 409:
+            try:
+                payload = json.loads(exc.read(4096))
+                reason = payload.get('msg') if isinstance(payload, dict) else None
+            except (ValueError, OSError):
+                reason = None
+            if reason == 'queue empty':
+                raise RuntimeError('No assigned work is ready to run. Check assigned work for review, completion or gates.') from exc
+            if isinstance(reason, str) and reason.strip():
+                raise RuntimeError('WorkForce did not start this run: ' + reason[:300]) from exc
         raise RuntimeError('WorkForce declined dispatch. Refresh to see its current state.') from exc
     except (URLError, TimeoutError, ValueError) as exc:
         raise RuntimeError('WorkForce did not confirm the request. Refresh before retrying.') from exc
