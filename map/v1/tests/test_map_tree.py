@@ -78,14 +78,42 @@ class RenderFileTests(unittest.TestCase):
         self.assertIn("text/html", ctype)
         self.assertIn("<h1>", body)
 
-    def test_non_md_returns_plain(self) -> None:
-        body, ctype = render_file(FIXTURE, "notes/scratch.txt", render="html")
-        self.assertIn("text/plain", ctype)
-        self.assertIn("non-md file", body)
+    def test_non_markdown_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            render_file(FIXTURE, "notes/scratch.txt", render="raw")
 
     def test_escape_rejected(self) -> None:
         with self.assertRaises(ValueError):
             render_file(FIXTURE, "../secret.md")
+
+
+class DocumentAccessTests(unittest.TestCase):
+    def test_protected_files_and_symlink_aliases_are_denied(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in [".env", "config.json", "local/notes.md", ".git/notes.md", "secrets/keys.md"]:
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("PRIVATE_SENTINEL")
+                for mode in ["html", "raw"]:
+                    with self.subTest(path=relative, mode=mode), self.assertRaises(ValueError):
+                        render_file(root, relative, render=mode)
+            (root / "public.md").symlink_to(root / "secrets/keys.md")
+            with self.assertRaises(ValueError):
+                render_file(root, "public.md")
+
+    def test_project_and_skill_markdown_still_open(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in ["project/AGENTS.md", "project/docs/ARCHITECTURE.md", ".agents/skills/example/SKILL.md"]:
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("# Readable paper")
+                self.assertIn("Readable paper", render_file(root, relative)[0])
+            (root / "linked.md").symlink_to(root / "project/AGENTS.md")
+            self.assertIn("Readable paper", render_file(root, "linked.md")[0])
 
 
 if __name__ == "__main__":

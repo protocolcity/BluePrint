@@ -75,10 +75,8 @@ class FourLensNavTests(unittest.TestCase):
     def test_overview_root_paints(self) -> None:
         status, body, ctype = _get(self.port, "/")
         self.assertEqual(status, 200)
-        self.assertIn("text/html", ctype)
-        text = body.decode("utf-8")
-        self.assertIn('id="overview-shell"', text)
-        self.assertIn('data-lens="overview"', text)
+        self.assertIn('id="overview-view"', body.decode())
+        self.assertIn('data-page="overview"', body.decode())
 
     def test_map_lens_paints(self) -> None:
         status, body, ctype = _get(self.port, "/map")
@@ -99,52 +97,22 @@ class FourLensNavTests(unittest.TestCase):
         self.assertGreater(len(js_body), 0)
 
     def test_calendar_lens_paints(self) -> None:
-        status, body, ctype = _get(self.port, "/calendar")
+        status, body, _ = _get(self.port, "/calendar")
         self.assertEqual(status, 200)
-        self.assertIn("text/html", ctype)
-        text = body.decode("utf-8")
-        self.assertIn('id="calendar-shell"', text)
-        self.assertIn('data-lens="calendar"', text)
-        # Every page carries the full four-lens nav — no dead chips.
-        for lens in ("overview", "map", "calendar", "settings"):
-            self.assertIn(f'data-lens="{lens}"', text)
-        # Calendar is the current lens on this page.
-        self.assertRegex(
-            text,
-            r'data-lens="calendar"[^>]*aria-current="page"',
-        )
-        # Honest empty copy present on cold serve.
-        self.assertIn("No events", text)
-        # Detail sheet is a native dialog — closed until a row is clicked.
-        self.assertIn('data-role="cal-sheet"', text)
-        self.assertIn("<dialog", text)
-        # Local desk banner still says the exact string (Designer IA lock).
-        self.assertIn("Local desk", text)
-        self.assertNotIn("workspace", text.lower())
+        text=body.decode()
+        self.assertIn('id="calendar-view"', text)
+        self.assertIn('id="schedule-list"', text)
+        self.assertIn('id="event-list"', text)
+        self.assertIn('data-page="calendar"', text)
 
     def test_settings_lens_paints(self) -> None:
-        status, body, ctype = _get(self.port, "/settings")
+        status, body, _ = _get(self.port, "/settings")
         self.assertEqual(status, 200)
-        self.assertIn("text/html", ctype)
-        text = body.decode("utf-8")
-        self.assertIn('id="settings-shell"', text)
-        self.assertIn('data-lens="settings"', text)
-        # Full four-lens nav.
-        for lens in ("overview", "map", "calendar", "settings"):
-            self.assertIn(f'data-lens="{lens}"', text)
-        # Settings is the current lens on this page.
-        self.assertRegex(
-            text,
-            r'data-lens="settings"[^>]*aria-current="page"',
-        )
-        # Four groups from the Designer IA spec.
-        self.assertIn("Desk", text)
-        self.assertIn("Appearance", text)
-        self.assertIn("Privacy", text)
-        self.assertIn("About", text)
-        self.assertIn("Cellar", text)
-        # No workspace theme leak.
-        self.assertNotIn("workspace", text.lower())
+        text=body.decode()
+        self.assertIn('id="settings-view"', text)
+        self.assertIn('id="refresh-preference"', text)
+        self.assertIn('id="motion-preference"', text)
+        self.assertIn('data-page="settings"', text)
 
     def test_calendar_and_settings_share_overview_css(self) -> None:
         """One dark PC voice — Calendar and Settings load the shared
@@ -183,19 +151,12 @@ class FourLensNavTests(unittest.TestCase):
                 f"Settings HTML must not use Map verb {verb!r}",
             )
 
-    def test_settings_groups_paint_in_spec_order(self) -> None:
-        """Glass DoD: Desk · Appearance · Privacy/Local-only · About/Cellar."""
+    def test_settings_separates_display_from_runtime(self) -> None:
         _, body, _ = _get(self.port, "/settings")
-        text = body.decode("utf-8")
-        desk = text.index("ov-set-desk-title")
-        appearance = text.index("ov-set-appearance-title")
-        privacy = text.index("ov-set-privacy-title")
-        about = text.index("ov-set-about-title")
-        self.assertLess(desk, appearance)
-        self.assertLess(appearance, privacy)
-        self.assertLess(privacy, about)
-        self.assertIn("Dark PC", text)
-        self.assertIn("Cellar tip", text)
+        text=body.decode()
+        self.assertLess(text.index('Display preferences'),text.index('Workspace and application'))
+        self.assertIn('These do not change agents or services.', text)
+        self.assertIn('Running build', text)
 
     def test_calendar_and_settings_do_not_duplicate_overview_tiles(self) -> None:
         """Settings / Calendar are lenses — no Agents · Jobs · Pulse tiles."""

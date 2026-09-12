@@ -4,8 +4,7 @@ Locks the CoS feed contract:
 
 - Agents from ``<binder>/.protocolcity/workforce/local/roster.json``
   (twin ``workforce/local/roster.json``). Daemon is runtime polish only.
-- Jobs from ``<binder>/worklane/worklane/local/data/<slug>.db`` (Desk HTTP
-  optional, short timeout, fail → SQLite / empty).
+- Jobs from ``<binder>/worklane/worklane/local/data/<slug>.db`` (read-only; no implicit localhost service).
 - ``overview.json`` wins when present.
 - Absent / malformed → honest empty. Never invent seats or WOs.
 - ``demo-worker`` alone still paints No agents.
@@ -128,11 +127,7 @@ class OverviewJsonWinsTests(unittest.TestCase):
 class WorkLaneSqliteTests(unittest.TestCase):
     def test_sqlite_projects_open_jobs_and_buckets(self) -> None:
         binder = FIXTURES / "binder_worklane_jobs"
-        # Force SQLite path — Desk may or may not be up; mock Desk miss.
-        with mock.patch(
-            "server.local_projectors._project_jobs_via_desk", return_value=None
-        ):
-            jobs, buckets = project_jobs(binder)
+        jobs, buckets = project_jobs(binder)
         names = {j["name"] for j in jobs}
         self.assertIn("Ready-ish in progress", names)
         self.assertIn("Waiting on backlog", names)
@@ -143,14 +138,33 @@ class WorkLaneSqliteTests(unittest.TestCase):
         self.assertEqual(buckets["waiting"], 1)
         self.assertEqual(buckets["blocked"], 1)
 
-    def test_desk_http_failure_degrades_empty_when_no_sqlite(self) -> None:
+    def test_unrelated_local_service_is_never_contacted(self) -> None:
         binder = FIXTURES / "binder_absent_stores"
         with mock.patch(
-            "server.local_projectors._http_get_json", return_value=None
-        ):
+            "urllib.request.urlopen", side_effect=AssertionError("foreign workspace contacted")
+        ) as request:
             jobs, buckets = project_jobs(binder)
+        request.assert_not_called()
         self.assertEqual(jobs, [])
         self.assertEqual(buckets, {"waiting": 0, "ready": 0, "blocked": 0})
+
+
+class WorkspaceIsolationTests(unittest.TestCase):
+    def test_same_project_slug_in_two_workspaces_stays_separate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bp-isolation-") as tmp:
+            binders = [Path(tmp) / "first", Path(tmp) / "second"]
+            for index, binder in enumerate(binders):
+                data = binder / "worklane/worklane/local/data"
+                data.mkdir(parents=True)
+                with sqlite3.connect(data / "shared.db") as db:
+                    db.execute("CREATE TABLE tasks (id INTEGER, ext_id TEXT, title TEXT, status TEXT, labels TEXT)")
+                    db.execute("INSERT INTO tasks VALUES (1, 'shared-1', ?, 'backlog', '[]')", (f"Workspace {index}",))
+            with mock.patch("urllib.request.urlopen", side_effect=AssertionError("foreign service contacted")) as request:
+                for index, binder in enumerate(binders):
+                    jobs, buckets = project_jobs(binder)
+                    self.assertEqual([job["name"] for job in jobs], [f"Workspace {index}"])
+                    self.assertEqual(buckets["waiting"], 1)
+                request.assert_not_called()
 
 
 class BinderOverviewLiveProjectorTests(unittest.TestCase):
