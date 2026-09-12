@@ -69,6 +69,16 @@ class EngineIntegrationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'not assigned'):
                 work_action(roots[0], 'protocolcity', 'pc-1', 'assign', 'other-agent', order['updated_at'])
             self.assertTrue(work_action(roots[0], 'protocolcity', 'pc-1', 'assign', 'test-agent', order['updated_at'])['ok'])
+            order = read_work_order(roots[0], 'protocolcity', 'pc-1')
+            work_action(roots[0], 'protocolcity', 'pc-1', 'reminder', '2026-12-20', order['updated_at'])
+            reminded = read_work_order(roots[0], 'protocolcity', 'pc-1')
+            labels = json.loads(reminded['labels'])
+            self.assertIn('worker:test-agent', labels)
+            self.assertIn('reminder:2026-12-20', labels)
+            self.assertEqual(reminded['status'], order['status'])
+            self.assertEqual(reminded['gate_type'], order['gate_type'])
+            work_action(roots[0], 'protocolcity', 'pc-1', 'reminder', '', reminded['updated_at'])
+            self.assertNotIn('reminder:', read_work_order(roots[0], 'protocolcity', 'pc-1')['labels'])
             with sqlite3.connect(roots[0]/'worklane/worklane/local/data/protocolcity.db') as conn:
                 labels = conn.execute('SELECT labels FROM tasks').fetchone()[0]
                 self.assertIn('worker:test-agent', labels)

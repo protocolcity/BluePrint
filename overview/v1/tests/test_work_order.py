@@ -60,3 +60,17 @@ class WorkOrderTests(unittest.TestCase):
                 conn.execute('UPDATE tasks SET ext_id = NULL')
             self.assertEqual(read_work_order(root, '', 'pc-1')['ext_id'], 'pc-1')
             with self.assertRaises(FileNotFoundError): read_work_order(root, 'protocolcity', 'wrong-1')
+
+
+class RevealTests(unittest.TestCase):
+    def test_only_recorded_reference_can_reach_file_manager(self):
+        from unittest.mock import patch
+        from server.work_order import reveal_reference
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'source.py').write_text('# source')
+            order={'references':[{'path':'source.py'}]}
+            with patch('server.work_order.read_work_order',return_value=order), patch('sys.platform','darwin'), patch('subprocess.run') as run:
+                with self.assertRaises(ValueError):reveal_reference(root,'product','pc-1','/etc/passwd')
+                run.assert_not_called()
+                self.assertTrue(reveal_reference(root,'product','pc-1','source.py')['ok'])
+                self.assertEqual(run.call_args.args[0],['/usr/bin/open','-R',str((root/'source.py').resolve())])

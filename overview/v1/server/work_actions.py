@@ -46,6 +46,11 @@ try:
         result = tool('update')(identity, product=project, gate_type='human', gate_note=request['value'])
     elif action == 'resume':
         result = tool('update')(identity, product=project, gate_type='', gate_note='')
+    elif action == 'reminder':
+        labels = list(task.labels or [])
+        result = tool('label')(identity, product=project,
+            add=['reminder:' + request['value']] if request['value'] else [],
+            remove=[label for label in labels if label.startswith('reminder:') and label != 'reminder:' + request['value']])
     elif action == 'assign':
         labels = list(task.labels or [])
         result = tool('label')(identity, product=project, add=['worker:' + request['value']],
@@ -105,7 +110,7 @@ def _invoke(root, project, order, action):
 
 
 def work_action(binder, project, order_id, action, value, expected_updated_at):
-    if action not in ('priority', 'hold', 'resume', 'assign'):
+    if action not in ('priority', 'hold', 'resume', 'assign', 'reminder'):
         raise ValueError('Unsupported work-order action.')
     if not binder or not isinstance(project, str) or not project or project not in project_registry(Path(binder).resolve()):
         raise ValueError('A registered project is required.')
@@ -119,6 +124,12 @@ def work_action(binder, project, order_id, action, value, expected_updated_at):
         raise ValueError('Select a priority from 1 to 4.')
     if action == 'hold' and (not isinstance(value, str) or not value.strip() or len(value)>2000):
         raise ValueError('Describe the decision needed in 1 to 2,000 characters.')
+    if action == 'reminder':
+        from datetime import date
+        if not isinstance(value, str): raise ValueError('Choose a reminder date or clear it.')
+        if value:
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}',value): raise ValueError('Use a valid calendar date.')
+            date.fromisoformat(value)
     if action == 'assign':
         from .operations import read_json
         from .local_projectors import resolve_roster_path

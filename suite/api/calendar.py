@@ -202,6 +202,18 @@ def events_from_task(
                 }
             )
 
+    for lab in _labels_of(task):
+        if not lab.startswith('reminder:'):
+            continue
+        try:
+            when = date.fromisoformat(lab[len('reminder:'):])
+        except ValueError:
+            continue
+        out.append({'uid': '%s-reminder-%s@blueprint.calendar' % (tid, when.isoformat()),
+                    'summary': '%s · %s' % (tid, title), 'description': 'Calendar reminder; work eligibility is unchanged.',
+                    'url': url, 'kind': 'reminder', 'dtstart': when, 'all_day': True,
+                    'task_id': tid, 'product': product})
+
     seen_dates = set()
     for lab in _labels_of(task):
         d = parse_deadline_label(lab)

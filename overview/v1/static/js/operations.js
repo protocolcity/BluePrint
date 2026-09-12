@@ -7,6 +7,11 @@ const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':
 const titles = {activity:['Activity','Verified repository activity across your projects.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents','Registered local agents, schedules, and reported runtime state.'],connections:['Connections','Where the information comes from and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 const size = 25;
+let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
+function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
+function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
+$('attention-face').addEventListener('change',()=>overview());
+$('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
 let interval = 15, motion = 'system';
 try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,15,30].includes(saved.interval))interval=saved.interval;if(saved.motion==='off')motion='off'; } catch(error) { /* Unavailable storage uses defaults. */ }
@@ -14,6 +19,7 @@ $('refresh-preference').value=String(interval);$('motion-preference').value=moti
 document.body.classList.toggle('bp-reduce-motion',motion==='off');
 const query = new URLSearchParams(location.search);
 $('search').value = query.get('q') || '';
+for(const name of ['decide','read','watch','note'])$('status-filter').add(new Option(name[0].toUpperCase()+name.slice(1),'face:'+name));
 for(const [gate,label] of Object.entries({deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'})) {
   const existing=Array.from($('status-filter').options).find(option=>option.value===gate);
   if(existing) existing.value='gate:'+gate;
@@ -38,6 +44,7 @@ function orderRow(order) {
   const row=link('',workUrl(order),'bp-order');
   const content=el('div'); content.append(el('strong',order.title));
   content.append(el('span',`${order.project_name} · ${order.id} · ${order.workers.length ? order.owner : 'No worker assigned'} · ${date(order.updated_at)}`,'bp-order-meta'));
+  if(order.attention_face==='watch')content.append(el('span',order.gate_type==='timer' ? 'Timer opens '+date(order.gate_until) : 'No recent update · check progress before recovery','bp-order-note'));
   if(order.gate_note) content.append(el('span',order.gate_note.length > 160 ? order.gate_note.slice(0,157) + '…' : order.gate_note,'bp-order-note'));
   const gateLabel={deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'}[order.gate_type];
   row.append(content,badge(order.attention ? 'attention' : order.status, order.attention ? 'Needs you' : undefined));
@@ -64,8 +71,21 @@ function overview() {
   const orders=snapshot.orders, attention=orders.filter(x=>x.attention);
   const metrics=[['Needs you',attention.length,'/work?status=attention'],['In progress',orders.filter(x=>x.status==='in_progress').length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Agents & jobs',snapshot.agents.length,'/agents']];
   $('metrics').replaceChildren(...metrics.map(([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;}));
-  const list=$('attention-list');list.replaceChildren(...attention.slice(0,6).map(orderRow));
-  if(!attention.length) empty(list,'No work orders explicitly waiting on you in the readable stores.');
+  const selected=$('attention-face').value, list=$('attention-list');list.replaceChildren();
+  const band=orders.filter(o=>o.attention_face===selected);
+  const visible=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
+  for(const order of visible.slice(0,6)){
+    const entry=el('div');entry.append(orderRow(order));
+    const mute=el('button','Mute here for 24 hours');mute.type='button';
+    mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();overview();});entry.append(mute);list.append(entry);
+  }
+  if(!visible.length)empty(list,'No '+selected+' items visible in the readable stores.');
+  const mutedCount=band.length-visible.length;
+  $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
+  $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
+  for(const option of $('attention-face').options)option.textContent=option.value[0].toUpperCase()+option.value.slice(1)+' · '+orders.filter(o=>o.attention_face===option.value).length;
+  $('attention-list').closest('section').querySelector('.bp-section-head a').href='/work?status=face:'+selected;
+
   sources($('source-list'),false);
   const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
   $('project-summary').replaceChildren(...projects.slice(0,6).map(projectCard));
@@ -90,7 +110,7 @@ function filterOptions() {
 }
 function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value;
-  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.length:selectedAssignment==='needs-routing'?o.needs_routing:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.length:selectedAssignment==='needs-routing'?o.needs_routing:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):status.startsWith('face:')?o.attention_face===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
   $('work-list').replaceChildren(...orders.slice(pageIndex*size,(pageIndex+1)*size).map(orderRow));
   if(!orders.length) empty($('work-list'),'No matching open work. Try another project, assignment, status, or search.');
