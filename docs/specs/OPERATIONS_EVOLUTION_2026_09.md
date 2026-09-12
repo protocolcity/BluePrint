@@ -4,9 +4,9 @@ User decision: the application developed on :8803 is the forward BP baseline. Th
 
 ## Product behavior
 
-BluePrint provides one view into the selected workspace's projects, work orders, agents, schedules, and data sources. Overview prioritizes explicitly human-gated work and gives project context. Work provides search, project/status filters, pagination, and links to a full description/comment reader. Projects groups registered stores. Agents distinguishes registry membership from fresh runtime evidence. Calendar separates WorkForce next-run reports from manually supplied calendar events. Connections explains source availability and excluded databases. Settings contains functioning browser display preferences and running package identity.
+BluePrint provides one view into the selected workspace's projects, work orders, agents, schedules, and data sources. Overview prioritizes explicitly human-gated work and gives project context. Work provides search, project/status filters, pagination, and links to a full description/comment reader. Projects groups registered stores. Agents distinguishes registry membership from fresh runtime evidence. Calendar distinguishes WorkForce next-run reports, dates derived from work orders, and optional manually supplied events. Connections explains source availability and excluded databases. Settings contains functioning browser display preferences and running package identity.
 
-The desk disclosure describes the selected workspace; it is not a cloud switch. Remote operations are explicitly not connected. A future remote adapter must carry source identity, observation time, and failure state. A local work order describing remote work is not proof of remote execution.
+The desk disclosure describes the selected workspace; it is not a cloud switch. GitHub delivery activity is connected through an explicit repository allowlist. Direct remote agent execution is not configured. A future remote adapter must carry source identity, observation time, and failure state. A local work order describing remote work is not proof of remote execution.
 
 ## Data and interaction rules
 
@@ -18,12 +18,36 @@ The desk disclosure describes the selected workspace; it is not a cloud switch. 
 - Display installed package metadata as the running build, not an unrelated Homebrew formula version.
 - Render work titles, descriptions, comments, and calendar notes as text, never executable markup.
 
-## Delivery state
+## Current delivery state
 
-Implemented in isolated blueprint-consolidation candidate, package 0.1.47+consolidation.2. 129 Overview tests and 44 Map tests pass. Installed-wheel route/data smoke test passes. Browser checks cover search → detail, real comment trail, desk disclosure, calendar schedules, Map navigation, and a 375px work-list layout.
+The application is deployed on :8803 from the canonical BluePrint source and
+an isolated installed release. Build identity comes from installed package
+metadata and the workspace deployment receipt. Old :8801/:8802 links redirect
+in the same process; no separate preview is part of normal operation.
+See [deployment and recovery](../operations/DEPLOYMENT.md).
 
-Production deployment, remote adapters, work-order write/dispatch controls, and broader Map information-density improvements remain. Existing V1 assets and APIs are retained for compatibility; live operation routes use the new shell. This candidate has not been published or installed into the production service.
+Work-order notes, priority, hold, resume, and assignment to a registered agent
+use WorkLane with an explicit project, verified store, and record-version
+check. The reader displays errors and preserves the user's context. Notes
+cannot smuggle lifecycle commands. Create, close, and agent-dispatch forms
+are not currently implemented in BP; those operations use their owning
+engines through the established work-order process.
 
-## Note action extension
+Map provides both spatial navigation and a keyboard-accessible folder/paper
+browser. Document readers contain untrusted text, focus the close control,
+and return focus to the originating paper on dismissal. Project papers
+catalog existing documents under Product, System, Operations, and Development;
+this navigation does not confer public exposure or authority on a document.
 
-Candidate .3 adds ordinary notes through the workspace-installed WorkLane handler, using its author identity and lifecycle validation. The bridge validates the registered project and resolved tracker path before writing. Lifecycle command markers are blocked in this note-only form. Dedicated approve/close/assign/dispatch actions remain unimplemented. Notes may now be written from the reader; other data views stay read-only. 134 Overview tests pass, including isolated real-engine and local-origin tests. Browser persistence/error tests used disposable records only.
+GitHub PRs, checks, workflows, and releases carry repository identity and
+observation state. They are delivery evidence, not agent heartbeats. Local
+scheduled report jobs show actual execution receipts and are explicitly
+identified as deterministic reports. They do not imply AI implementation
+coverage. A future remote execution connection needs an identified runtime
+and its explicit access configuration.
+
+Verification includes isolated real-engine action tests, origin and store
+refusal paths, unavailable/stale-source behavior, installed-wheel activation,
+and browser navigation/readers. Host-specific test counts, versions, commits,
+and remaining consolidation items live in the workspace execution report;
+they are not a permanent product specification.
