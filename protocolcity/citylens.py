@@ -49,7 +49,7 @@ from typing import Dict, List, Optional, Tuple
 
 # Origin owners that count as "ours" for zone classification (pc-49).
 # Everything else with a remote is foreign reference material.
-OWN_REMOTE_OWNERS = frozenset({"example_user", "protocolcity"})
+OWN_REMOTE_OWNERS = frozenset({"protocolcity"})
 # Cold-storage name pattern: tp-backups, tradeOS-backups, *.backups, etc.
 _ARCHIVE_NAME = re.compile(r"(?i)(^|[._-])backups?$|backups?$")
 # Generated export dirs (BluePrint / WorkLane / WorkForce / Charter *export

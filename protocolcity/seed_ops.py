@@ -1,8 +1,11 @@
-"""Seed workspace ops jobs for plug-and-play first runs.
+"""Seed workspace ops kit; routines stay off the WorkForce roster by default.
 
 Office/workspace **jobs** (default trio: chief-of-staff · health-patrol ·
-workspace-efficiency) should appear on the Map JOBS ring after install —
-not only after a manual hire. Project lanes stay user-hired.
+workspace-efficiency) are BluePrint **routines**, not product-lane seats.
+After an intentional retire (local roster = product lanes only), seed-ops
+must not put those three back. Pass ``hire_routines=True`` to opt in
+through the Python API. Non-routine ``jobs=`` (digest,
+demo-worker / product lanes) still hire.
 
 Idempotent: skips names already on the WorkForce roster. Old seat names
 (marshal, papers-patrol, …) count as aliases so renames never double-seed
@@ -56,6 +59,17 @@ OPS_JOB_ALIASES: Dict[str, Tuple[str, ...]] = {
     "health-patrol": ("marshal", "city-marshal"),
     "papers-sync": ("papers-patrol",),
 }
+
+# BluePrint routines — not WorkForce product-lane seats. Default seed
+# (hire_routines=False) skips these so a restart / seed-ops cannot reseat
+# them after an intentional retire.
+OPS_ROUTINE_SLUGS: frozenset = frozenset(
+    {
+        "chief-of-staff",
+        "health-patrol",
+        "workspace-efficiency",
+    }
+)
 
 
 def _pkg_dir() -> Path:
@@ -122,6 +136,21 @@ def _seat_already_present(name: str, existing: set) -> bool:
         return True
     for alias in OPS_JOB_ALIASES.get(key, ()):
         if alias.lower() in existing:
+            return True
+    return False
+
+
+def _is_ops_routine(name: str) -> bool:
+    """True for the local routine trio or a recognized old alias of one."""
+    key = (name or "").strip().lower()
+    if not key:
+        return False
+    if key in OPS_ROUTINE_SLUGS:
+        return True
+    for canon, aliases in OPS_JOB_ALIASES.items():
+        if canon not in OPS_ROUTINE_SLUGS:
+            continue
+        if key in {a.lower() for a in aliases}:
             return True
     return False
 
@@ -338,10 +367,17 @@ def seed_workspace_ops(
     *,
     jobs: Optional[List[Dict[str, str]]] = None,
     quiet: bool = False,
+    hire_routines: bool = False,
 ) -> Dict[str, Any]:
-    """Ensure L0 workspace ops jobs exist on the city roster.
+    """Plant the L0 ops kit; do not reseat BluePrint routines unless asked.
 
-    Returns a receipt: {ok, seeded: [...], skipped: [...], errors: [...], roster}.
+    Default ``hire_routines=False`` (serve/start, seed-ops, Map CTA) plants
+    the efficiency kit but does **not** hire chief-of-staff / health-patrol /
+    workspace-efficiency into WorkForce. Explicit ``jobs=`` entries that are
+    not routines still hire (digest, product lanes). Opt in with
+    ``hire_routines=True``.
+
+    Returns a receipt: {ok, seeded, skipped, routines, errors, roster}.
     Also plants the workspace-efficiency skill + scripts kit.
     """
     root = city_root.expanduser().resolve()
@@ -367,8 +403,39 @@ def seed_workspace_ops(
     want = jobs if jobs is not None else DEFAULT_OPS_JOBS
     seeded: List[str] = []
     skipped: List[str] = []
+    routines: List[str] = []
     errors: List[str] = []
     papers_updated: List[str] = []
+    to_hire: List[Dict[str, str]] = []
+
+    for job in want:
+        name = (job.get("name") or "").strip()
+        if not name:
+            continue
+        if not hire_routines and _is_ops_routine(name):
+            routines.append(name)
+            skipped.append(name)
+            continue
+        to_hire.append(job)
+
+    def _receipt(**extra: Any) -> Dict[str, Any]:
+        out = {
+            "ok": not errors,
+            "seeded": seeded,
+            "skipped": skipped,
+            "routines": routines,
+            "errors": errors,
+            "roster": str(roster_path),
+            "ops_workdir": str(ops_wd),
+            "kit": kit,
+            "papers_updated": papers_updated,
+            "hire_routines": hire_routines,
+        }
+        out.update(extra)
+        return out
+
+    if not to_hire:
+        return _receipt()
 
     try:
         from workforce.hire import hire, RosterError  # type: ignore
@@ -395,17 +462,13 @@ def seed_workspace_ops(
         try:
             from workforce.hire import hire, RosterError  # type: ignore
         except ImportError as e:
-            return {
-                "ok": False,
-                "error": "protocolcity-workforce not installed (%s)" % e,
-                "seeded": [],
-                "skipped": [],
-                "errors": [str(e)],
-                "roster": str(roster_path),
-                "kit": kit,
-            }
+            return _receipt(
+                ok=False,
+                error="protocolcity-workforce not installed (%s)" % e,
+                errors=[str(e)],
+            )
 
-    for job in want:
+    for job in to_hire:
         name = (job.get("name") or "").strip()
         if not name:
             continue
@@ -455,13 +518,4 @@ def seed_workspace_ops(
         except Exception as e:
             errors.append("%s: %s" % (name, e))
 
-    return {
-        "ok": not errors,
-        "seeded": seeded,
-        "skipped": skipped,
-        "errors": errors,
-        "roster": str(roster_path),
-        "ops_workdir": str(ops_wd),
-        "kit": kit,
-        "papers_updated": papers_updated,
-    }
+    return _receipt()
