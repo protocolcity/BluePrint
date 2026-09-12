@@ -106,6 +106,7 @@ def operations_snapshot(binder):
                     except (ValueError, TypeError):
                         labels = []
                     labels = labels if isinstance(labels, list) else []
+                    workers = [x[7:] for x in labels if isinstance(x, str) and x.startswith('worker:') and x[7:]]
                     attention = item.get('gate_type') == 'human' or 'gate:human' in labels
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
                     from suite.api.calendar import events_from_task
@@ -116,6 +117,7 @@ def operations_snapshot(binder):
                         'priority': item.get('priority'), 'updated_at': item.get('updated_at'),
                         'attention': attention, 'gate_type': item.get('gate_type') or '',
                         'gate_note': item.get('gate_note') or '',
+                        'workers': workers, 'needs_routing': not workers or 'needs:routing' in labels,
                         'owner': ', '.join(str(x)[7:] for x in labels if isinstance(x,str) and x.startswith('worker:')) or 'Unassigned'})
                     summary['attention'] += int(attention)
         except (OSError, sqlite3.Error):

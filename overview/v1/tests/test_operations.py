@@ -37,6 +37,21 @@ class OperationsTests(unittest.TestCase):
         result=operations_snapshot(self.root)
         self.assertEqual(len(result['orders']),1)
         self.assertEqual(result['sources'][0]['state'],'partial')
+
+    def test_assignment_and_routing_are_separate_from_project(self):
+        self.seed()
+        for labels, expected_workers, needs_routing in [
+            ([], [], True),
+            (['worker:agent'], ['agent'], False),
+            (['worker:agent', 'needs:routing'], ['agent'], True),
+            (['worker:agent', 'worker:second'], ['agent', 'second'], False),
+        ]:
+            with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+                conn.execute('UPDATE tasks SET labels=? WHERE id=1', (json.dumps(labels),))
+            order = operations_snapshot(self.root)['orders'][0]
+            self.assertEqual(order['project'], 'product')
+            self.assertEqual(order['workers'], expected_workers)
+            self.assertEqual(order['needs_routing'], needs_routing)
     def test_unregistered_work_labels_do_not_create_agents(self):
         self.seed()
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
