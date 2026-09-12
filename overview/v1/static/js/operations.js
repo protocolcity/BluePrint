@@ -15,9 +15,11 @@ document.body.classList.toggle('bp-reduce-motion',motion==='off');
 const query = new URLSearchParams(location.search);
 $('search').value = query.get('q') || '';
 for(const [gate,label] of Object.entries({deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'})) {
-  $('status-filter').add(new Option(label,'gate:'+gate));
+  const existing=Array.from($('status-filter').options).find(option=>option.value===gate);
+  if(existing) existing.value='gate:'+gate;
+  else $('status-filter').add(new Option(label,'gate:'+gate));
 }
-$('status-filter').value = query.get('status') || '';
+$('status-filter').value = query.get('status')==='deferred' ? 'gate:deferred' : query.get('status') || '';
 let selectedProject = query.get('project') || '';
 $('page-title').textContent = titles[page][0];
 $('page-description').textContent = titles[page][1];
