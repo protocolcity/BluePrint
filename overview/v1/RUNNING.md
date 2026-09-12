@@ -7,6 +7,8 @@ pip package. One path today: **local dev tree** via the tiny server.
 (landing MC), Map V1 dig, Calendar (week list), Settings (groups). Every
 lens chip in the top nav is a real page; no dead pills, no 404.
 
+CLI session handoff: see [`docs/CLI_HANDOFF.md`](../../docs/CLI_HANDOFF.md).
+
 ## Local dev tree
 
 ```bash
