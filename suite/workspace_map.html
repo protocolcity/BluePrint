@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en" class="suite-map-city suite-has-spine">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/brand/favicon.svg?v=pc-1285" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch.png?v=pc-1285">
+<title>BluePrint — Workspace · Map</title>
+<!-- pc-973: CSS first so skeleton can paint while deferred JS downloads -->
+<link rel="stylesheet" href="/suite.css?v=20260821-pc1298">
+<link rel="stylesheet" href="/map/workspace_map.css?v=20260811-pc1210">
+<style>
+  /* pc-1318: skills library — Map stage chrome, not a fourth lens.
+     Tokens match corner panels (glass / Avenir / chip radius). */
+  .map-skills {
+    left: 148px;
+    right: 148px;
+    bottom: 12px;
+    max-width: none;
+    padding: 8px 10px 7px;
+    border: 1px solid var(--map-edge, var(--border, #c4b8a4));
+    border-radius: var(--map-radius-chip, 8px);
+    background: var(--map-glass, color-mix(in srgb, var(--card, #fffdf8) 92%, transparent));
+    box-shadow: var(--map-shadow);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    max-height: min(22vh, 220px);
+    z-index: 8;
+  }
+  .map-skills[hidden] {
+    display: none !important;
+  }
+  .map-skills > summary.map-skills-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    font-weight: var(--weight-medium);
+    font-size: var(--type-label);
+    line-height: 1.2;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink, #2a241c);
+  }
+  .map-skills > summary.map-skills-head::-webkit-details-marker {
+    display: none;
+  }
+  .map-skills > summary.map-skills-head::after {
+    content: " +";
+    margin-left: auto;
+    color: var(--finder-blue, #007AFF);
+    opacity: 0.75;
+  }
+  .map-skills[open] > summary.map-skills-head {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid color-mix(in srgb, var(--map-edge, #c4b8a4) 70%, transparent);
+  }
+  .map-skills[open] > summary.map-skills-head::after {
+    content: " −";
+  }
+  .map-skills-title { opacity: 0.72; }
+  .map-skills-n {
+    opacity: 0.5;
+    font-variant-numeric: tabular-nums;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  .map-skills-body {
+    min-height: 0;
+    overflow: auto;
+  }
+  .map-skills:not([open]) .map-skills-body {
+    display: none;
+  }
+  .map-skills-empty {
+    margin: 0;
+    font-size: var(--type-body);
+    opacity: 0.6;
+    font-style: italic;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .map-skills-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  a.map-skills-chip,
+  button.map-skills-chip {
+    display: inline-flex;
+    align-items: center;
+    font: inherit;
+    font-size: var(--type-body);
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    text-transform: none;
+    color: var(--ink, #2a241c);
+    border: 1px solid var(--line, var(--border, #c4b8a4));
+    background: color-mix(in srgb, var(--card, #fffdf8) 92%, transparent);
+    border-radius: 999px;
+    padding: 4px 10px 3px;
+    cursor: pointer;
+    line-height: 1.25;
+  }
+  a.map-skills-chip:hover,
+  button.map-skills-chip:hover {
+    border-color: color-mix(in srgb, var(--gold, #b8860b) 55%, var(--border, #c4b8a4));
+    color: var(--ink, #2a241c);
+  }
+  a.map-skills-chip:focus-visible,
+  button.map-skills-chip:focus-visible {
+    outline: 2px solid var(--finder-blue, #007AFF);
+    outline-offset: 2px;
+  }
+  .map-skills-chip.is-meta {
+    border-style: dashed;
+    opacity: 0.88;
+    font-size: var(--type-label);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  @media (max-width: 900px) {
+    .map-skills {
+      left: 8px;
+      right: 8px;
+      bottom: 48px;
+      max-height: min(28vh, 200px);
+      padding: 7px 8px 6px;
+    }
+  }
+</style>
+<!-- pc-893/973: kick data + engine download while shell paints -->
+<!-- pc-1093: use-credentials so preload matches same-origin fetch (was anonymous → never reused) -->
+<!-- pc-1292: preload canonical snapshot — /api/map-bootstrap 302s and Chromium drops redirected fetch preloads -->
+<link rel="preload" href="/api/map/snapshot" as="fetch" crossorigin="use-credentials">
+<link rel="preload" href="/map/map-fast.js?v=20260819-pc1292" as="script">
+<link rel="preload" href="/map/workspace_map_app.js?v=20260901-pc1415" as="script">
+<link rel="preload" href="/map/agents-panel.js?v=20260806-pc1169" as="script">
+<link rel="preload" href="/map/wo-tape.js?v=20260831-pc1346" as="script">
+<link rel="preload" href="/map/folder-list.js?v=20260820-pc1260" as="script">
+<link rel="preload" href="/map/inspect-project.js?v=20260901-pc1395" as="script">
+<link rel="preload" href="/map/inspect-person.js?v=20260901-pc1401" as="script">
+<link rel="preload" href="/map/inspect-you.js?v=20260901-pc1405" as="script">
+<link rel="preload" href="/map/inspect-workspace.js?v=20260901-pc1408" as="script">
+<link rel="preload" href="/map/inspect-orbit.js?v=20260901-pc1414" as="script">
+<link rel="preload" href="/map/inspect-shell.js?v=20260901-pc1415" as="script">
+<!-- pc-1396: shared HTML-escape — sync before map-fast + classic suite scripts -->
+<script src="/esc.js?v=20260901-pc1396"></script>
+<!-- pc-1084: shared WO bucket math — sync before map-fast + deferred consumers -->
+<script src="/map/wo-buckets.js?v=20260804-pc1090"></script>
+<script>
+/* Kick snapshot fetch while remaining assets download (pc-893/895 / pc-1292) */
+(function () {
+  try {
+    window.__mapShellAt = Date.now();
+    if (window.__mapBootPrefetch) return;
+    /* default cache: consume the matching snapshot preload (no-store discarded it) */
+    window.__mapBootPrefetch = fetch("/api/map/snapshot", {
+      credentials: "same-origin",
+    }).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).catch(function () {
+      return null;
+    });
+  } catch (e) {}
+})();
+</script>
+<!-- pc-973: defer suite helpers — no longer block first paint (was 12 sync tags) -->
+<script src="/suite-nav.js?v=20260819-pc1290" defer></script>
+<script src="/suite-data.js?v=20260803-pc1022" defer></script>
+<script src="/suite-pulse.js?v=20260803-pc1022" defer></script>
+<script src="/suite-live.js?v=20260803-pc1022" defer></script>
+<script src="/suite-paper.js?v=20260830-pc1340" defer></script>
+<script src="/map/map-soft.js?v=20260804-pc1084" defer></script>
+<script src="/map/map-chrome-spec.js?v=20260803-pc1022" defer></script>
+<script src="/map/view-state.js?v=20260803-pc1022" defer></script>
+<script src="/map/graph.js?v=20260803-pc1022" defer></script>
+<script src="/map/map-notices.js?v=20260803-pc1022" defer></script>
+<script src="/map/live.js?v=20260803-pc1022" defer></script>
+<script src="/map/chrome.js?v=20260803-pc1022" defer></script>
+<script src="/suite-settings-sheet.js?v=20260819-pc1267" defer></script>
+<script src="/suite-person-sheet.js?v=20260901-pc1413" defer></script>
+<script src="/map-searchlight.js?v=20260901-pc1404" defer></script>
+<script type="module" src="/components/index.js"></script>
+</head>
+<body>
+<aside id="suite-spine" class="suite-spine" aria-label="BluePrint">
+  <div class="suite-spine-brand">
+    <a class="suite-spine-lockup" href="/" aria-label="BluePrint">
+      <img class="suite-spine-mark" src="/brand/mark-cyanotype.svg?v=pc-1288" width="64" height="52" alt="">
+      <span class="suite-spine-word">BluePrint</span>
+    </a>
+  </div>
+  <nav aria-label="Lenses">
+    <a id="spine-overview" href="/overview" data-spine-lens="overview">Overview</a>
+    <a id="spine-map" href="/workspace-map" data-spine-lens="map" class="here" aria-current="page">Map</a>
+    <a id="spine-calendar" href="/calendar" data-spine-lens="calendar">Calendar</a>
+    <a id="spine-settings" href="/settings" data-spine-lens="settings">Settings</a>
+  </nav>
+  <p class="suite-spine-hint"><a href="https://github.com/protocolcity/BluePrint" target="_blank" rel="noopener"><span class="suite-powered-bolt" aria-hidden="true">⚡</span><span class="suite-powered-label">Powered by</span><span class="suite-powered-name">ProtocolCity</span></a></p>
+</aside>
+<header class="suite-head">
+  <div class="suite-mast">
+    <div class="suite-title">
+      <!-- Neutral shell — never hardcode a host folder (was "Developer workspace"). -->
+      <h1 id="mast">Map</h1>
+      <div class="sub" id="sub" hidden>⚡ Powered by ProtocolCity · Map</div>
+    </div>
+  </div>
+  <script>
+  /* First paint: last known folder + suite version (never strip the version chip).
+   * Plain mast.textContent wiped .mast-version after city hung / late paint. */
+  (function () {
+    try {
+      var n =
+        localStorage.getItem("suite.cityName") ||
+        sessionStorage.getItem("suite.cityName") ||
+        "";
+      n = String(n || "").trim();
+      if (!n || n.toLowerCase() === "developer") return;
+      var mast = document.getElementById("mast");
+      var ver =
+        localStorage.getItem("suite.suiteVersion") ||
+        sessionStorage.getItem("suite.suiteVersion") ||
+        "";
+      ver = String(ver || "").trim();
+      var base = "Map";
+      if (mast) {
+        if (window.SuiteNav && typeof SuiteNav.setMastTitle === "function") {
+          SuiteNav.setMastTitle(mast, base, ver || null);
+        } else {
+          mast.textContent = ver ? base + " · " + ver : base;
+        }
+      }
+      document.title =
+        window.SuiteNav && typeof SuiteNav.docTitle === "function"
+          ? SuiteNav.docTitle(n, "Map")
+          : "BluePrint — " + n + " · Map";
+    } catch (e) {}
+  })();
+  </script>
+  <div class="suite-head-meta" id="suite-head-meta" aria-live="polite">
+    <div id="workspace-map-searchlight"></div>
+    <span class="head-live" id="map-live-badge" title="Live cinema — pulse + SSE">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span id="map-live-label">LIVE</span>
+    </span>
+    <!-- Theater demo trigger lives in Settings (not mast chrome) — page must not read as a demo surface -->
+  </div>
+  <div
+    id="map-theater-demo"
+    class="map-theater-demo"
+    hidden
+    role="dialog"
+    aria-label="Theater demo"
+    aria-live="polite"
+  >
+    <div class="map-theater-demo-kicker">Theater demo · live paused</div>
+    <div class="map-theater-demo-act" id="map-theater-demo-act">—</div>
+    <div class="map-theater-demo-look" id="map-theater-demo-look">Look left rails + map house</div>
+    <div class="map-theater-demo-hint" id="map-theater-demo-hint">Back · Next · pick a beat · Esc</div>
+    <label class="map-theater-demo-jump-lab" for="map-theater-demo-jump">Beat</label>
+    <select
+      id="map-theater-demo-jump"
+      class="map-theater-demo-jump"
+      title="Jump to any beat on demand (replay or skip ahead)"
+      aria-label="Jump to theater demo beat"
+    ></select>
+    <div class="map-theater-demo-actions">
+      <button type="button" class="map-theater-demo-prev" id="map-theater-demo-prev" title="Previous beat (←)">← Back</button>
+      <button type="button" class="map-theater-demo-next" id="map-theater-demo-next">Next →</button>
+      <button type="button" class="map-theater-demo-stop" id="map-theater-demo-stop">Stop</button>
+    </div>
+  </div>
+  <div class="suite-nav-cluster" hidden aria-hidden="true">
+    <nav class="suite-doors suite-doors-map-primary" hidden aria-hidden="true"></nav>
+  </div>
+</header>
+
+<div id="suite-body" data-suite-room="map">
+<div class="map-shell is-first-paint" id="map-shell" aria-busy="true">
+  <div class="map-first-paint" id="map-first-paint" role="status" aria-live="polite">
+    <span class="map-first-paint-folder" aria-hidden="true"></span>
+    <span class="map-first-paint-label" id="map-first-paint-label">Building workspace map…</span>
+  </div>
+  <aside class="map-left" id="map-left" aria-label="You, agents, and work orders">
+    <!-- 0 · YOU — human origin / For You pulse (rail ledger; map icon is spatial twin) -->
+    <div class="map-mod map-mod-you" id="map-mod-you">
+      <button type="button" class="map-you-card" id="map-you-card"
+        aria-label="You — for You work and face options" title="You · click for For You list">
+        <span class="map-you-av" aria-hidden="true">👤</span>
+        <span class="map-you-body">
+          <span class="map-you-nm" id="map-you-nm">You</span>
+          <span class="map-you-meta" id="map-you-meta">Nothing waiting on You</span>
+        </span>
+        <span class="map-you-pill is-zero" id="map-you-pill" title="For You count">0</span>
+      </button>
+    </div>
+    <div class="map-mod-divider" aria-hidden="true"></div>
+    <!-- 1 · Agent activities — same chrome grammar as Work orders (title · total · summary) -->
+    <div class="map-mod map-mod-agents" id="map-mod-agents">
+      <div class="map-mod-h-row">
+        <h3 class="map-panel-h">Agent activities</h3>
+        <button type="button" class="map-wo-total" id="map-agents-total"
+          aria-label="Show agent activities list"
+          title="Hands + jobs on roster · click for the list">0</button>
+      </div>
+      <p class="map-mod-summary" id="map-agents-sub"
+        title="Agent activity counts">0 live · 0 due · 0 idle</p>
+      <aside class="map-rail map-agents" id="map-rail-live" aria-label="Agent live activity — recent status changes rise">
+        <p class="empty" id="map-live-empty">No hands or jobs yet</p>
+        <ul id="map-live-list" hidden></ul>
+        <p class="map-wo-cap" id="map-agents-cap" hidden></p>
+      </aside>
+    </div>
+    <div class="map-split-v" id="map-split-v" role="separator" aria-orientation="horizontal"
+      aria-label="Resize agent activities vs work orders" title="Drag to give more room to agents or work orders"></div>
+    <!-- 2 · Work orders — same chrome grammar as Agent activities (title · total · summary) -->
+    <div class="map-mod map-mod-wo" id="map-mod-wo">
+      <div class="map-mod-h-row">
+        <h3 class="map-panel-h">Work orders</h3>
+        <button type="button" class="map-wo-total is-selected" id="map-wo-total"
+          aria-pressed="true"
+          aria-label="All work orders across projects"
+          title="Live activity — newest create · claim · status · close on top">0</button>
+        <!-- pc-519: no citizen File compose on ship Map (SUITE_VIEWER — capture = chat + WorkLane MCP / wl; tk retired) -->
+      </div>
+      <!-- pc-687: first-class open · done (pill alone is lifetime total, not open-only) -->
+      <p class="map-mod-summary" id="map-wo-total-sub">0 open · 0 done</p>
+      <aside class="map-tape" id="map-tape" aria-label="Work orders across projects">
+        <div class="map-wo-filters" id="map-wo-filters" role="toolbar"
+          aria-label="Filter work orders · live ready deferred for you"></div>
+        <div class="map-list-filter" id="map-tape-filter-wrap" hidden>
+          <input type="search" class="map-list-filter-input" id="map-tape-filter"
+            placeholder="Filter…"
+            title="Filter by id · title · status · / to focus"
+            autocomplete="off" spellcheck="false"
+            aria-label="Filter work orders by id, title, or status" />
+          <p class="map-list-filter-meta" id="map-tape-filter-meta" hidden></p>
+        </div>
+        <p class="empty" id="map-tape-empty">Loading live activity…</p>
+        <ul id="map-tape-list" hidden></ul>
+        <p class="map-wo-cap" id="map-wo-cap" hidden></p>
+        <!-- Bidirectional hygiene: folders without a desk store -->
+        <p class="map-wo-hygiene" id="map-wo-hygiene" hidden></p>
+        <!-- pc-446 / pc-519 / pc-653: first-user no-jobs CTA only (handless/quiet left the rail) -->
+        <div class="map-empty-cta" id="map-empty-cta" hidden aria-live="polite"></div>
+      </aside>
+    </div>
+    <div class="hud" id="hud">
+      <div class="line" id="hud-line" hidden aria-live="polite"></div>
+      <div class="offmap-strip" id="offmap-strip" hidden>
+        <button type="button" class="offmap-toggle" id="offmap-toggle"
+          title="Display only — folders still on disk; engines ignore this list">
+          Off the map (<span id="offmap-n">0</span>) · <span id="offmap-verb">show</span>
+        </button>
+        <ul class="offmap-list" id="offmap-list" hidden></ul>
+      </div>
+    </div>
+    <div class="map-split-h" id="map-split-h" role="separator" aria-orientation="vertical"
+      aria-label="Resize left column" title="Drag to resize · double-click to reset"></div>
+  </aside>
+
+  <div class="map-center">
+    <div class="stage" id="stage">
+      <div class="err-banner" id="err">Loading workspace…</div>
+      <!-- kept for hierarchy hide hooks; content moved to left rail -->
+      <div class="map-chrome" id="map-chrome" hidden aria-hidden="true"></div>
+      <!-- Agent activities live in the left rail (#map-rail-live), not floating on stage -->
+      <svg id="world" viewBox="0 0 1200 780" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Workspace map"></svg>
+      <!-- Map chrome: one family — collapsible View options (TL) · Dig trail · Expand (TC) · Reset (TR) · Legend (BL) · Settings (BR) -->
+      <details class="map-stage-chrome map-corner-panel map-view-options" id="map-controls" aria-label="View options">
+        <summary class="map-panel-h">View options</summary>
+        <div class="map-tools" id="map-tools" role="group" aria-label="Managed, Unmanaged, Hidden"></div>
+      </details>
+      <div class="map-stage-chrome map-dig-trail" id="map-dig-trail" hidden aria-label="Dig path">
+        <div class="map-dig-trail-h map-panel-h">Dig path</div>
+        <button type="button" class="map-dig-up" id="map-dig-up">← Up</button>
+        <div class="map-dig-crumbs" id="map-dig-crumbs"></div>
+        <div class="map-dig-legend" id="map-dig-legend" hidden aria-hidden="true">
+        </div>
+      </div>
+      <button type="button" class="map-corner-fab map-reset-fab" id="cam-balloon"
+        title="Reset view · full workspace (also closes dig-in)">Reset view</button>
+      <button type="button" class="map-corner-fab map-expand-fab" id="map-expand-fab"
+        aria-pressed="false"
+        title="Show top-level folders inside every project at once · zoom to fit">Expand folders</button>
+      <details class="map-stage-chrome map-corner-panel map-legend-fab" id="map-footer-legend" title="Map visual language" aria-label="Map legend">
+        <summary class="map-panel-h">Legend</summary>
+        <!-- pc-481: filled by renderMapLegend() from MAP_LEGEND_SPEC — do not hand-edit rows here -->
+        <div class="map-fill-legend" id="map-fill-legend"></div>
+      </details>
+      <div class="tip" id="tip"></div>
+      <div class="map-ctx-menu" id="map-ctx-menu" hidden role="menu"></div>
+      <!-- pc-758: Outline projection panel (hidden by default; shown when mapProjection=outline) -->
+      <div class="map-outline-view" id="map-outline" hidden aria-label="Outline tree"></div>
+      <!-- pc-1318 / pc-1360: skills library (workspace toolkit / project skills). Not a fourth lens. -->
+      <details class="map-stage-chrome map-skills" id="map-skills" open hidden aria-label="Skills library">
+        <summary class="map-skills-head">
+          <span class="map-skills-title" id="map-skills-title">Workspace toolkit</span>
+          <span class="map-skills-n" id="map-skills-n"></span>
+        </summary>
+        <div class="map-skills-body" id="map-skills-body"></div>
+      </details>
+    </div>
+  </div>
+
+  <aside class="map-right" id="map-right" aria-label="Selection details" hidden aria-hidden="true">
+    <div class="map-split-right" id="map-split-right" role="separator" aria-orientation="vertical"
+      aria-label="Resize details column" title="Drag to resize · double-click to reset"></div>
+    <div class="inspect" id="inspect" aria-live="polite">
+      <!-- Empty placeholder hidden — rail only appears when something is selected -->
+      <div class="inspect-empty" id="inspect-empty" hidden></div>
+      <div class="inspect-toolbar" id="inspect-toolbar">
+        <button type="button" class="inspect-back" id="inspect-back" hidden
+          title="Previous sidebar view">← Previous</button>
+        <span class="inspect-toolbar-spacer" aria-hidden="true"></span>
+        <button type="button" class="inspect-close" id="inspect-close"
+          title="Close details" aria-label="Close details">×</button>
+      </div>
+      <div class="k" id="inspect-kind">—</div>
+      <h2 id="inspect-title">—</h2>
+      <div class="meta" id="inspect-meta"></div>
+      <div class="stats" id="inspect-stats"></div>
+      <div class="snippet" id="inspect-snippet" hidden></div>
+      <div class="doors" id="inspect-doors"></div>
+    </div>
+  </aside>
+</div>
+</div>
+
+<!--
+  pc-898/973: map-fast paints ring UNDER skeleton only (failsafe if engine
+  late). Skeleton holds until hierarchy handoff — no ring→radial flash.
+  pc-973: drop 800ms gate; engine is a deferred script (document order after
+  suite helpers) so parse starts as soon as the shell is ready.
+-->
+<script src="/map/map-fast.js?v=20260819-pc1292"></script>
+<!-- pc-1292: defer extracted panels — sync parse of ~242KB blocked the host defer tag + 1.1MB execute -->
+<script src="/map/agents-panel.js?v=20260806-pc1169" defer></script>
+<script src="/map/wo-tape.js?v=20260831-pc1346" defer></script>
+<script src="/map/folder-list.js?v=20260820-pc1260" defer></script>
+<script src="/map/inspect-project.js?v=20260901-pc1395" defer></script>
+<script src="/map/inspect-person.js?v=20260901-pc1401" defer></script>
+<script src="/map/inspect-you.js?v=20260901-pc1405" defer></script>
+<script src="/map/inspect-workspace.js?v=20260901-pc1408" defer></script>
+<script src="/map/inspect-orbit.js?v=20260901-pc1414" defer></script>
+<script src="/map/inspect-shell.js?v=20260901-pc1415" defer></script>
+<script src="/map/workspace_map_app.js?v=20260901-pc1415" defer
+  onerror="try{var l=document.getElementById('map-first-paint-label');if(l&&!window.__mapAppReady)l.textContent='Full map failed — folders above still usable';}catch(e){}"></script>
+</body>
+</html>

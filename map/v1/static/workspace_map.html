@@ -19,6 +19,11 @@
       <div id="md-viewer-host" class="map-md-host" data-hit-layer="md-viewer"></div>
 
       <div id="map-chrome" class="map-chrome" data-hit-layer="chrome">
+        <details class="map-chrome-hit map-chrome-panel map-browser" open>
+          <summary>Browse folders and papers</summary>
+          <p id="map-browser-path" aria-live="polite">Workspace</p>
+          <div id="map-browser-list" aria-label="Folders and documents"></div>
+        </details>
         <details id="map-view-options" class="map-chrome-hit map-chrome-panel">
           <summary>View</summary>
           <label><input type="checkbox" id="flt-managed" checked /> Managed</label>

@@ -1,3 +1,18 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+.venv/
+build/
+dist/
+*.egg-info/
+__pycache__/
+
+# Workspace registration is host configuration, not product source.
+.protocolcity/
+
+# Generated host skill bridges and local credentials.
+.claude/skills/
+.env
+.env.*
+!.env.example

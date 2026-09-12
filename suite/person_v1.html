@@ -1,0 +1,1357 @@
+<!doctype html>
+<html lang="en" class="suite-person-view suite-has-spine">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/brand/favicon.svg?v=pc-1285" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch.png?v=pc-1285">
+<title>BluePrint — Person</title>
+<link rel="stylesheet" href="/suite.css?v=20260821-pc1298">
+<script src="/esc.js?v=20260901-pc1396"></script>
+<script src="/suite-nav.js?v=20260901-pc1413"></script>
+<script src="/map/wo-buckets.js?v=20260804-pc1090"></script>
+<script src="/suite-paper.js?v=20260804-pc1084"></script>
+<script src="/suite-pulse.js?v=20260722z"></script>
+<script type="module" src="/components/index.js"></script>
+<style>
+  .pathbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px;
+    margin: 16px 0 8px; font-size: var(--type-body); letter-spacing: 0.04em;
+  }
+  .pathbar a { color: var(--line); text-decoration: none;
+               border-bottom: 1px solid var(--line-faint); }
+  .pathbar a:hover { border-bottom-color: var(--gold); color: var(--gold); }
+  .pathbar .sep { opacity: 0.4; margin: 0 4px; }
+  .pathbar .here { font-weight: var(--weight-medium); }
+  .plate {
+    margin-top: 18px; border: 1.5px solid var(--line); background: var(--paper-deep);
+    padding: 18px 20px; display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-start;
+    position: relative;
+  }
+  .plate.working { border-color: var(--alive); }
+  .plate.fault { border-color: var(--warn, #f0997b); }
+  .plate .badge-state {
+    font-size: var(--type-label); letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 3px 8px; border: 1px solid var(--line-faint);
+  }
+  .plate .badge-state.working { border-color: var(--alive); color: var(--alive); }
+  .plate .badge-state.fault { border-color: var(--warn, #f0997b); color: var(--warn, #f0997b); }
+  .plate .badge-state.quiet { opacity: 0.55; }
+  .plate h2 { font-size: var(--type-display); font-weight: var(--weight-medium); letter-spacing: 0.08em; text-transform: uppercase; }
+  .plate .meta { font-size: var(--type-body); opacity: 0.75; margin-top: 4px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px; margin-top: 22px;
+  }
+  .panel { padding: 14px 16px; }
+  .panel h3 {
+    font-size: var(--type-label); letter-spacing: 0.18em; text-transform: uppercase;
+    opacity: 0.6; margin-bottom: 10px;
+  }
+  .row {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: var(--type-body); padding: 5px 0; border-top: 1px solid var(--line-faint);
+  }
+  .row:first-of-type { border-top: none; }
+  .row .k { opacity: 0.55; }
+  .row .v { text-align: right; word-break: break-word; }
+  .row.model-edit { flex-direction: column; align-items: stretch; gap: 6px; }
+  .row.model-edit .v { text-align: left; }
+  .model-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .model-row input {
+    flex: 1 1 10rem; min-width: 0; font: inherit; font-size: var(--type-body);
+    padding: 6px 8px; border: 1px solid var(--line-faint); background: var(--paper-deep);
+    color: inherit;
+  }
+  .model-row .btn {
+    font: inherit; font-size: var(--type-label); letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 6px 12px; border: 1px solid var(--line); background: transparent;
+    cursor: pointer; color: inherit;
+  }
+  .model-row .btn:hover { border-color: var(--gold); color: var(--gold); }
+  .model-row .btn:disabled { opacity: 0.45; cursor: default; }
+  .row.model-edit .dim { font-size: var(--type-label); opacity: 0.55; text-align: left; }
+  .law a.plot {
+    display: block; text-decoration: none; color: var(--line);
+    border: 1.5px solid var(--gold); padding: 10px 12px; margin-bottom: 8px;
+    background: var(--paper-deep);
+  }
+  .law a.plot:hover { outline: 1px solid var(--gold); outline-offset: 2px; }
+  .law a.plot .lv { color: var(--gold); font-size: var(--type-label); letter-spacing: 0.12em; text-transform: uppercase; }
+  .law a.plot .fn { font-weight: var(--weight-medium); margin-top: 2px; }
+  .law a.plot .sm { font-size: var(--type-label); opacity: 0.6; margin-top: 2px; }
+  .law .missing {
+    border: 1px dashed var(--line-faint); padding: 10px 12px; margin-bottom: 8px;
+    opacity: 0.55; font-size: var(--type-body);
+  }
+  .shift {
+    font-size: var(--type-body); padding: 6px 0; border-top: 1px solid var(--line-faint);
+  }
+  .shift:first-of-type { border-top: none; }
+  .shift .out { font-weight: var(--weight-medium); text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--type-label); }
+  .shift .out.ok { color: var(--alive); }
+  .shift .out.skip { opacity: 0.7; }
+  .shift .out.fail, .shift .out.error { color: var(--warn, #f0997b); }
+  .hold {
+    border: 1px solid var(--gold); padding: 8px 10px; margin-bottom: 6px; font-size: var(--type-body);
+  }
+  .empty { font-size: var(--type-body); opacity: 0.5; }
+  .note {
+    margin-top: 14px; font-size: var(--type-label); opacity: 0.5; letter-spacing: 0.04em;
+  }
+  .out-pre {
+    margin-top: 10px; padding: 10px 12px; max-height: 220px; overflow: auto;
+    font-weight: var(--weight-regular); font-size: var(--type-label); line-height: 1.45; font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: rgba(0,0,0,0.28); border: 1px solid var(--line-faint);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .out-prose {
+    margin-top: 6px; padding: 12px 14px; max-height: 280px; overflow: auto;
+    font-weight: var(--weight-regular); font-size: var(--type-body); line-height: 1.55; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: rgba(0,0,0,0.22); border: 1px solid var(--line-faint);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .out-pass { margin-top: 12px; }
+  .out-pass:first-of-type { margin-top: 8px; }
+  .out-meta {
+    font-size: var(--type-label); letter-spacing: 0.04em; opacity: 0.7;
+    text-transform: uppercase;
+  }
+  .out-meta .tag-err { color: var(--warn, #f0997b); font-weight: var(--weight-medium); }
+  .out-meta .tag-ok { color: var(--alive, #7dcea0); font-weight: var(--weight-medium); }
+  .out-stale {
+    margin-top: 10px; padding: 8px 10px; font-size: var(--type-body);
+    border: 1px dashed var(--line-faint); opacity: 0.85;
+  }
+  details.out-raw {
+    margin-top: 10px; font-size: var(--type-label); opacity: 0.65;
+  }
+  details.out-raw summary {
+    cursor: pointer; letter-spacing: 0.04em; text-transform: uppercase;
+    list-style: none;
+  }
+  details.out-raw summary::-webkit-details-marker { display: none; }
+  details.out-raw[open] { opacity: 0.9; }
+  details.out-raw .out-pre { max-height: 160px; }
+  .artifact {
+    display: block; text-decoration: none; color: var(--line);
+    border: 1.5px solid var(--gold); padding: 8px 10px; margin: 6px 0;
+    font-size: var(--type-body);
+  }
+  .artifact:hover { outline: 1px solid var(--gold); outline-offset: 2px; }
+  .artifact .fn { font-weight: var(--weight-medium); color: var(--gold); }
+  .artifact .sm { font-size: var(--type-label); opacity: 0.65; margin-top: 2px; }
+  .lead { border-color: var(--gold); }
+  .lead h3 { color: var(--gold); opacity: 0.9; }
+  /* On-demand Dispatch (pc-243) */
+  button.dispatch {
+    margin-left: auto; align-self: center;
+    font: inherit; font-size: var(--type-label); letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--line); background: transparent; border: 1px solid var(--line);
+    padding: 8px 16px; cursor: pointer; flex: 0 0 auto;
+  }
+  button.dispatch:hover { background: var(--line); color: var(--paper); }
+  button.dispatch:disabled {
+    opacity: 0.45; cursor: default; border-color: var(--line-faint);
+    background: transparent; color: var(--line);
+  }
+  /* Pivot to Desk (suite WorkLane page) without leaving BluePrint */
+  a.desk-pivot {
+    margin-left: 8px; align-self: center;
+    font: inherit; font-size: var(--type-label); letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--gold); text-decoration: none; border: 1px solid var(--gold);
+    padding: 8px 16px; flex: 0 0 auto;
+  }
+  a.desk-pivot:hover { background: var(--gold); color: #1d1503; }
+  a.hold, a.shift-ticket {
+    display: block; text-decoration: none; color: var(--line);
+    border: 1px solid var(--gold); padding: 8px 10px; margin-bottom: 6px; font-size: var(--type-body);
+  }
+  a.hold:hover, a.shift-ticket:hover {
+    outline: 1px solid var(--gold); outline-offset: 1px;
+  }
+  a.shift-ticket { border-color: var(--line-faint); }
+  a.shift-ticket:hover { border-color: var(--gold); }
+  .pivot-row {
+    display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 12px; align-items: center;
+  }
+  .pivot-row a {
+    font-size: var(--type-label); letter-spacing: 0.1em; text-transform: uppercase;
+    text-decoration: none; border-bottom: 1px solid var(--line-faint); color: var(--line);
+  }
+  .pivot-row a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  .pivot-row a.primary { color: var(--gold); border-bottom-color: var(--gold); font-weight: var(--weight-medium); }
+  /* pc-1310 / pc-1312: this-wake is the plate lead */
+  .this-wake {
+    margin-top: 8px; font-size: var(--type-body); font-weight: var(--weight-medium);
+    line-height: 1.4; max-width: 42rem;
+  }
+  .this-wake a {
+    color: var(--gold); text-decoration: none;
+    border-bottom: 1px solid var(--gold);
+  }
+  .this-wake.working, .this-wake.working a { color: var(--alive); }
+  .this-wake.working a { border-bottom-color: rgba(127, 216, 164, 0.45); }
+  .this-wake .sm {
+    display: block; font-weight: var(--weight-regular); opacity: 0.65;
+    font-size: var(--type-label); margin-top: 3px; letter-spacing: 0.02em;
+  }
+  .plate.working {
+    box-shadow:
+      0 0 0 1px rgba(127, 216, 164, 0.3),
+      0 0 18px rgba(127, 216, 164, 0.1);
+  }
+  /* pc-304: LiveTail host sits outside #grid so SuitePulse redraws keep the stream */
+  #live-tail-host {
+    margin-top: 18px;
+  }
+  #live-tail-host[hidden] {
+    display: none !important;
+  }
+  #live-tail-host .suite-live-tail {
+    min-height: 5rem;
+  }
+  #live-tail-host .suite-live-tail.is-streaming {
+    box-shadow: inset 0 0 0 1px rgba(127, 216, 164, 0.08);
+  }
+  #live-tail-host .suite-live-tail__pre {
+    max-height: 280px;
+  }
+</style>
+</head>
+<body>
+<aside class="suite-spine" id="suite-spine" aria-label="BluePrint">
+  <div class="suite-spine-brand">
+    <a class="suite-spine-lockup" href="/" aria-label="BluePrint">
+      <img class="suite-spine-mark" src="/brand/mark-cyanotype.svg?v=pc-1288" width="64" height="52" alt="">
+      <span class="suite-spine-word">BluePrint</span>
+    </a>
+  </div>
+  <nav aria-label="Lenses">
+    <a href="/overview" data-spine-lens="overview">Overview</a>
+    <a href="/workspace-map" data-spine-lens="map">Map</a>
+    <a href="/calendar" data-spine-lens="calendar">Calendar</a>
+    <a href="/settings" data-spine-lens="settings">Settings</a>
+  </nav>
+  <p class="suite-spine-hint"><a href="https://github.com/protocolcity/BluePrint" target="_blank" rel="noopener"><span class="suite-powered-bolt" aria-hidden="true">⚡</span><span class="suite-powered-label">Powered by</span><span class="suite-powered-name">ProtocolCity</span></a></p>
+</aside>
+<header class="suite-head">
+  <div class="suite-mast">
+    <div class="suite-title">
+      <h1 id="mast">Person</h1>
+      <div class="sub" id="sub">Agent file</div>
+    </div>
+  </div>
+</header>
+
+<div id="suite-body">
+<div class="suite-meta"></div>
+<div class="pathbar" id="pathbar"></div>
+<div class="plate" id="plate" hidden>
+  <span class="corner tl"></span><span class="corner br"></span>
+  <div style="flex:1; min-width:200px;">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <h2 id="who">—</h2>
+      <span class="badge-state" id="state">—</span>
+    </div>
+    <div class="meta" id="who-meta"></div>
+    <div class="this-wake" id="this-wake" hidden></div>
+  </div>
+  <a class="desk-pivot" id="desk-pivot" hidden
+     title="Open this agent's work orders on Map">Work orders →</a>
+  <button type="button" class="dispatch" id="dispatch-btn" hidden
+          title="Run a shift now (same path as the schedule)">Dispatch</button>
+</div>
+
+<div class="grid" id="grid" hidden></div>
+<!-- pc-304: stable host for SuiteUI.LiveTail (not rebuilt by main() pulse) -->
+<div id="live-tail-host" hidden aria-label="Live shift output"></div>
+<div class="note" id="note" hidden>
+  Agents view shows people, not required workspace instruction files. Gold papers here are this agent's instruction stack (open in BluePrint).
+</div>
+<div class="err" id="err" hidden></div>
+
+<script>
+const Q = new URLSearchParams(location.search);
+const NAME = (Q.get("name") || "").trim();
+const BACK = Q.get("back") || "/workspace-map";
+
+const esc = function (s) { return window.__bp.esc(s); };
+/** Citizen depth for instruction cards. Glass never stamps L0–L3 (pc-1365).
+ *  Level/file win over published citizen_label so retired *law* captions stay off glass. */
+function instructionFace(e) {
+  if (!e) return "rules";
+  var lv = String(e.level || "").toUpperCase();
+  var lab = String(e.label || "").toLowerCase();
+  var fn = String(e.file || e.name || "").toLowerCase();
+  if (
+    lv === "L0" ||
+    lab.indexOf("city") >= 0 ||
+    lab.indexOf("workspace") >= 0
+  ) {
+    return "workspace";
+  }
+  if (
+    lv === "L1" ||
+    lab.indexOf("neighborhood") >= 0 ||
+    lab.indexOf("project") >= 0
+  ) {
+    return "project";
+  }
+  if (lv === "L2" || fn === "contract.md" || lab.indexOf("contract") >= 0) {
+    return "contract";
+  }
+  if (lv === "L3" || fn === "prompt.md" || lab.indexOf("prompt") >= 0) {
+    return "this run";
+  }
+  if (e.citizen_label) {
+    var cit = String(e.citizen_label);
+    if (!/\bL[0-3]\b/.test(cit) && !/\blaw\b/i.test(cit)) return cit;
+  }
+  if (e.label) return String(e.label);
+  return "rules";
+}
+function nice(ts) {
+  if (!ts) return "—";
+  try {
+    return new Date(ts).toLocaleString([], {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+  } catch (e) { return ts; }
+}
+function parseTs(iso) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return isNaN(t) ? null : t;
+}
+
+/** Working now / on duty idle / paused / fault / quiet / soon */
+/** Folder basename / brand → store slug for Map ?project= (pc-1375). */
+const FOLDER_TO_STORE = {
+  worklane: "worklane",
+  ticketingprotocol: "worklane",
+  workforce: "workforce",
+  protocolcity: "protocolcity",
+  tradeos: "tradeos",
+  socials: "socials",
+  gridfinity: "gridfinity",
+};
+function storeFromWorkdir(workdir) {
+  const leaf = String(workdir || "").split("/").filter(Boolean).pop() || "";
+  return FOLDER_TO_STORE[leaf.toLowerCase()] || leaf.toLowerCase() || "";
+}
+function ticketHref(id) {
+  return (
+    "/ticket?id=" +
+    encodeURIComponent(id) +
+    "&back=" +
+    encodeURIComponent(location.pathname + location.search)
+  );
+}
+/** Map dig-in for this worker's project (peer /desk retired). */
+function deskHrefForWorker(name, store) {
+  if (store) {
+    return "/workspace-map?project=" + encodeURIComponent(store);
+  }
+  return "/workspace-map";
+}
+function ticketBits(t) {
+  if (t == null) return { id: "", title: "" };
+  if (typeof t === "string") return { id: t, title: "" };
+  return { id: t.id || t.task_id || "", title: t.title || "" };
+}
+
+function lastShiftOf(w) {
+  if (!w) return null;
+  if (w.shifts && w.shifts[0]) return w.shifts[0];
+  if (w.last_real_shift && typeof w.last_real_shift === "object") {
+    return w.last_real_shift;
+  }
+  return null;
+}
+
+/** pc-1310: on shift from inflight, holding, last-shift running, or live Dispatch. */
+function workerIsOnShift(w, inflightSet) {
+  if (!w) return false;
+  const name = w.name || NAME;
+  if (inflightSet && inflightSet.has(name)) return true;
+  if ((w.holding && w.holding.length) || (w.holding_count | 0) > 0) return true;
+  const oc = String((lastShiftOf(w) || {}).outcome || "").toLowerCase();
+  if (oc === "running" || oc === "in_progress") return true;
+  return !!_dispatchLive;
+}
+
+function thisWake(w, st) {
+  const isJob = String((w && w.kind) || "").toLowerCase() === "job";
+  const held = (w && w.holding) || [];
+  const ready = (w && w.ready) || [];
+  const lrt = w && w.last_real_ticket;
+  if (isJob) {
+    if (st && st.id === "working") return { text: "Running now" };
+    return { text: "" };
+  }
+  if (st && st.id === "working") {
+    const t = held[0] || lrt || ready[0];
+    const b = ticketBits(t);
+    if (b.id) {
+      const verb = held[0] ? "Claimed " : "On shift · claiming ";
+      return {
+        id: b.id,
+        title: b.title,
+        text: verb + b.id + (b.title ? " · " + b.title : ""),
+      };
+    }
+    return { text: "On shift · claiming…" };
+  }
+  const b = ticketBits(ready[0]);
+  if (b.id) {
+    return {
+      id: b.id,
+      title: b.title,
+      text: "Dispatch will claim " + b.id + (b.title ? " · " + b.title : ""),
+    };
+  }
+  return { text: "Ready queue empty" };
+}
+
+function paintThisWake(w, st) {
+  const el = document.getElementById("this-wake");
+  if (!el) return;
+  const wake = thisWake(w, st);
+  const text = (wake && wake.text) || "";
+  if (!text) {
+    el.hidden = true;
+    el.innerHTML = "";
+    el.className = "this-wake";
+    return;
+  }
+  el.hidden = false;
+  el.className = "this-wake" + (st && st.id === "working" ? " working" : "");
+  if (wake.id) {
+    el.innerHTML =
+      '<a href="' +
+      esc(ticketHref(wake.id)) +
+      '">' +
+      esc(wake.text) +
+      "</a>";
+  } else {
+    el.textContent = wake.text;
+  }
+}
+
+function workerState(w, inflightSet) {
+  const health = (w.health || "").toLowerCase();
+  if (health === "err" || health === "wedged") {
+    return { id: "fault", label: "Fault", cls: "fault" };
+  }
+  if (workerIsOnShift(w, inflightSet)) {
+    return { id: "working", label: "On shift", cls: "working" };
+  }
+  const sch = String(w.schedule || "").trim().toLowerCase();
+  if (!w.owned || !sch || sch === "manual") {
+    return { id: "paused", label: "Paused / unarmed", cls: "quiet" };
+  }
+  if (health === "dim") {
+    return { id: "quiet", label: "Quiet", cls: "quiet" };
+  }
+  const nf = parseTs(w.next_fire);
+  if (nf != null) {
+    const s = (nf - Date.now()) / 1000;
+    if (s > 0 && s <= 120) {
+      return { id: "soon", label: "Starting soon", cls: "working" };
+    }
+  }
+  return { id: "idle", label: "On duty · idle", cls: "" };
+}
+
+function row(k, v) {
+  return '<div class="row"><span class="k">' + esc(k) +
+    '</span><span class="v">' + v + "</span></div>";
+}
+
+function cityLabelFromPayload(city) {
+  const folder = ((city && city.city_root) || "").split("/").pop() || "";
+  if (window.SuiteNav && typeof SuiteNav.workspaceFolderLabel === "function") {
+    return SuiteNav.workspaceFolderLabel(folder);
+  }
+  const n = String(folder || "").trim();
+  if (!n || n.toLowerCase() === "city") return "Workspace";
+  return n;
+}
+
+function jsonNoStore(url) {
+  return fetch(url, { cache: "no-store", credentials: "same-origin" });
+}
+
+/** pc-1309: name from ?name= so the plate is never a long blank. */
+function paintInstantPlate() {
+  if (!NAME) return;
+  const plate = document.getElementById("plate");
+  if (!plate) return;
+  const who = document.getElementById("who");
+  if (who && (who.textContent === "—" || !String(who.textContent || "").trim())) {
+    who.textContent = NAME;
+  }
+  const mast = document.getElementById("mast");
+  if (mast && (mast.textContent === "Person" || !String(mast.textContent || "").trim())) {
+    mast.textContent = NAME;
+  }
+  const sub = document.getElementById("sub");
+  if (sub && sub.textContent === "Agent file") {
+    sub.textContent = "personnel file · stay in BluePrint";
+  }
+  plate.hidden = false;
+  const dBtn = document.getElementById("dispatch-btn");
+  if (dBtn && dBtn.hidden) {
+    dBtn.hidden = false;
+    dBtn.disabled = true;
+    dBtn.textContent = "Dispatch";
+  }
+}
+
+function applyCityLabel(cityName) {
+  const label =
+    window.SuiteNav && typeof SuiteNav.workspaceFolderLabel === "function"
+      ? SuiteNav.workspaceFolderLabel(cityName)
+      : String(cityName || "").trim() || "Workspace";
+  const pathbar = document.getElementById("pathbar");
+  if (pathbar) {
+    const crumb = pathbar.querySelector("[data-city-crumb]");
+    if (crumb) crumb.textContent = label;
+  }
+}
+
+function applyInflightState(w, inflightSet) {
+  if (!w) return;
+  const st = workerState(w, inflightSet || new Set());
+  const kind = (w.kind || "worker").toLowerCase();
+  const isJob = kind === "job";
+  if (isJob && st.id === "working") st.label = "Running now";
+  else if (isJob && st.id === "idle") st.label = "Scheduled · waiting";
+  else if (isJob && st.id === "quiet") st.label = "Scheduled · quiet";
+  const plate = document.getElementById("plate");
+  if (plate) plate.className = "plate" + (st.cls ? " " + st.cls : "");
+  const stateEl = document.getElementById("state");
+  if (stateEl) {
+    stateEl.textContent = st.label;
+    stateEl.className = "badge-state" + (st.cls ? " " + st.cls : "");
+  }
+  const dBtn = document.getElementById("dispatch-btn");
+  if (dBtn && st.id === "working") {
+    dBtn.disabled = true;
+    dBtn.textContent = isJob ? "Running" : "On shift";
+  }
+  paintThisWake(w, st);
+  if (typeof armLiveOut === "function") {
+    armLiveOut(w, st.id === "working");
+  }
+}
+
+let _bootWorkerP = NAME
+  ? jsonNoStore("/api/worker/" + encodeURIComponent(NAME))
+  : null;
+let _paintedWorker = null;
+let _dispatchLive = false;
+let _dispatchPoll = null;
+let _dispatchAt = 0;
+
+function stopDispatchPoll() {
+  if (_dispatchPoll) {
+    clearInterval(_dispatchPoll);
+    _dispatchPoll = null;
+  }
+}
+
+/** pc-1310: follow Dispatch on this page — no reload hunt. */
+function followDispatch(w) {
+  stopDispatchPoll();
+  _dispatchLive = true;
+  _dispatchAt = Date.now();
+  let n = 0;
+  function tick() {
+    n += 1;
+    jsonNoStore("/api/worker/" + encodeURIComponent(w.name || NAME))
+      .then(function (r) {
+        return r.json().then(function (d) {
+          return { ok: r.ok, d: d || {} };
+        });
+      })
+      .then(function (pack) {
+        if (!pack.ok || pack.d.error) return;
+        const nw = pack.d;
+        const oc = String((lastShiftOf(nw) || {}).outcome || "").toLowerCase();
+        const held = nw.holding || [];
+        const ts = Date.parse((lastShiftOf(nw) || {}).ts || "");
+        const recent =
+          !ts || isNaN(ts) || ts >= _dispatchAt - 8000;
+        const skip =
+          recent && (oc === "skip" || oc === "skipped" || oc === "error");
+        const running = oc === "running" || oc === "in_progress" || held.length > 0;
+        Object.assign(w, nw);
+        _paintedWorker = w;
+        if (skip && n >= 2) {
+          _dispatchLive = false;
+          stopDispatchPoll();
+          main();
+          return;
+        }
+        if (running) {
+          _dispatchLive = false;
+          stopDispatchPoll();
+          main();
+          return;
+        }
+        if (n >= 20) {
+          _dispatchLive = false;
+          stopDispatchPoll();
+          main();
+        }
+      })
+      .catch(function () {});
+  }
+  tick();
+  _dispatchPoll = setInterval(tick, 900);
+}
+
+async function main() {
+  if (!NAME) {
+    document.getElementById("err").hidden = false;
+    document.getElementById("err").innerHTML =
+      'No agent — open someone from the <a href="/workspace-map">Map</a>.';
+    return;
+  }
+
+  paintInstantPlate();
+
+  /* pc-1309: city/people fan-in in parallel — must not block first paint. */
+  const cityP = jsonNoStore("/api/city")
+    .then(function (r) { return r.json(); })
+    .then(cityLabelFromPayload)
+    .catch(function () {
+      return window.SuiteNav && typeof SuiteNav.workspaceFolderLabel === "function"
+        ? SuiteNav.workspaceFolderLabel()
+        : "Workspace";
+    });
+  const peopleP = jsonNoStore("/api/people")
+    .then(function (r) { return r.json(); })
+    .then(function (scene) { return new Set(scene.in_flight || []); })
+    .catch(function () { return new Set(); });
+
+  let w;
+  try {
+    const workerP = _bootWorkerP || jsonNoStore("/api/worker/" + encodeURIComponent(NAME));
+    _bootWorkerP = null;
+    const r = await workerP;
+    w = await r.json();
+    if (!r.ok) throw new Error(w.error || r.statusText);
+  } catch (e) {
+    document.getElementById("err").hidden = false;
+    document.getElementById("err").textContent = "Could not load agent: " + e.message;
+    return;
+  }
+  _paintedWorker = w;
+
+  /* First paint from /api/worker. Workspace folder + inflight patch after. */
+  let cityName =
+    window.SuiteNav && typeof SuiteNav.workspaceFolderLabel === "function"
+      ? SuiteNav.workspaceFolderLabel()
+      : "Workspace";
+  let inflight = new Set();
+
+  const project =
+    w.project || (w.workdir || "").split("/").filter(Boolean).pop() || "";
+  /* Store slug for Map/API — folder aliases (ticketingprotocol → worklane, pc-1375) */
+  const storeSlug =
+    storeFromWorkdir(w.workdir) ||
+    (w.ready && w.ready[0] && w.ready[0].product) ||
+    (w.holding && w.holding[0] && (w.holding[0].product || w.holding[0].project)) ||
+    "";
+  /* Prefer ?project= from opener; else worker home folder; else store */
+  const qProj =
+    (window.SuiteNav && SuiteNav.projectFromSearch()) ||
+    project ||
+    storeSlug ||
+    "";
+  const display = w.display || w.name;
+  const workerKey = w.name || NAME;
+  const deskStore = storeSlug || qProj;
+  const deskHrefNav = deskHrefForWorker(workerKey, deskStore);
+  const kindEarly = (w.kind || "worker").toLowerCase();
+  const isJobEarly = kindEarly === "job";
+  const st = workerState(w, inflight);
+  if ((w.kind || "").toLowerCase() === "job" && st.id === "working") {
+    st.label = "Running now";
+  } else if ((w.kind || "").toLowerCase() === "job" && st.id === "idle") {
+    st.label = "Scheduled · waiting";
+  } else if ((w.kind || "").toLowerCase() === "job" && st.id === "quiet") {
+    st.label = "Scheduled · quiet";
+  }
+
+  if (window.SuiteNav) {
+    /* Resolved city-relative paths from enrich_worker_law (pc-330 paper links). */
+    const lawPaths = {};
+    for (const e of w.law || []) {
+      if (!e || !e.path || !e.readable) continue;
+      const lv = String(e.level || "").toUpperCase();
+      if (lv === "L0") lawPaths.l0 = e.path;
+      else if (lv === "L1") lawPaths.l1 = e.path;
+      else if (lv === "L2") lawPaths.l2 = e.path;
+      else if (lv === "L3") lawPaths.l3 = e.path;
+    }
+    if (w.contract_path) lawPaths.l2 = w.contract_path;
+    if (w.prompt_path) lawPaths.l3 = w.prompt_path;
+    SuiteNav.apply({
+      room: "person",
+      project: qProj,
+      projectLabel: project || qProj,
+      cityLabel: cityName,
+      person: workerKey || NAME,
+      personLabel: display,
+      worker: !isJobEarly ? workerKey || NAME : "",
+      workerLabel: !isJobEarly ? display : "",
+      seat: isJobEarly ? "none" : "worker",
+      lawPaths: lawPaths,
+      /* Agent workdir on disk — Show in Finder at this level */
+      openPath: w.workdir || project || qProj || "",
+    });
+  }
+
+  document.getElementById("mast").textContent = display;
+  document.title =
+    window.SuiteNav && typeof SuiteNav.docTitle === "function"
+      ? SuiteNav.docTitle(display)
+      : "BluePrint — " + display;
+  document.getElementById("sub").textContent =
+    (project ? project + " · " : "") + "personnel file · stay in BluePrint";
+
+  const rosterHref = qProj
+    ? "/workspace-map?project=" + encodeURIComponent(qProj)
+    : "/workspace-map";
+  const mapHref = rosterHref;
+
+  /* Plate pivot — Map dig-in (work orders live on folder / tape) */
+  const deskPivot = document.getElementById("desk-pivot");
+  if (deskPivot && !isJobEarly) {
+    deskPivot.hidden = false;
+    deskPivot.href = deskHrefNav;
+    deskPivot.textContent = "Map →";
+  } else if (deskPivot) {
+    deskPivot.hidden = true;
+  }
+
+  document.getElementById("pathbar").innerHTML =
+    '<a href="/" data-city-crumb="1">' + esc(cityName) + "</a>" +
+    '<span class="sep">/</span>' +
+    (qProj
+      ? '<a href="' + rosterHref + '">' + esc(project || qProj) + " on Map</a>" +
+        '<span class="sep">/</span>'
+      : '<a href="/workspace-map">Map</a><span class="sep">/</span>') +
+    '<span class="here">' + esc(w.name) + "</span>" +
+    (BACK
+      ? ' · <a href="' + esc(BACK) + '">← back</a>'
+      : "");
+
+  const plate = document.getElementById("plate");
+  plate.hidden = false;
+  plate.className = "plate" + (st.cls ? " " + st.cls : "");
+  document.getElementById("who").textContent = display;
+  const stateEl = document.getElementById("state");
+  stateEl.textContent = st.label;
+  stateEl.className = "badge-state" + (st.cls ? " " + st.cls : "");
+  const kind = (w.kind || "worker").toLowerCase();
+  const isJob = kind === "job";
+  const payBits = [];
+  if (w.cli) payBits.push(String(w.cli));
+  /* Always surface model pin on plate (pc-428) */
+  if (w.model && w.model !== "default") payBits.push("model " + String(w.model));
+  else payBits.push("model · vendor default");
+  const metaBase =
+    (isJob ? "Job · automated task" : "Agent · work-order lane") +
+    (project ? " · home " + project : "") +
+    (w.identity ? " · signs as " + w.identity : "") +
+    (payBits.length ? " · " + payBits.join(" · ") : "") +
+    (isJob ? " · no claim lifecycle" : " · one home · no free roam");
+  document.getElementById("who-meta").textContent = metaBase;
+
+  /* pc-1310: this-wake lead on the plate (ready[0] or Holding). */
+  paintThisWake(w, st);
+
+  /* On-demand Dispatch — workers and jobs (pc-243 / STAFFING verb) */
+  const dBtn = document.getElementById("dispatch-btn");
+  dBtn.hidden = false;
+  if (st.id === "working") {
+    dBtn.disabled = true;
+    dBtn.textContent = isJob ? "Running" : "On shift";
+    dBtn.onclick = null;
+  } else {
+    dBtn.disabled = false;
+    dBtn.textContent = "Dispatch";
+    dBtn.onclick = async function () {
+      const what = isJob ? "job" : "agent";
+      const who = w.name || display || NAME;
+      if (!confirm(
+        "Dispatch " + who + " now?\n\n" +
+        "Runs a real " + what + " shift under their contract (same path as the schedule)."
+      )) return;
+      dBtn.disabled = true;
+      dBtn.textContent = "Dispatching…";
+      dBtn.title = "Contacting WorkForce…";
+      try {
+        const r = await fetch("/api/dispatch/" + encodeURIComponent(w.name || NAME), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        let d = {};
+        try { d = await r.json(); } catch (e) {}
+        const why = d.msg || d.error || ("refused (" + r.status + ")");
+        if (!r.ok || d.ok === false) {
+          alert(who + ": " + why);
+          dBtn.disabled = false;
+          dBtn.textContent = "Dispatch";
+          dBtn.title = "Refused: " + why;
+          return;
+        }
+        /* Map cinema: fire_now sprint signal (pc-399) */
+        try {
+          localStorage.setItem(
+            "pc-map-dispatch",
+            JSON.stringify({
+              name: w.name || NAME,
+              project: project || qProj || "",
+              at: Date.now(),
+            })
+          );
+        } catch (eSig) {}
+        dBtn.textContent = isJob ? "Running" : "On shift";
+        dBtn.title = "OK · " + why + " · following this wake";
+        _dispatchLive = true;
+        applyInflightState(w, new Set([w.name || NAME]));
+        paintThisWake(w, { id: "working", label: isJob ? "Running now" : "On shift", cls: "working" });
+        followDispatch(w);
+      } catch (e) {
+        alert(
+          "Dispatch failed: " + e +
+          "\n\nIs WorkForce up? blueprint serve --root <workspace>"
+        );
+        dBtn.disabled = false;
+        dBtn.textContent = "Dispatch";
+        dBtn.title = "Failed: " + e;
+      }
+    };
+  }
+
+  const backQ = encodeURIComponent(location.pathname + location.search);
+  const lawHtml = (w.law || []).map((e) => {
+    const face = instructionFace(e);
+    if (e.readable && e.path) {
+      return (
+        '<a class="plot" href="/read?path=' + encodeURIComponent(e.path) +
+        "&back=" + backQ + '">' +
+        '<div class="lv">' + esc(face) + "</div>" +
+        '<div class="fn">' + esc(e.file) + "</div>" +
+        '<div class="sm">' + esc(e.path) +
+        (e.sha ? " · " + e.sha : "") +
+        (e.mtime ? " · " + e.mtime : "") +
+        "</div></a>"
+      );
+    }
+    return (
+      '<div class="missing">' +
+      esc(face) + " · " + esc(e.file) + " · path not in workspace</div>"
+    );
+  }).join("") || '<div class="empty">No instruction stack</div>';
+
+  const shifts = (w.shifts || []).slice(0, 12);
+  const shiftHtml = shifts.length
+    ? shifts.map((s) => {
+        const out = (s.outcome || "?").toLowerCase();
+        return (
+          '<div class="shift"><span class="out ' + esc(out) + '">' +
+          esc(s.outcome || "?") +
+          "</span> · " + nice(s.ts) +
+          (s.reason ? " · " + esc(s.reason) : "") +
+          (s.passes != null ? " · " + s.passes + " pass" : "") +
+          "</div>"
+        );
+      }).join("")
+    : '<div class="empty">No shifts recorded yet</div>';
+
+  const holding = w.holding || [];
+  const onShift = st.id === "working";
+  const wake = thisWake(w, st);
+  const holdHtml = holding.length
+    ? holding.map((h) => {
+        const id = typeof h === "string" ? h : (h.id || h.task_id || JSON.stringify(h));
+        const title = typeof h === "object" ? (h.title || "") : "";
+        return (
+          '<a class="hold" href="' + ticketHref(id) +
+          '" title="Open work order">' +
+          "<b>" + esc(id) + "</b>" +
+          (title ? '<div class="sm">' + esc(title) + "</div>" : "") +
+          "</a>"
+        );
+      }).join("")
+    : onShift && wake.id
+      ? (
+          '<a class="hold" href="' + ticketHref(wake.id) +
+          '" title="This wake claim">' +
+          "<b>" + esc(wake.id) + "</b>" +
+          '<div class="sm">' +
+          esc(wake.title ? wake.title : "claiming this wake") +
+          "</div></a>"
+        )
+      : onShift
+        ? '<div class="empty">On shift · waiting for claim</div>'
+        : "";
+
+  const ready = w.ready || [];
+  const claimedIds = {};
+  holding.forEach(function (h) {
+    const id = ticketBits(h).id;
+    if (id) claimedIds[id] = true;
+  });
+  if (wake.id) claimedIds[wake.id] = true;
+  const readyRest = (onShift ? ready : ready.slice(1)).filter(function (h) {
+    return !claimedIds[ticketBits(h).id];
+  });
+  const readyHtml = readyRest.length
+    ? readyRest.map((h) => {
+        const id = typeof h === "string" ? h : (h.id || h.task_id || "?");
+        const title = typeof h === "object" ? (h.title || "") : "";
+        return (
+          '<a class="shift-ticket" href="' + ticketHref(id) +
+          '" title="Open work order">' +
+          "<b>" + esc(id) + "</b>" +
+          (title ? " · " + esc(title) : "") +
+          "</a>"
+        );
+      }).join("")
+    : "";
+
+  const deskHref = deskHrefNav;
+
+  const o = w.outputs || {};
+  const lastShift = (w.shifts || [])[0];
+  const artHtml = (o.artifacts || []).length
+    ? (o.artifacts || []).map((a) => {
+        if (a.md && a.exists) {
+          return (
+            '<a class="artifact" href="/read?path=' + encodeURIComponent(a.path) +
+            "&back=" + backQ + '"><div class="fn">' + esc(a.name) +
+            "</div><div class=\"sm\">" + esc(a.path) + " · open in BluePrint</div></a>"
+          );
+        }
+        return (
+          '<div class="artifact" style="opacity:0.7"><div class="fn">' +
+          esc(a.name) + "</div><div class=\"sm\">" + esc(a.path) +
+          (a.exists ? "" : " · missing on disk") + "</div></div>"
+        );
+      }).join("")
+    : "";
+  const ticketHtml = (o.tickets || []).length
+    ? "<div class=\"shift\" style=\"margin-top:8px\">Tickets: " +
+      (o.tickets || []).map((t) => "<b>" + esc(t) + "</b>").join(", ") +
+      "</div>"
+    : "";
+
+  /* pc-432: dated job report papers on disk */
+  const reportList = (w.reports || o.reports || []).slice(0, 10);
+  const reportsHtml = reportList.length
+    ? '<div class="empty" style="margin-top:12px">Reports · job deliverables</div>' +
+      reportList
+        .map(function (r) {
+          var rp = (r && r.path) || "";
+          var rn = (r && r.name) || "";
+          if (!rp) return "";
+          return (
+            '<a class="artifact" href="/read?path=' +
+            encodeURIComponent(rp) +
+            "&back=" +
+            backQ +
+            '"><div class="fn">' +
+            esc(rn || rp.split("/").pop()) +
+            '</div><div class="sm">' +
+            esc(rp) +
+            (r.mtime ? " · " + nice(r.mtime) : "") +
+            "</div></a>"
+          );
+        })
+        .join("")
+    : isJob
+      ? '<div class="empty" style="margin-top:12px">No report files yet — jobs write dated .md under ops reports after a real run</div>'
+      : "";
+
+  /* Agent JSON → prose; demote raw + stale .out when last shift never wrote model output. */
+  function fmtDuration(ms) {
+    if (ms == null || ms === "") return "";
+    const n = Number(ms);
+    if (!isFinite(n) || n < 0) return "";
+    if (n < 1000) return Math.round(n) + "ms";
+    return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "s";
+  }
+  function fmtCost(usd) {
+    if (usd == null || usd === "") return "";
+    const n = Number(usd);
+    if (!isFinite(n)) return "";
+    if (n < 0.01) return "$" + n.toFixed(4);
+    return "$" + n.toFixed(2);
+  }
+  function stdoutIsStale(shift, mtime) {
+    /* pc-1310: any stdout older than last shift is previous output, not this wake. */
+    if (!mtime) return false;
+    if (!shift || !shift.ts) return false;
+    const shiftTs = Date.parse(shift.ts);
+    const outTs = Date.parse(mtime);
+    if (isNaN(shiftTs) || isNaN(outTs)) return true;
+    return outTs < shiftTs - 2000;
+  }
+  function renderPass(p) {
+    const n = p.n != null ? p.n : "?";
+    const isErr = !!p.is_error;
+    const sub = p.subtype || (p.kind === "result" ? "result" : "plain");
+    const bits = ["Pass " + n];
+    bits.push(
+      '<span class="' + (isErr ? "tag-err" : "tag-ok") + '">' +
+      esc(isErr ? "error" : sub) + "</span>"
+    );
+    const dur = fmtDuration(p.duration_ms);
+    const cost = fmtCost(p.cost_usd);
+    if (dur) bits.push(esc(dur));
+    if (cost) bits.push(esc(cost));
+    if (p.num_turns != null) bits.push(esc(String(p.num_turns)) + " turns");
+    const text = (p.text || "").trim();
+    return (
+      '<div class="out-pass"><div class="out-meta">' + bits.join(" · ") +
+      "</div>" +
+      (text
+        ? '<pre class="out-prose">' + esc(text) + "</pre>"
+        : '<div class="empty" style="margin-top:6px">No prose in this pass</div>') +
+      "</div>"
+    );
+  }
+  function renderStdoutBlock() {
+    if (!o.stdout_tail) {
+      return isJob
+        ? '<div class="empty" style="margin-top:8px">No stdout capture yet</div>'
+        : "";
+    }
+    const parsed = o.stdout_parsed || {};
+    const passes = parsed.passes || [];
+    const stale = stdoutIsStale(lastShift, o.stdout_mtime);
+    const pathNote = o.stdout_path ? " · " + esc(o.stdout_path) : "";
+    const mtimeNote = o.stdout_mtime ? " · " + nice(o.stdout_mtime) : "";
+    let body = "";
+    if (passes.length && parsed.format === "agent_json") {
+      body = passes.map(renderPass).join("");
+    } else if (passes.length && parsed.format === "plain") {
+      body = passes.map(renderPass).join("");
+    } else {
+      body = '<pre class="out-pre">' + esc(o.stdout_tail) + "</pre>";
+    }
+    const raw = (
+      '<details class="out-raw"><summary>Raw stdout' + pathNote +
+      mtimeNote + "</summary>" +
+      '<pre class="out-pre">' + esc(o.stdout_tail) + "</pre></details>"
+    );
+    if (stale) {
+      const shiftNote = lastShift ? " · last shift " + nice(lastShift.ts) : "";
+      const running =
+        lastShift &&
+        String(lastShift.outcome || "").toLowerCase() === "running";
+      return (
+        '<div class="out-stale">' +
+        (running
+          ? "This shift has not written yet. Previous model output is not current"
+          : "Stale · last shift did not write this file") +
+        shiftNote +
+        " · file" +
+        mtimeNote +
+        ".</div>" +
+        '<details class="out-raw" style="margin-top:8px"><summary>Previous model output</summary>' +
+        body + raw + "</details>"
+      );
+    }
+    return (
+      '<div class="empty" style="margin-top:10px">Model output' +
+      pathNote + mtimeNote + "</div>" +
+      body + raw
+    );
+  }
+
+  /* JOB lead: Output (artifacts + last run + stdout). WORKER lead: Desk work. */
+  const outputPanel =
+    '<div class="box panel' + (isJob ? " lead" : "") +
+    '" style="grid-column:1/-1"><span class="corner tl"></span><span class="corner br"></span>' +
+    "<h3>" + (isJob ? "Output · last run result" : "Last out") + "</h3>" +
+    (lastShift
+      ? row("last outcome", esc(lastShift.outcome || "—") +
+          (lastShift.reason ? " · " + esc(lastShift.reason) : "") +
+          " · " + nice(lastShift.ts))
+      : row("last outcome", "—")) +
+    row("next fire", nice(w.next_fire)) +
+    (artHtml || (isJob
+      ? '<div class="empty" style="margin-top:8px">No file artifact parsed from last stdout — see log tail below</div>'
+      : '<div class="empty" style="margin-top:8px">Agents rarely leave a single output file; work-order activity is the main result</div>')) +
+    ticketHtml +
+    reportsHtml +
+    renderStdoutBlock() +
+    (isJob && o.log_tail
+      ? '<div class="empty" style="margin-top:10px">ledger tail' +
+        (o.log_path ? " · " + esc(o.log_path) : "") +
+        '</div><pre class="out-pre" style="max-height:120px">' + esc(o.log_tail) + "</pre>"
+      : "") +
+    "</div>";
+
+  const workPanel =
+    '<div class="box panel' + (!isJob ? " lead" : "") +
+    '"><span class="corner tl"></span><span class="corner br"></span>' +
+    "<h3>" + (isJob ? "Work orders join · usually empty" : "This wake") + "</h3>" +
+    (isJob
+      ? '<div class="empty">Jobs do not claim work orders. Output panel is the result.</div>'
+      : "") +
+    (!isJob && onShift
+      ? "<h3 style=\"margin-top:4px;opacity:0.5\">Holding · in hands</h3>" + holdHtml
+      : "") +
+    (!isJob && readyHtml
+      ? "<h3 style=\"margin-top:16px;opacity:0.5\">Also ready</h3>" + readyHtml
+      : "") +
+    (!isJob
+      ? '<div class="pivot-row">' +
+        '<a class="primary" href="' + deskHref +
+        '">Open on Map →</a>' +
+        '<a href="/workspace-map?you=decide">For You on Map</a>' +
+        (deskStore
+          ? '<a href="/workspace-map?project=' + encodeURIComponent(deskStore) +
+            '">Project on Map</a>'
+          : '<a href="/workspace-map">Map</a>') +
+        "</div>"
+      : "") +
+    "</div>";
+
+  const identityPanel =
+    '<div class="box panel"><span class="corner tl"></span><span class="corner br"></span>' +
+    "<h3>Identity</h3>" +
+    row("id", esc(w.name)) +
+    row("kind", esc(isJob ? "job · automation" : (w.kind || "worker"))) +
+    row("home", esc(project || "—")) +
+    row("workdir", esc(w.workdir || "—")) +
+    row("identity", esc(w.identity || "—")) +
+    row("cli", esc(w.cli || "—")) +
+    '<div class="row model-edit">' +
+    '<div class="k">model</div><div class="v">' +
+    '<div class="model-row">' +
+    '<input type="text" id="model-pin-input" spellcheck="false" ' +
+    'placeholder="vendor default" value="' +
+    esc(w.model && w.model !== "default" ? w.model : "") +
+    '" />' +
+    '<button type="button" class="btn" id="model-pin-save">Save pin</button>' +
+    "</div>" +
+    '<div class="dim" id="model-pin-status">Empty = vendor default · next shift uses the saved pin</div>' +
+    "</div></div>" +
+    (w.succeeds ? row("succeeds", esc(w.succeeds)) : "") +
+    (w.owner || (o && false) ? "" : "") +
+    "</div>";
+
+  const schedulePanel =
+    '<div class="box panel"><span class="corner tl"></span><span class="corner br"></span>' +
+    "<h3>Schedule &amp; health</h3>" +
+    row("state", esc(st.label)) +
+    row("schedule", esc(w.schedule || "—")) +
+    row("next fire", nice(w.next_fire)) +
+    row("budget", w.budget_secs != null ? w.budget_secs + "s" : "—") +
+    row("max passes", w.max_passes != null ? String(w.max_passes) : "—") +
+    row("health", esc(w.health || "—")) +
+    row("why", esc(w.why || "—")) +
+    (!isJob ? row("queue", esc(String(w.queue != null ? w.queue : "—"))) : "") +
+    "</div>";
+
+  const lawPanel =
+    '<div class="box panel law"><span class="corner tl"></span><span class="corner br"></span>' +
+    "<h3>Instructions · next shift reads</h3>" +
+    lawHtml +
+    "</div>";
+
+  const historyPanel =
+    '<div class="box panel" style="grid-column:1/-1"><span class="corner tl"></span><span class="corner br"></span>' +
+    "<h3>" + (isJob ? "Run history" : "Shift history") + "</h3>" +
+    shiftHtml +
+    "</div>";
+
+  /* Order: job → Output first; worker → Work first */
+  const lead = isJob
+    ? outputPanel + workPanel
+    : workPanel + outputPanel;
+
+  document.getElementById("grid").hidden = false;
+  document.getElementById("note").hidden = false;
+  document.getElementById("note").textContent = isJob
+    ? "Job: result is a run artifact (report path, work-order id, stdout). Not a work-order lane."
+    : "Agent: result is work-order activity (claims/closes). Skip with empty queue is lawful — no file required.";
+  document.getElementById("grid").innerHTML =
+    lead + identityPanel + schedulePanel + lawPanel + historyPanel;
+
+  /* pc-428: editable model pin → POST /api/worker/<name>/model */
+  (function armModelPin() {
+    var input = document.getElementById("model-pin-input");
+    var btn = document.getElementById("model-pin-save");
+    var status = document.getElementById("model-pin-status");
+    if (!input || !btn) return;
+    btn.onclick = function () {
+      var pin = String(input.value || "").trim();
+      btn.disabled = true;
+      if (status) status.textContent = "Saving…";
+      fetch("/api/worker/" + encodeURIComponent(w.name) + "/model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: pin }),
+      })
+        .then(function (r) {
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error((d && d.error) || r.statusText);
+            return d;
+          });
+        })
+        .then(function (d) {
+          w.model = (d && d.model) || pin;
+          btn.disabled = false;
+          if (status) {
+            status.textContent =
+              "Saved · " +
+              (w.model ? w.model : "vendor default") +
+              " · next shift uses this pin";
+          }
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          if (status) {
+            status.textContent =
+              "Save failed: " + ((err && err.message) || err);
+          }
+        });
+    };
+  })();
+
+  /* LIVE-C / pc-304: SuiteUI.LiveTail against same-origin SSE proxy */
+  armLiveOut(w, st.id === "working");
+
+  /* pc-1309: city/people follow; plate + ready + Dispatch already painted. */
+  cityP.then(function (name) {
+    if (_paintedWorker !== w) return;
+    applyCityLabel(name);
+  });
+  peopleP.then(function (set) {
+    if (_paintedWorker !== w) return;
+    applyInflightState(w, set);
+  });
+}
+
+/** pc-299/pc-304: SuiteUI kit — module tag is deferred; await before mount. */
+async function ensureSuiteUI() {
+  if (globalThis.SuiteUI && globalThis.SuiteUI.LiveTail) return globalThis.SuiteUI;
+  await import("/components/index.js");
+  return globalThis.SuiteUI;
+}
+
+/* Stable host + key so SuitePulse main() redraws do not tear down EventSource. */
+let _liveTailCtl = null;
+let _liveTailKey = null;
+
+function armLiveOut(w, onShift) {
+  const host = document.getElementById("live-tail-host");
+  if (!host) return;
+  const name = w && w.name;
+  if (!name || !globalThis.SuiteUI || !SuiteUI.LiveTail) {
+    if (_liveTailCtl) {
+      try { _liveTailCtl.destroy(); } catch (e) {}
+      _liveTailCtl = null;
+    }
+    _liveTailKey = null;
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+
+  /* pc-1310: hide the tail when idle — do not repeat "not on shift" under Idle. */
+  if (!onShift) {
+    if (_liveTailCtl) {
+      try { _liveTailCtl.destroy(); } catch (e) {}
+      _liveTailCtl = null;
+    }
+    _liveTailKey = null;
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+
+  host.hidden = false;
+  const active = !!window.EventSource;
+  const key = name + "|1";
+  if (_liveTailKey === key && _liveTailCtl) return;
+
+  const props = {
+    url: "/api/worker-out/" + encodeURIComponent(name) + "/stream",
+    worker: name,
+    active: active,
+    idleLabel: "Waiting for shift output…",
+  };
+  _liveTailKey = key;
+  if (_liveTailCtl) {
+    _liveTailCtl = _liveTailCtl.update(props);
+  } else {
+    _liveTailCtl = SuiteUI.LiveTail.mount(host, props);
+  }
+}
+
+function destroyLiveTail() {
+  if (_liveTailCtl) {
+    try { _liveTailCtl.destroy(); } catch (e) {}
+    _liveTailCtl = null;
+  }
+  _liveTailKey = null;
+  const host = document.getElementById("live-tail-host");
+  if (host) {
+    host.hidden = true;
+    host.innerHTML = "";
+  }
+}
+
+if (window.SuitePaper) SuitePaper.install(); /* law/artifact .md → side drawer */
+
+paintInstantPlate();
+
+ensureSuiteUI()
+  .then(function () {
+    return main();
+  })
+  .catch(function (e) {
+    const err = document.getElementById("err");
+    if (err) {
+      err.hidden = false;
+      err.textContent = "SuiteUI failed to load: " + e;
+    }
+  });
+
+if (window.SuitePulse) {
+  SuitePulse.start({
+    keys: ["people"],
+    interval: 2000,
+    onChange: function () {
+      if (_dispatchLive) return;
+      main();
+    },
+  });
+}
+window.SuiteRoomInit = {
+  name: "person",
+  teardown: function () {
+    stopDispatchPoll();
+    _dispatchLive = false;
+    destroyLiveTail();
+    if (window.SuitePulse) SuitePulse.stop();
+  },
+};
+</script>
+</div>
+</body>
+</html>

@@ -192,3 +192,11 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-dig-child.map-dig-dense:hover .map-dig-label,
 .map-dig-child.map-dig-dense:focus .map-dig-label,
 .map-dig-child.map-dig-dense:focus-within .map-dig-label { opacity: 1; }
+
+/* The list is the keyboard/touch counterpart to the spatial folder map. */
+.map-browser { width: min(280px, calc(100vw - 48px)); }
+.map-browser p { font-size: 12px; overflow-wrap: anywhere; color: #aeb6c2; }
+#map-browser-list { display: grid; gap: 3px; max-height: 48vh; overflow-y: auto; }
+#map-browser-list button { text-align: left; padding: 7px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--map-chrome-fg); font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+#map-browser-list button:hover, #map-browser-list button:focus-visible { background: #273347; outline: 2px solid #789bce; outline-offset: -2px; }
+@media (max-width: 640px) { .map-browser { width: min(220px, calc(100vw - 48px)); } #map-browser-list { max-height: 30vh; } }

@@ -1,0 +1,357 @@
+/* suite/components/suite-ui.css — kit chrome (pc-294)
+ * Tokens come from suite.css (:root --paper, --line, --gold, …).
+ * Safe to load after suite.css; does not redefine page layout.
+ */
+
+/* ── focus rings (binding a11y) ── */
+.suite-error__retry:focus-visible,
+.suite-empty__btn:focus-visible,
+.suite-view-mode__btn:focus-visible,
+.suite-pathbar__link:focus-visible,
+.suite-slip:focus-visible,
+a.suite-slip:focus-visible {
+  outline: 2px solid var(--gold, #b8860b);
+  outline-offset: 2px;
+}
+
+/* ── ErrorBanner ── */
+.suite-error {
+  display: none;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1.5px solid var(--warn, #f0997b);
+  background: rgba(240, 153, 123, 0.08);
+  color: var(--line, #2a241c);
+  font-size: var(--type-body);
+}
+.suite-error.is-visible {
+  display: block;
+}
+.suite-error__msg {
+  margin: 0;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+}
+.suite-error__up {
+  margin: 6px 0 0;
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.suite-error__retry {
+  margin-top: 10px;
+  font: inherit;
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold, #b8860b);
+  background: transparent;
+  border: 1px solid var(--gold, #b8860b);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.suite-error__retry:hover {
+  background: rgba(233, 196, 106, 0.12);
+}
+
+/* ── EmptyState ── */
+.suite-empty {
+  padding: 28px 16px;
+  text-align: center;
+  border: 1px dashed var(--line-faint, rgba(42, 36, 28, 0.16));
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper-deep));
+}
+.suite-empty__title {
+  margin: 0;
+  font-size: var(--type-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.suite-empty__hint {
+  margin: 8px 0 0;
+  font-size: var(--type-body);
+  opacity: 0.6;
+  line-height: 1.4;
+}
+.suite-empty__action {
+  margin: 14px 0 0;
+}
+.suite-empty__btn {
+  display: inline-block;
+  font: inherit;
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--gold, #b8860b);
+  border: 1px solid var(--gold, #b8860b);
+  background: transparent;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.suite-empty__btn:hover {
+  background: rgba(233, 196, 106, 0.1);
+}
+
+/* ── LoadingBlock ── */
+.suite-loading {
+  padding: 12px 0;
+}
+.suite-loading__label {
+  margin: 0 0 10px;
+  font-size: var(--type-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.suite-loading__bar {
+  height: 10px;
+  margin-bottom: 8px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--line-ghost, rgba(42, 36, 28, 0.06)) 0%,
+    var(--line-faint, rgba(42, 36, 28, 0.16)) 50%,
+    var(--line-ghost, rgba(42, 36, 28, 0.06)) 100%
+  );
+  background-size: 200% 100%;
+  animation: suite-skel 1.2s ease-in-out infinite;
+}
+.suite-loading--pulse .suite-loading__pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--alive, #7fd8a4);
+  animation: suite-pulse-dot 1s ease-in-out infinite;
+}
+@keyframes suite-skel {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes suite-pulse-dot {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .suite-loading__bar,
+  .suite-loading--pulse .suite-loading__pulse {
+    animation: none;
+  }
+  .suite-loading__bar {
+    opacity: 0.55;
+  }
+}
+
+/* ── Pathbar ── */
+.suite-pathbar {
+  font-size: var(--type-body);
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  flex-wrap: wrap;
+}
+.suite-pathbar__link {
+  color: var(--line, #2a241c);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-faint, rgba(42, 36, 28, 0.16));
+  transition: color 0.15s, border-color 0.15s;
+}
+.suite-pathbar__link:hover {
+  color: var(--gold, #b8860b);
+  border-bottom-color: var(--gold, #b8860b);
+}
+.suite-pathbar__cur {
+  color: var(--gold, #b8860b);
+  font-weight: var(--weight-medium);
+}
+.suite-pathbar__sep,
+.path-sep {
+  opacity: 0.45;
+  margin: 0 2px;
+}
+
+/* ── Slip (shares desk density; works without page-local CSS) ── */
+.suite-slip {
+  display: block;
+  text-decoration: none;
+  color: var(--line, #2a241c);
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.16));
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-size: var(--type-body);
+  min-height: 72px;
+  box-sizing: border-box;
+  background: transparent;
+  transition: border-color 0.15s;
+}
+a.suite-slip {
+  cursor: pointer;
+}
+a.suite-slip:hover {
+  border-color: var(--gold, #b8860b);
+  outline: 1px solid var(--gold, #b8860b);
+  outline-offset: 1px;
+}
+.suite-slip--for-you,
+.suite-slip.fresh {
+  border-color: rgba(233, 196, 106, 0.55);
+  background: rgba(233, 196, 106, 0.06);
+}
+.suite-slip .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.suite-slip .id {
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.suite-slip .kind {
+  font-size: var(--type-caption);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid var(--gold, #b8860b);
+  color: var(--gold, #b8860b);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.suite-slip .kind.muted {
+  border-color: var(--line-faint, rgba(42, 36, 28, 0.16));
+  color: var(--line, #2a241c);
+  opacity: 0.7;
+}
+.suite-slip .t {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  opacity: 0.9;
+  margin-top: 6px;
+  line-height: 1.35;
+}
+.suite-slip .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.suite-slip .tag {
+  font-size: var(--type-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.16));
+  padding: 1px 6px;
+  opacity: 0.75;
+}
+.suite-slip .meta {
+  opacity: 0.55;
+  font-size: var(--type-label);
+  margin-top: 6px;
+  display: block;
+}
+.suite-slip .top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.suite-slip .when {
+  font-size: var(--type-label);
+  opacity: 0.55;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.suite-slip--loading {
+  min-height: 88px;
+  opacity: 0.75;
+}
+.suite-slip__skel .suite-loading__bar {
+  margin-top: 6px;
+}
+
+/* ── ViewModeToggle ── */
+.suite-view-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.suite-view-mode__btn {
+  font: inherit;
+  font-size: var(--type-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--line, #2a241c);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: color 0.15s, opacity 0.15s, border-color 0.15s;
+}
+.suite-view-mode__btn.is-here,
+.suite-view-mode__btn[aria-pressed="true"] {
+  color: var(--gold, #b8860b);
+  border-bottom-color: var(--gold, #b8860b);
+  opacity: 1;
+  font-weight: var(--weight-medium);
+}
+.suite-view-mode__btn:hover {
+  opacity: 1;
+  color: var(--gold, #b8860b);
+}
+.suite-view-mode__sep {
+  opacity: 0.4;
+}
+
+/* ── LiveTail ── */
+.suite-live-tail {
+  border: 1px solid var(--line-faint, rgba(42, 36, 28, 0.16));
+  background: rgba(0, 0, 0, 0.18);
+  min-height: 4.5rem;
+  padding: 8px 10px;
+  font-size: var(--type-body);
+}
+.suite-live-tail__idle {
+  margin: 0;
+  opacity: 0.55;
+  letter-spacing: 0.04em;
+}
+.suite-live-tail__pre {
+  margin: 0;
+  max-height: 16rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-weight: var(--weight-regular); font-size: var(--type-label); line-height: 1.45; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--line, #2a241c);
+}
+.suite-live-tail__status {
+  margin: 6px 0 0;
+  font-size: var(--type-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.suite-live-tail__status.is-err {
+  color: var(--warn, #f0997b);
+  opacity: 0.9;
+}
+.suite-live-tail.is-streaming {
+  border-color: rgba(127, 216, 164, 0.45);
+}
+.suite-live-tail.is-error {
+  border-color: rgba(240, 153, 123, 0.45);
+}
+
+.dim {
+  opacity: 0.65;
+}

@@ -1,5 +1,7 @@
 # Always-work process (every BluePrint workspace)
 
+> **September2026 interface amendment:** WorkLane remains the work-order authority; WorkForce remains the execution authority. The current BP operations app includes Work, Projects, Agents, Activity, Map, Calendar, Connections, and Settings. Former Map-only/no-form descriptions below are historical interface constraints, superseded by [OPERATIONS_EVOLUTION_2026_09.md](OPERATIONS_EVOLUTION_2026_09.md). Actions go through the owning engine. Follow the isolated [build/activate/recovery procedure](../operations/DEPLOYMENT.md); do not restore competing UI services. The operating loop and evidence requirements remain.
+
 > **Status: LIVE** — 2026-08-02 · all BluePrint installs, not host-private.  
 > **Amended 2026-08-07:** shift **drain loop** is law (finish → next
 > ready until empty / gated / budget / fault). Engine enforcement: ****.  

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en" class="suite-ticket-view suite-has-spine">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/brand/favicon.svg?v=pc-1285" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch.png?v=pc-1285">
+<title>BluePrint — Work order</title>
+<link rel="stylesheet" href="/suite.css?v=20260821-pc1298">
+<script src="/esc.js?v=20260901-pc1396"></script>
+<script src="/suite-nav.js?v=20260831-pc1383"></script>
+<script src="/map/wo-buckets.js?v=20260804-pc1090"></script>
+<script src="/suite-paper.js?v=20260804-pc1084"></script>
+<style>
+  .pathbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px;
+    margin: 16px 0 8px; font-size: var(--type-body); letter-spacing: 0.04em;
+  }
+  .pathbar a { color: var(--line); text-decoration: none;
+               border-bottom: 1px solid var(--line-faint); }
+  .pathbar a:hover { border-bottom-color: var(--gold); color: var(--gold); }
+  .pathbar .sep { opacity: 0.4; margin: 0 4px; }
+  .pathbar .here { font-weight: var(--weight-medium); }
+  .plate {
+    margin-top: 14px; border: 1.5px solid var(--gold); background: var(--paper-deep);
+    padding: 18px 20px; position: relative;
+  }
+  .plate h2 { font-size: var(--type-heading); font-weight: var(--weight-medium); letter-spacing: 0.03em; line-height: 1.35; }
+  .plate .meta { font-size: var(--type-body); opacity: 0.7; margin-top: 8px; }
+  .body {
+    margin-top: 20px; border: 1.5px solid var(--line); background: var(--paper-deep);
+    padding: 22px 24px; position: relative; max-width: 720px;
+  }
+  .md { font-size: var(--type-body); line-height: 1.65; word-wrap: break-word; }
+  .md p { margin: 0.6em 0; }
+  .links a {
+    margin-right: 14px; font-size: var(--type-label); letter-spacing: 0.1em; text-transform: uppercase;
+    text-decoration: none; border-bottom: 1px solid var(--line-faint);
+  }
+  .links a:hover { border-bottom-color: var(--gold); color: var(--gold); }
+  .note { margin-top: 14px; font-size: var(--type-label); opacity: 0.5; }
+</style>
+</head>
+<body>
+<aside class="suite-spine" id="suite-spine" aria-label="BluePrint">
+  <div class="suite-spine-brand">
+    <a class="suite-spine-lockup" href="/" aria-label="BluePrint">
+      <img class="suite-spine-mark" src="/brand/mark-cyanotype.svg?v=pc-1288" width="64" height="52" alt="">
+      <span class="suite-spine-word">BluePrint</span>
+    </a>
+  </div>
+  <nav aria-label="Lenses">
+    <a href="/overview" data-spine-lens="overview">Overview</a>
+    <a href="/workspace-map" data-spine-lens="map">Map</a>
+    <a href="/calendar" data-spine-lens="calendar">Calendar</a>
+    <a href="/settings" data-spine-lens="settings">Settings</a>
+  </nav>
+  <p class="suite-spine-hint"><a href="https://github.com/protocolcity/BluePrint" target="_blank" rel="noopener"><span class="suite-powered-bolt" aria-hidden="true">⚡</span><span class="suite-powered-label">Powered by</span><span class="suite-powered-name">ProtocolCity</span></a></p>
+</aside>
+<header class="suite-head">
+  <div class="suite-mast">
+    <div class="suite-title">
+      <h1 id="mast">Work order</h1>
+      <div class="sub" id="sub">From the board</div>
+    </div>
+  </div>
+</header>
+
+<div id="suite-body">
+<div class="pathbar" id="pathbar"></div>
+<div class="plate" id="plate" hidden>
+  <span class="corner tl"></span><span class="corner br"></span>
+  <h2 id="title">—</h2>
+  <div class="meta" id="meta"></div>
+  <div class="links" id="doors" style="margin-top:14px"></div>
+</div>
+<div class="body" id="body" hidden>
+  <span class="corner tl"></span><span class="corner br"></span>
+  <div id="desc"></div>
+</div>
+<div class="note">Work orders live in the WorkLane store. Read-only in BluePrint.</div>
+<div class="err" id="err" hidden></div>
+
+<script>
+const Q = new URLSearchParams(location.search);
+const ID = (Q.get("id") || "").trim();
+const BACK = Q.get("back") || "/workspace-map";
+
+const esc = function (s) { return window.__bp.esc(s); };
+function productSlug(task) {
+  const p = (task.product || "").toLowerCase();
+  if (p === "ticketingprotocol") return "worklane";
+  if (p) return p;
+  const id = (task.id || "").toLowerCase();
+  const pref = id.split("-")[0];
+  return ({
+    ts: "tradeos", tp: "worklane", pc: "protocolcity",
+    wf: "workforce", oc: "workforce", so: "socials", gf: "gridfinity",
+    wl: "worklane", conn: "connector",
+  })[pref] || "";
+}
+
+async function main() {
+  if (!ID) {
+    document.getElementById("err").hidden = false;
+    document.getElementById("err").innerHTML =
+      'No work-order id — open a slip from the <a href="/workspace-map">Map</a> work-order tape.';
+    return;
+  }
+  let cityName =
+    window.SuiteNav && typeof SuiteNav.workspaceFolderLabel === "function"
+      ? SuiteNav.workspaceFolderLabel()
+      : "Workspace";
+  let folderName = "";
+  try {
+    const city = await (await fetch("/api/city")).json();
+    const folder = (city.city_root || "").split("/").pop() || "";
+    cityName =
+      window.SuiteNav && typeof SuiteNav.workspaceFolderLabel === "function"
+        ? SuiteNav.workspaceFolderLabel(folder)
+        : folder || "Workspace";
+    const slug = productSlug({ id: ID });
+    const hood = (city.folders || city.neighborhoods || []).find(
+      (x) => (x.slug || "").toLowerCase() === slug ||
+        (x.name || "").toLowerCase() === slug
+    );
+    folderName = (hood && hood.name) || slug;
+  } catch (e) {}
+
+  let data;
+  try {
+    const r = await fetch("/api/task/" + encodeURIComponent(ID));
+    data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+  } catch (e) {
+    document.getElementById("err").hidden = false;
+    document.getElementById("err").textContent = "Could not load work order: " + e.message;
+    return;
+  }
+  const t = data.task || data;
+  const product = productSlug(t);
+  const qProj =
+    (window.SuiteNav && SuiteNav.projectFromSearch()) || product || "";
+  if (window.SuiteNav) {
+    SuiteNav.apply({ room: "ticket", project: qProj });
+  }
+  /* pc-495: dig-in default stays SuitePaper even after full-page ticket */
+  if (window.SuitePaper && SuitePaper.install) SuitePaper.install();
+
+  document.getElementById("mast").textContent = "Work order";
+  document.title =
+    window.SuiteNav && typeof SuiteNav.docTitle === "function"
+      ? SuiteNav.docTitle(t.id || ID)
+      : "BluePrint — " + (t.id || ID);
+  document.getElementById("sub").textContent =
+    (folderName || product || "workspace") + " · " + (t.id || ID) + " · read-only";
+
+  const mapHref = qProj
+    ? "/workspace-map?project=" + encodeURIComponent(qProj)
+    : "/workspace-map";
+
+  document.getElementById("pathbar").innerHTML =
+    '<a href="/">' + esc(cityName) + "</a>" +
+    '<span class="sep">/</span>' +
+    (product
+      ? '<a href="' + mapHref + '">' + esc(folderName || product) + " on Map</a>" +
+        '<span class="sep">/</span>'
+      : '<a href="/workspace-map">Map</a><span class="sep">/</span>') +
+    '<span class="here">' + esc(t.id || ID) + "</span>" +
+    ' · <a href="' + esc(BACK) + '">← back</a>';
+
+  document.getElementById("plate").hidden = false;
+  document.getElementById("title").textContent = t.title || t.id;
+  const metaLine = String(t.status || "—").replace(/_/g, " ") +
+    (product ? " · " + product : "") +
+    (t.priority != null ? " · p" + t.priority : "");
+  const stampLine = window.SuitePaper && typeof SuitePaper.ticketDualStampText === "function"
+    ? SuitePaper.ticketDualStampText(t) : "";
+  document.getElementById("meta").innerHTML =
+    esc(metaLine) + (stampLine ? "<br>" + esc(stampLine) : "");
+  document.getElementById("doors").innerHTML =
+    '<a href="' + mapHref + '">Map</a>' +
+    '<a href="/overview">Overview</a>';
+
+  /* Same citizen body as Map dig-in (suite-paper renderTicketHtml) */
+  document.getElementById("body").hidden = false;
+  const descEl = document.getElementById("desc");
+  if (window.SuitePaper && typeof SuitePaper.renderTicketHtml === "function") {
+    descEl.innerHTML = SuitePaper.renderTicketHtml(t);
+    if (typeof SuitePaper.wireWhereActions === "function") {
+      SuitePaper.wireWhereActions(descEl);
+    }
+  } else {
+    descEl.textContent = t.description || "(no description)";
+  }
+}
+main();
+</script>
+</div>
+</body>
+</html>

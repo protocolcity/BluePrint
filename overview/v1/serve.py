@@ -174,11 +174,121 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:  # keep output quiet
         sys.stderr.write("bp-desk %s - %s\n" % (self.address_string(), fmt % args))
 
+    def do_POST(self) -> None:
+        from server.work_actions import add_note, work_action
+        import sqlite3
+        if self.path not in ("/api/work-order/note", "/api/work-order/action"):
+            self._send_json(404, {"error": "Unknown action."})
+            return
+        # A local browser write must originate on this exact local origin.
+        host = self.headers.get("Host", "")
+        origin = self.headers.get("Origin", "")
+        expected_port = self.server.server_address[1]
+        allowed = {f"127.0.0.1:{expected_port}", f"localhost:{expected_port}"}
+        if host not in allowed or origin != f"http://{host}" or self.headers.get("X-BluePrint-Action") != ("note" if self.path.endswith("/note") else "work-order"):
+            self._send_json(403, {"error": "This action must come from the local BluePrint page."})
+            return
+        if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+            self._send_json(415, {"error": "JSON is required."})
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 0 < size <= 65536:
+                raise ValueError("Invalid request size.")
+            payload = json.loads(self.rfile.read(size))
+            if not isinstance(payload, dict):
+                raise ValueError("Invalid action request.")
+            if self.path.endswith("/note"):
+                result = add_note(self.binder_root, payload.get("project"), payload.get("id"), payload.get("body"))
+            else:
+                result = work_action(self.binder_root, payload.get("project"), payload.get("id"), payload.get("action"), payload.get("value"), payload.get("expected_updated_at"))
+            self._send_json(200, result)
+        except (ValueError, TypeError) as exc:
+            self._send_json(400, {"error": str(exc)})
+        except FileNotFoundError:
+            self._send_json(404, {"error": "Work order not found."})
+        except (RuntimeError, OSError, sqlite3.Error) as exc:
+            message = str(exc) if isinstance(exc, RuntimeError) else "Work-order source is unavailable."
+            self._send_json(503, {"error": message})
+
     # ── router ─────────────────────────────────────────────────────────
     def do_GET(self) -> None:  # noqa: N802 — http.server contract
         parsed = urlparse(self.path)
         query = {k: v[0] for k, v in parse_qs(parsed.query).items()}
         route = parsed.path
+
+        if route in ("/desk", "/roster", "/workspace-map", "/tickets"):
+            from server.legacy_redirect import target
+            self.send_response(307)
+            self.send_header("Location", target(self.path))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if route in ("/work-order", "/work-order/", "/ticket", "/ticket/"):
+            self._serve_static(_OV_STATIC_DIR, "work-order.html")
+            return
+        if route == "/api/work-order":
+            from server.work_order import read_work_order
+            import sqlite3
+            try:
+                result = read_work_order(self.binder_root, query.get("project", ""), query.get("id", ""))
+                from server.work_actions import assignment_options
+                result["assignment_options"] = assignment_options(self.binder_root, result["project"])
+                self._send_json(200, result)
+            except ValueError as exc:
+                self._send_json(400, {"error": str(exc)})
+            except FileNotFoundError as exc:
+                self._send_json(404, {"error": str(exc)})
+            except (sqlite3.Error, OSError):
+                self._send_json(503, {"error": "Work-order store is unavailable. Try again shortly."})
+            return
+
+        if route in ("/documents", "/documents/"):
+            self._serve_static(_OV_STATIC_DIR, "documents.html")
+            return
+        if route in ("/api/documents", "/api/document"):
+            from server.documents import catalog, read_document
+            try:
+                result = catalog(self.binder_root, query.get("project", "")) if route == "/api/documents" else read_document(self.binder_root, query.get("project", ""), query.get("path", ""))
+                self._send_json(200, result)
+            except (ValueError, UnicodeError) as exc:
+                self._send_json(400, {"error": str(exc)})
+            except FileNotFoundError as exc:
+                self._send_json(404, {"error": str(exc)})
+            except OSError:
+                self._send_json(503, {"error": "Project papers could not be read."})
+            return
+        if route == "/calendar.ics":
+            from server.operations import operations_snapshot
+            from suite.api.calendar import render_vcalendar
+            from datetime import date, datetime
+            from urllib.parse import urlencode
+            snapshot = operations_snapshot(self.binder_root)
+            lane = next((s for s in snapshot["sources"] if s["name"] == "WorkLane"), {})
+            if lane.get("state") != "available" or snapshot.get("truncated"):
+                self._send_json(503, {"error": "Calendar cannot be exported while work-order sources are incomplete."})
+                return
+            events=[]
+            for row in snapshot["work_dates"]:
+                events.append({**row, "dtstart":date.fromisoformat(row["dtstart"]) if row["all_day"] else datetime.fromisoformat(row["dtstart"]),
+                    "uid":row["product"] + "-" + row["uid"],
+                    "url":"http://127.0.0.1:" + str(self.server.server_address[1]) + "/work-order?" + urlencode({"project":row["product"],"id":row["task_id"]})})
+            self._send_text(200, render_vcalendar(events), "text/calendar; charset=utf-8")
+            return
+        if route == "/api/remote-activity":
+            from server.remote_activity import remote_snapshot
+            self._send_json(200, remote_snapshot(self.binder_root))
+            return
+        if route == "/api/operations":
+            from server.operations import operations_snapshot
+            try:
+                self._send_json(200, operations_snapshot(self.binder_root))
+            except (OSError, ValueError):
+                self._send_json(503, {"error": "Workspace sources could not be read."})
+            return
+        if route in ("/", "/overview", "/overview/", "/work", "/agents", "/activity", "/projects", "/connections", "/calendar", "/calendar/", "/settings", "/settings/"):
+            self._serve_static(_OV_STATIC_DIR, "operations.html")
+            return
 
         # Overview API surface — always available.
         if route == "/api/overview/agents":
@@ -301,6 +411,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send_text(404, "map shell missing")
             return
         text = _rewrite_map_html(shell.read_text(encoding="utf-8"))
+        operations = (_OV_STATIC_DIR / "operations.html").read_text(encoding="utf-8")
+        nav = '<nav class="bp-nav"' + operations.split('<nav class="bp-nav"', 1)[1].split('</nav>', 1)[0] + '</nav>'
+        nav = nav.replace('href="/map"', 'href="/map" aria-current="page"')
+        text = text.replace('</head>', '<link rel="stylesheet" href="/css/overview.css"><link rel="stylesheet" href="/css/operations.css"></head>')
+        text = text.replace('<body>', '<body class="bp-operations bp-map-page">' + nav)
         self._send_text(200, text, "text/html; charset=utf-8")
 
 
@@ -327,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Dogfood desk server for BluePrint (four-lens)")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8803)
+    parser.add_argument("--legacy-port", action="append", type=int, default=[], help="Retired local UI port to redirect to this app")
     parser.add_argument(
         "--binder",
         type=Path,
@@ -381,6 +497,19 @@ def main(argv: list[str] | None = None) -> int:
     Handler.binder_root = binder
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
+    redirects = []
+    try:
+        from server.legacy_redirect import listener
+        import threading
+        for port in args.legacy_port:
+            redirect = listener(args.host, port, args.port)
+            redirects.append(redirect)
+        for redirect in redirects:
+            threading.Thread(target=redirect.serve_forever, daemon=True).start()
+    except OSError:
+        for redirect in redirects: redirect.server_close()
+        httpd.server_close()
+        raise
     where = f" · binder={binder}" if binder else ""
     print(f"bp-desk: four-lens shell on http://{args.host}:{args.port}/{where}")
     try:
@@ -388,6 +517,9 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nbp-desk: shutdown")
     finally:
+        for redirect in redirects:
+            redirect.shutdown()
+            redirect.server_close()
         httpd.server_close()
     return 0
 

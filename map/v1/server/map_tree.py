@@ -21,7 +21,7 @@ from typing import Iterable
 
 _MD_SUFFIXES = frozenset({".md", ".markdown"})
 _MANAGED_MARKER = ".blueprint"          # BluePrint's binder marker directory
-_DEFAULT_HIDDEN_NAMES = frozenset({".git", ".DS_Store", ".venv", "node_modules"})
+_DEFAULT_HIDDEN_NAMES = frozenset({".git", ".DS_Store", ".venv", "node_modules", "__pycache__", "build", "dist"})
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ def _dir_has_md(path: Path) -> bool:
 
 
 def _is_managed(path: Path) -> bool:
-    return (path / _MANAGED_MARKER).exists()
+    return (path / _MANAGED_MARKER).exists() or (path / '.protocolcity/desk-join.json').is_file()
 
 
 def _iter_top_children(root: Path, hidden_names: Iterable[str]) -> Iterable[Lot]:
@@ -71,7 +71,7 @@ def _iter_top_children(root: Path, hidden_names: Iterable[str]) -> Iterable[Lot]
     for entry in sorted(root.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
         name = entry.name
         low = name.lower()
-        hidden = low in hidden_set or name.startswith(".")
+        hidden = low in hidden_set or name.startswith(".") or low.endswith(".egg-info")
         is_dir = entry.is_dir()
         has_md = False
         if is_dir:
@@ -149,7 +149,7 @@ def children_at(root: Path, rel_path: str, *, hidden_names: Iterable[str] | None
             "isDir": is_dir,
             "hasMd": _dir_has_md(entry) if is_dir else entry.suffix.lower() in _MD_SUFFIXES,
             "managed": is_dir and _is_managed(entry),
-            "hidden": low in hidden_set or name.startswith("."),
+            "hidden": low in hidden_set or name.startswith(".") or low.endswith(".egg-info"),
         })
     return {"relPath": rel_path, "children": kids}
 
@@ -215,10 +215,31 @@ def _render_markdown(text: str) -> str:
     return "\n".join(out)
 
 
+_PRIVATE_DOCUMENT_DIRS = frozenset({"local", "data", "runtime", "secrets", "credentials", "backups"})
+_SKILL_SHELVES = frozenset({".agents", ".claude", ".codex"})
+
+
+def _check_document_path(path: Path) -> None:
+    """Allow project Markdown and skill papers, not runtime/private storage."""
+    parts = path.parts
+    if path.suffix.lower() not in _MD_SUFFIXES:
+        raise ValueError("file reader supports Markdown documents only")
+    for index, part in enumerate(parts):
+        lower = part.lower()
+        if lower in _PRIVATE_DOCUMENT_DIRS:
+            raise ValueError("document is in a protected directory")
+        if part.startswith("."):
+            if lower in _SKILL_SHELVES and parts[index + 1:index + 2] == ("skills",):
+                continue
+            raise ValueError("document is in a protected directory")
+
+
 def render_file(root: Path, rel_path: str, *, render: str = "html") -> tuple[str, str]:
-    """Return (content, content_type) for a file under the binder."""
+    """Return permitted Markdown under the binder, checking symlink targets too."""
     root = Path(root).resolve()
     target = _safe_join(root, rel_path)
+    _check_document_path(Path(rel_path))
+    _check_document_path(target.relative_to(root))
     if not target.is_file():
         raise FileNotFoundError(rel_path)
     text = target.read_text(encoding="utf-8", errors="replace")
