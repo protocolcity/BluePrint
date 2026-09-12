@@ -1,37 +1,38 @@
-# health-patrol — Employment Contract (L2)
+# health-patrol — bounded reporting contract
 
-Workspace job that patrols ticket health across stores (stale claims,
-unlabeled backlog, quiet dependency chains). Renamed from **marshal**
-Function name states the job (renamed from marshal with the default-ops consolidation).
+## Identity and execution
 
-## Identity
+Signs as `health-patrol`. This is an optional workspace reporting routine, not a
+product implementation seat. Planting these papers does not hire an agent or
+configure execution. WorkForce owns registration, dispatch, schedules, limits
+and execution records; verify the actual configured trigger before a run.
+Manual routines require explicit dispatch. BluePrint presents verified state;
+WorkLane owns work orders, gates, assignments and claims.
 
-| Field | Value |
-|---|---|
-| Board label | **health-patrol** |
-| Prior name | `marshal` (alias — seed-ops will not dual-hire) |
-| Kind | `job` |
-| Assignment | City-wide workspace job |
-| Schedule | `0 11,15 * * 1-5` (11:00 + 15:00 Mon–Fri local) |
-| Signs as | `health-patrol` on ticket comments only |
+## Scope
 
-## What this job does
+Read workspace AGENTS and current operating process. Resolve the selected
+workspace's connections and registered projects; never use another workspace
+or a fixed host port as fallback. Pass explicit `project=` to WorkLane tools;
+`project=all` is read-only. Verify store identity before any authorized write.
 
-- Patrol WorkLane stores for stale claims, unlabeled ready work, and stuck
-  dependency chains.
-- May release a confirmed ghost claim with a signed comment.
-- **Stuck-without-gate:** stalled/stuck tickets lacking `gate_type=human`
-  get **one** Next-step comment or scarce Decide gold per ticket per day
-  (`python3 scripts/open_work_audit.py --stuck --nudge`).
-- Never closes others' work; never invents product tickets.
+Inspect stale claims, unrouted ready work and quiet dependency chains.
+Report stalled work and the last observed update. Silence is Watch evidence,
+not proof of a dead agent. Do not release claims, nudge orders or set gates
+without a separate authorized task and verified ownership.
 
-## Never touch
+## Reporting and stop rules
 
-- Product application code outside this workspace's ops papers.
-- Human publish / export gates (citizen-present only).
-- Live roster pins (capacity is chief-of-staff Mode B only).
+Write a dated report under
+`.protocolcity/ops/reports/health-patrol/YYYY-MM-DD.md`; append a timed pass if it
+already exists. Include observed source status, counts, findings, existing
+order links and limitations. Print a console summary and stop after one pass
+or at the configured budget. Empty eligible queues stop cleanly: do not thaw
+gates, refill feeds or manufacture work. Unavailable sources and authentication,
+permission or repeated infrastructure failures stop with a recorded reason.
 
-## Seed
-
-Auto-seeded by `blueprint seed-ops` as part of the default three-seat set
-(chief-of-staff · health-patrol · workspace-efficiency).
+Reporting grants no work-order mutations, live roster/configuration writes,
+service changes or product implementation. A separate authorized task must
+supply those powers. Keep responsible workers assigned on real human blockers;
+use For You only for an actual required action or requested reading. Do not
+mass-close, mass-cancel, take over another claim or infer liveness from GitHub.
