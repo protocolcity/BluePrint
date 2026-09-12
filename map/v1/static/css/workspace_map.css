@@ -108,9 +108,24 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-trail-crumb:hover { background: rgba(255,255,255,0.06); }
 .map-trail-sep { color: var(--map-muted); }
 
-/* Reader overlay — foreignObject-hosted panel */
+/* Reader overlay — HTML host on #map-stage (viewport-fixed). Inset from
+ * chrome (View / Reset / trail) so dig depth + camera never clip the panel. */
 #md-viewer-layer { pointer-events: none; }
 .map-md-fo { pointer-events: none; }
+.map-md-host {
+  position: absolute;
+  inset: 56px 16px 16px 16px;
+  z-index: 4;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+}
+.map-md-host.is-open {
+  visibility: visible;
+  pointer-events: auto;
+}
 .map-md-backdrop {
   position: absolute; inset: 0;
   background: rgba(0,0,0,0.45);
@@ -118,8 +133,10 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
   pointer-events: auto;
 }
 .map-md-panel {
-  width: min(680px, calc(92vw - 48px)); max-width: calc(100% - 48px);
-  max-height: 82vh; overflow: auto; margin: 0 24px;
+  width: min(640px, 100%);
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto; margin: 0;
   background: #14171c; color: var(--map-fg);
   border: 1px solid var(--map-chrome-border); border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
@@ -173,4 +190,5 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-lot.map-lot-dense:focus-within .map-lot-label { opacity: 1; }
 .map-dig-child.map-dig-dense .map-dig-label { opacity: 0; pointer-events: none; }
 .map-dig-child.map-dig-dense:hover .map-dig-label,
-.map-dig-child.map-dig-dense:focus .map-dig-label { opacity: 1; }
+.map-dig-child.map-dig-dense:focus .map-dig-label,
+.map-dig-child.map-dig-dense:focus-within .map-dig-label { opacity: 1; }
