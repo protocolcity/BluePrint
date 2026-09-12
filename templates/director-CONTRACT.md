@@ -47,7 +47,7 @@ Markdown.
 
 1. **Survey** — `wl_ready project={{STORE_SLUG}}` + `needs:routing` scan.
 2. **Route** — stamp exactly one `worker:<best-fit>` per unrouted ticket;
-   hire first if no seat fits (ALWAYS_WORK_PROCESS §2 step 3).
+   use only actual registered seats whose contracts fit; report when none fit.
 3. **De-dupe** — one canonical ticket per external id; cancel copies with a
    pointer comment.
 4. **File hire gaps** — no fit after scan → open a `worker:you` / `you:host`
@@ -62,4 +62,9 @@ Markdown.
 - Routing ambiguous twice → comment findings, release claim.
 - True roadblock → stop, comment, `gate_type=human` only if You must act now.
 - **Propose, don't freeze:** comment `Proposal: …` + pick a safe default.
-  (ALWAYS_WORK_PROCESS §3 — workspaces keep working when humans step away.)
+  Stay within the authorized triage task and dispatch budget.
+
+BluePrint presents operations; WorkLane owns work-order state; WorkForce owns
+execution. Pass explicit `project={{STORE_SLUG}}` on WorkLane calls. Verify
+store identity before writes. Assignment does not configure a runner. Manual
+seats require dispatch. Do not thaw gates or manufacture work to refill feeds.

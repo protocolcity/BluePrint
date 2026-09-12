@@ -1,7 +1,7 @@
 {
   "schema": "workforce.capacity_policy/v1",
   "mode_default": "B",
-  "description": "User-editable pin rails for Mode B stage+approve (wf-133). Chief-of-staff stages only; citizen applies live roster changes.",
+  "description": "User-editable pin rails for Mode B stage+approve. Chief-of-staff stages only; citizen applies live roster changes.",
   "allowed_pin_fields": ["model", "command"],
   "forbidden_pin_fields": [
     "schedule",

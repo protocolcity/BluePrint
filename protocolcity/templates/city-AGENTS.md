@@ -15,8 +15,8 @@ This folder is the **workspace** root. Sessions opened here are
 ```
 You + entry AI (author = you)
   → file work order (route worker:<hand> on create)
-  → Agents drain that seat on a clock
-  → Map shows live truth
+  → configured runner claims assigned, ready work on manual or scheduled dispatch
+  → BluePrint shows work state and separate execution evidence
   → true blocker → keep hand seat + gold For You (gate_type=human)
   → close on the ticket (history) — do not re-file from chat memory
 ```
@@ -24,7 +24,7 @@ You + entry AI (author = you)
 | Stamp | Meaning |
 |---|---|
 | **Author** | You filed it (host chat intake) |
-| **Seat** | `worker:<hand>` implements while you step away |
+| **Seat** | `worker:<hand>` identifies responsibility; execution requires a configured runner and dispatch |
 | **For You** | Only when the hand needs your decision / credential / publish |
 
 **Load order:** this CORE → product always-work process (if installed) →
@@ -66,18 +66,23 @@ adopt required to run automations or file operator work.
 BluePrint is vendor-neutral: pick any chat host + WorkLane MCP for capture, any
 CLI for hired hands, suite as **glass**.
 
-- **Capture** = chat + MCP (`wl_create`) — not suite Map forms. Never `tk`.
-- **File = decided.** When You file a work order, hands work it — they do not
-  re-ask for permission. Route with `worker:<id>` on create.
+- **Ownership:** WorkLane owns work orders and writes; WorkForce owns execution
+  and roster state. BluePrint presents verified state and routes supported
+  actions through the owning engine with explicit project/store identity.
+- **File = decided within its stated scope.** Route with a registered
+  `worker:<id>` on create. A missing seat needs visible routing; it is not
+  permission for every provider to compete for the same work. Assignment,
+  dispatch, claim, and completion are separate events.
 - **Hands** drain only tickets labeled `worker:<id>`
 - **Assign ≠ escalate.** Assign = `worker:<hand>` on create. Escalate to You =
   keep the hand seat + `gate_type=human` / Blocked — never re-seat failed work
-  to `worker:you` (that parks implement work where cron never drains).
-- **Tag You only when needed.** Author is always You; gold For You is scarce
+  to `worker:you`. An authorized host session may implement as You; that
+  does not establish unattended execution.
+- **Tag You only when needed.** Sign as the actual acting identity; For You is scarce
   (true blocker). Ordinary finish stays closed by the hand without re-asking.
 - **History on the board.** Work orders + comments are the archive. Prefer
   dig-in / done trail over re-teaching the same outcome in a new chat.
-- **For You** = roadblocks only (true decisions / sign-off) — not FYI, not
+- **For You** = real decisions, credentials, publication or requested reading; not
   “confirm this plan” after You already filed
 - **Coord sessions** file / label / dispatch / escalate — they do **not** claim
   `worker:*` work when a hand runtime exists
@@ -86,12 +91,10 @@ CLI for hired hands, suite as **glass**.
   `.claude/skills/` — L0 always-on toolkit; L1 under each project. Not cloud.
   L0 must still load in **project** sessions (`scripts/skills_sync.sh` + Grok
   `[skills] paths` — see `.claude/skills/README.md` and `FIRST_RUN.md`).
-- **Drain hygiene:** L0 skill + job `workspace-efficiency` (seeded by
-  `blueprint seed-ops`) — ready-by-seat / You-starve on a cadence.
-- **Capacity-aware:** vendor session / weekly limits are first-class process
-  (ALWAYS_WORK §2d′). Do not thrash a capped seat; batch same-path tickets;
-  re-pin payroll when a pool is hard-down. Glass: `capacity-<pool>` kind in
-  For You (`workforce capacity` — wf-120; wired to cadence by wf-122).
+- **Efficiency:** the planted skill supports inspection/reporting. A job needs
+  separately configured execution; empty queues stop without refill or thaw.
+- **Capacity:** stop at configured limits and report failures. Roster changes
+  require applicable authorization; a template does not establish capacity.
 - Full ladder: product docs `INSTRUCTION_LADDER.md` + `SUITE_VIEWER.md` when
   present in your BluePrint install
 
@@ -104,7 +107,7 @@ When the citizen asks to create something, route by shape:
 | One-off outcome | File a **work order** | Create a new worker |
 | Recurring fixed duty (report, sync, release) | **Job** (`kind=job`, function-named) | Give it a persona |
 | Open-ended claiming worker for a project | **Agent hire** (`kind=lane`; persona optional) | Make it a staff seat |
-| Coordination / triage powers needed | Point at the shipped **chief-of-staff** | Invent a second coordinator |
+| Coordination / triage powers needed | Inspect registered seats and their contracts | Invent a second coordinator |
 
 **Naming law:** Jobs and staff are function-named — the name states the duty
 (`weekly-report`, `health-patrol`, not a person's name). Lane ids are
@@ -112,7 +115,7 @@ lowercase-kebab and stable forever — the id is a contract with the
 work-order board.
 
 ```shell
-# Seed the shipped ops trio (chief-of-staff, health-patrol, workspace-efficiency):
+# Plant ops papers; routine hiring is not enabled by default:
 blueprint seed-ops --root <workspace>
 
 # Hire an agent for a project:
@@ -151,13 +154,11 @@ the short workspace-root reminder every project inherits.
 
 ## Gates that need You (workspace-wide)
 
-Anything below is prepared by workers but shipped only by a citizen:
-
-- Publishing or making anything public
-- Releases and version tags
-- Money, credentials, and permissions
-- Deleting anything that can't be regenerated
-<!-- Add your own. Err on the side of gating; ungate by evidence. -->
+Apply the workspace's explicit authorization and each dispatch contract.
+Branch publication, merge, package release and deployment are separate actions.
+A bounded implementation handoff ends at review unless more is authorized.
+Money, credentials, permissions and destructive changes retain their owning
+product boundaries. Do not ask again for permission already granted in scope.
 
 ## Vendor pointers (optional)
 

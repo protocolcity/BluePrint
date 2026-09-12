@@ -46,7 +46,8 @@
   walk-up to outermost `AGENTS.md` (`protocolcity.workspace`). From a
   project parcel, relative `../AGENTS.md` is fine when the layout is
   one-level deep; prefer env or discovery over home-relative paths.
-- Work on `main` unless this contract or the ticket says otherwise.
+- Use the isolated checkout and task branch selected for this dispatch.
+  Preserve unrelated files and history.
 
 ## Papers
 
@@ -54,57 +55,43 @@ Durable work is **Markdown** in the project tree. Exports (pptx, PDF, HTML
 renders) are derived, not the paper. Do not convert **code**, **databases**,
 **secrets**, or **binary assets** to Markdown.
 
+## Ownership and execution
+
+BluePrint presents verified operations and routes supported actions. WorkLane
+owns work orders, assignments, gates, claims and completion. WorkForce owns
+registered workers, dispatch, schedules, limits and execution records.
+A roster entry or GitHub event does not establish agent liveness. Manual
+workers require explicit dispatch; scheduling requires configured, verified
+execution capacity. This template does not configure a runner.
+
 ## Procedure
 
-1. **Claim** — set the ticket in progress under your identity; comment that
-   you own it. **File = decided:** do not re-ask You to confirm the ticket
-   exists or re-design it unless a true blocker.
-2. **Work** — complete the agreed outcome; stage only files your
-   ticket touched, by explicit path (never `add -A` in a shared checkout).
-3. **Verify** — run `{{TEST_COMMAND}}`; a claim of "done" without a
-   verification line is not done.
-4. **Close out** — per the desk's own protocol (its close-out contract is
-   the desk's law, not restated here): state what was done, how it was
-   verified, links, and follow-ups filed as new tickets.
+1. Read workspace and project AGENTS and the complete assigned work order.
+   Verify scope, readiness, ownership and the selected workspace/store.
+2. Claim through installed WorkLane MCP (`wl_*`) with explicit
+   `project={{STORE_SLUG}}`, signed as `{{WORKER_ID}}`, before implementation.
+   Stop if eligibility changed; never take over another owner's claim.
+3. Complete the bounded acceptance in the prepared checkout. Stage only exact
+   owned paths. Do not invent additional work or expand product boundaries.
+4. Verify with `{{TEST_COMMAND}}` using disposable workspaces. Never test
+   against live stores. Inspect the owned diff before committing.
+5. Record Completed, Verification, Links and Follow-ups on the same work order.
+   Publish only when authorized to the verified repository and exact task branch.
+   A draft PR/review handoff leaves installed acceptance for host integration;
+   do not claim deployment from a process exit, commit or passing source test.
 
 ## Stop rules
 
-- Queue empty → **stop** and record the empty result. Do not automatically
-  thaw deferred work or manufacture child orders to refill the feed.
-  Do **not** file a hygiene / leftover
-  / next-knob sibling so the next fire has work. Leftover-truth on the
-  close-out of the real WO; land origin/main on the same ticket. Larger
-  ideas → `Proposal:` on the parent epic. Never silent freelance. Never
-  invent product direction, hardware, credentials, trading paths, or host
-  mutation. If remaining work needs a ruling → gold one decision (hand
-  seat + `gate_type=human`).
-- **Execution:** `worker:{{WORKER_ID}}` is your seat. Assignment alone does
-  not start execution: a configured runner requires manual dispatch or a
-  verified schedule. Record the run and claim separately. `worker:you`
-  identifies human or authorized host work, not a scheduled worker. Escalation = keep your
-  seat + `gate_type=human`; never re-seat failed work to `worker:you`.
-- Verification fails twice on the same approach → stop, comment findings,
-  release the claim.
-- True roadblock (missing credentials, publish gate, ambiguous irreversible
-  choice) → stop, comment, set For You / ask citizen. Do **not** gold You for
-  ordinary already-filed polish or “please confirm my plan.”
-- **Propose, don’t freeze:** if a preference is unclear but a safe default
-  exists, comment `Proposal: …` and continue within the authorized scope.
-- **Host-mutation gate (`docs/policy/host-mutation-gate.md`):** production
-  system service daemons, shared ports (`:8797`/`:8799`/`:8801`),
-  `~/.protocolcity/` service config, live-engine brew/pip, and running-engine
-  registry wiring are **never autonomous** (tier-2 host mutations). Stage the
-  change, file a citizen gate (`gate_type: human`) with label `host: …`, exact
-  commands + rollback, then stop. Autonomous execution is an automatic contract
-  violation.
-- **Human gates are scarce (PROCESS §3.9 / ).** Do not mass-park the
-  board with bare `gate_type=human`. Prefer ready drain or `gate_type=deferred`
-  only for real later-track parks. Action-shaped For You only when You must
-  decide something *now*.
-- **Do not invent suite capture UI.** Ticket create/claim/close is chat + MCP.
-  Suite Map is viewer-only (SUITE_VIEWER) — never add File-work-order forms. Never `tk`.
-- **Sign as `{{WORKER_ID}}` only.** Never claim another hand's `worker:*`
-  tickets. Coord sessions (You) route; agents execute.
-- **When You file tickets:** include `worker:<id>` on create (or accept
-  auto-stamped `needs:routing` and route immediately). Area labels alone do
-  not put work on a hand feed.
+- Empty eligible queue: stop cleanly and record the result. Do not automatically
+  thaw deferred work, cut children or manufacture work to refill a feed.
+- Stop at the dispatch's pass/time budget, authentication or permission failure,
+  repeated infrastructure failure, or three corrections without progress.
+  Preserve unfinished artifacts and record the reason on the owning order.
+- Keep the responsible worker assigned when a real decision, credential or
+  irreversible choice needs You. Use a human gate with the exact required action;
+  do not move failed agent work into the personal queue or thaw existing gates.
+- Correct ordinary scoped errors and use reasonable safe defaults within the
+  authorized task; do not ask for plan approval already provided by the task.
+- Host configuration, services, live stores, roster changes, merge, release and
+  deployment need applicable authorization beyond a bounded source/PR dispatch.
+- Sign only as `{{WORKER_ID}}`. Never claim another worker's assignment.

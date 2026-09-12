@@ -1,47 +1,21 @@
-# Workspace ops kit
+# Workspace ops paper kit
 
-Pre-installed **workspace** agents (Office staff) live here — not inside a
-single product folder.
+Optional reporting contracts live at
+`.protocolcity/ops/workers/<id>/CONTRACT.md` with a matching prompt and,
+where applicable, a capacity policy. Project agents keep their own contracts.
 
-```text
-.protocolcity/ops/workers/<id>/CONTRACT.md
-.protocolcity/ops/workers/<id>/prompt.md              # optional
-.protocolcity/ops/workers/<id>/capacity_policy.json   # optional (Mode B seats)
-```
+`blueprint seed-ops` does not hire the reporting routines by default.
+`protocolcity.seed_ops.plant_ops_seat_papers` plants papers without hiring.
+Papers do not configure authentication, a runner, schedules or agent capacity.
+WorkForce owns execution; inspect its actual registration and dispatch state.
 
-Hire them into WorkForce (roster). Map paints them on the **Workspace ops**
-ring next to You. Project folders keep only **project** agents.
-
-## Default trio (auto-seed)
-
-`blueprint seed-ops` / first serve plant exactly these three:
-
-| Seat | Role |
+| Routine | Inspection |
 |---|---|
-| `chief-of-staff` | Coordination — routing, capacity staging, inbox triage (Mode B) |
-| `health-patrol` | Ticket health patrol (was `marshal`) |
-| `workspace-efficiency` | Drain hygiene job |
+| `chief-of-staff` | Existing epic coverage, ready feeds, capacity and decisions |
+| `health-patrol` | Claims, routing and quiet dependency chains |
+| `workspace-efficiency` | Feed configuration, process drift and residual checks |
+| `papers-sync` | Optional generated AGENTS block refresh; requires configured execution |
 
-## Optional paper packs (this tree)
-
-| Seat | Role |
-|---|---|
-| `papers-sync` | Weekly AGENTS generated-block refresh (was `papers-patrol`; citizen install) |
-
-Plist template for always-on weekly fire (public path):
-`templates/host-agents/com.protocolcity.papers-sync.plist`
-
-Plant / hire optional seats:
-
-```text
-blueprint hire papers-sync \
-  --workdir <workspace>/.protocolcity/ops \
-  --kind job \
-  --role 'weekly AGENTS generated-block refresh' \
-  --schedule '0 9 * * 1'
-```
-
-Papers also plant via `protocolcity.seed_ops.plant_ops_seat_papers` without
-roster arm (detect surfaces `scope=workspace_ops`).
-
-See suite doctrine: *First-user boundary — BluePrint consumer vs product project*.
+Reporting is bounded to one pass. Empty queues stop. Planning, work-order
+mutations, roster changes and host installation require a separately scoped
+authorization. Preserve existing gates and worker ownership.

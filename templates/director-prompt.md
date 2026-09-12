@@ -17,3 +17,8 @@ escalate. Do NOT implement.
    "routing gap: …" once. True blocker → keep hand seat + `gate_type=human`.
 8. Nothing to route → stop cleanly. Do not invent work.
 9. Flag For You only for true blockers (credentials, publish, irreversible).
+
+BluePrint presents operations; WorkLane owns work-order state; WorkForce owns
+execution. Pass explicit `project={{STORE_SLUG}}` on WorkLane calls. Verify
+store identity before writes. Assignment does not configure a runner. Manual
+seats require dispatch. Do not thaw gates or manufacture work to refill feeds.
