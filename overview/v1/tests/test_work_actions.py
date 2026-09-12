@@ -31,7 +31,9 @@ class EngineIntegrationTests(unittest.TestCase):
             roots=[Path(a),Path(b)]
             for root in roots:
                 data=root/'worklane/worklane/local/data';data.mkdir(parents=True)
-                (root/'worklane/.venv').symlink_to(Path(executable).parent.parent, target_is_directory=True)
+                installed = root/'local/worklane/current'
+                installed.mkdir(parents=True)
+                (installed/'venv').symlink_to(Path(executable).parent.parent, target_is_directory=True)
                 manifest=root/'product/.protocolcity/desk-join.json';manifest.parent.mkdir(parents=True)
                 manifest.write_text('{"slug":"protocolcity","prefix":"pc"}')
                 script="from pathlib import Path; from worklane.trackers.sqlite import SQLiteTracker; import sys; t=SQLiteTracker(db_path=Path(sys.argv[1])); t.create_task(title='Test work order', description='Isolated verification')"
@@ -58,6 +60,18 @@ class EngineIntegrationTests(unittest.TestCase):
             self.assertFalse(order['gate_type'])
             with self.assertRaisesRegex(ValueError, 'registered agent'):
                 work_action(roots[0], 'protocolcity', 'pc-1', 'assign', 'invented-worker', order['updated_at'])
+            roster = roots[0]/'.protocolcity/workforce/local/roster.json'
+            roster.parent.mkdir(parents=True)
+            roster.write_text(json.dumps({'workers': {
+                'test-agent': {'name': 'Test agent', 'queue_url': 'http://localhost/ready?product=protocolcity'},
+                'other-agent': {'name': 'Other agent', 'queue_url': 'http://localhost/ready?product=other'},
+            }}))
+            with self.assertRaisesRegex(ValueError, 'not assigned'):
+                work_action(roots[0], 'protocolcity', 'pc-1', 'assign', 'other-agent', order['updated_at'])
+            self.assertTrue(work_action(roots[0], 'protocolcity', 'pc-1', 'assign', 'test-agent', order['updated_at'])['ok'])
+            with sqlite3.connect(roots[0]/'worklane/worklane/local/data/protocolcity.db') as conn:
+                labels = conn.execute('SELECT labels FROM tasks').fetchone()[0]
+                self.assertIn('worker:test-agent', labels)
             with sqlite3.connect(roots[1]/'worklane/worklane/local/data/protocolcity.db') as conn:
                 self.assertNotEqual(conn.execute('SELECT priority FROM tasks').fetchone()[0], 1)
 
