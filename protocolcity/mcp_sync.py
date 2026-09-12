@@ -614,11 +614,11 @@ def check_vendor_toml(
         if actual is None:
             result["missing"].append(sid)
             continue
-        # Compare key fields loosely: command + args presence
-        if "command" in entry and str(entry["command"]) not in actual:
-            result["mismatched"].append(sid)
-            # still scan actual for dead outside-city paths below
-        elif actual.strip() != expected and str(entry.get("command", "")) not in actual:
+        # Compare the complete generated projection, including args and env.
+        # Conservatively treat alternate TOML formatting as drift: this keeps
+        # validation dependency-free on Python 3.9 and never accepts a changed
+        # identity merely because the expected command occurs somewhere.
+        if actual.strip() != expected:
             result["mismatched"].append(sid)
         # Actual command path (what the vendor will exec)
         m_cmd = re.search(r'(?m)^\s*command\s*=\s*"([^"]+)"', actual)
@@ -803,6 +803,34 @@ def check_runtime_dir_wiring(
     return findings
 
 
+def sync_existing_workspace_codex_entries(
+    root: Path, managed: Dict[str, Any], *, apply: bool = False
+) -> Dict[str, Any]:
+    """Repair only already-connected managed workspace Codex overrides.
+
+    This is workspace-local, so it does not require the live-host gate. Never
+    create a config or enroll another registry server; personal tables survive.
+    """
+    path = root / ".codex" / "config.toml"
+    if not path.is_file():
+        return {"ok": True, "action": "skipped", "detail": "not configured"}
+    text = path.read_text(encoding="utf-8")
+    present = {sid for sid, _nested, _start, _end in _iter_toml_sections(text)}
+    existing = {sid: entry for sid, entry in managed.items() if sid in present}
+    result = check_vendor_toml(path, existing, workspace=root)
+    result["action"] = "checked"
+    if apply and result["drift"]:
+        # Do not use the global patcher's seed cleanup: absent registry seeds
+        # and servers the user has not connected are outside this operation.
+        base = strip_managed_toml_ids(text, existing)
+        blocks = [render_toml_mcp_server_block(sid, entry)
+                  for sid, entry in sorted(existing.items())]
+        path.write_text(base.rstrip() + "\n\n" + "\n".join(blocks), encoding="utf-8")
+        result = check_vendor_toml(path, existing, workspace=root)
+        result["action"] = "updated"
+    return result
+
+
 def sync_existing_cursor_entries(root: Path, managed: Dict[str, Any], *, apply: bool = False) -> Dict[str, Any]:
     """Reconcile existing Cursor registry entries without adding permissions.
 
@@ -919,6 +947,14 @@ def check_drift(
         return result
 
     vendor_notes: List[str] = []
+    workspace_codex = sync_existing_workspace_codex_entries(
+        root, project_managed_entries(manifests, root)
+    )
+    result["workspace_codex"] = workspace_codex
+    if not workspace_codex["ok"]:
+        result["codes"].append("MCP-MIRROR-DRIFT")
+        result["detail"] = "workspace codex drift: " + workspace_codex["detail"]
+        return result
     if check_vendors:
         managed = project_managed_entries(manifests, root)
         for label, cpath in (
@@ -1010,6 +1046,11 @@ def apply_mcp(
         "detail": "generated .mcp.json from MCP registry",
         "vendors": {},
     }
+    out["workspace_codex"] = sync_existing_workspace_codex_entries(
+        root, project_managed_entries(manifests, root), apply=True
+    )
+    if not out["workspace_codex"]["ok"]:
+        out["ok"] = False
     if touch_vendors:
         managed = project_managed_entries(manifests, root)
         reg_ids = [str(m.get("id")) for m in manifests if m.get("id")]
@@ -1630,7 +1671,9 @@ def diagnose_mcp_findings(
         detail = str(chk.get("detail") or "MCP mirror drift")
         path_str = str(mcp_json_path(root))
         low = detail.lower()
-        if low.startswith("grok "):
+        if low.startswith("workspace codex "):
+            path_str = str(root / ".codex" / "config.toml")
+        elif low.startswith("grok "):
             path_str = str(grok_config or default_grok_config_path())
         elif low.startswith("codex "):
             path_str = str(codex_config or default_codex_config_path())
