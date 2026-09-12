@@ -161,5 +161,69 @@ class JobsCapTests(unittest.TestCase):
         counts = self.cases["jobs_cap"]["bucket_counts"]
         self.assertEqual(counts, ["100", "3", "12"])
 
+
+class CalendarGlassPaintTests(unittest.TestCase):
+    """Calendar V1 glass DoD — empty copy + title · when · source · status."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.cases = _run_harness()
+
+    def test_empty_paints_no_events(self) -> None:
+        c = self.cases["calendar_empty"]
+        self.assertEqual(c["empty_text"], "No events")
+        self.assertEqual(c["empty_class"], "ov-empty")
+        self.assertEqual(c["ul_count"], 0)
+        self.assertEqual(c["child_count"], 1)
+        self.assertEqual(c["range"], "")
+
+    def test_populated_rows_show_title_when_source_status(self) -> None:
+        c = self.cases["calendar_rows"]
+        self.assertEqual(c["row_count"], 3)
+        self.assertEqual(c["empty_count"], 0)
+        self.assertEqual(c["range"], "2026-09-07 → 2026-09-13")
+        classes = [f["className"] for f in c["fields"][0]]
+        self.assertEqual(
+            classes,
+            [
+                "ov-cal-event-title",
+                "ov-cal-event-when",
+                "ov-cal-event-source",
+                "ov-cal-event-state",
+            ],
+        )
+        titles = [row[0]["text"] for row in c["fields"]]
+        self.assertEqual(titles, ["Standup", "Ship peel", "Filed note"])
+        sources = [row[2]["text"] for row in c["fields"]]
+        self.assertEqual(sources, ["routine", "WO", "manual"])
+        states = [row[3]["text"] for row in c["fields"]]
+        self.assertEqual(states, ["scheduled", "due", "done"])
+
+    def test_unknown_source_state_fall_back(self) -> None:
+        fields = self.cases["calendar_fallback"]["fields"]
+        by_class = {f["className"]: f for f in fields}
+        self.assertEqual(by_class["ov-cal-event-source"]["text"], "manual")
+        self.assertEqual(by_class["ov-cal-event-state"]["text"], "scheduled")
+
+
+class SettingsGlassPaintTests(unittest.TestCase):
+    """Settings V1 glass DoD — Desk path + brew-face Cellar tip."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.cases = _run_harness()
+
+    def test_desk_paints_binder_path_and_local_desk(self) -> None:
+        c = self.cases["settings_desk"]
+        self.assertEqual(c["binder_path"], "/Users/eliefrainseo/OneSeo")
+        self.assertEqual(c["desk_label"], "Local desk")
+        self.assertEqual(c["cellar_tip"], "blueprint 0.1.50_12")
+        self.assertNotIn("sha", c["cellar_tip"].lower())
+
+    def test_empty_cellar_tip_does_not_invent_a_version(self) -> None:
+        c = self.cases["settings_cellar_empty"]
+        self.assertEqual(c["cellar_tip"], "")
+
+
 if __name__ == "__main__":
     unittest.main()
