@@ -51,3 +51,19 @@ refusal paths, unavailable/stale-source behavior, installed-wheel activation,
 and browser navigation/readers. Host-specific test counts, versions, commits,
 and remaining consolidation items live in the workspace execution report;
 they are not a permanent product specification.
+
+## Map navigation repair
+
+The default Map shows managed projects, with names visible without hovering.
+Other workspace folders are optional in View. Opening a folder replaces the
+visible level rather than layering every project behind its children. Large
+levels have bounded spatial pages; the folder/paper browser retains the full
+readable list. Breadcrumbs and Workspace return to a parent or root. At narrow
+widths the list provides the same navigation without a miniature unreadable map.
+Keyboard users can activate spatial nodes with Enter or Space.
+
+MCP mirror verification checks existing Cursor entries as well as Grok/Codex
+mirrors. Synchronization updates only Cursor servers already configured there;
+it does not enroll additional servers or infer session approval/authentication.
+A passing mirror check and successful server handshake do not prove an
+unattended worker has been configured.
