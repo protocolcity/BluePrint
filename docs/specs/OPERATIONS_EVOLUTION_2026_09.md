@@ -29,9 +29,12 @@ See [deployment and recovery](../operations/DEPLOYMENT.md).
 Work-order notes, priority, hold, resume, and assignment to a registered agent
 use WorkLane with an explicit project, verified store, and record-version
 check. The reader displays errors and preserves the user's context. Notes
-cannot smuggle lifecycle commands. Create, close, and agent-dispatch forms
-are not currently implemented in BP; those operations use their owning
-engines through the established work-order process.
+cannot smuggle lifecycle commands. Create and close use the owning engine
+through the established work-order process. Agents provides manual dispatch
+through WorkForce and displays refusal reasons, including an empty queue.
+An assignment is not a dispatch, a dispatch acceptance is not a claim, and
+a claim is not completion. Scheduled execution requires a verified schedule
+and run evidence; a roster entry alone supplies neither.
 
 Map provides both spatial navigation and a keyboard-accessible folder/paper
 browser. Document readers contain untrusted text, focus the close control,
