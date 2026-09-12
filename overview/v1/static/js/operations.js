@@ -21,6 +21,7 @@ for(const [gate,label] of Object.entries({deferred:'Deferred',timer:'Timer gate'
 }
 $('status-filter').value = query.get('status')==='deferred' ? 'gate:deferred' : query.get('status') || '';
 let selectedProject = query.get('project') || '';
+let selectedAssignment = query.get('assignment') || '';
 $('page-title').textContent = titles[page][0];
 $('page-description').textContent = titles[page][1];
 document.title = `BluePrint · ${titles[page][0]}`;
@@ -36,7 +37,7 @@ function workUrl(order) { return '/work-order?' + new URLSearchParams({project:o
 function orderRow(order) {
   const row=link('',workUrl(order),'bp-order');
   const content=el('div'); content.append(el('strong',order.title));
-  content.append(el('span',`${order.project_name} · ${order.id} · ${order.owner} · ${date(order.updated_at)}`,'bp-order-meta'));
+  content.append(el('span',`${order.project_name} · ${order.id} · ${order.workers.length ? order.owner : 'No worker assigned'} · ${date(order.updated_at)}`,'bp-order-meta'));
   if(order.gate_note) content.append(el('span',order.gate_note.length > 160 ? order.gate_note.slice(0,157) + '…' : order.gate_note,'bp-order-note'));
   const gateLabel={deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'}[order.gate_type];
   row.append(content,badge(order.attention ? 'attention' : order.status, order.attention ? 'Needs you' : undefined));
@@ -76,6 +77,11 @@ function filterOptions() {
   for(const project of snapshot.projects) select.add(new Option(project.name,project.id));
   if(selectedProject && !snapshot.projects.some(p=>p.id===selectedProject)) select.add(new Option(selectedProject + ' (unavailable)', selectedProject));
   select.value=selectedProject;
+  const assignment=$('assignment-filter');
+  assignment.replaceChildren(new Option('All assignments',''),new Option('No worker assigned','unassigned'),new Option('Needs routing','needs-routing'));
+  for(const worker of [...new Set(snapshot.orders.flatMap(o=>o.workers))].sort()) assignment.add(new Option(worker,'worker:'+worker));
+  if(selectedAssignment && !Array.from(assignment.options).some(o=>o.value===selectedAssignment)) assignment.add(new Option(selectedAssignment.replace(/^worker:/,''),selectedAssignment));
+  assignment.value=selectedAssignment;
   const status=$('status-filter'), current=status.value;
   for(const name of new Set(snapshot.orders.map(o=>o.status))) {
     if(!Array.from(status.options).some(option=>option.value===name)) status.add(new Option(name.replaceAll('_',' '),name));
@@ -84,10 +90,10 @@ function filterOptions() {
 }
 function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value;
-  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.length:selectedAssignment==='needs-routing'?o.needs_routing:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
   $('work-list').replaceChildren(...orders.slice(pageIndex*size,(pageIndex+1)*size).map(orderRow));
-  if(!orders.length) empty($('work-list'),'No matching open work. Try another project, status, or search.');
+  if(!orders.length) empty($('work-list'),'No matching open work. Try another project, assignment, status, or search.');
   $('results').textContent=`${orders.length} matching work order${orders.length===1?'':'s'}`;
   $('page-count').textContent=`Page ${pageIndex+1} of ${pages}`;
   $('previous').disabled=pageIndex===0;$('next').disabled=pageIndex>=pages-1;
@@ -98,7 +104,7 @@ function agents() {
     const card=el('article',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');heading.append(el('h2',agent.name),badge(agent.state));card.append(heading);
     const facts=el('dl',undefined,'bp-facts');
     for(const [name,value] of [['Identity',agent.id],['Type',agent.kind],['Configuration',agent.configuration],['Schedule',scheduleLabel(agent.schedule)],['Next run',agent.schedule==='manual'?'On demand':date(agent.next_fire)],['Model',agent.model],['Scheduler heartbeat',date(agent.last_at)]]) facts.append(el('dt',name),el('dd',value));
-    card.append(facts,link('Find assigned work','/work?'+new URLSearchParams({q:agent.id}),'bp-order-meta'));
+    card.append(facts,link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
     const dispatch=el('button',agent.state==='working'?'Running':'Dispatch now');
     dispatch.type='button';dispatch.disabled=!agent.configured || ['working','unknown','off'].includes(agent.state);
     const feedback=el('p','','bp-muted');feedback.setAttribute('role','status');
@@ -208,12 +214,12 @@ async function refresh() {
   finally { pending=false;$('refresh').disabled=false;$('refresh').textContent='Refresh';freshness(); }
 }
 function updateFilters() {
-  selectedProject=$('project-filter').value;pageIndex=0;
-  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if($('status-filter').value)params.set('status',$('status-filter').value);if($('search').value)params.set('q',$('search').value);
+  selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
+  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('search').value)params.set('q',$('search').value);
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:''));if(snapshot)work();
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
-$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);
+$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);
 $('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});$('refresh').addEventListener('click',()=>{refresh();refreshRemote();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
