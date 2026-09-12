@@ -363,7 +363,7 @@ const settings = await import(
 {
   const root = makeSettingsShell();
   settings.paintDesk(root, {
-    binder_path: "/Users/eliefrainseo/OneSeo",
+    binder_path: "/tmp/local-desk",
     desk_label: "Local desk",
   });
   settings.paintCellarTip(root, { cellar_tip: "blueprint 0.1.50_12" });

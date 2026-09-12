@@ -215,7 +215,7 @@ class SettingsGlassPaintTests(unittest.TestCase):
 
     def test_desk_paints_binder_path_and_local_desk(self) -> None:
         c = self.cases["settings_desk"]
-        self.assertEqual(c["binder_path"], "/Users/eliefrainseo/OneSeo")
+        self.assertEqual(c["binder_path"], "/tmp/local-desk")
         self.assertEqual(c["desk_label"], "Local desk")
         self.assertEqual(c["cellar_tip"], "blueprint 0.1.50_12")
         self.assertNotIn("sha", c["cellar_tip"].lower())
