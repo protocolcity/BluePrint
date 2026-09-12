@@ -18,11 +18,12 @@
           <p class="bp-muted">Changes are recorded by WorkLane as you. Assignment and releasing a hold do not start a runner; use the configured agent’s dispatch control.</p>
           <form id="action-form" class="bp-note-form">
             <label for="work-action">Action</label>
-            <select id="work-action"><option value="priority">Change priority</option><option value="hold">Request your decision</option><option value="resume">Release hold</option><option value="assign">Assign agent</option></select>
+            <select id="work-action"><option value="priority">Change priority</option><option value="hold">Request your decision</option><option value="resume">Release hold</option><option value="assign">Assign agent</option><option value="reminder">Set calendar reminder</option></select>
             <label for="action-priority" id="priority-label">Priority</label>
             <select id="action-priority"><option value="1">1 · Urgent</option><option value="2">2 · High</option><option value="3">3 · Normal</option><option value="4">4 · Low</option></select>
             <label for="action-reason" id="reason-label" hidden>Decision needed</label><textarea id="action-reason" maxlength="2000" rows="3" hidden></textarea>
             <label for="action-agent" id="agent-label" hidden>Agent registered for this project</label><select id="action-agent" hidden></select>
+            <label for="action-reminder" id="reminder-label" hidden>Reminder date (blank removes it)</label><input id="action-reminder" type="date" hidden>
             <p id="action-explanation" class="bp-muted"></p>
             <button id="action-submit" type="submit">Apply change</button><p id="action-result" role="status"></p>
           </form>
