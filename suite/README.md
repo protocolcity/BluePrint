@@ -44,7 +44,7 @@ Canon: [`docs/specs/SUITE_IA.md`](../docs/specs/SUITE_IA.md) ·
   work-order **timer gates** (`gate_type=timer` + `gate_until`) and
   **`deadline:YYYY-MM-DD` labels** across all WorkLane product stores.
   Subscribe from Apple Calendar (File → New Calendar Subscription) at
-  `http://ops.oneseo.internal:8801/calendar.ics`. Optional HTML list:
+  `http://127.0.0.1:8803/calendar.ics`. Optional HTML list:
   `/calendar`. **Convention:** founders/hands put real-world dates on
   tickets as those labels/gates — no second date store. Regenerated on
   request (≈30s suite cache); set Apple’s refresh interval on the

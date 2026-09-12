@@ -1,34 +1,25 @@
-# Planted into public BluePrint / Charter DEST by scripts/export_*.sh.
-# Do not edit on the public parcel — fix the private SoT copy
-# (export/public/export-surface.yml) and re-export.
-name: Export surface
-
+# Canonical source validation. No private repository or generated export hop.
+name: Source validation
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-
+permissions:
+  contents: read
 jobs:
-  surface:
+  source:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Require export marker
+          python-version: '3.11'
+      - name: Validate source privacy
+        run: python scripts/check_source_surface.py
+      - name: Install candidate and WorkLane integration dependency
+        run: python -m pip install . protocolcity-worklane==0.1.7
+      - name: Verify operations and engine boundaries
         run: |
-          set -euo pipefail
-          if [ ! -f .blueprint-export ] && [ ! -f .charter-export ]; then
-            echo "missing export marker (.blueprint-export or .charter-export)" >&2
-            exit 1
-          fi
-          test -f .sync-head
-          test -f scripts/check_export_scrub.py
-          echo "ok  export marker + sync-head + planted scrub"
-
-      - name: Scrub public surface
-        run: python3 scripts/check_export_scrub.py --dest .
+          BP_TEST_WORKLANE_PYTHON="$(command -v python)" PYTHONPATH=overview/v1 python -m unittest discover -s overview/v1/tests
+          PYTHONPATH=map/v1 python -m unittest discover -s map/v1/tests

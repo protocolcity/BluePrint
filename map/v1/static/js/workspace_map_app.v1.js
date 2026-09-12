@@ -91,6 +91,7 @@ export async function boot(opts = {}) {
   let repaintScheduled = false;
   let browseVersion = 0;
   let browserKey = null;
+  function visibleChildren(nodes) { return nodes.filter(node => viewState.snapshot().filters.hidden || !node.hidden); }
   async function renderBrowser() {
     const list = document.getElementById('map-browser-list');
     if (!list) return;
@@ -100,9 +101,10 @@ export async function boot(opts = {}) {
     if (key === browserKey) return;
     document.getElementById('map-browser-path').textContent = snap.dig?.relPath || tree.binder?.name || 'Workspace';
     try {
-      const nodes = snap.dig ? await tree.childrenAt(snap.dig.relPath) : tree.topLots(snap.filters);
+      const nodes = snap.dig ? visibleChildren(await tree.childrenAt(snap.dig.relPath)) : tree.topLots(snap.filters);
       if (version !== browseVersion) return;
       browserKey = key;
+      if (snap.dig) { clearDigIn(world); paintDigIn(world, snap.dig, nodes, {radius:cfg.digRadius}); }
       list.replaceChildren();
       for (const node of nodes) {
         if (!node.isDir && !node.hasMd) continue;
@@ -138,7 +140,7 @@ export async function boot(opts = {}) {
     // Re-paint the lot ring so the top-level lot picks up the .is-selected
     // focus ring (paintLots reads selectedRelPath from the trail root).
     scheduleRepaint();
-    const kids = await tree.childrenAt(node.relPath);
+    const kids = visibleChildren(await tree.childrenAt(node.relPath));
     if (viewState.snapshot().dig?.relPath !== node.relPath) return;
     // Belt-and-braces: clear the fan layer before every paint so a racing
     // second click cannot leave A's ring layered under B's.
@@ -184,7 +186,7 @@ export async function boot(opts = {}) {
         const top = viewState.snapshot().dig;
         clearDigIn(world);
         if (top) {
-          const kids = await tree.childrenAt(top.relPath);
+          const kids = visibleChildren(await tree.childrenAt(top.relPath));
           clearDigIn(world);
           paintDigIn(world, top, kids, { radius: cfg.digRadius });
         }
@@ -290,7 +292,7 @@ export async function boot(opts = {}) {
     const popped = viewState.popDig();
     clearDigIn(world);
     if (popped) {
-      const kids = await tree.childrenAt(popped.relPath);
+      const kids = visibleChildren(await tree.childrenAt(popped.relPath));
       clearDigIn(world);
       paintDigIn(world, popped, kids, { radius: cfg.digRadius });
     }

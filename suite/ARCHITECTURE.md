@@ -1,3 +1,5 @@
+> Historical suite design. The current application authority is [../ARCHITECTURE.md](../ARCHITECTURE.md); retained rules below apply only where compatible with the current architecture.
+
 # suite/ — Client Architecture (L2 binding law)
 
 > **Binding law** — pc-1088 · 2026-08-04 · blossom

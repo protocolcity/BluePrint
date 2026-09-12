@@ -2136,11 +2136,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_seed_ops = sub.add_parser(
         "seed-ops",
         help=(
-            "plant L0 workspace ops **jobs** "
-            "(chief-of-staff/health-patrol/workspace-efficiency) if missing"
+            "plant workspace operations papers without rehiring retired jobs"
         ),
         description=(
-            "Seed workspace **jobs** (scheduled duties, Map diamonds): "
+            "Plant workspace operations papers; leave employment unchanged by default. "
             "chief-of-staff (coordination), health-patrol, and "
             "workspace-efficiency (drain hygiene). Also plants the L0 "
             "workspace-efficiency skill + scripts/skills_sync.sh. "

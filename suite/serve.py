@@ -4561,7 +4561,7 @@ def _calendar_public_base(handler=None):
         except Exception:
             pass
         return "%s://%s" % (scheme, host)
-    return "http://ops.oneseo.internal:8801"
+    return "http://127.0.0.1:8803"
 
 
 def build_workspace_calendar_events(*, force=False, base_url="", include_jobs=False):

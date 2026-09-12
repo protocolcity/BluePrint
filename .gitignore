@@ -10,3 +10,9 @@ __pycache__/
 
 # Workspace registration is host configuration, not product source.
 .protocolcity/
+
+# Generated host skill bridges and local credentials.
+.claude/skills/
+.env
+.env.*
+!.env.example

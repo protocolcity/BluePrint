@@ -21,7 +21,7 @@ from typing import Iterable
 
 _MD_SUFFIXES = frozenset({".md", ".markdown"})
 _MANAGED_MARKER = ".blueprint"          # BluePrint's binder marker directory
-_DEFAULT_HIDDEN_NAMES = frozenset({".git", ".DS_Store", ".venv", "node_modules"})
+_DEFAULT_HIDDEN_NAMES = frozenset({".git", ".DS_Store", ".venv", "node_modules", "__pycache__", "build", "dist"})
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,7 @@ def _iter_top_children(root: Path, hidden_names: Iterable[str]) -> Iterable[Lot]
     for entry in sorted(root.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
         name = entry.name
         low = name.lower()
-        hidden = low in hidden_set or name.startswith(".")
+        hidden = low in hidden_set or name.startswith(".") or low.endswith(".egg-info")
         is_dir = entry.is_dir()
         has_md = False
         if is_dir:
@@ -149,7 +149,7 @@ def children_at(root: Path, rel_path: str, *, hidden_names: Iterable[str] | None
             "isDir": is_dir,
             "hasMd": _dir_has_md(entry) if is_dir else entry.suffix.lower() in _MD_SUFFIXES,
             "managed": is_dir and _is_managed(entry),
-            "hidden": low in hidden_set or name.startswith("."),
+            "hidden": low in hidden_set or name.startswith(".") or low.endswith(".egg-info"),
         })
     return {"relPath": rel_path, "children": kids}
 
