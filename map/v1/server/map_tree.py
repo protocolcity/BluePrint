@@ -63,7 +63,7 @@ def _dir_has_md(path: Path) -> bool:
 
 
 def _is_managed(path: Path) -> bool:
-    return (path / _MANAGED_MARKER).exists()
+    return (path / _MANAGED_MARKER).exists() or (path / '.protocolcity/desk-join.json').is_file()
 
 
 def _iter_top_children(root: Path, hidden_names: Iterable[str]) -> Iterable[Lot]:
