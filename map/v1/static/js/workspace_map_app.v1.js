@@ -270,6 +270,11 @@ export async function boot(opts = {}) {
   await tree.load();
   repaint();
 
+  const mdParam = new URLSearchParams(window.location.search).get("md");
+  if (mdParam) {
+    viewer.open(mdParam, { label: mdParam });
+  }
+
   return {
     // Exposed for smoke tests + dogfood introspection.
     viewState, tree, viewer, hitRouter,

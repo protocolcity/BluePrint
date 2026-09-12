@@ -89,6 +89,18 @@ class FourLensNavTests(unittest.TestCase):
         self.assertIn('id="map-shell"', text)
         self.assertIn('/map/css/workspace_map.css', text)
         self.assertIn('/map/js/workspace_map_app.v1.js', text)
+        self.assertIn("Overview", text)
+        self.assertIn("Calendar", text)
+        self.assertIn("Settings", text)
+        self.assertIn('aria-current="page"', text)
+
+    def test_ticket_passthrough_paints(self) -> None:
+        status, body, ctype = _get(self.port, "/ticket?id=demo-1")
+        self.assertEqual(status, 200)
+        self.assertIn("text/html", ctype)
+        text = body.decode("utf-8")
+        self.assertIn('data-role="ticket-id"', text)
+        self.assertIn("Local desk", text)
 
     def test_map_static_assets_serve(self) -> None:
         css_status, css_body, _ = _get(self.port, "/map/css/workspace_map.css")
@@ -288,6 +300,11 @@ class BinderTruthTests(unittest.TestCase):
         # Add a lot so /api/map/tree returns something.
         (self.binder / "peels").mkdir()
         (self.binder / "peels" / "note.md").write_text("# hi", encoding="utf-8")
+        (self.binder / "CHARTER.md").write_text(
+            "# Local Charter\n\nDesk paper for tests.\n\n## Purpose\nHold the desk.\n",
+            encoding="utf-8",
+        )
+        (self.binder / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
 
         from server.overview_state import load_from_binder
         st = load_from_binder(self.binder)
@@ -309,6 +326,18 @@ class BinderTruthTests(unittest.TestCase):
         payload = json.loads(body)
         self.assertEqual(payload["buckets"]["waiting"], 1)
         self.assertEqual([j["name"] for j in payload["jobs"]], ["peel/foo"])
+        self.assertEqual(payload.get("next", {}).get("object"), "AGENTS.md")
+
+    def test_project_and_charter_from_desk_papers(self) -> None:
+        _, body, _ = _get(self.port, "/api/overview/project")
+        project = json.loads(body)
+        self.assertEqual(project["path_hint"], "on this desk")
+        self.assertTrue(project.get("title"))
+        self.assertIn("Desk paper", project.get("charter_excerpt", ""))
+        _, cbody, _ = _get(self.port, "/api/overview/charter")
+        charter = json.loads(cbody)
+        headings = [s["heading"] for s in charter.get("sections") or []]
+        self.assertIn("Purpose", headings)
 
     def test_calendar_events_from_binder(self) -> None:
         _, body, _ = _get(self.port, "/api/calendar/events")

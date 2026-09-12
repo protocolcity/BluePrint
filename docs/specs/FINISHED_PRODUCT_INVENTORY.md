@@ -43,6 +43,11 @@ Overview surfaces the INTENT spec locks. Nothing else is V1.
 | **Overview** — Local-only honesty banner | INTENT V1 | Constant affordance |
 | **Calendar** — week list + honest empty `No events` + event rows (title · when · source · status) + detail sheet (title · time · notes) | `OVERVIEW_CALENDAR_SETTINGS.md` V1 | `/api/calendar/events` ← `<binder>/.blueprint/calendar.json` |
 | **Settings** — Desk · Appearance · Privacy/Local-only · About/Cellar (brew tip) | `OVERVIEW_CALENDAR_SETTINGS.md` Glass DoD | `/api/settings/desk` + `/api/overview/pulse` cellar_tip |
+| **Overview** — next-action strip (one verb + one object) | Inventory NET-NEW #3 | `/api/overview/jobs` `next` |
+| **Overview** — project card + Charter from `CHARTER.md` on this desk | `OVERVIEW_MC_EXT.md` 02c/03d | `/api/overview/project` · `/api/overview/charter` |
+| **Map** — four-lens nav on the Map shell | Four-lens spine | `/map` HTML |
+| **Map** — WO-open passthrough | `MAP_V1_GLASS.md` DoD 6 | `/ticket?id=` in-shell |
+| **Map** — git dirty/untracked flags on lots | Inventory NET-NEW #9 (existing muted tokens) | `/api/map/tree` `gitState` |
 
 Everything on this list must read legible with **zero** entries. Honest empty
 is first-class.

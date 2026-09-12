@@ -234,6 +234,14 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
     }, truncateLotLabel(rawName, max));
     label.appendChild(el('title', {}, rawName));
     group.appendChild(label);
+    if (lot.gitState && lot.gitState !== 'clean') {
+      group.appendChild(el('text', {
+        x: 0,
+        y: (pos.labelY || 0) + (kind === 'file' ? 12 : 14),
+        class: 'map-lot-git',
+        'text-anchor': 'middle',
+      }, lot.gitState));
+    }
     layer.appendChild(group);
   });
   return {

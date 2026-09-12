@@ -81,6 +81,7 @@ from server.overview_state import (  # noqa: E402
     load_jobs,
     load_project,
     load_pulse,
+    next_action_from_state,
 )
 
 # Map V1 projector — imported from map/v1/server/map_tree.py. We alias the
@@ -185,7 +186,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, load_agents(self._overview_state()))
             return
         if route == "/api/overview/jobs":
-            self._send_json(200, load_jobs(self._overview_state()))
+            st = self._overview_state()
+            payload = load_jobs(st)
+            nxt = next_action_from_state(st, self.binder_root)
+            if nxt:
+                payload["next"] = nxt
+            self._send_json(200, payload)
             return
         if route == "/api/overview/pulse":
             self._send_json(200, load_pulse(self._overview_state()))
@@ -230,6 +236,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route in ("/map", "/map/"):
             self._serve_map_shell()
+            return
+        if route in ("/ticket", "/ticket/"):
+            self._serve_static(_OV_STATIC_DIR, "ticket.html")
             return
 
         # Map static (css/js/svg under /map/…) — served from map/v1/static.

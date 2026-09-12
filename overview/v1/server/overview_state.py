@@ -205,6 +205,111 @@ def _sanitize_project(raw: dict) -> dict:
     }
 
 
+def _charter_md_to_sections(text: str) -> tuple[str, list[dict]]:
+    """Best-effort CHARTER.md → excerpt + sections. Local paper only."""
+    lines = text.replace("\r\n", "\n").split("\n")
+    excerpt_parts: list[str] = []
+    sections: list[dict] = []
+    current: dict | None = None
+    for line in lines:
+        if line.startswith("## "):
+            if current and (current.get("heading") or current.get("body")):
+                sections.append(current)
+            current = {"heading": line[3:].strip(), "body": ""}
+            continue
+        if line.startswith("# "):
+            continue
+        if current is None:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("**Status"):
+                excerpt_parts.append(stripped)
+            continue
+        if line.strip():
+            body = current.get("body") or ""
+            current["body"] = f"{body} {line.strip()}".strip() if body else line.strip()
+    if current and (current.get("heading") or current.get("body")):
+        sections.append(current)
+    excerpt = " ".join(excerpt_parts).strip()
+    if len(excerpt) > 280:
+        excerpt = excerpt[:277].rstrip() + "…"
+    return excerpt, sections[:8]
+
+
+def project_desk_papers(binder: Path | None, cellar_tip: str = "") -> tuple[dict, dict]:
+    """CHARTER.md / AGENTS.md on this desk → project card + charter drawer.
+
+    Missing papers → empty ``{}`` (honest). Never invent a cloud path.
+    """
+    if binder is None:
+        return {}, {}
+    binder = Path(binder).expanduser().resolve()
+    if not binder.is_dir():
+        return {}, {}
+    tip = (cellar_tip or "").strip() or DEFAULT_CELLAR_TIP
+    charter_path = binder / "CHARTER.md"
+    agents_md = binder / "AGENTS.md"
+    if not charter_path.is_file() and not agents_md.is_file():
+        return {}, {}
+    excerpt = ""
+    sections: list[dict] = []
+    if charter_path.is_file():
+        try:
+            excerpt, sections = _charter_md_to_sections(
+                charter_path.read_text(encoding="utf-8")
+            )
+        except OSError:
+            excerpt, sections = "", []
+    has_git = (binder / ".git").exists()
+    project = _sanitize_project(
+        {
+            "title": binder.name,
+            "project": binder.name,
+            "path_hint": "on this desk",
+            "badges": {
+                "local_write": True,
+                "consume": False,
+                "upstream": has_git,
+                "local_only": True,
+            },
+            "charter_excerpt": excerpt,
+        }
+    )
+    charter: dict = {}
+    if sections or excerpt:
+        charter = _sanitize_charter(
+            {
+                "title": "Charter for Local Desk",
+                "sections": sections
+                or [{"heading": "Charter", "body": excerpt}],
+                "footer": (
+                    f"Cellar app tip {tip} — not private Protocol City install"
+                ),
+            }
+        )
+    return project, charter
+
+
+def next_action_from_state(state: dict | None, binder: Path | None = None) -> dict:
+    """One verb + one object. Hidden when nothing real is on this desk."""
+    st = state if state is not None else empty_state()
+    for job in st.get("jobs") or []:
+        if isinstance(job, dict) and job.get("state") == "ready" and job.get("name"):
+            return {"verb": "Open", "object": str(job["name"]), "href": ""}
+    if binder is not None:
+        agents_md = Path(binder).expanduser().resolve() / "AGENTS.md"
+        if agents_md.is_file():
+            return {
+                "verb": "Read",
+                "object": "AGENTS.md",
+                "href": "/map?md=AGENTS.md",
+            }
+    if st.get("charter"):
+        return {"verb": "Open", "object": "Charter", "href": "#charter"}
+    if st.get("project"):
+        return {"verb": "Open", "object": "Map", "href": "/map"}
+    return {}
+
+
 def _sanitize_charter(raw: dict) -> dict:
     """Charter drawer. Operator voice OK — stranger / marketing voice is not."""
     if not isinstance(raw, dict) or not raw:
@@ -451,26 +556,40 @@ class BinderOverview:
         roster / WorkLane DBs change under the binder.
         """
         ov = self._overview_stamp()
+        papers = []
+        for name in ("CHARTER.md", "AGENTS.md"):
+            try:
+                st = (self.binder / name).stat()
+                papers.append((name, st.st_mtime_ns, st.st_size))
+            except OSError:
+                papers.append((name, 0, 0))
         if ov is not None:
-            return ("overview", ov)
+            return ("overview", ov, tuple(papers))
         # Local import keeps the cold path light when only fixtures are used.
         from server.local_projectors import projector_stamp  # noqa: PLC0415
 
-        return projector_stamp(self.binder)
+        return ("projectors", projector_stamp(self.binder), tuple(papers))
 
     def _read(self, stamp: tuple) -> dict:
         if stamp and stamp[0] == "overview":
             try:
-                return load_from_fixture(self.path)
+                state = load_from_fixture(self.path)
             except (OSError, ValueError):
-                return empty_state()
-        from server.local_projectors import project_local_overview  # noqa: PLC0415
+                state = empty_state()
+        else:
+            from server.local_projectors import project_local_overview  # noqa: PLC0415
 
-        try:
-            projected = project_local_overview(self.binder)
-        except Exception:  # noqa: BLE001 — never 500 the desk on projector bugs
-            return empty_state()
-        return _apply_projected_slice(projected)
+            try:
+                projected = project_local_overview(self.binder)
+            except Exception:  # noqa: BLE001 — never 500 the desk on projector bugs
+                projected = {}
+            state = _apply_projected_slice(projected)
+        project, charter = project_desk_papers(self.binder, self.cellar_tip)
+        if not state.get("project"):
+            state["project"] = project
+        if not state.get("charter"):
+            state["charter"] = charter
+        return state
 
     def current(self) -> dict:
         """State for this request — re-read only when inputs changed."""
@@ -496,15 +615,22 @@ def load_from_binder(binder: Path) -> dict:
     marker = binder / ".blueprint" / "overview.json"
     if marker.is_file():
         try:
-            return load_from_fixture(marker)
+            state = load_from_fixture(marker)
         except (OSError, ValueError):
-            return empty_state()
-    from server.local_projectors import project_local_overview  # noqa: PLC0415
+            state = empty_state()
+    else:
+        from server.local_projectors import project_local_overview  # noqa: PLC0415
 
-    try:
-        return _apply_projected_slice(project_local_overview(binder))
-    except Exception:  # noqa: BLE001
-        return empty_state()
+        try:
+            state = _apply_projected_slice(project_local_overview(binder))
+        except Exception:  # noqa: BLE001
+            state = empty_state()
+    project, charter = project_desk_papers(binder)
+    if not state.get("project"):
+        state["project"] = project
+    if not state.get("charter"):
+        state["charter"] = charter
+    return state
 
 
 def _sanitize_event(row: dict) -> dict:

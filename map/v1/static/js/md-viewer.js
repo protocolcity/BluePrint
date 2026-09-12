@@ -104,6 +104,15 @@ export function createMdViewer({
       const html = await res.text();
       contentEl.classList.remove('is-loading');
       contentEl.innerHTML = html;
+      contentEl.querySelectorAll('a[href]').forEach((anchor) => {
+        const href = anchor.getAttribute('href') || '';
+        const match = href.match(/[?&]id=([^&]+)/i) && /ticket/i.test(href)
+          ? href.match(/[?&]id=([^&]+)/i)
+          : href.match(/\/ticket\/([^/?#]+)/i);
+        if (!match) return;
+        const id = decodeURIComponent(match[1]);
+        anchor.setAttribute('href', `/ticket?id=${encodeURIComponent(id)}`);
+      });
     } catch (err) {
       contentEl.classList.remove('is-loading');
       contentEl.textContent = `Failed to load ${path}: ${err.message}`;

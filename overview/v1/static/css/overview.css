@@ -265,6 +265,27 @@ html, body {
 .ov-bucket-dot[data-bucket="ready"]   { background: var(--ov-state-working); }
 .ov-bucket-dot[data-bucket="blocked"] { background: var(--ov-state-error); }
 
+.ov-next {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ov-tile-border);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.ov-next-label {
+  color: var(--ov-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ov-next-link {
+  color: var(--ov-link);
+  text-decoration: none;
+}
+.ov-next-link:hover { text-decoration: underline; }
+
 /* Pulse — heartbeat rows + Cellar tip + Last tick. Discrete, no motion. */
 .ov-pulse-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .ov-pulse-row {

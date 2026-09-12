@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BluePrint — Ticket</title>
+  <link rel="stylesheet" href="/css/overview.css" />
+</head>
+<body>
+  <main id="ticket-shell" class="ov-shell" aria-label="Ticket">
+    <header class="ov-topnav" role="banner">
+      <div class="ov-brand">Protocol City</div>
+      <nav class="ov-lens-nav" aria-label="Lenses">
+        <a class="ov-lens" href="/" data-lens="overview">Overview</a>
+        <a class="ov-lens" href="/map" data-lens="map">Map</a>
+        <a class="ov-lens" href="/calendar" data-lens="calendar">Calendar</a>
+        <a class="ov-lens" href="/settings" data-lens="settings">Settings</a>
+      </nav>
+    </header>
+    <div class="ov-banner-row">
+      <span class="ov-banner">
+        <span class="ov-banner-dot" aria-hidden="true"></span>
+        <span class="ov-banner-label">Local desk</span>
+      </span>
+    </div>
+    <section class="ov-set-body">
+      <section class="ov-set-group">
+        <h1 class="ov-set-group-title">Ticket</h1>
+        <p class="ov-set-row">
+          <span class="ov-set-label">Id</span>
+          <span class="ov-set-value" data-role="ticket-id"></span>
+          <span class="ov-set-hint">In-shell passthrough — no tape, no cloud.</span>
+        </p>
+      </section>
+    </section>
+  </main>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id") || "";
+    const el = document.querySelector('[data-role="ticket-id"]');
+    if (el) el.textContent = id || "none";
+  </script>
+</body>
+</html>

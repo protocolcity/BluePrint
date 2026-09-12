@@ -33,8 +33,10 @@ class Lot:
     managed: bool
     hidden: bool
 
+    git_state: str | None = None
+
     def to_json(self) -> dict:
-        return {
+        body = {
             "relPath": self.rel_path,
             "name": self.name,
             "isDir": self.is_dir,
@@ -42,6 +44,9 @@ class Lot:
             "managed": self.managed,
             "hidden": self.hidden,
         }
+        if self.git_state:
+            body["gitState"] = self.git_state
+        return body
 
 
 def load_binder(root: Path) -> dict:
@@ -66,8 +71,41 @@ def _is_managed(path: Path) -> bool:
     return (path / _MANAGED_MARKER).exists()
 
 
-def _iter_top_children(root: Path, hidden_names: Iterable[str]) -> Iterable[Lot]:
+def _git_lot_states(root: Path) -> dict[str, str]:
+    """Top-level lot → dirty | untracked. Absent key means clean when git exists."""
+    flags: dict[str, str] = {}
+    try:
+        status = subprocess.check_output(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).decode()
+    except (subprocess.SubprocessError, OSError, FileNotFoundError):
+        return flags
+    for line in status.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip().strip('"')
+        if " -> " in path:
+            path = path.split(" -> ")[-1]
+        top = path.split("/")[0]
+        if not top:
+            continue
+        if line.startswith("??"):
+            flags.setdefault(top, "untracked")
+        elif flags.get(top) != "untracked":
+            flags[top] = "dirty"
+    return flags
+
+
+def _iter_top_children(
+    root: Path,
+    hidden_names: Iterable[str],
+    git_flags: dict[str, str] | None = None,
+) -> Iterable[Lot]:
     hidden_set = {n.lower() for n in hidden_names}
+    flags = git_flags or {}
+    git_on = bool(flags) or git_flags is not None
     for entry in sorted(root.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
         name = entry.name
         low = name.lower()
@@ -78,6 +116,9 @@ def _iter_top_children(root: Path, hidden_names: Iterable[str]) -> Iterable[Lot]
             has_md = _dir_has_md(entry)
         else:
             has_md = entry.suffix.lower() in _MD_SUFFIXES
+        git_state = None
+        if git_on:
+            git_state = flags.get(name, "clean")
         yield Lot(
             rel_path=name,
             name=name,
@@ -85,6 +126,7 @@ def _iter_top_children(root: Path, hidden_names: Iterable[str]) -> Iterable[Lot]
             has_md=has_md,
             managed=is_dir and _is_managed(entry),
             hidden=hidden,
+            git_state=git_state,
         )
 
 
@@ -112,8 +154,10 @@ def build_tree(root: Path, *, hidden_names: Iterable[str] | None = None) -> dict
     root = Path(root).resolve()
     binder = load_binder(root)
     hidden = hidden_names if hidden_names is not None else _DEFAULT_HIDDEN_NAMES
-    lots = [lot.to_json() for lot in _iter_top_children(root, hidden)]
-    return {"binder": binder, "lots": lots, "git": _git_shape(root)}
+    git = _git_shape(root)
+    git_flags = _git_lot_states(root) if git else None
+    lots = [lot.to_json() for lot in _iter_top_children(root, hidden, git_flags)]
+    return {"binder": binder, "lots": lots, "git": git}
 
 
 def _safe_join(root: Path, rel: str) -> Path:

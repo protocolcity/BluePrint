@@ -7,7 +7,16 @@
   <link rel="stylesheet" href="./css/workspace_map.css" />
 </head>
 <body>
-  <main id="map-shell" class="map-shell" aria-label="Workspace map">
+  <main id="map-shell" class="map-shell" aria-label="Map">
+    <header class="map-topnav" role="banner">
+      <div class="map-brand">Protocol City</div>
+      <nav class="map-lens-nav" aria-label="Lenses">
+        <a class="map-lens" href="/">Overview</a>
+        <a class="map-lens map-lens--current" href="/map" aria-current="page">Map</a>
+        <a class="map-lens" href="/calendar">Calendar</a>
+        <a class="map-lens" href="/settings">Settings</a>
+      </nav>
+    </header>
     <div id="map-stage" class="map-stage">
       <svg id="map-svg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-hidden="false">
         <g id="world">

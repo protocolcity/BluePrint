@@ -427,6 +427,48 @@ export function paintCharter(root, charter) {
   drawer.hidden = false;
 }
 
+export function paintNext(root, next) {
+  const wrap = root.querySelector('[data-role="jobs-next"]');
+  const link = root.querySelector('[data-role="jobs-next-link"]');
+  if (!wrap || !link) return;
+  const verb = next && next.verb ? String(next.verb) : "";
+  const object = next && next.object ? String(next.object) : "";
+  if (!verb || !object) {
+    wrap.hidden = true;
+    link.textContent = "";
+    return;
+  }
+  link.textContent = `${verb} ${object}`;
+  const href = next.href ? String(next.href) : "";
+  if (href) {
+    link.setAttribute("href", href);
+  } else {
+    link.removeAttribute("href");
+  }
+  wrap.hidden = false;
+}
+
+export function bindProjectActions(root) {
+  const charterBtn = root.querySelector('[data-role="action-open-charter"]');
+  if (charterBtn) {
+    charterBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const drawer = root.querySelector('[data-role="charter-drawer"]');
+      if (drawer && !drawer.hidden) {
+        drawer.scrollIntoView({ block: "nearest" });
+      }
+    });
+  }
+  const flagBtn = root.querySelector('[data-role="action-plant-flag"]');
+  if (flagBtn) {
+    flagBtn.setAttribute("href", "/map");
+  }
+  const agentsBtn = root.querySelector('[data-role="action-read-agents"]');
+  if (agentsBtn) {
+    agentsBtn.setAttribute("href", "/map?md=AGENTS.md");
+  }
+}
+
 export function paintFooter(root, pulse) {
   // Mirror the pulse heartbeats in a single quiet footer line — but only
   // the lit ones. A permanent row of five `off` cells is noise, not
@@ -471,9 +513,10 @@ export async function boot(opts = {}) {
         remote_builders: data?.remote_builders || [],
       }),
     ],
-    ["jobs", (data) =>
-      paintJobs(root, data?.jobs || [], data?.buckets || { waiting: 0, ready: 0, blocked: 0 }),
-    ],
+    ["jobs", (data) => {
+      paintJobs(root, data?.jobs || [], data?.buckets || { waiting: 0, ready: 0, blocked: 0 });
+      paintNext(root, data?.next || {});
+    }],
     ["pulse", (data) => {
       const pulse = data || { heartbeats: [], ticks: [], last_at: null, cellar_tip: "" };
       paintPulse(root, pulse);
@@ -482,6 +525,8 @@ export async function boot(opts = {}) {
     ["project", (data) => paintProject(root, data || {})],
     ["charter", (data) => paintCharter(root, data || {})],
   ];
+
+  bindProjectActions(root);
 
   for (const [key, paint] of surfaces) {
     try {
