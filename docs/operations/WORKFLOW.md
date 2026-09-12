@@ -54,3 +54,17 @@ Solid links represent connections only after they are verified in that workspace
 Start with one bounded work order and a manual worker. Pin its identity and project queue, verify authentication, isolate its checkout, state allowed writes and delivery permissions, and configure time/fault/empty exits. Verify the signed claim, meaningful code change, tests, reviewed PR and result record. Verify deployment separately. Only then expand recurring work, providers or hosts.
 
 [Operating process](../specs/ALWAYS_WORK_PROCESS.md) · [Deployment](DEPLOYMENT.md)
+
+## Capability-based routing
+
+At capture, establish the owning project before choosing a worker. Match the work against a registered worker's demonstrated capabilities: required language/domain, repository access, tools and context, permitted writes, execution host, review/deployment rights, available time and provider capacity. Select a model only after those constraints are satisfied. A cheaper model that lacks the needed tools is not a valid route; a more capable model does not grant broader authority.
+
+Record the chosen worker and routing reason on the work order. If no registered seat fits, retain the project and expose a routing exception with a reason; do not assign a provider name as a fictional worker. Report jobs are not implementation seats. Capacity exhaustion preserves the same order, artifacts and current owner until an explicit recovery/handoff occurs. Model/provider changes require a compatible authenticated runner, the same project boundaries, and a new run receipt; they must not create a duplicate order or erase earlier evidence.
+
+## Supervisory contract
+
+The supervisory role reads WorkLane readiness and gates, WorkForce flight/result evidence, and repository/deployment receipts. It reconciles missing assignment, stale updates, failed runs, blocked dependencies, review handoffs and claims without a corresponding live run. A stale timestamp is a reason to inspect, not authority to kill a process, steal a claim or mark work complete.
+
+A supervisor may dispatch or recover work only through owning-engine controls and within the operator's configured authorization. It must not store a second task database or add orchestration state to BluePrint. Deterministic health reports satisfy observation only; calling a job “Chief of Staff” does not prove reasoning, routing or implementation. Human decisions retain the responsible worker and carry an exact gate reason. Empty queues stop.
+
+Before replacement, verify the previous flight is stopped or failed, preserve its branch and artifacts, record the last tested state and unresolved acceptance on the existing order, and release/reassign through WorkLane. The successor claims under its own identity and resumes from those records. Review and deployment acceptance remain separate from a successful process exit. Before unattended expansion, prove single-flight refusal, empty/gated behavior, bounded failures, durable restart and reviewed delivery in the selected workspace.
