@@ -90,8 +90,22 @@ function agents() {
   for(const agent of snapshot.agents) {
     const card=el('article',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');heading.append(el('h2',agent.name),badge(agent.state));card.append(heading);
     const facts=el('dl',undefined,'bp-facts');
-    for(const [name,value] of [['Identity',agent.id],['Type',agent.kind],['Configuration',agent.configuration],['Schedule',scheduleLabel(agent.schedule)],['Next run',date(agent.next_fire)],['Model',agent.model],['Last heartbeat',date(agent.last_at)]]) facts.append(el('dt',name),el('dd',value));
+    for(const [name,value] of [['Identity',agent.id],['Type',agent.kind],['Configuration',agent.configuration],['Schedule',scheduleLabel(agent.schedule)],['Next run',agent.schedule==='manual'?'On demand':date(agent.next_fire)],['Model',agent.model],['Scheduler heartbeat',date(agent.last_at)]]) facts.append(el('dt',name),el('dd',value));
     card.append(facts,link('Find assigned work','/work?'+new URLSearchParams({q:agent.id}),'bp-order-meta'));
+    const dispatch=el('button',agent.state==='working'?'Running':'Dispatch now');
+    dispatch.type='button';dispatch.disabled=!agent.configured || ['working','unknown','off'].includes(agent.state);
+    const feedback=el('p','','bp-muted');feedback.setAttribute('role','status');
+    dispatch.addEventListener('click',async()=>{
+      dispatch.disabled=true;dispatch.textContent='Dispatching…';feedback.textContent='';
+      try {
+        const response=await fetch('/api/agents/dispatch',{method:'POST',headers:{'Content-Type':'application/json','X-BluePrint-Action':'agent-dispatch'},body:JSON.stringify({identity:agent.id})});
+        const result=await response.json();
+        if(!response.ok || !result.ok) throw new Error(result.error || 'Dispatch was not confirmed. Refresh before retrying.');
+        feedback.textContent=result.message || 'Dispatch accepted. Refresh to see progress.';dispatch.textContent='Dispatched';
+      } catch(error) {feedback.textContent=error.message;dispatch.textContent='Refresh to retry';}
+    });
+    card.append(dispatch,feedback);
+    if(agent.last_run) card.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)} · ${agent.last_run.reason}`,'bp-note bp-muted'));
     if(agent.report) {
       const report=el('div',undefined,'bp-note');report.append(badge(agent.report.state),el('p',agent.report.summary),el('p',`${date(agent.report.observed_at)} · ${agent.report.mode}`,'bp-muted'),el('p',agent.report.detail,'bp-muted'));card.append(report);
     }
