@@ -59,7 +59,7 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
 1. **Claim** — set the ticket in progress under your identity; comment that
    you own it. **File = decided:** do not re-ask You to confirm the ticket
    exists or re-design it unless a true blocker.
-2. **Work** — smallest slice that moves the ticket; stage only files your
+2. **Work** — complete the agreed outcome; stage only files your
    ticket touched, by explicit path (never `add -A` in a shared checkout).
 3. **Verify** — run `{{TEST_COMMAND}}`; a claim of "done" without a
    verification line is not done.
@@ -69,17 +69,19 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
 
 ## Stop rules
 
-- Queue empty → climb the empty-feed ladder (ALWAYS_WORK_PROCESS §2k):
-  refill (thaw eligible deferred / cut children from open epics). Still
-  empty → **stop** (mill-stop). Do **not** file a hygiene / leftover
+- Queue empty → **stop** and record the empty result. Do not automatically
+  thaw deferred work or manufacture child orders to refill the feed.
+  Do **not** file a hygiene / leftover
   / next-knob sibling so the next fire has work. Leftover-truth on the
   close-out of the real WO; land origin/main on the same ticket. Larger
   ideas → `Proposal:` on the parent epic. Never silent freelance. Never
   invent product direction, hardware, credentials, trading paths, or host
   mutation. If remaining work needs a ruling → gold one decision (hand
   seat + `gate_type=human`).
-- **Drain seat:** `worker:{{WORKER_ID}}` is your seat; cron drains it. `worker:you`
-  is **never** a drain seat — cron does not claim You. Escalation = keep your
+- **Execution:** `worker:{{WORKER_ID}}` is your seat. Assignment alone does
+  not start execution: a configured runner requires manual dispatch or a
+  verified schedule. Record the run and claim separately. `worker:you`
+  identifies human or authorized host work, not a scheduled worker. Escalation = keep your
   seat + `gate_type=human`; never re-seat failed work to `worker:you`.
 - Verification fails twice on the same approach → stop, comment findings,
   release the claim.
@@ -87,8 +89,7 @@ renders) are derived, not the paper. Do not convert **code**, **databases**,
   choice) → stop, comment, set For You / ask citizen. Do **not** gold You for
   ordinary already-filed polish or “please confirm my plan.”
 - **Propose, don’t freeze:** if a preference is unclear but a safe default
-  exists, comment `Proposal: …` and continue. City keeps working when humans
-  step away (ALWAYS_WORK_PROCESS product promise).
+  exists, comment `Proposal: …` and continue within the authorized scope.
 - **Host-mutation gate (`docs/policy/host-mutation-gate.md`):** production
   system service daemons, shared ports (`:8797`/`:8799`/`:8801`),
   `~/.protocolcity/` service config, live-engine brew/pip, and running-engine
