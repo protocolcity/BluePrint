@@ -56,3 +56,54 @@ Option B, change feed: BluePrint watches what it already reads (the twelve WorkL
 5. Map node state (D4), Calendar row cleanup, Connections engine versions.
 
 Each becomes a protocolcity order with acceptance and tests; engine-side evidence gaps found while implementing go to workforce or worklane orders.
+
+## Second audit — 2026-09-13, consolidation.47, and the approved uplift
+
+All ten surfaces (Overview, Work, Projects, Agents, Delivery, Timeline, Map, Calendar, Connections, Settings) plus the readers, papers and search were reviewed in the browser at desktop and 400px against the records above. The design pass that followed the first audit landed (change feed, Agents groups and badges, Delivery, Timeline, Calendar and Connections repairs, provider coverage), and the second audit found that the remaining problem is hierarchy, not plumbing: the desk has the facts but makes a person translate prose, implementation words and overlapping filters into an answer. The user accepted the recommendations in full on 2026-09-13; nothing below waits on a design choice.
+
+The target reading order on every surface: **what is running · what needs You · what changed · where to go next.** Compact, comparable rows lead to original evidence; every live signal names its source and time; motion marks a real state change and keeps the person oriented.
+
+### Corrections that supersede earlier decisions
+
+- **D3 and D9's default hiding are superseded.** All open means every open order, gated or not (STATES_AND_TERMS §5). The checkbox goes; Gate becomes its own filter.
+- **D10/D11's filter shape is superseded.** You returns to Assignment; For You leaves Status and is the attention view; note/todo/reminder are kinds, not statuses.
+- **D4 and the Map node-state idea are replaced** by the approved focused exploded project ([MAP_FOCUSED_PROJECT.md](MAP_FOCUSED_PROJECT.md)).
+- Projects and Settings now have records: [PROJECTS_INTENT.md](PROJECTS_INTENT.md), [SETTINGS_INTENT.md](SETTINGS_INTENT.md).
+
+### Live-state semantics (owning order pc-1483)
+
+| Signal | Means exactly | Must not |
+|---|---|---|
+| Updates connected | the change-feed transport is open | stand in for data freshness |
+| Last read | the last successful projection read, per source | reset "last change" |
+| Last change | the last time the content fingerprint changed, ignoring read times and heartbeat ticks | move on identical reads |
+| Running | a WorkForce shift open within budget for a seat | be inferred from a WorkLane claim, a stale claim or a fresh daemon heartbeat |
+| Live with / Parked by | a WorkLane Owner marker | be called "working" anywhere, including Map |
+| Unknown | the engine could not be read | be painted as zero or idle |
+
+Reconciliation keeps focus, selection, scroll, filters, expanded details and reader drafts; unchanged rows do not flash; a person reading older events sees a "new events" affordance instead of a moving list. Reduced motion (system or saved) and hidden-tab pause apply everywhere. No invented percentages, no ambient motion.
+
+### Per-surface outcome and owning order
+
+| Surface | Observed on .47 | Approved outcome | Order |
+|---|---|---|---|
+| Overview | Search and KPIs consume the first screen; one decision repeats a long gate note; "2 Live" counts a days-old claim; no recent delivery or current execution | Current execution, a short Decide/Read queue, recent meaningful changes; claimed work separate from running seats; details expand | pc-1483, pc-1484 |
+| Work | All open hides 87 of 122; Status mixes lifecycle, gates and inbox faces; no You assignment; tall rows repeat boilerplate | Complete default; five orthogonal axes; explicit filtered/total; compact comparable rows with full detail one click away | pc-1482, pc-1484 |
+| Projects | Twelve equal cards with open/need-you counts; no activity time, agents or distribution | Comparison rows by activity with agents now, last change and scoped drill-down (PROJECTS_INTENT) | pc-1486 |
+| Agents | Coverage cards and dozens of hire commands above the working seat; tall identical cards; held ids as plain text | Working and attention rows first; selected-run inspector with recorded milestones; compact jobs and supervisor summary; coverage and hire behind a disclosure | pc-1480 (coverage), pc-1485 |
+| Delivery | Long runs of green CI rows; merged PRs badged closed; no link to the installed revision | Repository/release summary with failed, pending and open first; checks grouped under PR/commit; merged, released and installed distinguished | pc-1487 |
+| Timeline | Four tall source rows fill the first viewport; whole comments become titles; plumbing dominates; reader return goes to Work | Compact source strip; short event headlines grouped by verified work/run/PR correlation; originals expand; reading position preserved | pc-1488 |
+| Map | Small labels and unexplained number triplets in a large orbit; WorkLane claims labelled working; no recent activity on the selected project | Focused exploded project with a stable sidebar, one expanded branch, named quantities and synchronized navigation | pc-1492 |
+| Calendar | Opens on past dates; jobs below all dated work; due and hold repeat an order; provenance unclear | Today and Next agenda; past/overdue grouped; one item with separately labelled due, reminder and hold clocks; next runs prominent | pc-1489 |
+| Connections | "Available" beside "Reachable · HTTP 404"; a failed supervisor pass shown as available evidence; receipt times shown as observations | Reachable, usable, fresh and installed as separate fields with the last outcome; exceptions first; raw detail behind a disclosure | pc-1490 |
+| Settings, shell, readers, search | Active tab off-screen at 400px; readers show raw Markdown and ISO times; stale Activity links; search returns to Work | Shared navigation with a discoverable active tab; readable documents; search and reader return to where the person came from (SETTINGS_INTENT) | pc-1491 |
+
+### Build sequence (integration, one bounded seat at a time)
+
+1. Integrate the coverage repair (pc-1480).
+2. Foundations: complete filters and You assignment (pc-1482), live-state semantics (pc-1483), Connections precision (pc-1490).
+3. Primary views and shell: Overview and Work compactness (pc-1484), Agents roster and inspector (pc-1485), shared shell and readers (pc-1491).
+4. Remaining surfaces: Projects (pc-1486), Delivery (pc-1487), Timeline (pc-1488), Calendar (pc-1489), Map (pc-1492).
+5. Installed acceptance across all ten surfaces at desktop and 400px, with keyboard, reduced motion, empty, stale, partial and unavailable states exercised (pc-1481).
+
+Each order updates the surface's record before code, keeps the current tokens and engine boundaries, verifies with disposable fixtures, and closes only on installed-build evidence.
