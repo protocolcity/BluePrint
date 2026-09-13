@@ -52,6 +52,20 @@ class ProjectFocusPaintTests(unittest.TestCase):
         self.assertIn("bp-reduce-motion", self.paint)
         self.assertIn("reduceMotion ? '' : ' map-branch-item-enter'", self.paint)
 
+    def test_branch_item_enter_class_is_removed_after_the_enter_frame(self) -> None:
+        # integrator (pc-1492 PR 115): the CSS only declares the *start*
+        # (opacity: 0) for `.map-branch-item-enter`; nothing ever removed
+        # the class, so with motion enabled the transition it names never
+        # ran and the chip could stay invisible forever. The class must be
+        # dropped on the next frame so the base (opacity: 1) state — and its
+        # transition — actually applies.
+        match = re.search(r"export function paintProjectFocus\([\s\S]*?\n\}", self.paint)
+        self.assertIsNotNone(match)
+        body = match.group(0)
+        self.assertIn("enterNodes.push(node)", body)
+        self.assertIn("requestAnimationFrame(() => {", body)
+        self.assertIn("node.classList.remove('map-branch-item-enter')", body)
+
 
 class ViewStateFocusTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -266,6 +280,41 @@ class HostFocusWiringTests(unittest.TestCase):
         self.assertIsNotNone(refresh_remote)
         self.assertIn("applyDataUpdate();", refresh_remote.group(1))
         self.assertIn("if (json === lastNodeStateJson) return;", self.host)
+
+    def test_popstate_reconciles_md_and_path_not_only_project_branch_item(self) -> None:
+        # integrator pass: the popstate listener only ever called
+        # applyProjectParams (project/branch/item) — a Back/Forward that
+        # dropped or added `md` never closed/reopened the reader, and one
+        # that only changed `path` (no project focused) never restored the
+        # dig depth. popstate must reconcile both via the shared helpers.
+        self.assertIn("async function applyMdParam(params)", self.host)
+        popstate = re.search(
+            r"window\.addEventListener\('popstate', async \(\) => \{([\s\S]*?)\n  \}\);",
+            self.host,
+        )
+        self.assertIsNotNone(popstate)
+        body = popstate.group(1)
+        self.assertIn("await applyProjectParams(params);", body)
+        self.assertIn("await applyMdParam(params);", body)
+        md_param = re.search(r"async function applyMdParam\(params\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(md_param)
+        self.assertIn("viewer.close();", md_param.group(1))
+        self.assertIn("openPaper(md,", md_param.group(1))
+
+    def test_apply_project_params_re_digs_the_path_param_for_papers(self) -> None:
+        # integrator pass: applyProjectParams toggled the Papers branch but
+        # never read the `path` query param, so popping to
+        # ?project=…&branch=papers&path=… re-dug only the project root —
+        # nested Papers folder depth in the URL was lost on Back/Forward.
+        self.assertIn("function digToPath(path)", self.host)
+        params_fn = re.search(r"async function applyProjectParams\(initial\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(params_fn)
+        body = params_fn.group(1)
+        self.assertIn("if (branch === 'papers')", body)
+        self.assertIn("const path = initial.get('path');", body)
+        self.assertIn("await digToPath(path);", body)
+        # The no-project branch also restores a plain (non-Papers) dig path.
+        self.assertIn("if (path) await digToPath(path);", body)
 
 
 class HitRouterFocusRowsTests(unittest.TestCase):
