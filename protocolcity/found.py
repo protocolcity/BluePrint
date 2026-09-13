@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from protocolcity.desk import (
     DEFAULT_DESK,
@@ -599,16 +599,23 @@ def found(
     desk_url: str = DEFAULT_DESK,
     sample_ticket: bool = True,
     map_port: int = 8801,
+    plant_seats: bool = False,
+    hire_seats: bool = False,
+    held_providers: Optional[Iterable[str]] = None,
+    workforce_bin: str = "workforce",
+    dry_run: bool = False,
 ) -> Dict[str, object]:
     """Scaffold a workspace at *target*. Returns a receipt dict for the CLI/proof.
 
     *neighborhood* (CLI: ``--project`` / ``--neighborhood``) is **optional**.
     When omitted, only workspace law is planted — no default project folder.
     When set, that string is the folder name the user chose (not a product default).
+
+    ``dry_run=True`` writes nothing — no workspace/project folder, no law,
+    no desk join, no roster/hire — and returns a preview receipt (what would
+    plant, the standard-seat-set commands) instead.
     """
     root = target.expanduser().resolve()
-    root.mkdir(parents=True, exist_ok=True)
-
     name = city_name or root.name
     agents = root / "AGENTS.md"
     if agents.exists() and not force:
@@ -631,6 +638,43 @@ def found(
     prefix: Optional[str] = _prefix_for(hood) if hood else None
     store_slug: Optional[str] = slugify(hood) if hood else None
 
+    if dry_run:
+        would_create = ["AGENTS.md", "BOUNDARIES.md", ".claude/skills/README.md"]
+        hood_dir = root / hood if hood else None
+        if hood_dir is not None:
+            would_create.append(
+                "%s/{AGENTS.md,README.md,ARCHITECTURE.md,PROGRAMS.md}" % hood
+            )
+        seats_result: Optional[Dict] = None
+        if plant_seats and hood and store_slug and prefix and hood_dir is not None:
+            from protocolcity.adopt import plant_standard_seats
+
+            seats_result = plant_standard_seats(
+                root,
+                store_slug,
+                project_path=hood_dir,
+                prefix=prefix,
+                hire=False,
+                held=held_providers,
+                workforce_bin=workforce_bin,
+                dry_run=True,
+            )
+        return {
+            "ok": True,
+            "dry_run": True,
+            "root": str(root),
+            "agents": str(agents),
+            "city_name": name,
+            "neighborhood": hood,
+            "neighborhood_path": str(hood_dir) if hood_dir is not None else None,
+            "would_create": would_create,
+            "first_run": None,
+            "vendor_clis": [],
+            "desk": None,
+            "seats": seats_result,
+        }
+
+    root.mkdir(parents=True, exist_ok=True)
     agents.write_text(_honest_city_agents(name, hood, prefix), encoding="utf-8")
 
     # pc-427: workspace is BluePrint-founded — stamp join marker
@@ -855,6 +899,7 @@ def found(
 
     clis = detect_vendor_clis()
 
+    seats_result: Optional[Dict] = None
     desk_result: Optional[Dict] = None
     if with_desk and hood and store_slug and hood_title and prefix:
         if desk_reachable(desk_url):
@@ -908,6 +953,19 @@ def found(
             "skipped": True,
             "reason": "no project at found — adopt or --project first",
         }
+
+    if plant_seats and hood and store_slug and hood_dir is not None:
+        from protocolcity.adopt import plant_standard_seats
+
+        seats_result = plant_standard_seats(
+            root,
+            store_slug,
+            project_path=hood_dir,
+            prefix=prefix,
+            hire=hire_seats,
+            held=held_providers,
+            workforce_bin=workforce_bin,
+        )
 
     first_run = _write_first_run(
         root,
@@ -971,6 +1029,7 @@ def found(
         "mcp_layer": mcp_layer,
         "secrets_layer": secrets_layer,
         "desk": desk_result,
+        "seats": seats_result,
         "map_port": map_port,
         "next_steps": next_steps,
     }
