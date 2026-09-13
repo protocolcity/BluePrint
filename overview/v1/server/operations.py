@@ -451,18 +451,73 @@ def verified_local_origin(receipt):
     return None
 
 
+# Canonical WorkLane health-check (README / INSTALL). `/health` is not a
+# documented API; an HTTP 404 there is reachable, not a usable capability.
+WORKLANE_API_PATH = '/api/admin/products'
+_SUPERVISOR_FAILED = frozenset({'failed', 'provider_failed', 'escalated'})
+
+
+def _read_bounded(stream, limit=65536):
+    try:
+        try:
+            data = stream.read(limit)
+        except TypeError:
+            data = stream.read()
+    except (OSError, ValueError, AttributeError):
+        return b''
+    if isinstance(data, str):
+        data = data.encode('utf-8', errors='replace')
+    if not isinstance(data, (bytes, bytearray)):
+        return b''
+    return bytes(data[:limit])
+
+
+def _json_object(body):
+    if not body:
+        return None
+    if isinstance(body, bytes):
+        try:
+            raw = body.decode('utf-8')
+        except UnicodeDecodeError:
+            return None
+    elif isinstance(body, str):
+        raw = body
+    else:
+        return None
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _worklane_api_usable(body):
+    payload = _json_object(body)
+    return bool(payload and payload.get('ok') is True and isinstance(payload.get('products'), list))
+
+
+def _normalize_outcome(value):
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip().lower().replace(' ', '_')
+
+
 def probe_local_http(origin, path):
-    """GET ``origin+path`` without following redirects. Any HTTP reply is reachable."""
+    """GET ``origin+path`` without following redirects.
+
+    Any HTTP reply means the origin responded (reachable). That is not
+    usability; callers must interpret ``status`` and ``body``.
+    """
     request = Request(origin.rstrip('/') + path)
     opener = build_opener(_NoRedirect())
     try:
         with opener.open(request, timeout=3) as response:
             status = getattr(response, 'status', None) or getattr(response, 'code', 200)
-            return {'ok': True, 'status': status}
+            return {'ok': True, 'status': status, 'body': _read_bounded(response)}
     except HTTPError as exc:
         if 300 <= exc.code < 400:
-            return {'ok': False, 'redirect': True}
-        return {'ok': True, 'status': exc.code}
+            return {'ok': False, 'redirect': True, 'status': exc.code}
+        return {'ok': True, 'status': exc.code, 'body': _read_bounded(exc)}
     except (URLError, TimeoutError, ValueError, OSError):
         return {'ok': False}
 
@@ -472,28 +527,35 @@ def supervisor_snapshot(root):
 
     Same origin-verification shape as agent_actions.dispatch_agent, but a
     plain read with a 3 s timeout — the one upstream call this surface adds.
+    An HTTP reply proves reachability even when the body is malformed;
+    usability still requires a JSON object with a ``passes`` list.
     """
     receipt = read_json(root / 'local/workforce/deployment.json', root) or {}
     origin = verified_local_origin(receipt)
     if not origin:
-        return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.', 'passes': []}
-    request = Request(origin.rstrip('/') + '/api/supervisor?limit=3')
-    opener = build_opener(_NoRedirect())
-    try:
-        with opener.open(request, timeout=3) as response:
-            payload = json.load(response)
-    except HTTPError as exc:
-        if 300 <= exc.code < 400:
-            return {'state': 'unavailable', 'detail': 'WorkForce redirected the supervisor read; refusing to leave the verified origin.', 'passes': []}
-        if exc.code == 404:
-            return {'state': 'not_configured', 'detail': 'This WorkForce engine does not report supervisor passes.', 'passes': []}
-        return {'state': 'unavailable', 'detail': 'WorkForce declined the supervisor read.', 'passes': []}
-    except (URLError, TimeoutError, ValueError, OSError):
-        return {'state': 'unavailable', 'detail': 'WorkForce is not reachable.', 'passes': []}
+        return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.',
+                'passes': [], 'reachable': False, 'http_status': None, 'probed': False}
+    probe = probe_local_http(origin, '/api/supervisor?limit=3')
+    if probe.get('redirect'):
+        return {'state': 'unavailable', 'detail': 'WorkForce redirected the supervisor read; refusing to leave the verified origin.',
+                'passes': [], 'reachable': False, 'http_status': probe.get('status'), 'probed': True}
+    if not probe.get('ok'):
+        return {'state': 'unavailable', 'detail': 'WorkForce is not reachable.',
+                'passes': [], 'reachable': False, 'http_status': None, 'probed': True}
+    status = probe.get('status')
+    if status == 404:
+        return {'state': 'not_configured', 'detail': 'This WorkForce engine does not report supervisor passes.',
+                'passes': [], 'reachable': True, 'http_status': 404, 'probed': True}
+    if status != 200:
+        return {'state': 'unavailable', 'detail': 'WorkForce declined the supervisor read.',
+                'passes': [], 'reachable': True, 'http_status': status, 'probed': True}
+    payload = _json_object(probe.get('body'))
     passes = payload.get('passes') if isinstance(payload, dict) else None
     if not isinstance(passes, list):
-        return {'state': 'unavailable', 'detail': 'Supervisor endpoint returned an unexpected shape.', 'passes': []}
-    return {'state': 'available', 'detail': '', 'passes': passes[:3]}
+        return {'state': 'unavailable', 'detail': 'Supervisor endpoint returned an unexpected shape.',
+                'passes': [], 'reachable': True, 'http_status': status, 'probed': True}
+    return {'state': 'available', 'detail': '', 'passes': passes[:3],
+            'reachable': True, 'http_status': status, 'probed': True}
 
 
 def read_json(path, root):
@@ -506,65 +568,134 @@ def read_json(path, root):
         return None
 
 
-def _empty_engine(source, detail):
-    return {'state': 'unavailable', 'version': None, 'source': source,
-            'observed_at': None, 'outcome': None, 'detail': detail}
+def _engine_record(*, state, source, detail, version=None, observed_at=None,
+                   activated_at=None, last_success_at=None, outcome=None,
+                   reachable=None, usable=None, http_status=None, next_step=None):
+    return {
+        'state': state,
+        'version': version,
+        'source': source,
+        'observed_at': observed_at,
+        'activated_at': activated_at,
+        'last_success_at': last_success_at,
+        'outcome': outcome,
+        'reachable': reachable,
+        'usable': usable,
+        'http_status': http_status,
+        'detail': detail,
+        'next_step': next_step,
+    }
+
+
+def _empty_engine(source, detail, next_step=None, state='unavailable'):
+    return _engine_record(state=state, source=source, detail=detail,
+                          usable=False, next_step=next_step)
 
 
 def _engine_receipt(root, relative):
-    """Version + activation time from a workspace installation receipt."""
+    """Version + activation time from a workspace installation receipt.
+
+    A receipt establishes installed identity, not live daemon health.
+    """
     source = Path(relative).as_posix()
+    missing_step = 'Install or activate this engine in the selected workspace so a deployment receipt exists.'
     receipt = read_json(root / relative, root)
     if not receipt:
-        return _empty_engine(source, 'No installation receipt in this workspace.')
+        return _empty_engine(source, 'No installation receipt in this workspace.', missing_step)
     version = receipt.get('version')
     activated = receipt.get('activated_at') if isinstance(receipt.get('activated_at'), str) else None
     if not isinstance(version, str) or not version.strip():
-        return {'state': 'unavailable', 'version': None, 'source': source,
-                'observed_at': activated, 'outcome': None,
-                'detail': 'Installation receipt is missing a version.'}
-    return {'state': 'available', 'version': version.strip(), 'source': source,
-            'observed_at': activated, 'outcome': None,
-            'detail': 'Version ' + version.strip() + ((' · activated ' + activated) if activated else '')}
+        return _engine_record(
+            state='unavailable', source=source, activated_at=activated,
+            usable=False, next_step=missing_step,
+            detail='Installation receipt is missing a version.')
+    return _engine_record(
+        state='installed', version=version.strip(), source=source,
+        activated_at=activated, usable=True,
+        detail='Version ' + version.strip())
 
 
 def _worklane_reachability(root, now):
     source_file = 'local/worklane/deployment.json'
     receipt = read_json(root / source_file, root)
     if not receipt:
-        return _empty_engine(source_file, 'No installation receipt in this workspace.')
+        return _empty_engine(
+            source_file, 'No installation receipt in this workspace.',
+            'Install or activate WorkLane in the selected workspace so a deployment receipt exists.')
     origin = verified_local_origin(receipt)
     if not origin:
-        return _empty_engine(source_file, 'A verified local WorkLane connection is required.')
-    source = origin + '/health'
-    probe = probe_local_http(origin, '/health')
+        return _empty_engine(
+            source_file, 'A verified local WorkLane connection is required.',
+            'Use this workspace installation receipt; do not fall back to another workspace or a default port.')
+    source = origin + WORKLANE_API_PATH
+    probe = probe_local_http(origin, WORKLANE_API_PATH)
     observed = now.isoformat()
     if probe.get('redirect'):
-        return {'state': 'unavailable', 'version': None, 'source': source, 'observed_at': observed,
-                'outcome': None, 'detail': 'WorkLane redirected the health read; refusing to leave the verified origin.'}
+        return _engine_record(
+            state='unavailable', source=source, observed_at=observed,
+            reachable=False, usable=False, http_status=probe.get('status'),
+            next_step='Confirm the installation receipt origin stays on this machine.',
+            detail='WorkLane redirected the products read; refusing to leave the verified origin.')
     if not probe.get('ok'):
-        return {'state': 'unavailable', 'version': None, 'source': source, 'observed_at': observed,
-                'outcome': None, 'detail': 'WorkLane API is not reachable.'}
+        return _engine_record(
+            state='unavailable', source=source, observed_at=observed,
+            reachable=False, usable=False,
+            next_step='Start WorkLane on the verified local origin from the installation receipt.',
+            detail='WorkLane API is not reachable.')
     status = probe.get('status')
-    return {'state': 'available', 'version': None, 'source': source, 'observed_at': observed,
-            'outcome': None, 'detail': 'Reachable' + ((' · HTTP %s' % status) if status else '')}
+    usable = status == 200 and _worklane_api_usable(probe.get('body'))
+    if usable:
+        return _engine_record(
+            state='available', source=source, observed_at=observed,
+            last_success_at=observed, reachable=True, usable=True,
+            http_status=status,
+            detail='Reachable · usable' + ((' · HTTP %s' % status) if status else ''))
+    return _engine_record(
+        state='reachable', source=source, observed_at=observed,
+        reachable=True, usable=False, http_status=status,
+        next_step='Confirm GET /api/admin/products on the verified origin returns the product list.',
+        detail='Reachable · health not verified' + ((' · HTTP %s' % status) if status else ''))
 
 
-def _supervisor_pass_fields(payload):
+def _supervisor_pass_fields(payload, now):
     source = 'WorkForce /api/supervisor'
+    probed = bool(payload.get('probed'))
+    observed = now.isoformat() if probed else None
     state = payload.get('state') or 'unavailable'
+    reachable = payload.get('reachable')
+    http_status = payload.get('http_status')
+    if state == 'not_configured':
+        return _engine_record(
+            state='not_configured', source=source, observed_at=observed,
+            reachable=True if reachable is None else reachable, usable=False,
+            http_status=http_status,
+            detail=payload.get('detail') or 'This WorkForce engine does not report supervisor passes.')
     if state != 'available':
-        return _empty_engine(source, payload.get('detail') or 'Supervisor pass record unavailable.') | {'state': state}
+        down = reachable is False or (isinstance(payload.get('detail'), str) and 'not reachable' in payload['detail'].lower())
+        return _engine_record(
+            state='unavailable', source=source, observed_at=observed,
+            reachable=False if down else (True if reachable is None else reachable),
+            usable=False, http_status=http_status,
+            next_step='Confirm the WorkForce origin in the installation receipt.' if probed or down else None,
+            detail=payload.get('detail') or 'Supervisor pass record unavailable.')
     passes = [item for item in (payload.get('passes') or []) if isinstance(item, dict)]
     if not passes:
-        return {'state': 'available', 'version': None, 'source': source, 'observed_at': None,
-                'outcome': None, 'detail': 'No supervisor passes recorded yet.'}
+        return _engine_record(
+            state='empty', source=source, observed_at=observed,
+            last_success_at=observed, reachable=True, usable=True,
+            http_status=http_status,
+            detail='No supervisor passes recorded yet.')
     latest = max(passes, key=lambda item: str(item.get('generated_at') or ''))
     generated = latest.get('generated_at') if isinstance(latest.get('generated_at'), str) else None
-    outcome = latest.get('pass_outcome') if isinstance(latest.get('pass_outcome'), str) else None
-    return {'state': 'available', 'version': None, 'source': source, 'observed_at': generated,
-            'outcome': outcome,
-            'detail': (outcome or 'outcome not reported') + ' · ' + (generated or 'time not reported')}
+    outcome = _normalize_outcome(latest.get('pass_outcome'))
+    failed = outcome in _SUPERVISOR_FAILED
+    detail = (outcome or 'outcome not reported').replace('_', ' ') + ' · last pass ' + (generated or 'time not reported')
+    return _engine_record(
+        state='failed' if failed else 'available', source=source,
+        observed_at=observed, last_success_at=observed, outcome=outcome,
+        reachable=True, usable=True, http_status=http_status,
+        next_step='Open Agents for the last pass; a readable failed report is evidence, not a green pass.' if failed else None,
+        detail=detail)
 
 
 def _unavailable_engines(detail):
@@ -1007,14 +1138,22 @@ def operations_snapshot(binder):
               'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
-        result['sources'].append({'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.'})
+        result['sources'].append({
+            'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.',
+            'reachable': False, 'usable': False, 'next_step': 'Start BluePrint with a workspace selected.',
+            'source': None})
         return result
     root = Path(binder).resolve()
     result['workspace'] = {'name': root.name, 'path': str(root)}
     registry = project_registry(root)
     data = worklane_data_dir(root)
     if not data.resolve().is_relative_to(root):
-        result['sources'].append({'name': 'WorkLane', 'state': 'unavailable', 'detail': 'Store directory is outside this workspace.'})
+        result['sources'].append({
+            'name': 'WorkLane', 'state': 'unavailable',
+            'detail': 'Store directory is outside this workspace.',
+            'reachable': False, 'usable': False,
+            'next_step': 'Select a workspace whose WorkLane data directory is inside it.',
+            'source': 'worklane data directory'})
         paths = []
     else:
         paths = sorted(data.glob('*.db'))
@@ -1133,22 +1272,47 @@ def operations_snapshot(binder):
         if seat and order['status'] == 'backlog' and not order['gate_type'] and blocked_state == 'clear':
             order['ready_for'] = seat
     failed = [p['name'] for p in result['projects'] if p['state'] != 'available']
-    result['sources'].append({'name': 'WorkLane', 'state': 'partial' if failed else ('available' if paths else 'unavailable'),
-                             'detail': f"{sum(p['state'] == 'available' for p in result['projects'])} project stores readable" + ('. Unavailable: ' + ', '.join(failed) if failed else '')})
+    readable = sum(p['state'] == 'available' for p in result['projects'])
+    if not paths:
+        lane_state, lane_next = 'unavailable', 'Register a project store inside this workspace.'
+    elif failed:
+        lane_state, lane_next = 'partial', 'Inspect the unavailable stores listed in the detail.'
+    else:
+        lane_state, lane_next = 'available', None
+    result['sources'].append({
+        'name': 'WorkLane', 'state': lane_state,
+        'detail': f"{readable} project stores readable" + ('. Unavailable: ' + ', '.join(failed) if failed else ''),
+        'reachable': True, 'usable': readable > 0, 'next_step': lane_next,
+        'source': 'worklane data directory'})
+    roster = read_json(resolve_roster_path(root), root)
     daemon = read_json(resolve_daemon_path(root), root)
     tick = (daemon or {}).get('last_tick')
     age = age_seconds(tick, now)
     fresh = age is not None and age <= 120
-    result['sources'].append({'name': 'WorkForce roster', 'state': 'available' if isinstance((roster or {}).get('workers'), dict) else 'unavailable',
-                             'detail': 'Local agent registry' if roster else 'Registry could not be read.'})
-    result['sources'].append({'name': 'WorkForce heartbeat', 'state': 'fresh' if fresh else ('stale' if age is not None else 'unknown'),
-                             'detail': 'Last reported activity; not a process health check.', 'last_at': tick})
+    roster_ok = isinstance((roster or {}).get('workers'), dict)
+    result['sources'].append({
+        'name': 'WorkForce roster', 'state': 'available' if roster_ok else 'unavailable',
+        'detail': 'Local agent registry' if roster else 'Registry could not be read.',
+        'reachable': roster is not None, 'usable': roster_ok,
+        'next_step': None if roster_ok else 'Confirm the WorkForce roster path in this workspace.',
+        'source': 'WorkForce roster'})
+    heartbeat_state = 'fresh' if fresh else ('stale' if age is not None else 'unknown')
+    heartbeat_next = None
+    if heartbeat_state == 'stale':
+        heartbeat_next = 'The daemon last tick is older than two minutes; this is not a process health check.'
+    elif heartbeat_state == 'unknown':
+        heartbeat_next = 'No daemon tick has been observed.'
+    result['sources'].append({
+        'name': 'WorkForce heartbeat', 'state': heartbeat_state,
+        'detail': 'Last reported activity; not a process health check.', 'last_at': tick,
+        'reachable': age is not None, 'usable': fresh,
+        'next_step': heartbeat_next, 'source': 'WorkForce daemon'})
     passes_payload = supervisor_snapshot(root)
     result['engines'] = {
         'worklane': _engine_receipt(root, 'local/worklane/deployment.json'),
         'workforce': _engine_receipt(root, 'local/workforce/deployment.json'),
         'worklane_api': _worklane_reachability(root, now),
-        'supervisor': _supervisor_pass_fields(passes_payload),
+        'supervisor': _supervisor_pass_fields(passes_payload, now),
     }
     workers = (roster or {}).get('workers', {})
     runtime = (daemon or {}).get('workers', {})
@@ -1245,12 +1409,26 @@ def operations_snapshot(binder):
             project_index[agent['project']]['running'] += 1
     placeholders = [a['name'] for a in result['agents'] if not a['configured']]
     if placeholders:
-        result['sources'].append({'name':'Agent/job configuration','state':'partial','detail':'Placeholder commands: ' + ', '.join(placeholders) + '. These jobs do not execute operational work.'})
+        result['sources'].append({
+            'name':'Agent/job configuration','state':'partial',
+            'detail':'Placeholder commands: ' + ', '.join(placeholders) + '. These jobs do not execute operational work.',
+            'reachable': True, 'usable': False,
+            'next_step': 'Placeholder commands do not execute operational work.',
+            'source': 'roster command'})
     calendar_path = root / '.blueprint' / 'calendar.json'
     calendar = read_json(calendar_path, root)
     calendar_valid = calendar is not None and isinstance(calendar.get('events'), list)
-    result['sources'].append({'name': 'Calendar', 'state': 'available' if calendar_valid else ('unavailable' if calendar_path.exists() else 'not_configured'),
-                             'detail': 'Local calendar events' if calendar_valid else 'No readable local calendar file; agent schedules are shown separately.'})
+    if calendar_valid:
+        calendar_state, calendar_next = 'available', None
+    elif calendar_path.exists():
+        calendar_state, calendar_next = 'unavailable', 'The calendar file exists but could not be read.'
+    else:
+        calendar_state, calendar_next = 'not_configured', None
+    result['sources'].append({
+        'name': 'Calendar', 'state': calendar_state,
+        'detail': 'Local calendar events' if calendar_valid else 'No readable local calendar file; agent schedules are shown separately.',
+        'reachable': calendar_path.exists() or calendar_valid, 'usable': calendar_valid,
+        'next_step': calendar_next, 'source': '.blueprint/calendar.json'})
     if calendar_valid:
         for event in calendar['events']:
             if isinstance(event, dict):
