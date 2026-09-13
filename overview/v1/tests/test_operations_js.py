@@ -206,10 +206,93 @@ class AgentCardBodyTests(unittest.TestCase):
         self.assertIn('WorkForce daemon: seen', _SRC)
 
     def test_find_assigned_work_is_seat_only(self):
-        self.assertIn("if(agent.group==='seat')card.append(link('Findassignedwork'", _SRC.replace(' ', ''))
+        """pc-1485: the link moved into the seat-only inspector panel;
+        jobRow never renders it."""
+        self.assertIn("container.append(link('Find assigned work'", _SRC)
+        self.assertNotIn("Find assigned work", _SRC.split('function jobRow')[1].split('function ')[0])
 
     def test_recovery_attempts_is_seat_only(self):
-        self.assertIn("if(agent.group==='seat' && agent.recovery_attempts)", _SRC)
+        """pc-1485: recovery attempts moved into the seat-only run timeline;
+        jobRow never references it."""
+        self.assertIn("timelineStep('Recovery attempts'", _SRC)
+        self.assertNotIn('recovery_attempts', _SRC.split('function jobRow')[1].split('function ')[0])
+
+
+class AgentCompactRowAndInspectorTests(unittest.TestCase):
+    """pc-1485: compact comparable seat rows plus a selected-run inspector
+    with a source-labelled timeline; jobs stay a compact schedule/report
+    line with no timeline."""
+
+    def test_seat_and_job_lists_use_compact_rows_not_the_old_card_grid(self):
+        self.assertIn('id="seat-list" class="bp-agent-rows"', _HTML)
+        self.assertIn('id="job-list" class="bp-agent-rows"', _HTML)
+        self.assertNotIn('bp-agent-grid', _HTML)
+        self.assertNotIn('bp-agent-grid', _SRC)
+
+    def test_agent_detail_panel_exists_and_starts_hidden(self):
+        self.assertIn('id="agent-detail"', _HTML)
+        self.assertIn('id="agent-detail" class="bp-panel bp-agent-detail" hidden', _HTML)
+
+    def test_seat_row_carries_project_state_work_elapsed_update_and_one_action(self):
+        fn = _SRC.split('function agentRow(agent)')[1].split('function jobRow')[0]
+        self.assertIn("agent.project_name || 'No project queue'", fn)
+        self.assertIn('badge(agent.state,agent.badge)', fn)
+        self.assertIn('heldLink(agent)', fn)
+        self.assertIn('elapsedText(agent)', fn)
+        self.assertIn('lastUpdateText(agent)', fn)
+        self.assertIn('agentAction(agent)', fn)
+
+    def test_selecting_a_row_toggles_selection_and_repaints(self):
+        self.assertIn('function selectAgent(id)', _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("selectedAgentId=selectedAgentId===id?'':id", compact)
+        self.assertIn('agents();', _SRC.split('function selectAgent(id)')[1].split('}')[0] + '}')
+
+    def test_row_is_keyboard_operable_without_reactivating_on_button_or_link_clicks(self):
+        fn = _SRC.split('function agentRow(agent)')[1].split('function jobRow')[0]
+        self.assertIn("row.setAttribute('role','button')", fn)
+        self.assertIn('row.tabIndex=1'.replace('1', '0'), fn.replace(' ', ''))
+        self.assertIn("event.target.closest('button')", fn)
+        self.assertIn("event.key==='Enter'", fn)
+
+    def test_elapsed_is_a_time_budget_never_a_percent(self):
+        fn = _SRC.split('function elapsedText(agent)')[1].split('function ')[0]
+        self.assertIn('budget', fn)
+        self.assertNotIn('%', fn)
+
+    def test_current_work_id_is_a_usable_reader_link(self):
+        fn = _SRC.split('function heldLink(agent)')[1].split('function ')[0]
+        self.assertIn("readerHref('/work-order?'", fn)
+        self.assertIn('workUrl(order)', fn)
+
+    def test_timeline_covers_the_five_source_labelled_phases_in_order(self):
+        fn = _SRC.split('function agentTimeline(agent)')[1].split('function agentDetail')[0]
+        for phase in ('Dispatch candidate', 'Verified claim', 'Observed run start', 'Recovery attempts', 'Terminal outcome'):
+            self.assertIn(f"timelineStep('{phase}'", fn)
+        order = [fn.index(f"timelineStep('{phase}'") for phase in
+                 ('Dispatch candidate', 'Verified claim', 'Observed run start', 'Recovery attempts', 'Terminal outcome')]
+        self.assertEqual(order, sorted(order))
+
+    def test_missing_timeline_phases_read_not_reported_not_inferred(self):
+        fn = _SRC.split('function agentTimeline(agent)')[1].split('function agentDetail')[0]
+        self.assertIn("'Not reported'", fn)
+
+    def test_an_old_failure_no_longer_held_is_distinguished_from_a_current_failure(self):
+        fn = _SRC.split('function agentTimeline(agent)')[1].split('function agentDetail')[0]
+        self.assertIn("state==='last_run_failed'", fn)
+        self.assertIn('resolved by another provider', fn)
+
+    def test_job_row_is_a_compact_schedule_report_line_with_no_timeline(self):
+        fn = _SRC.split('function jobRow(agent)')[1].split('function timelineStep')[0]
+        self.assertIn('scheduleLabel(agent.schedule)', fn)
+        self.assertIn('agent.report', fn)
+        self.assertNotIn('agentTimeline', fn)
+        self.assertNotIn('heldLink', fn)
+
+    def test_inspector_action_is_seat_only_and_hides_when_nothing_selected(self):
+        fn = _SRC.split('function agentDetail()')[1].split('})();')[0]
+        self.assertIn("a.group==='seat'", fn)
+        self.assertIn('container.hidden=true', fn)
 
 
 class DeliveryQuietCopyTests(unittest.TestCase):

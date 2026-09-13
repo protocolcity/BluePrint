@@ -9,6 +9,7 @@ const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
 const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents',''],connections:['Connections','Where the information comes from and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
+let selectedAgentId = '';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
 function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
@@ -253,30 +254,99 @@ function agentAction(agent, dispatchLabel) {
   nodes.push(button,feedback);
   return nodes;
 }
-function agentCard(agent) {
-  const card=el('article',undefined,'bp-panel');
+function currentOrderFor(agent) {
+  if(!agent.held) return null;
+  return (snapshot.orders || []).find(o=>o.id===agent.held.id && o.project===agent.held.project) || null;
+}
+function heldLink(agent) {
+  const order=currentOrderFor(agent);
+  if(order) return link(`${order.title} · ${order.id}`,workUrl(order));
+  if(agent.held) return link(agent.held.id,readerHref('/work-order?'+new URLSearchParams({project:agent.held.project,id:agent.held.id})));
+  return el('span','No current work','bp-muted');
+}
+function elapsedText(agent) {
+  if(agent.shift && agent.shift.age_seconds!=null) {
+    const mins=Math.floor(agent.shift.age_seconds/60);
+    const elapsed=mins ? `${mins}m` : `${agent.shift.age_seconds}s`;
+    return `${elapsed} of ${Math.round((agent.shift.budget_secs||0)/60)}m budget`;
+  }
+  return '—';
+}
+function lastUpdateText(agent) {
+  if(agent.shift) return `Since ${date(agent.shift.started_at)}`;
+  if(agent.last_run) return date(agent.last_run.at);
+  return 'Not reported';
+}
+function selectAgent(id) {
+  selectedAgentId=selectedAgentId===id ? '' : id;
+  agents();
+}
+function agentRow(agent) {
+  const row=el('div',undefined,'bp-agent-row');
+  row.setAttribute('role','button');row.tabIndex=0;
+  const selected=selectedAgentId===agent.id;
+  row.dataset.selected=String(selected);
+  row.setAttribute('aria-pressed',String(selected));
+  row.append(el('span',agent.project_name || 'No project queue','bp-agent-cell'));
+  const nameCell=el('span',undefined,'bp-agent-cell bp-agent-name');
+  nameCell.append(el('strong',agent.name),el('span',` · ${agent.model}`,'bp-muted'));
+  row.append(nameCell);
+  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));row.append(stateCell);
+  const workCell=el('span',undefined,'bp-agent-cell bp-agent-work');workCell.append(heldLink(agent));row.append(workCell);
+  row.append(el('span',elapsedText(agent),'bp-agent-cell bp-muted'));
+  row.append(el('span',lastUpdateText(agent),'bp-agent-cell bp-muted'));
+  const actionCell=el('span',undefined,'bp-agent-cell bp-agent-action');actionCell.append(...agentAction(agent));row.append(actionCell);
+  const activate=event=>{ if(event.target.closest('button') || event.target.closest('a')) return; event.preventDefault(); selectAgent(agent.id); };
+  row.addEventListener('click',activate);
+  row.addEventListener('keydown',event=>{ if((event.key==='Enter' || event.key===' ') && !event.target.closest('button') && !event.target.closest('a')) { event.preventDefault(); selectAgent(agent.id); } });
+  return row;
+}
+function jobRow(agent) {
+  const row=el('div',undefined,'bp-agent-row');
+  row.append(el('span',agent.name,'bp-agent-cell'));
+  row.append(el('span',scheduleLabel(agent.schedule),'bp-agent-cell bp-muted'));
+  row.append(el('span',agent.schedule==='manual'?'On demand':date(agent.next_fire),'bp-agent-cell bp-muted'));
+  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));row.append(stateCell);
+  const reportText=agent.report ? `${agent.report.state} · ${agent.report.summary}` : (agent.last_run ? `${agent.last_run.outcome} · ${date(agent.last_run.at)}` : 'No report yet');
+  row.append(el('span',reportText,'bp-agent-cell bp-muted'));
+  const actionCell=el('span',undefined,'bp-agent-cell bp-agent-action');actionCell.append(...agentAction(agent));row.append(actionCell);
+  return row;
+}
+function timelineStep(label, value) {
+  const step=el('div',undefined,'bp-agent-timeline-step');
+  step.append(el('dt',label),el('dd',value));
+  return step;
+}
+function agentTimeline(agent) {
+  const wrap=el('dl',undefined,'bp-agent-timeline');
+  wrap.append(timelineStep('Dispatch candidate', agent.last_candidates && agent.last_candidates.length ? agent.last_candidates.join(', ') : 'Not reported'));
+  let claim='Not reported';
+  if(agent.held) claim=agent.held_verified ? `Verified: holds ${agent.held.id}` : `Holds ${agent.held.id} · not yet verified against the last dispatch candidates`;
+  else if(agent.state==='last_run_failed') claim=agent.preserved_reservation ? 'No order currently held here; a preserved reservation is available to recover' : 'No order currently held here; the failed ticket may already be resolved by another provider';
+  wrap.append(timelineStep('Verified claim', claim));
+  wrap.append(timelineStep('Observed run start', agent.shift ? date(agent.shift.started_at) : 'Not reported'));
+  wrap.append(timelineStep('Recovery attempts', String(agent.recovery_attempts || 0)));
+  let terminal='Not reported';
+  if(agent.shift) terminal='Open — no terminal row yet';
+  else if(agent.last_run) terminal=`${agent.last_run.outcome} · ${agent.last_run.reason} · ${date(agent.last_run.at)}`;
+  wrap.append(timelineStep('Terminal outcome', terminal));
+  return wrap;
+}
+function agentDetail() {
+  const container=$('agent-detail');
+  const agent=snapshot.agents.find(a=>a.id===selectedAgentId && a.group==='seat');
+  if(!agent) { container.hidden=true; container.replaceChildren(); return; }
+  container.hidden=false;
+  container.replaceChildren();
   const heading=el('div',undefined,'bp-section-head');
-  const title=el('div');title.append(el('h2',agent.name));
-  if(agent.group==='seat') title.append(el('span',`${agent.project_name || 'No project queue'} · ${agent.model}`,'bp-muted'));
-  title.append(el('p',agent.id,'bp-muted bp-note'));
-  heading.append(title,badge(agent.state,agent.badge));
-  card.append(heading,el('p',`Source: ${agent.badge_source}`,'bp-muted'));
-  if(agent.group==='job') {
-    const facts=el('dl',undefined,'bp-facts');
-    facts.append(el('dt','Schedule'),el('dd',scheduleLabel(agent.schedule)));
-    facts.append(el('dt','Next run'),el('dd',agent.schedule==='manual'?'On demand':date(agent.next_fire)));
-    card.append(facts);
-  }
-  if(agent.group==='seat' && agent.held) card.append(el('p',`Holds ${agent.held.id}${agent.held_verified?' (owner verified)':' (not yet verified)'}${agent.shift && agent.shift.lock_held?' · lock held':''}`,'bp-note'));
-  if(agent.shift) card.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · since ${date(agent.shift.started_at)} · budget ${agent.shift.budget_secs}s${agent.shift.candidates.length?' · candidates '+agent.shift.candidates.join(', '):''} · ${agent.shift.source}${agent.shift.lock_held?' · lock held':''}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
-  if(agent.report) {
-    const report=el('div',undefined,'bp-note');report.append(badge(agent.report.state),el('p',agent.report.summary),el('p',`${date(agent.report.observed_at)} · ${agent.report.mode}`,'bp-muted'),el('p',agent.report.detail,'bp-muted'));card.append(report);
-  }
-  if(agent.last_run) card.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)} · ${agent.last_run.reason} · ledger/${agent.id}.log`,'bp-note bp-muted'));
-  if(agent.group==='seat' && agent.recovery_attempts) card.append(el('p',`Recovery attempts: ${agent.recovery_attempts}`,'bp-note bp-muted'));
-  if(agent.group==='seat') card.append(link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
-  card.append(...agentAction(agent));
-  return card;
+  heading.append(el('h2',`Inspect · ${agent.name}`),badge(agent.state,agent.badge));
+  container.append(heading);
+  container.append(el('p',`${agent.id} · source: ${agent.badge_source}`,'bp-muted bp-note'));
+  if(agent.shift) container.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · budget ${agent.shift.budget_secs}s${agent.shift.lock_held?' · lock held':''} · ${agent.shift.source}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
+  container.append(agentTimeline(agent));
+  container.append(link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
+  const closeBtn=el('button','Close');closeBtn.type='button';closeBtn.addEventListener('click',()=>selectAgent(agent.id));
+  container.append(closeBtn);
 }
 function supervisorPanel() {
   const container=$('supervisor-panel');container.replaceChildren();
@@ -401,8 +471,9 @@ function renderCoverage() {
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
   $('agents-heartbeat').textContent=heartbeatLine();
-  reconcileList($('seat-list'), seats, a=>a.id, agentCard, {emptyText:'No seats registered in the readable registry.'});
-  reconcileList($('job-list'), jobs, a=>a.id, agentCard, {emptyText:'No jobs registered in the readable registry.'});
+  reconcileList($('seat-list'), seats, a=>a.id, agentRow, {emptyText:'No seats registered in the readable registry.'});
+  reconcileList($('job-list'), jobs, a=>a.id, jobRow, {emptyText:'No jobs registered in the readable registry.'});
+  agentDetail();
   supervisorPanel();
   renderCoverage();
 }

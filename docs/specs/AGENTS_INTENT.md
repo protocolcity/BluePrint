@@ -91,3 +91,36 @@ Roster editing; schedule changes; provider quota meters (no live source); a per-
 ## Acceptance for the implementation order
 
 Grouped layout with the three sections; badge vocabulary and sources exactly as above; supervisor panel from `/api/supervisor`; recovery attempts shown from ledger rows; one action per row; disposable-fixture tests for every badge state and for the supervisor panel; verified on the running app during a real shift and after a real failure (both exist in the wf-252 evidence).
+
+## Compact rows and a selected-run inspector (pc-1485, 2026-09-13)
+
+Seats moved from tall repeated cards to one compact comparable row each,
+ordered by state then name (unchanged from §"Information hierarchy" above).
+A row states only what an operator scans a roster for: project, seat name
+and provider/model, badge, the current work-order title+id (a reader link,
+or "No current work"), elapsed run time against budget (a time budget,
+never a percent), the last meaningful update, and the one supported action
+from the existing badge-to-action table. Raw identity slugs, full ledger
+paths, and the cumulative recovery count move behind selecting the row.
+
+Selecting a seat's row (click or Enter/Space, `aria-pressed` on the row)
+opens one shared inspector panel beneath the seat rows with a
+source-labelled run timeline, in this fixed order:
+
+| Step | Source | Shown as |
+|---|---|---|
+| Dispatch candidate | ledger CANDIDATE rows in the last START block (open or closed) | ticket list, or "Not reported" |
+| Verified claim | WorkForce holding compared against the dispatch candidates | "Verified: holds X", "Holds X · not yet verified", or a no-longer-held explanation |
+| Observed run start | open-shift `started_at` | timestamp, or "Not reported" when no shift is open |
+| Recovery attempts | ledger START rows tagged `recovery=1` | the count (0 is a fact, not a gap) |
+| Terminal outcome | last terminal ledger row | outcome, reason, time, or "Open — no terminal row yet" |
+
+A missing phase always reads "Not reported"; nothing is inferred from
+absence. When a seat reads LAST RUN FAILED but no longer holds an order,
+the Verified claim step says so explicitly ("the failed ticket may
+already be resolved by another provider") instead of implying the
+current seat is still failing — an old failure is not automatically a
+current task failure. Jobs keep a compact schedule/report line (schedule,
+next run, badge, last report or last run) with no timeline, since a job
+never claims a work order to verify. The supervisor panel keeps its
+previously held placement and shape; this order does not revisit it.
