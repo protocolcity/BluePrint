@@ -80,15 +80,28 @@ class AssignmentFilterTests(unittest.TestCase):
         self.assertIn("if(value==='you')returnorder.assigned_you", _SRC.replace(' ', ''))
 
 
-class BlockedFilterTests(unittest.TestCase):
-    """Blocked is a secondary filter on declared blockers, not a Status
-    lifecycle word (STATES_AND_TERMS.md §5: Status holds lifecycle only)."""
-    def test_blocked_filter_matches_declared_blockers_not_a_task_status(self):
-        self.assertIn("!blockedOnly||(o.blockers&&o.blockers.length)", _SRC.replace(' ', ''))
-    def test_blocked_is_not_a_status_option(self):
-        self.assertNotIn('<option value="blocked">', _HTML)
-    def test_blocked_filter_control_exists_in_the_markup(self):
-        self.assertIn('id="blocked-filter"', _HTML)
+class GateBlockedFilterTests(unittest.TestCase):
+    """Declared blockers are a Gate value, not a checkbox or Status word
+    (STATES_AND_TERMS.md §5, pc-1493)."""
+    def test_blocked_is_a_gate_filter_value_not_a_status_option(self):
+        self.assertIn('<option value="blocked">Blocked on another order</option>', _HTML)
+        status_section = _HTML.split('id="status-filter"')[1].split('</select>')[0]
+        self.assertNotIn('value="blocked"', status_section)
+    def test_blocked_filter_control_is_removed_from_the_markup(self):
+        self.assertNotIn('id="blocked-filter"', _HTML)
+    def test_gate_filter_matches_open_blockers_via_blocked_on(self):
+        self.assertIn("if(value==='blocked')returnorder.blocked_on==='open'||order.blocked_on==='unknown'", _SRC.replace(' ', ''))
+    def test_ungated_excludes_orders_with_open_blockers(self):
+        self.assertIn("if(value==='none')return!order.gate_type&&order.blocked_on==='clear'", _SRC.replace(' ', ''))
+    def test_gate_label_surfaces_blocked_on_another_order(self):
+        self.assertIn("if(order.blocked_on==='open'||order.blocked_on==='unknown')return'Blockedonanotherorder'", _SRC.replace(' ', ''))
+    def test_unknown_blocker_note_surfaces_in_reader_text(self):
+        self.assertIn("if(order.blocked_on==='unknown'&&order.blocked_note)returnorder.blocked_note", _SRC.replace(' ', ''))
+    def test_legacy_blocked_param_maps_to_gate_blocked(self):
+        self.assertIn("query.get('blocked') === '1'", _SRC)
+        self.assertIn("gateParam = gateParam || 'blocked'", _SRC)
+    def test_legacy_status_blocked_maps_to_gate_blocked(self):
+        self.assertIn("statusParam === 'blocked'", _SRC)
 
 
 class FiveAxisFilterTests(unittest.TestCase):
@@ -100,8 +113,8 @@ class FiveAxisFilterTests(unittest.TestCase):
         self.assertIn('<option value="in_progress">Live</option>', _HTML)
         self.assertIn('<option value="in_review">Parked</option>', _HTML)
         self.assertNotIn('For You (any face)', _HTML.split('id="gate-filter"')[0].split('id="status-filter"')[1])
-    def test_gate_filter_offers_the_five_gate_values(self):
-        for value in ('none', 'human', 'timer', 'deferred', 'tracking'):
+    def test_gate_filter_offers_the_gate_values_including_blocked(self):
+        for value in ('none', 'human', 'timer', 'deferred', 'tracking', 'blocked'):
             self.assertIn(f'value="{value}"', _HTML)
     def test_attention_filter_offers_the_four_faces_and_any(self):
         for value in ('any', 'decide', 'read', 'watch', 'note'):
@@ -112,16 +125,14 @@ class FiveAxisFilterTests(unittest.TestCase):
         self.assertIn('selectedProject||o.project===selectedProject', compact)
         self.assertIn('selectedAssignment||matchesAssignment', compact)
         self.assertIn('status||o.status===status', compact)
-        self.assertIn("gate||(gate==='none'?!o.gate_type:o.gate_type===gate)", compact)
+        self.assertIn('gate||matchesGate(o,gate)', compact)
         self.assertIn("attention||(attention==='any'?o.attention:o.attention_face===attention)", compact)
-        self.assertIn('blockedOnly||(o.blockers&&o.blockers.length)', compact)
     def test_results_state_filtered_of_total(self):
         self.assertIn("`${orders.length} of ${total} matching work order", _SRC)
     def test_clear_all_resets_every_filter(self):
         fn = _SRC.split("$('clear-filters').addEventListener('click',()=>{")[1].split('});')[0]
         for control in ("$('search').value=''", "$('project-filter').value=''", "$('assignment-filter').value=''",
-                        "$('status-filter').value=''", "$('gate-filter').value=''", "$('attention-filter').value=''",
-                        "$('blocked-filter').checked=false"):
+                        "$('status-filter').value=''", "$('gate-filter').value=''", "$('attention-filter').value=''"):
             self.assertIn(control, fn.replace(' ', ''))
     def test_active_filters_render_as_dismissable_chips(self):
         self.assertIn("function renderActiveFilters()", _SRC)

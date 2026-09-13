@@ -132,13 +132,14 @@ class OperationsTests(unittest.TestCase):
         order = operations_snapshot(self.root)['orders'][0]
         self.assertEqual(order['attention_face'], 'decide')
         self.assertEqual(order['face_reason'], 'Ratify the plan')
-    def test_persona_worker_you_never_shows_as_assignment(self):
+    def test_bare_worker_you_is_assigned_to_you_not_unassigned(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute('UPDATE tasks SET labels=?, gate_type=NULL WHERE id=1', (json.dumps(['worker:you']),))
         order = operations_snapshot(self.root)['orders'][0]
-        self.assertEqual(order['owner'], 'Unassigned')
-        self.assertTrue(order['needs_routing'])
+        self.assertTrue(order['assigned_you'])
+        self.assertEqual(order['owner'], 'You')
+        self.assertFalse(order['needs_routing'])
     def test_persona_qualifier_labels_never_need_routing(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
@@ -185,13 +186,59 @@ class OperationsTests(unittest.TestCase):
             conn.execute('UPDATE tasks SET labels=? WHERE id=1', (json.dumps(['worker:you']),))
         order = operations_snapshot(self.root)['orders'][0]
         self.assertEqual(order['persona'], '')
-    def test_worker_you_with_retired_host_qualifier_still_needs_routing(self):
+    def test_worker_you_with_host_qualifier_is_assigned_to_you(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
                          ('backlog', json.dumps(['worker:you', 'you:host'])))
         order = operations_snapshot(self.root)['orders'][0]
-        self.assertTrue(order['needs_routing'])
+        self.assertTrue(order['assigned_you'])
+        self.assertEqual(order['owner'], 'You')
+        self.assertFalse(order['needs_routing'])
+    def test_worker_you_host_in_progress_with_owner_marker_reads_live_with_you(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                         ('in_progress', json.dumps(['worker:you', 'you:host'])))
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: you\nStart: 2026-09-13T10:00:00Z','you','2026-09-13T10:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['assigned_you'])
+        self.assertEqual(order['owner'], 'You')
+        self.assertFalse(order['needs_routing'])
+        self.assertEqual(order['live_with'], 'you')
+    def test_open_blocker_sets_blocked_on_and_clears_when_dependency_done(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN description TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', gate_type=NULL, description='Depends on pc-2' WHERE id=1")
+            conn.execute("UPDATE tasks SET status='backlog' WHERE id=2")
+        result = operations_snapshot(self.root)
+        order = next(o for o in result['orders'] if o['id'] == 'pc-1')
+        self.assertEqual(order['blocked_on'], 'open')
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='done' WHERE id=2")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['blocked_on'], 'clear')
+    def test_unknown_blocker_in_unavailable_store_stays_blocked(self):
+        self.seed()
+        self.seed('workforce', registered=True)
+        manifest = self.root/'workforce'/'.protocolcity'/'desk-join.json'
+        manifest.write_text(json.dumps({'slug': 'workforce', 'prefix': 'wf', 'display': 'WorkForce'}))
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN description TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', gate_type=NULL, description='Depends on wf-1' WHERE id=1")
+        (self.root/'worklane/worklane/local/data/workforce.db').write_bytes(b'not sqlite')
+        order = next(o for o in operations_snapshot(self.root)['orders'] if o['id'] == 'pc-1')
+        self.assertEqual(order['blocked_on'], 'unknown')
+        self.assertIn('dependency unknown: wf-1 (store unavailable)', order['blocked_note'])
+    def test_unknown_blocker_id_stays_blocked(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN description TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', gate_type=NULL, description='Depends on pc-999' WHERE id=1")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['blocked_on'], 'unknown')
+        self.assertEqual(order['blocked_note'], 'dependency unknown: pc-999')
     def test_unlabeled_backlog_needs_routing(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:

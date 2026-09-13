@@ -62,6 +62,41 @@ def declared_blockers(description):
     return sorted(set(_DEPENDS_RE.findall(description or '')))
 
 
+def _blocker_resolution(blocker_id, open_ids, status_by_id, unavailable_slugs, prefix_to_slug):
+    """Return open, clear, or unknown for one declared blocker id."""
+    if blocker_id in open_ids:
+        return 'open'
+    status = status_by_id.get(blocker_id)
+    if status is not None:
+        return 'clear' if status in ('done', 'canceled', 'cancelled') else 'open'
+    prefix = blocker_id.rsplit('-', 1)[0] if '-' in blocker_id else ''
+    slug = prefix_to_slug.get(prefix)
+    if slug is None or slug in unavailable_slugs:
+        return 'unknown'
+    return 'unknown'
+
+
+def blocked_on_state(blockers, open_ids, status_by_id, unavailable_slugs, prefix_to_slug):
+    """Three-valued blocker gate: open, unknown, or clear."""
+    if not blockers:
+        return 'clear', ''
+    state = 'clear'
+    notes = []
+    for blocker_id in blockers:
+        resolution = _blocker_resolution(blocker_id, open_ids, status_by_id, unavailable_slugs, prefix_to_slug)
+        if resolution == 'open':
+            state = 'open'
+        elif resolution == 'unknown' and state != 'open':
+            state = 'unknown'
+            prefix = blocker_id.rsplit('-', 1)[0] if '-' in blocker_id else ''
+            slug = prefix_to_slug.get(prefix)
+            if slug in unavailable_slugs:
+                notes.append(f'dependency unknown: {blocker_id} (store unavailable)')
+            else:
+                notes.append(f'dependency unknown: {blocker_id}')
+    return state, '; '.join(notes)
+
+
 def _split_row(line):
     """Parse one ledger row, never raising on a truncated quoted field."""
     if not line.strip():
@@ -1108,6 +1143,8 @@ def operations_snapshot(binder):
         paths = sorted(data.glob('*.db'))
     result['excluded_stores'] = [p.name for p in paths if p.stem not in registry]
     paths = [p for p in paths if p.stem in registry]
+    status_by_id = {}
+    store_available = {}
     for path in paths:
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
         summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'claimed': 0, 'running': 0, 'state': 'available'}
@@ -1121,6 +1158,10 @@ def operations_snapshot(binder):
                 summary['open'] = count
                 result['truncated'] |= count > 2000
                 owner_by_task, last_note_by_task = task_comment_index(conn)
+                prefix = project.get('prefix') or ''
+                for task_row in conn.execute('SELECT id, ext_id, status FROM tasks').fetchall():
+                    task_id = task_row['ext_id'] or (f"{prefix}-{task_row['id']}" if prefix else str(task_row['id']))
+                    status_by_id[task_id] = task_row['status']
                 for row in rows[:2000]:
                     item = dict(row)
                     try:
@@ -1130,12 +1171,14 @@ def operations_snapshot(binder):
                     labels = labels if isinstance(labels, list) else []
                     workers = [x[7:] for x in labels if isinstance(x, str) and x.startswith('worker:') and x[7:]]
                     routable_workers = [w for w in workers if w != 'you']
-                    you_qualifier = any(label in ('you:todo', 'you:remind', 'you:note') for label in labels if isinstance(label, str))
-                    # A human gate with nobody routed to it is a decision that
-                    # belongs to You; one with a routable worker stays that
-                    # worker's (STATES_AND_TERMS.md §5: agent-owned gates stay
-                    # assigned to the agent even while they appear in For You).
-                    assigned_you = you_qualifier or (item.get('gate_type') == 'human' and not routable_workers)
+                    has_worker_you = 'you' in workers
+                    # worker:you (with or without you:host or persona qualifiers)
+                    # is Assignment = You unless a registered seat is also
+                    # routed. A human gate with nobody routed is also You
+                    # (STATES_AND_TERMS.md §5).
+                    assigned_you = (has_worker_you and not routable_workers) or (
+                        item.get('gate_type') == 'human' and not routable_workers
+                    )
                     gate_expired = False
                     if item.get('gate_type') == 'timer' and item.get('gate_until'):
                         from suite.api.calendar import parse_gate_until
@@ -1167,7 +1210,9 @@ def operations_snapshot(binder):
                         'gate_expired': gate_expired,
                         'gate_note': item.get('gate_note') or '',
                         'workers': workers,
-                        'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not you_qualifier,
+                        'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not has_worker_you,
+                        'blocked_on': 'clear',
+                        'blocked_note': '',
                         'persona': persona_text(item, labels),
                         'assigned_you': assigned_you,
                         'owner': 'You' if assigned_you else (', '.join(routable_workers) or 'Unassigned'),
@@ -1183,19 +1228,27 @@ def operations_snapshot(binder):
                     # the same as a fresh agent shift. 'running' below is the
                     # separate, agent-evidence-only signal (pc-1483).
                     summary['claimed'] += int(status == 'in_progress' and marker is not None)
+            store_available[path.stem] = True
         except (OSError, sqlite3.Error):
             summary['state'] = 'unavailable'
+            store_available[path.stem] = False
         result['projects'].append(summary)
-    open_ids = {o['id'] for o in result['orders']}
-    for order in result['orders']:
-        seat = next((w for w in order['workers'] if w != 'you'), None)
-        blocked = any(b in open_ids for b in order['blockers'])
-        if seat and order['status'] == 'backlog' and not order['gate_type'] and not blocked:
-            order['ready_for'] = seat
     found = {p.stem for p in paths}
     for slug, project in registry.items():
         if slug not in found:
             result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'claimed': 0, 'running': 0, 'state': 'unavailable'})
+            store_available[slug] = False
+    unavailable_slugs = {slug for slug, ok in store_available.items() if not ok}
+    prefix_to_slug = {proj['prefix']: slug for slug, proj in registry.items() if proj.get('prefix')}
+    open_ids = {o['id'] for o in result['orders']}
+    for order in result['orders']:
+        seat = next((w for w in order['workers'] if w != 'you'), None)
+        blocked_state, blocked_note = blocked_on_state(
+            order['blockers'], open_ids, status_by_id, unavailable_slugs, prefix_to_slug)
+        order['blocked_on'] = blocked_state
+        order['blocked_note'] = blocked_note
+        if seat and order['status'] == 'backlog' and not order['gate_type'] and blocked_state == 'clear':
+            order['ready_for'] = seat
     failed = [p['name'] for p in result['projects'] if p['state'] != 'available']
     readable = sum(p['state'] == 'available' for p in result['projects'])
     if not paths:
