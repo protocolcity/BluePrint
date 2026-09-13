@@ -25,25 +25,60 @@ STATE_ORDER = {'working': 0, 'last_run_failed': 1, 'stale_shift': 2, 'idle': 3,
                'unknown': 4, 'not_configured': 5, 'off': 6}
 
 
-def last_run(daemon_path, root, identity):
+_LEDGER_TAIL_BYTES = 16384
+
+
+def _split_row(line):
+    """Parse one ledger row, never raising on a truncated quoted field."""
+    if not line.strip():
+        return []
+    try:
+        return shlex.split(line)
+    except ValueError:
+        return []
+
+
+def _ledger_tail_lines(daemon_path, root, identity):
+    """Read this identity's ledger tail, dropping a possibly-truncated first line.
+
+    A byte-offset seek can land mid-line, so the first decoded line may be a
+    partial row (e.g. cut inside a quoted ``title=`` field). When the seek did
+    not start at offset 0 the file is longer than the tail window, so that
+    first line is unreliable and is dropped rather than parsed.
+    """
     if daemon_path is None or not identity or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in identity):
         return None
     path = daemon_path.resolve().parent / 'ledger' / (identity + '.log')
-    if not path.resolve().is_relative_to(root):
+    try:
+        if not path.resolve().is_relative_to(root):
+            return None
+    except OSError:
         return None
     try:
         with path.open('rb') as stream:
             stream.seek(0, 2)
-            stream.seek(max(0, stream.tell() - 16384))
-            lines = stream.read().decode('utf-8', errors='replace').splitlines()
-        for line in reversed(lines):
-            parts = shlex.split(line)
-            if len(parts) < 2 or parts[1] not in ('STOP', 'ERROR', 'DONE', 'SKIP'):
-                continue
-            fields = dict(item.split('=', 1) for item in parts[2:] if '=' in item)
-            return {'at': parts[0], 'outcome': parts[1].lower(), 'reason': fields.get('reason') or ('Process exited; verify work outcome.' if parts[1] == 'DONE' else 'No reason reported.')}
-    except (OSError, ValueError):
-        pass
+            size = stream.tell()
+            offset = max(0, size - _LEDGER_TAIL_BYTES)
+            stream.seek(offset)
+            data = stream.read()
+    except OSError:
+        return None
+    lines = data.decode('utf-8', errors='replace').splitlines()
+    if offset > 0 and lines:
+        lines = lines[1:]
+    return lines
+
+
+def last_run(daemon_path, root, identity):
+    lines = _ledger_tail_lines(daemon_path, root, identity)
+    if lines is None:
+        return None
+    for line in reversed(lines):
+        parts = _split_row(line)
+        if len(parts) < 2 or parts[1] not in ('STOP', 'ERROR', 'DONE', 'SKIP'):
+            continue
+        fields = dict(item.split('=', 1) for item in parts[2:] if '=' in item)
+        return {'at': parts[0], 'outcome': parts[1].lower(), 'reason': fields.get('reason') or ('Process exited; verify work outcome.' if parts[1] == 'DONE' else 'No reason reported.')}
     return None
 
 
@@ -54,24 +89,12 @@ def last_shift_candidates(daemon_path, root, identity):
     this also answers for a shift that already closed — the candidates a
     just-failed run held are still the ones a "verified" mark checks.
     """
-    if daemon_path is None or not identity or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in identity):
-        return []
-    path = daemon_path.resolve().parent / 'ledger' / (identity + '.log')
-    try:
-        if not path.resolve().is_relative_to(root):
-            return []
-    except OSError:
-        return []
-    try:
-        with path.open('rb') as stream:
-            stream.seek(0, 2)
-            stream.seek(max(0, stream.tell() - 16384))
-            lines = stream.read().decode('utf-8', errors='replace').splitlines()
-    except OSError:
+    lines = _ledger_tail_lines(daemon_path, root, identity)
+    if lines is None:
         return []
     start_index = None
     for index in range(len(lines) - 1, -1, -1):
-        parts = shlex.split(lines[index]) if lines[index].strip() else []
+        parts = _split_row(lines[index])
         if len(parts) >= 2 and parts[1] == 'START':
             start_index = index
             break
@@ -79,7 +102,7 @@ def last_shift_candidates(daemon_path, root, identity):
         return []
     candidates = []
     for line in lines[start_index + 1:]:
-        parts = shlex.split(line) if line.strip() else []
+        parts = _split_row(line)
         if len(parts) < 2 or parts[1] not in ('CANDIDATE',):
             continue
         fields = dict(item.split('=', 1) for item in parts[2:] if '=' in item)
@@ -91,24 +114,12 @@ def last_shift_candidates(daemon_path, root, identity):
 
 def recovery_attempts(daemon_path, root, identity):
     """Count START rows tagged recovery=1 in this identity's ledger tail."""
-    if daemon_path is None or not identity or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in identity):
-        return 0
-    path = daemon_path.resolve().parent / 'ledger' / (identity + '.log')
-    try:
-        if not path.resolve().is_relative_to(root):
-            return 0
-    except OSError:
-        return 0
-    try:
-        with path.open('rb') as stream:
-            stream.seek(0, 2)
-            stream.seek(max(0, stream.tell() - 16384))
-            lines = stream.read().decode('utf-8', errors='replace').splitlines()
-    except OSError:
+    lines = _ledger_tail_lines(daemon_path, root, identity)
+    if lines is None:
         return 0
     count = 0
     for line in lines:
-        parts = shlex.split(line) if line.strip() else []
+        parts = _split_row(line)
         if len(parts) < 2 or parts[1] != 'START':
             continue
         fields = dict(item.split('=', 1) for item in parts[2:] if '=' in item)
