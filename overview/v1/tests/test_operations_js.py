@@ -845,7 +845,7 @@ class SeatParkedClaimRowTests(unittest.TestCase):
         self.assertIn('currentShiftParkedIds(agent)', _SRC)
 
 class TimelineClearResetsPeriodTests(unittest.TestCase):
-    """pc-1488 installed check on .58: Clear reset the period select but left
+    """pc-1488 browser check on .58: Clear reset the period select but left
     ?period= in the URL because clearTimelineFilters never cleared the
     client-side timelinePeriod that timelineFilterParams() serialises."""
 
