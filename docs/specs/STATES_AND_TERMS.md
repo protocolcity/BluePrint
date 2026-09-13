@@ -41,6 +41,8 @@ Rule kept from PROTOCOL 7a: finished agent work parked in_review is a handoff to
 | Parked (held) | Owner marker and status in_review | **Parked by** identity, since time |
 | Verified holder | WorkForce confirms the WorkLane owner matches the seat | small "verified" mark on Agents |
 
+**Decision D10 (2026-09-13, user question on the Work filter).** Assignment values come from the roster, not from whatever labels happen to be on open orders: **You**, each hired seat (lanes only, listed even with zero orders) and **Unassigned**. "Needs routing" is not an assignment; it is a triage chip on a row, computed as ungated and unassigned, so a deferred or tracking order never needs routing while it is parked (today the label sits on 84 parked orders and duplicates "no worker assigned"). A human-gated order is You's by definition: it reads Assigned to You and enters For You even when no worker label was stamped. Assignment answers "who is it routed to"; For You answers "does it want a person now"; an order can be both Assigned to You and in For You, and that is two facts, not an overlap. The Status filter's "Needs you" entry becomes "For You (any face)" with the four faces beneath it; the Assignment entry reads "Assigned to You".
+
 You seats are assignments too: `worker:you` plus `you:host` (You implementing on this machine), `you:todo` (an inbox item for You), `you:remind` (a dated reminder), `you:note` (a personal note). `gate:founder` marks a publication or money gate that only You can pass. An assignment is routing intent; only a claim proves anyone is working. Work rows today print the assignment as "owner"; the record renames it **Assigned to** and adds **Live with / Parked by** from the Owner marker.
 
 ### 1.4 Attention: For You and its four faces
