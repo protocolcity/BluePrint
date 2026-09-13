@@ -1731,6 +1731,26 @@ def main(argv: Optional[List[str]] = None) -> int:
             "under the workspace (pc-571 / GH#6; same as setup --adopt-existing)"
         ),
     )
+    p_found.add_argument(
+        "--hire",
+        action="store_true",
+        help=(
+            "run the printed standard-seat-set `workforce hire` commands for "
+            "--project (AGENT_ADOPTION D12) — default is print only"
+        ),
+    )
+    p_found.add_argument(
+        "--held",
+        action="append",
+        default=[],
+        metavar="PROVIDER",
+        help="mark PROVIDER's standard-seat hire command --held (repeatable)",
+    )
+    p_found.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the plan (law + standard-seat commands) — write nothing",
+    )
 
     p_adopt = sub.add_parser(
         "adopt",
@@ -1784,6 +1804,27 @@ def main(argv: Optional[List[str]] = None) -> int:
             "plant unarmed workers/demo-worker CONTRACT+prompt stubs "
             "(default: no stubs — work-order-only projects stay clean; pc-489)"
         ),
+    )
+    p_adopt.add_argument(
+        "--hire",
+        action="store_true",
+        help=(
+            "run the printed standard-seat-set `workforce hire` commands "
+            "(AGENT_ADOPTION D12) — default is print only, adoption never "
+            "registers agents silently"
+        ),
+    )
+    p_adopt.add_argument(
+        "--held",
+        action="append",
+        default=[],
+        metavar="PROVIDER",
+        help="mark PROVIDER's standard-seat hire command --held (repeatable)",
+    )
+    p_adopt.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="explicit no-op — printing the standard-seat commands without --hire is the default",
     )
 
     p_doctor = sub.add_parser(
@@ -2431,27 +2472,58 @@ def main(argv: Optional[List[str]] = None) -> int:
                 file=sys.stderr,
             )
             return 2
+        dry_run = bool(getattr(args, "dry_run", False))
         try:
-            # Adopt = doctor --neighborhood --fix (same plant path)
-            result = fix(
-                Path(args.city),
-                neighborhood=args.neighborhood,
-                force=args.force,
-                with_desk=not args.no_desk,
-                desk_url=args.desk,
-                with_demo_worker=with_demo,
-                allow_live_desk=bool(getattr(args, "live_desk", False)),
-            )
+            if dry_run:
+                # Dry run previews adopt_neighborhood directly — never routes
+                # through doctor.fix()'s city-wide/neighborhood side plants.
+                from protocolcity.adopt import adopt_neighborhood
+
+                adopt_payload = adopt_neighborhood(
+                    Path(args.city),
+                    args.neighborhood,
+                    force=args.force,
+                    with_desk=not args.no_desk,
+                    desk_url=args.desk,
+                    with_demo_worker=with_demo,
+                    allow_live_desk=bool(getattr(args, "live_desk", False)),
+                    plant_seats=True,
+                    hire_seats=False,
+                    held_providers=getattr(args, "held", None),
+                    dry_run=True,
+                )
+                result = {"ok": adopt_payload.get("ok"), "adopt": adopt_payload}
+            else:
+                # Adopt = doctor --neighborhood --fix (same plant path)
+                result = fix(
+                    Path(args.city),
+                    neighborhood=args.neighborhood,
+                    force=args.force,
+                    with_desk=not args.no_desk,
+                    desk_url=args.desk,
+                    with_demo_worker=with_demo,
+                    allow_live_desk=bool(getattr(args, "live_desk", False)),
+                    plant_seats=True,
+                    hire_seats=bool(getattr(args, "hire", False)),
+                    held_providers=getattr(args, "held", None),
+                )
+                adopt_payload = result.get("adopt") if isinstance(result.get("adopt"), dict) else None
         except Exception as e:
             print("error: adopt failed: %s" % e, file=sys.stderr)
             return 2
-        adopt_payload = result.get("adopt") if isinstance(result.get("adopt"), dict) else None
         print(json.dumps(adopt_payload or result, indent=2, default=str))
         # pc-513: always remind citizens of manual city-law rows (never auto-fixed)
-        _checklist_from_adopt_payload(
-            adopt_payload,
-            fallback_name=str(args.neighborhood or ""),
-        )
+        if not dry_run:
+            _checklist_from_adopt_payload(
+                adopt_payload,
+                fallback_name=str(args.neighborhood or ""),
+            )
+        seats = (adopt_payload or {}).get("seats") if isinstance(adopt_payload, dict) else None
+        if isinstance(seats, dict) and seats.get("commands"):
+            verb = "ran" if getattr(args, "hire", False) and not dry_run else "standard seat set —"
+            print("\n%s:" % verb)
+            for row in seats["commands"]:
+                print("  %s" % row["command"])
         return 0 if result.get("ok") else 1
 
     if args.cmd == "doctor":
@@ -2551,6 +2623,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
 
     if args.cmd == "found":
+        dry_run = bool(getattr(args, "dry_run", False))
         try:
             receipt = found(
                 Path(args.path),
@@ -2561,6 +2634,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 desk_url=args.desk,
                 sample_ticket=not args.no_ticket,
                 map_port=args.port,
+                plant_seats=True,
+                hire_seats=bool(getattr(args, "hire", False)) and not dry_run,
+                held_providers=getattr(args, "held", None),
+                dry_run=dry_run,
             )
         except FileExistsError as e:
             print("error: %s" % e, file=sys.stderr)
@@ -2568,12 +2645,25 @@ def main(argv: Optional[List[str]] = None) -> int:
         except FileNotFoundError as e:
             print("error: %s" % e, file=sys.stderr)
             return 2
+        seats = receipt.get("seats") if isinstance(receipt, dict) else None
+        if dry_run:
+            print(json.dumps(receipt, indent=2, default=str))
+            if isinstance(seats, dict) and seats.get("commands"):
+                print("\nstandard seat set —:")
+                for row in seats["commands"]:
+                    print("  %s" % row["command"])
+            return 0 if receipt.get("ok") else 1
         root = Path(str(receipt["root"]))
         register_city(
             root,
             name=str(receipt.get("city_name") or ""),
         )
         print_receipt(receipt)
+        if isinstance(seats, dict) and seats.get("commands"):
+            verb = "ran" if getattr(args, "hire", False) else "standard seat set —"
+            print("\n%s:" % verb)
+            for row in seats["commands"]:
+                print("  %s" % row["command"])
         # pc-571 / GH#6: existing top-level folders stay unmanaged unless
         # --adopt-existing, or the user accepts the TTY offer (same as setup).
         if getattr(args, "adopt_existing", False):
