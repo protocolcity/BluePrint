@@ -439,9 +439,18 @@ def retire_legacy_agents(
         }
         if found and not dry_run:
             if is_macos():
-                entry["bootout_rc"] = launchctl(
-                    "bootout", "%s/%s" % (domain, label)
-                ).returncode
+                bootout_rc = launchctl("bootout", "%s/%s" % (domain, label)).returncode
+                entry["bootout_rc"] = bootout_rc
+                if loaded and bootout_rc != 0:
+                    # Agent is still loaded and launchd refused to unload it —
+                    # moving the plist now would strand a running legacy
+                    # process launchd still owns. Stop before touching disk.
+                    raise RuntimeError(
+                        "Legacy agent %s is loaded but bootout failed (rc=%d); "
+                        "not moving its plist. Resolve manually (for example "
+                        "`launchctl bootout %s/%s`) and re-run "
+                        "`blueprint upgrade`." % (label, bootout_rc, domain, label)
+                    )
             if plist_present:
                 if retire_dir is None:
                     retire_dir = (
