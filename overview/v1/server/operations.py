@@ -1110,7 +1110,7 @@ def operations_snapshot(binder):
     paths = [p for p in paths if p.stem in registry]
     for path in paths:
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
-        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'working': 0, 'state': 'available'}
+        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'claimed': 0, 'running': 0, 'state': 'available'}
         try:
             if not path.resolve().is_relative_to(root):
                 raise OSError('external store')
@@ -1147,7 +1147,12 @@ def operations_snapshot(binder):
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
                     from suite.api.calendar import events_from_task
                     for event in events_from_task({**item, 'id':order_id, 'labels':labels, 'product':path.stem}):
-                        result['work_dates'].append({**event, 'dtstart':event['dtstart'].isoformat(), 'attention':attention})
+                        result['work_dates'].append({
+                            **event,
+                            'dtstart': event['dtstart'].isoformat(),
+                            'attention': attention_face == 'decide',
+                            'attention_face': attention_face,
+                        })
                     status = item.get('status')
                     marker = owner_by_task.get(item['id'])
                     parent = next((label[7:] for label in labels if isinstance(label, str) and label.startswith('parent:') and label[7:]), '')
@@ -1173,8 +1178,11 @@ def operations_snapshot(binder):
                         'parent': parent, 'blockers': declared_blockers(item.get('description')),
                         'ready_for': None})
                     summary['attention'] += int(attention)
-                    # Same fact Overview's Live metric uses: in_progress with a claim.
-                    summary['working'] += int(status == 'in_progress' and marker is not None)
+                    # A claim (in_progress with a signed Owner marker) is not
+                    # execution evidence — a days-old human claim counts here
+                    # the same as a fresh agent shift. 'running' below is the
+                    # separate, agent-evidence-only signal (pc-1483).
+                    summary['claimed'] += int(status == 'in_progress' and marker is not None)
         except (OSError, sqlite3.Error):
             summary['state'] = 'unavailable'
         result['projects'].append(summary)
@@ -1187,7 +1195,7 @@ def operations_snapshot(binder):
     found = {p.stem for p in paths}
     for slug, project in registry.items():
         if slug not in found:
-            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'working': 0, 'state': 'unavailable'})
+            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'claimed': 0, 'running': 0, 'state': 'unavailable'})
     failed = [p['name'] for p in result['projects'] if p['state'] != 'available']
     readable = sum(p['state'] == 'available' for p in result['projects'])
     if not paths:
@@ -1272,7 +1280,8 @@ def operations_snapshot(binder):
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
             group = 'supervisor' if identity == 'bp-supervisor' else ('seat' if kind == 'lane' else 'job')
             held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
-            verified = bool(held and held['id'] in last_shift_candidates(daemon_path, root, identity))
+            last_candidates = last_shift_candidates(daemon_path, root, identity)
+            verified = bool(held and held['id'] in last_candidates)
             reservation = bool(held and state == 'last_run_failed' and preserved_reservation(root, command, held['id']))
             project_slug = _row_project_slug(row)
             project_name = registry.get(project_slug, {}).get('name') if project_slug else None
@@ -1298,14 +1307,27 @@ def operations_snapshot(binder):
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
                 'model': _seat_model_text(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'project': project_slug, 'project_name': project_name,
-                'held': {'id': held['id'], 'project': held['project_name']} if held else None,
-                'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
+                'held': {'id': held['id'], 'project': held['project'], 'project_name': held['project_name'], 'title': held['title']} if held else None,
+                'held_verified': verified, 'last_candidates': last_candidates,
+                'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}
             if group == 'supervisor':
                 result['supervisor'] = {**agent_row, 'passes': passes_payload}
             else:
                 result['agents'].append(agent_row)
     result['agents'].sort(key=lambda a: (STATE_ORDER.get(a['state'], 9), a['name']))
+    # 'running' is agent-evidence-only (fresh heartbeat plus an open shift or
+    # in-flight ticket) — never inflated by a WorkLane claim's age, unlike
+    # 'claimed' above (pc-1483: "a days-old human claim" must not read as a
+    # running agent). It is also seats-only, the same rule overview()
+    # applies on the Overview metric (STATES_AND_TERMS §2): a working job
+    # (a scheduled duty that never claims work) shows as running on Agents
+    # but must not count toward a project's execution (review finding,
+    # pc-1483 recovery 2 — a working job made Map disagree with Overview).
+    project_index = {p['id']: p for p in result['projects']}
+    for agent in result['agents']:
+        if agent['group'] == 'seat' and agent['state'] == 'working' and agent['project'] in project_index:
+            project_index[agent['project']]['running'] += 1
     placeholders = [a['name'] for a in result['agents'] if not a['configured']]
     if placeholders:
         result['sources'].append({

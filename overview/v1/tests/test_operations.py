@@ -448,15 +448,69 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(dates[0]['task_id'],'pc-1')
         self.assertEqual(dates[0]['product'],'product')
         self.assertEqual(dates[0]['dtstart'],'2026-09-20')
-    def test_project_working_count_is_live_claim_not_status_alone(self):
+    def test_project_claimed_count_is_live_claim_not_status_alone(self):
+        # 'claimed' is a WorkLane fact (in_progress + a signed Owner marker) —
+        # it must never be labelled "working"; a days-old human claim counts
+        # here exactly like a fresh agent shift, which is why Overview and
+        # Map keep it separate from 'running' (pc-1483).
         self.seed()
-        self.assertEqual(operations_snapshot(self.root)['projects'][0]['working'],0)
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['claimed'],0)
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-grok-implementer\nStart: 2026-09-13T09:00:00Z','bp-grok-implementer','2026-09-13T09:00:00Z')")
-        self.assertEqual(operations_snapshot(self.root)['projects'][0]['working'],1)
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['claimed'],1)
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute("UPDATE tasks SET status='backlog' WHERE id=1")
-        self.assertEqual(operations_snapshot(self.root)['projects'][0]['working'],0)
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['claimed'],0)
+    def test_project_running_count_is_agent_evidence_not_a_worklane_claim(self):
+        # A days-old human claim (Owner marker, no daemon evidence) must not
+        # inflate 'running' the way it inflates 'claimed' above.
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: you\nStart: 2026-09-01T09:00:00Z','you','2026-09-01T09:00:00Z')")
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['claimed'],1)
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['running'],0)
+        runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
+        (runtime/'roster.json').write_text(json.dumps({'workers':{'agent':{
+            'display':'Agent','command':['example-agent'],'identity':'agent','kind':'lane',
+            'queue_url':'https://example.invalid/queue?product=product'}}}))
+        (runtime/'daemon.json').write_text(json.dumps({'last_tick':datetime.now(timezone.utc).isoformat(),'in_flight':['agent']}))
+        result=operations_snapshot(self.root)
+        self.assertEqual(result['agents'][0]['state'],'working')
+        self.assertEqual(result['projects'][0]['running'],1)
+    def test_project_running_count_is_seats_only_a_working_job_does_not_count(self):
+        # Review finding (pc-1483 recovery 2): overview() and the project
+        # rollup here must apply one shared Running rule (seats only,
+        # STATES_AND_TERMS §2); a working job (kind='job') shows 'working'
+        # on Agents but must not move project.running.
+        self.seed()
+        runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
+        (runtime/'roster.json').write_text(json.dumps({'workers':{
+            'agent':{'display':'Agent','command':['example-agent'],'identity':'agent','kind':'lane',
+                     'queue_url':'https://example.invalid/queue?product=product'},
+            'health-patrol':{'display':'Health patrol','command':['example-job'],'identity':'health-patrol','kind':'job',
+                     'queue_url':'https://example.invalid/queue?product=product'}}}))
+        (runtime/'daemon.json').write_text(json.dumps({'last_tick':datetime.now(timezone.utc).isoformat(),'in_flight':['health-patrol']}))
+        result=operations_snapshot(self.root)
+        job=next(a for a in result['agents'] if a['id']=='health-patrol')
+        self.assertEqual(job['group'],'job')
+        self.assertEqual(job['state'],'working')
+        self.assertEqual(result['projects'][0]['running'],0)
+        seat=next(a for a in result['agents'] if a['id']=='agent')
+        self.assertEqual(seat['group'],'seat')
+        self.assertEqual(seat['state'],'idle')
+    def test_date_only_gate_until_projects_as_all_day(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_until=? WHERE id=1',
+                         (json.dumps(['worker:agent']),'timer','2026-09-13'))
+        dates=operations_snapshot(self.root)['work_dates']
+        self.assertEqual(len(dates),1)
+        self.assertEqual(dates[0]['kind'],'timer')
+        self.assertTrue(dates[0]['all_day'])
+        self.assertEqual(dates[0]['dtstart'],'2026-09-13')
+        self.assertEqual(dates[0]['source'],'gate_until')
+
     def test_due_and_hold_until_remain_two_work_dates(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
@@ -466,6 +520,33 @@ class OperationsTests(unittest.TestCase):
         dates=operations_snapshot(self.root)['work_dates']
         self.assertEqual(sorted(d['kind'] for d in dates),['deadline','timer'])
         self.assertEqual({d['task_id'] for d in dates},{'pc-1'})
+        by_kind={d['kind']:d for d in dates}
+        self.assertEqual(by_kind['deadline']['source'],'deadline:2026-09-20')
+        self.assertEqual(by_kind['timer']['source'],'gate_until')
+
+    def test_human_gate_note_date_projects_as_mentioned_not_due(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_note=? WHERE id=1',
+                         (json.dumps(['worker:agent']),'human','Founder ratification (2026-09-13): decide the leftover stack.'))
+        dates=operations_snapshot(self.root)['work_dates']
+        self.assertEqual(len(dates),1)
+        self.assertEqual(dates[0]['kind'],'mentioned')
+        self.assertEqual(dates[0]['source'],'gate_note')
+        self.assertEqual(dates[0]['dtstart'],'2026-09-13')
+        self.assertTrue(dates[0]['attention'])
+        self.assertEqual(dates[0]['attention_face'],'decide')
+
+    def test_watch_timer_does_not_mark_calendar_needs_you(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_until=?, gate_note=? WHERE id=1',
+                         (json.dumps(['worker:agent']),'timer','2026-10-12T14:00:00+00:00','Held until review'))
+        dates=operations_snapshot(self.root)['work_dates']
+        self.assertEqual(dates[0]['kind'],'timer')
+        self.assertFalse(dates[0]['attention'])
+        self.assertEqual(dates[0]['attention_face'],'watch')
     def test_engine_receipts_missing_are_unavailable(self):
         with patch('server.operations.build_opener') as build_opener:
             result=operations_snapshot(self.root)
