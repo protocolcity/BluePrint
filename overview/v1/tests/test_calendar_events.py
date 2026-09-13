@@ -140,6 +140,27 @@ class CalendarExportTests(unittest.TestCase):
         self.assertNotIn('CATEGORIES:deadline', feed)
         self.assertIn('X-BLUEPRINT-SOURCE:gate_note', feed)
 
+    def test_gate_note_uid_keeps_the_pre_change_deadline_form(self):
+        events = events_from_task(_task(gate_type='human', gate_note='Decide by 2026-09-13'))
+        self.assertEqual(events[0]['kind'], 'mentioned')
+        self.assertEqual(events[0]['source'], 'gate_note')
+        self.assertEqual(events[0]['uid'], 'pc-1-deadline-2026-09-13@blueprint.calendar')
+        feed = render_vevent(events[0], dtstamp=datetime(2026, 9, 13, tzinfo=timezone.utc))
+        self.assertIn('UID:pc-1-deadline-2026-09-13@blueprint.calendar', feed)
+        self.assertNotIn('UID:pc-1-mentioned-2026-09-13@blueprint.calendar', feed)
+        self.assertIn('CATEGORIES:mentioned', feed)
+
+    def test_date_only_gate_until_is_all_day_value_date(self):
+        events = events_from_task(_task(gate_type='timer', gate_until='2026-09-13', gate_note='Hold through the day'))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]['kind'], 'timer')
+        self.assertTrue(events[0]['all_day'])
+        self.assertEqual(events[0]['dtstart'], date(2026, 9, 13))
+        text = render_vevent(events[0], dtstamp=datetime(2026, 9, 13, tzinfo=timezone.utc))
+        self.assertIn('DTSTART;VALUE=DATE:20260913', text)
+        self.assertIn('DTEND;VALUE=DATE:20260914', text)
+        self.assertNotIn('DTSTART:20260913T000000Z', text)
+
 
 if __name__ == '__main__':
     unittest.main()

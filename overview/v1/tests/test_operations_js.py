@@ -392,6 +392,13 @@ class CalendarRowTests(unittest.TestCase):
         self.assertIn("id=\"calendar-prev-week\"", _HTML)
         self.assertIn("id=\"calendar-today-btn\"", _HTML)
 
+    def test_agenda_group_buckets_per_clock_so_overdue_beats_a_later_reminder(self):
+        fn = _SRC.split('function agendaGroup(row, origin)')[1].split('function ')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('days.some(day=>day===origin)', compact)
+        self.assertIn('days.some(day=>day<origin)', compact)
+        self.assertNotIn('days.some(day=>day>origin)', compact)
+
     def test_needs_you_on_calendar_is_decide_only(self):
         self.assertIn("event.attention_face==='decide'", _SRC)
         self.assertIn("decide?'Needs you'", _SRC)

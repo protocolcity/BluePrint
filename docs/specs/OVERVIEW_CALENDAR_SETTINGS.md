@@ -40,7 +40,9 @@ Supersedes the V1 week-or-day list as the primary Calendar law. The operations C
 
 Default view centres **Today** and **Next**. Past and overdue items are counted in a collapsed group; they are not the first paint. Optional week navigation shifts the selected day by seven days and keeps that day (and project) in the URL so the work-order reader can return here.
 
-Timed values display in the browser timezone. All-day dates stay on the calendar day they were recorded; they are not shifted by UTC midnight.
+Agenda buckets per clock, not by the latest clock on the row: any clock on the selected day → Today; else any clock before that day → Past and overdue; else Next. An overdue due with a later reminder is Past, not Next.
+
+Timed values display in the browser timezone. All-day dates stay on the calendar day they were recorded; they are not shifted by UTC midnight. A date-only `gate_until` is an all-day hold and remains active through the end of that local calendar day.
 
 ### Clocks and provenance
 
@@ -56,7 +58,7 @@ Three durable WorkLane clocks plus one narrative label. Every displayed date nam
 
 Ratification notes that happen to contain today's ISO date, and report titles that contain a historical date, are not deadlines. Needs you is the Decide face from attention policy; a date alone never paints it.
 
-ICS keeps one VEVENT per clock, with all-day `VALUE=DATE`, timed values as UTC `Z`, `CATEGORIES` equal to the clock kind (`deadline` · `reminder` · `timer` · `mentioned`), and `X-BLUEPRINT-SOURCE` equal to the source field.
+ICS keeps one VEVENT per clock, with all-day `VALUE=DATE`, timed values as UTC `Z`, `CATEGORIES` equal to the clock kind (`deadline` · `reminder` · `timer` · `mentioned`), and `X-BLUEPRINT-SOURCE` equal to the source field. A mentioned date from `gate_note` keeps the pre-change UID (`…-deadline-YYYY-MM-DD@blueprint.calendar`) so subscribers update the existing VEVENT; kind and CATEGORIES may change, the UID may not.
 
 ### Jobs and local events
 
