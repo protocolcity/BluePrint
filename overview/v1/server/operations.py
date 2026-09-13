@@ -1010,6 +1010,9 @@ def operations_snapshot(binder):
         paths = sorted(data.glob('*.db'))
     result['excluded_stores'] = [p.name for p in paths if p.stem not in registry]
     paths = [p for p in paths if p.stem in registry]
+    roster = read_json(resolve_roster_path(root), root)
+    registered_seats = {identity for identity, row in (roster or {}).get('workers', {}).items()
+                         if isinstance(row, dict) and (row.get('kind') or 'agent') == 'lane'}
     status_by_id = {}
     store_available = {}
     for path in paths:
@@ -1051,7 +1054,11 @@ def operations_snapshot(binder):
                         from suite.api.calendar import parse_gate_until
                         due = parse_gate_until(item['gate_until'])
                         gate_expired = due is not None and due <= now
-                    from .attention_view import face, face_reason, persona_text
+                    marker = owner_by_task.get(item['id'])
+                    status = item.get('status')
+                    item['parked_by_seat'] = bool(
+                        status == 'in_review' and marker and marker['identity'] in registered_seats)
+                    from .attention_view import face, face_reason, kind_of, persona_text
                     attention_face = face(item, labels, now)
                     attention = bool(attention_face)
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
@@ -1063,8 +1070,6 @@ def operations_snapshot(binder):
                             'attention': attention_face == 'decide',
                             'attention_face': attention_face,
                         })
-                    status = item.get('status')
-                    marker = owner_by_task.get(item['id'])
                     parent = next((label[7:] for label in labels if isinstance(label, str) and label.startswith('parent:') and label[7:]), '')
                     result['orders'].append({'id': order_id, 'project': path.stem, 'project_name': project['name'],
                         'title': item.get('title') or order_id, 'status': status,
@@ -1078,6 +1083,7 @@ def operations_snapshot(binder):
                         'gate_note': item.get('gate_note') or '',
                         'workers': workers,
                         'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not has_worker_you,
+                        'kind': kind_of(item, labels),
                         'blocked_on': 'clear',
                         'blocked_note': '',
                         'persona': persona_text(item, labels),
@@ -1119,7 +1125,6 @@ def operations_snapshot(binder):
     failed = [p['name'] for p in result['projects'] if p['state'] != 'available']
     result['sources'].append({'name': 'WorkLane', 'state': 'partial' if failed else ('available' if paths else 'unavailable'),
                              'detail': f"{sum(p['state'] == 'available' for p in result['projects'])} project stores readable" + ('. Unavailable: ' + ', '.join(failed) if failed else '')})
-    roster = read_json(resolve_roster_path(root), root)
     daemon = read_json(resolve_daemon_path(root), root)
     tick = (daemon or {}).get('last_tick')
     age = age_seconds(tick, now)

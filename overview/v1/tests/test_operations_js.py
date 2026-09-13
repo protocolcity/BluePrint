@@ -56,6 +56,12 @@ class DefaultFilterTests(unittest.TestCase):
         the first paint."""
         self.assertIn('legacyParam', _SRC)
         self.assertIn('if (legacyParam)', _SRC)
+    def test_old_attention_equals_note_link_maps_to_the_due_face(self):
+        """Review finding (pc-1494 recovery): the retired Note face value
+        must not silently yield an empty list; ?attention=note resolves to
+        Due and is canonicalised like every other legacy param."""
+        self.assertIn("attentionParam === 'note'", _SRC)
+        self.assertIn("attentionParam = 'due'", _SRC)
 
 
 class ClaimPresentationTests(unittest.TestCase):
@@ -117,8 +123,16 @@ class FiveAxisFilterTests(unittest.TestCase):
         for value in ('none', 'human', 'timer', 'deferred', 'tracking', 'blocked'):
             self.assertIn(f'value="{value}"', _HTML)
     def test_attention_filter_offers_the_four_faces_and_any(self):
-        for value in ('any', 'decide', 'read', 'watch', 'note'):
+        for value in ('any', 'decide', 'read', 'watch', 'due'):
             self.assertIn(f'<option value="{value}">', _HTML)
+    def test_kind_filter_offers_the_five_kinds(self):
+        """STATES_AND_TERMS.md §5 (D16): Work gains a Kind filter separate
+        from For You so the item type axis stops overloading the faces."""
+        self.assertIn('id="kind-filter"', _HTML)
+        for value in ('work', 'todo', 'note', 'reminder', 'report'):
+            self.assertIn(f'<option value="{value}">', _HTML)
+        self.assertIn("kind=$('kind-filter').value", _SRC.replace(' ', ''))
+        self.assertIn("kind||o.kind===kind", _SRC.replace(' ', ''))
     def test_filters_compose_with_and_not_or(self):
         fn = _SRC.split('function work()')[1]
         compact = fn.replace(' ', '')
@@ -132,7 +146,8 @@ class FiveAxisFilterTests(unittest.TestCase):
     def test_clear_all_resets_every_filter(self):
         fn = _SRC.split("$('clear-filters').addEventListener('click',()=>{")[1].split('});')[0]
         for control in ("$('search').value=''", "$('project-filter').value=''", "$('assignment-filter').value=''",
-                        "$('status-filter').value=''", "$('gate-filter').value=''", "$('attention-filter').value=''"):
+                        "$('status-filter').value=''", "$('gate-filter').value=''", "$('kind-filter').value=''",
+                        "$('attention-filter').value=''"):
             self.assertIn(control, fn.replace(' ', ''))
     def test_active_filters_render_as_dismissable_chips(self):
         self.assertIn("function renderActiveFilters()", _SRC)
