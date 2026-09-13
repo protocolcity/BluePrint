@@ -43,6 +43,15 @@ class ProjectFocusPaintTests(unittest.TestCase):
         self.assertIn("branch.summary", self.paint)
         self.assertIn("branch.label", self.paint)
 
+    def test_branch_item_entrance_is_skipped_under_reduce_motion(self) -> None:
+        # cursor-reviewer (pc-1492 PR 115): the CSS opacity-0 start is scoped
+        # to `prefers-reduced-motion: no-preference`, so `.bp-reduce-motion`
+        # alone (transition:none only) never becomes visible again on its
+        # own — the *class* itself must be skipped, not just its transition.
+        self.assertIn("function prefersReducedMotion", self.paint)
+        self.assertIn("bp-reduce-motion", self.paint)
+        self.assertIn("reduceMotion ? '' : ' map-branch-item-enter'", self.paint)
+
 
 class ViewStateFocusTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -65,6 +74,13 @@ class ViewStateFocusTests(unittest.TestCase):
 
     def test_papers_keeps_the_nested_dig_trail_other_branches_do_not(self) -> None:
         self.assertIsNotNone(re.search(r"state\.branch\s*!==\s*'papers'", self.view))
+
+    def test_select_project_persists_has_md(self) -> None:
+        # cursor-reviewer (pc-1492 PR 115): selectProject dropped `hasMd`,
+        # so papersBranch always read `undefined` and reported "empty" even
+        # for a project with Markdown — state.project must carry it through.
+        block = re.search(r"selectProject\(node\)\s*\{([\s\S]*?)\n\s*\},", self.view).group(1)
+        self.assertIn("hasMd: Boolean(node.hasMd)", block)
 
 
 class HostFocusWiringTests(unittest.TestCase):
@@ -96,6 +112,26 @@ class HostFocusWiringTests(unittest.TestCase):
 
     def test_opening_papers_branch_reuses_the_real_folder_tree(self) -> None:
         self.assertIn("await digInto(project, { mode: 'root' })", self.host)
+
+    def test_focused_project_paint_keeps_the_sidebar_browser_live(self) -> None:
+        # cursor-reviewer (pc-1492 PR 115): repaintInner returned early in
+        # project-focus mode without calling renderBrowser(), so
+        # #map-browser-list kept showing the pre-focus snapshot — including
+        # at the 400px breakpoint where the canvas is hidden and the browser
+        # is the only surface. Assert renderBrowser() runs before the early
+        # return of the project-focus branch of repaintInner.
+        match = re.search(r"function repaintInner\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(match)
+        focus_branch = re.search(r"if \(snap\.project\)\s*\{([\s\S]*?)\n\s*return;\n\s*\}", match.group(1))
+        self.assertIsNotNone(focus_branch)
+        self.assertIn("renderBrowser()", focus_branch.group(1))
+
+    def test_deep_link_project_boot_resolves_has_md_from_the_tree(self) -> None:
+        # cursor-reviewer (pc-1492 PR 115): the deep-link boot only had the
+        # relPath from the URL and passed no `hasMd`, so papersBranch always
+        # reported "empty" on first paint even for a project with Markdown.
+        self.assertIn("tree.snapshot().lots.find(lot => lot.relPath === projectPath)", self.host)
+        self.assertIn("hasMd: treeLot ? treeLot.hasMd : false", self.host)
 
 
 class HitRouterFocusRowsTests(unittest.TestCase):

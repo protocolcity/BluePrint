@@ -196,6 +196,11 @@ export async function boot(opts = {}) {
       applyCamera();
       renderTrail();
       renderProjectPanel(snap);
+      // The sidebar's folder browser (#map-browser-list) is also the only
+      // surface at 400px where the canvas is hidden — keep it live while a
+      // project is focused, especially once Papers reuses the dig machinery
+      // (mode: 'root') so its contents actually reflect the expanded branch.
+      renderBrowser();
       return;
     }
     lastBranches = [];
@@ -648,7 +653,15 @@ export async function boot(opts = {}) {
   repaint();
   if (initial.get('project')) {
     const projectPath = initial.get('project');
-    selectProjectView({ relPath: projectPath, name: projectPath.split('/').pop() });
+    // Deep-link boot only carries the relPath in the URL — resolve hasMd
+    // from the already-loaded tree so papersBranch reports correctly on
+    // first paint instead of always reading "empty" (no state.project.hasMd).
+    const treeLot = tree.snapshot().lots.find(lot => lot.relPath === projectPath);
+    selectProjectView({
+      relPath: projectPath,
+      name: (treeLot && treeLot.name) || projectPath.split('/').pop(),
+      hasMd: treeLot ? treeLot.hasMd : false,
+    });
     const branch = initial.get('branch');
     if (branch) {
       await toggleBranchView(branch);
