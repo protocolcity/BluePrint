@@ -54,14 +54,16 @@ You qualifiers (see D11): `you:todo` (personal task), `you:remind` (dated remind
 | Face | Rule (exact) | What it asks of you | Gold? |
 |---|---|---|---|
 | **Decide** | gate human with an act-now note (not parking language), or `gate:human` / `needs:founder-decision` label | act now; the note says what and what clears it | yes |
-| **Read** | `inbox-report` label (a report was written for you) | read, then clear or snooze | yes |
+| **Read** | `inbox-report` label, still open (a report was written for you and not yet cleared) | read, then clear or snooze | yes |
 | **Watch** | timer gate, or a live/parked order untouched for 90 minutes | look at evidence; not proof anything died | no |
-| **Note** | `reminder:<date>` label or `you:note` / `you:todo` / `you:remind` | your own list; no gate | no |
-| (none) | everything else, including all deferred and tracking orders | nothing | no |
+| **Due** | `reminder:YYYY-MM-DD` or `deadline:YYYY-MM-DD` label whose date is today or past | your own list, now due; no gate | no |
+| (none) | everything else, including an undated todo/note and all deferred and tracking orders | nothing | no |
 
-Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only. A `deadline:YYYY-MM-DD` label is Due. A date taken from a gate note, title, or history is a mentioned date, not a deadline. An expired timer is labelled expired; it is not currently blocking. Needs you is the Decide face, never the existence of a date. Calendar presentation is in [OVERVIEW_CALENDAR_SETTINGS.md](OVERVIEW_CALENDAR_SETTINGS.md).
+**Decision D16 (2026-09-13, user question).** Kind and For You used to overlap: the old Note face fired on the same labels that define the personal item kinds (`you:todo`, `you:note`, `you:remind`, `reminder:*`), and Read equalled Kind=report. Two of the four faces restated Kind instead of answering "does it want a person now" — 17 of 30 For You items were Note, 13 of them undated todos asking for nothing today. Due replaces Note: it fires only when a reminder or deadline date has arrived. An undated todo or note is Kind only (`kind_of` in attention_view.py); it never enters For You and shows under Assignment=You and Kind=todo/note on Work instead. `you:remind` carries no date of its own (§6): with a `reminder:<date>` label present it adds nothing to Due; without one it is an undated personal item and reads as Kind todo — "Reminder (no date)" must never appear.
 
-**Naming decision (D6).** Overview says "Needs you 10" while the panel opens on "Decide · 8". They measure the same pile with different filters. The record fixes one word: the metric and the panel are both **For You**, the number is the whole pile, and the breakdown shows the faces (8 decide · 2 read · 2 watch · 5 note). Decide and Read are open by default; Watch and Note are collapsed with counts. "Needs you" survives only as the badge on a Decide row.
+Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only. A `deadline:YYYY-MM-DD` label also drives the Due face and the Calendar's Due clock. A date taken from a gate note, title, or history is a mentioned date, not a deadline. An expired timer is labelled expired; it is not currently blocking. Needs you is the Decide face, never the existence of a date. Calendar presentation is in [OVERVIEW_CALENDAR_SETTINGS.md](OVERVIEW_CALENDAR_SETTINGS.md).
+
+**Naming decision (D6, amended by D16).** Overview says "Needs you 10" while the panel opens on "Decide · 8". They measure the same pile with different filters. The record fixes one word: the metric and the panel are both **For You**, the number is the whole pile, and the breakdown shows the faces (8 decide · 2 read · 2 watch · 5 due). Decide and Read are open by default; Watch and Due are collapsed with counts. "Needs you" survives only as the badge on a Decide row.
 
 ## 2. Seats, jobs, shifts and passes (WorkForce)
 
@@ -119,7 +121,7 @@ The user reviewed the installed Work surface on consolidation.47 and corrected t
 | **Status** | Where in the lifecycle | Open · Live · Parked (plus Done, Canceled when asked for) | WorkLane status |
 | **Gate** | May it execute | none · human · timer (active or expired) · deferred · tracking | WorkLane gate fields; an expired timer is not an active embargo |
 | **Kind** | What sort of item | work · note · todo · reminder · report, where recorded | `you:*`, `reminder:*`, `inbox-report` labels |
-| **For You** | Does it want a person now | the four faces (Decide · Read · Watch · Note) | computed attention (§1.4); a named view, not a status |
+| **For You** | Does it want a person now | the four faces (Decide · Read · Watch · Due) | computed attention (§1.4); a named view, not a status |
 
 Rules:
 
@@ -131,7 +133,7 @@ Rules:
 - **Counts are explicit.** The list header states filtered of total and the active filters with a clear-all. Filters, page and selection survive refresh, back/forward, reader return and reload; the old `deferred=1` and `status=gate:*` links map to the Gate filter.
 - **Stored data is untouched.** No stored status is added, no gate or label is rewritten to make the view come out; the projection and the filters change, the records do not.
 
-Fixtures every implementation must carry: a personal reminder assigned to You; an agent-owned human gate visible in For You and still assigned to the agent; an ungated ready agent order; deferred and tracking records visible under All open but not ready; an expired timer beside an active one; an unavailable store and a truncated store.
+Fixtures every implementation must carry: a personal reminder assigned to You; an agent-owned human gate visible in For You and still assigned to the agent; an ungated ready agent order; deferred and tracking records visible under All open but not ready; an expired timer beside an active one; an unavailable store and a truncated store. Also (D16): an undated todo (Kind todo, no face); a reminder dated today (Due); a reminder dated tomorrow (no face, Kind reminder); an open inbox-report (Read); each assigned to You.
 
 ## 6. Label matrix — every tag on a work order, which axis it feeds, who writes it
 
@@ -142,8 +144,8 @@ Inventory taken 2026-09-13 across all twelve registered stores (133 open orders)
 | `product:<slug>` | Store identity stamped on every order | none (routing) | WorkLane on create | project name on the row |
 | `worker:<seat>` | Routed to a registered seat | **Assignment** | filer, coordinator, seat generator | Assigned to seat; Assignment filter |
 | `worker:you` | Routed to the person | **Assignment** = You | filer, coordinator | Assigned to You (pc-1493 fixes the host case) |
-| `you:todo` · `you:remind` · `you:note` | Personal item kinds; `you:host` = You implementing on this machine | **Kind** (and Assignment = You) | filer | Your todo / Reminder (date) / note; Note face in For You |
-| `reminder:YYYY-MM-DD` · `deadline:YYYY-MM-DD` | Dated clocks without an embargo | Calendar clocks; Note face | filer, reader | Reminder / Due with the source label named |
+| `you:todo` · `you:remind` · `you:note` | Personal item kinds; `you:host` = You implementing on this machine. `you:remind` carries no date of its own — it is a legacy alias: with a `reminder:<date>` label present it adds nothing, without one it is Kind todo (D16) | **Kind** (and Assignment = You) | filer | Your todo / Your note; Kind todo/note on Work; no face unless dated |
+| `reminder:YYYY-MM-DD` · `deadline:YYYY-MM-DD` | Dated clocks without an embargo | Calendar clocks; **Kind** = reminder; **Due** face when the date is today or past (D16) | filer, reader | Reminder / Due with the source label named |
 | `inbox-report` · `inbox-report:<kind>` | A report was written for the person | **For You** = Read | report jobs | Read face |
 | `gate:founder` · `needs:founder-decision` · `needs:founder-present` | Only the person can pass this (publication, money, physical presence) | **For You** = Decide when the gate is human; otherwise a reader chip | filer | Needs you badge; chip |
 | `needs:routing` | WorkLane's stamp: no seat carried it when routing was last computed | none on the desk since .50; the desk computes Needs routing from ungated plus unassigned | WorkLane (engine) | Needs routing chip only when ungated and unassigned |
