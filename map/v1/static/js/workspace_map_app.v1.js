@@ -56,9 +56,17 @@ function indexNodeState(projects) {
 }
 
 let nodeState = {};
+let lastNodeStateJson = null;
 let paintNodeState = null;
 document.addEventListener('bp:map-operations', event => {
-  nodeState = indexNodeState(event.detail && event.detail.projects);
+  const next = indexNodeState(event.detail && event.detail.projects);
+  const json = JSON.stringify(next);
+  // Identical reads must not repaint (Done-when: "Only actual evidence
+  // changes receive brief feedback") — a poll that reports the same sibling
+  // badges is a no-op, not a fresh repaint + re-triggered enter animation.
+  if (json === lastNodeStateJson) return;
+  lastNodeStateJson = json;
+  nodeState = next;
   if (paintNodeState) paintNodeState();
 });
 
@@ -108,13 +116,26 @@ export async function boot(opts = {}) {
     if (snap.branch !== pendingDeepLinkItem.branch || snap.item) { pendingDeepLinkItem = null; return; }
     applyDeepLinkItem(pendingDeepLinkItem.branch, pendingDeepLinkItem.itemId);
   }
+  // Both `latestOperations` and `latestRemote` are read-only external
+  // snapshots, not a per-event trigger — a poll that reports the exact same
+  // payload must not repaint (Done-when: "Only actual evidence changes
+  // receive brief feedback"; identical reads must not re-run
+  // repaintInner()/paintProjectFocus() or re-trigger the branch-item enter
+  // animation). Gate scheduleRepaint() on a fingerprint of the combined data.
+  let lastAppliedDataKey = null;
+  function applyDataUpdate() {
+    const key = JSON.stringify([latestOperations, latestRemote]);
+    if (key === lastAppliedDataKey) return;
+    lastAppliedDataKey = key;
+    scheduleRepaint();
+  }
   async function refreshRemote() {
     try {
       const res = await fetchImpl(remoteEndpoint, { headers: { accept: 'application/json' } });
       latestRemote = res && res.ok ? await res.json() : null;
     } catch (_) { latestRemote = null; }
     retryPendingDeepLinkItem();
-    scheduleRepaint();
+    applyDataUpdate();
   }
   document.addEventListener('bp:map-operations', event => {
     latestOperations = event.detail || null;
@@ -327,6 +348,7 @@ export async function boot(opts = {}) {
         btn.type = 'button';
         btn.id = `map-branch-btn-${branch.key}`;
         btn.className = `is-${branch.state}`;
+        btn.dataset.branch = branch.key;
         btn.setAttribute('aria-expanded', snap.branch === branch.key ? 'true' : 'false');
         btn.textContent = `${branch.label} — ${branch.summary}`;
         btn.addEventListener('click', () => toggleBranchView(branch.key));
@@ -424,7 +446,13 @@ export async function boot(opts = {}) {
         document.getElementById('map-page-prev').disabled = page === 0;
         document.getElementById('map-page-next').disabled = page >= pageCount - 1;
       }
-      if (snap.dig) { clearDigIn(world); paintDigIn(world, snap.dig, nodes.slice(page * pageSize, (page + 1) * pageSize), {radius:220}); }
+      // The legacy dig-in fan (#dig-in-layer) is the top-level workspace's
+      // folder browser — while a project is focused the exploded canvas
+      // (#project-focus-layer) already owns the visual, and Papers browses
+      // via the sidebar list only; painting the fan underneath would leave
+      // stray, clickable folder chips in the gaps around the branch layout.
+      if (snap.dig && !snap.project) { clearDigIn(world); paintDigIn(world, snap.dig, nodes.slice(page * pageSize, (page + 1) * pageSize), {radius:220}); }
+      else if (snap.project) { clearDigIn(world); }
       list.replaceChildren();
       let lastGroup = '';
       const orderedNodes = [...nodes.filter(node => node.isDir), ...nodes.filter(node => !node.isDir && node.hasMd)];
@@ -717,6 +745,23 @@ export async function boot(opts = {}) {
     renderTrail();
     // Trail root may have changed (or gone empty) → refresh the focus ring.
     scheduleRepaint();
+  });
+
+  // Escape unwinds the focused-project selection one level at a time
+  // (item → branch → project), same order as the breadcrumb crumbs'
+  // onClick — and returns to the workspace level once nothing is left to
+  // unwind. md-viewer.js already owns Escape while the reader is open (it
+  // only closes the reader), so this never fires alongside that.
+  document.addEventListener('keydown', (ev) => {
+    if (viewer.isOpen()) return;
+    if (ev.key !== 'Escape') return;
+    if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
+    const snap = viewState.snapshot();
+    if (!snap.project) return;
+    ev.preventDefault();
+    if (snap.item) { viewState.clearItem(); scheduleRepaint(); return; }
+    if (snap.branch) { viewState.clearBranch(); scheduleRepaint(); return; }
+    clearProjectFocusView();
   });
 
   for (const [id, delta] of [['map-page-prev', -1], ['map-page-next', 1]]) {
