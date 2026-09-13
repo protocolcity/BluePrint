@@ -829,11 +829,26 @@ def _seat_model_text(row, root, config_cache):
     rather than resolving the provider through separate paths). A pin
     ``resolve_provider_model`` returned bare (unresolved command) gets its
     provider name prefixed when the executable or the pin family resolves
-    one; otherwise the bare text is returned unchanged."""
+    one; otherwise the bare text is returned unchanged.
+
+    ``None`` from ``resolve_provider_model`` passes through as ``None``
+    (review finding, pc-1479 follow-up: an unresolvable seat still yields a
+    row with no provider rather than raising). The fallback only applies to
+    rows the Seats group counts as seats — a lane, or a row with no
+    ``kind`` (``_row_is_seat_kind``); a job row keeps
+    ``resolve_provider_model``'s text as is, never gaining a provider
+    prefix from the executable or pin heuristics. The pin heuristic itself
+    only ever reads the roster's own ``model`` field, never the resolved
+    display text, so a provider name appearing inside unrelated command
+    text (a path, a module name) is never mistaken for a pin."""
     model_text = resolve_provider_model(row, root, config_cache)
+    if model_text is None:
+        return None
     if any(model_text == p or model_text.startswith(p + ' ') for p in _PROVIDER_ORDER):
         return model_text
-    provider = _seat_executable_provider(row, root, config_cache) or _provider_from_pin(model_text)
+    if not _row_is_seat_kind(row.get('kind')):
+        return model_text
+    provider = _seat_executable_provider(row, root, config_cache) or _provider_from_pin(row.get('model'))
     if not provider:
         return model_text
     pin = model_text if model_text and model_text != provider else None
@@ -865,7 +880,7 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             continue
         model_text = _seat_model_text(row, root, config_cache)
         provider = next((p for p in _PROVIDER_ORDER
-                          if model_text == p or model_text.startswith(p + ' ')), None)
+                          if model_text == p or (model_text and model_text.startswith(p + ' '))), None)
         if not provider:
             continue
         if _seat_executable_missing(row, root, config_cache):
