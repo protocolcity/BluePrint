@@ -45,6 +45,14 @@ class TimelineMappingTests(unittest.TestCase):
         self.assertEqual(_comment_event_word('Blocked: needs credentials'), 'gated')
         self.assertEqual(_comment_event_word('A regular note'), 'note')
 
+    def test_parked_body_with_embedded_owner_marker_reads_as_parked_not_claimed(self):
+        # wl_park's real body shape (worklane write.py): "Parked: {reason}\n
+        # Owner: {author}" — the Owner line is provenance, not a fresh claim
+        # (pc-1488 Done-when: distinguish terminal completion/lifecycle
+        # transitions from a claim marker embedded in the body).
+        self.assertEqual(_comment_event_word('Parked: waiting on review\nOwner: bp-claude-implementer'), 'parked')
+        self.assertEqual(_comment_event_word('Completed: shipped\nOwner: bp-claude-implementer'), 'closed')
+
     def test_ledger_event_word_mapping(self):
         self.assertEqual(_ledger_event_word('START', {}), {'event': 'started'})
         self.assertEqual(_ledger_event_word('START', {'recovery': '1'}), {'event': 'recovered'})
@@ -150,6 +158,25 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(worklane[1]['event'], 'claimed')
         self.assertEqual(worklane[1]['title'], 'Owner: seat\nAlso parked context')
 
+    def test_merged_row_keeps_full_comment_behind_detail(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-12", "Blocked task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","backlog","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                         ('Released by seat returning to backlog\nWaiting on credentials from ops.', _RECENT))
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['title'], 'Released by seat returning to backlog')
+        self.assertEqual(worklane[0]['detail'],
+                          'Released by seat returning to backlog\nWaiting on credentials from ops.')
+
     def test_release_event_and_released_comment_collapse_to_one_row(self):
         self._register()
         with sqlite3.connect(self._db()) as conn:
@@ -198,6 +225,35 @@ class TimelineProjectionTests(unittest.TestCase):
         workforce = [r for r in result['rows'] if r['source'] == 'workforce']
         self.assertEqual(len(workforce), 1)
         self.assertEqual(workforce[0]['event'], 'failed')
+
+    def test_workforce_ticket_resolves_blank_project_from_registered_prefix(self):
+        self._register('product', 'pc')
+        sqlite3.connect(self._db('product')).close()
+        runtime = self.root / 'workforce/local'
+        (runtime / 'ledger').mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {}}))
+        (runtime / 'daemon.json').write_text(json.dumps({'last_tick': _RECENT, 'in_flight': []}))
+        # No project= field on the ledger line (the observed pc-1480 gap):
+        # the ticket's own id prefix must resolve it against the registry.
+        (runtime / 'ledger/seat.log').write_text(f'{_RECENT} CANDIDATE ticket=pc-9\n')
+        result = timeline_snapshot(self.root)
+        workforce = [r for r in result['rows'] if r['source'] == 'workforce']
+        self.assertEqual(len(workforce), 1)
+        self.assertEqual(workforce[0]['project'], 'product')
+        self.assertEqual(workforce[0]['link'], {'href': '/work-order?project=product&id=pc-9', 'label': 'pc-9'})
+        self.assertEqual(workforce[0]['group_key'], 'workforce:seat:pc-9')
+
+    def test_workforce_ticket_with_unresolvable_project_gets_no_ambiguous_link(self):
+        runtime = self.root / 'workforce/local'
+        (runtime / 'ledger').mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {}}))
+        (runtime / 'daemon.json').write_text(json.dumps({'last_tick': _RECENT, 'in_flight': []}))
+        (runtime / 'ledger/seat.log').write_text(f'{_RECENT} CANDIDATE ticket=zz-9\n')
+        result = timeline_snapshot(self.root)
+        workforce = [r for r in result['rows'] if r['source'] == 'workforce']
+        self.assertEqual(len(workforce), 1)
+        self.assertEqual(workforce[0]['project'], '')
+        self.assertEqual(workforce[0]['link'], {'href': '/agents', 'label': 'zz-9'})
 
     def test_workforce_rows_capped_per_source(self):
         runtime = self.root / 'workforce/local'
@@ -279,6 +335,34 @@ class TimelineProjectionTests(unittest.TestCase):
         rows = [r for r in result['rows'] if r['source'] == 'github']
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['title'], 'Ship it')
+
+    def test_github_pr_and_ci_run_group_by_shared_head_sha(self):
+        cached = {
+            'state': 'connected',
+            'repositories': [{
+                'repo': 'org/repo',
+                'project': 'product',
+                'state': 'connected',
+                'observed_at': _RECENT,
+                'items': [
+                    {'kind': 'pull_request', 'repo': 'org/repo', 'project': 'product', 'title': 'Ship it',
+                     'url': 'https://github.com/org/repo/pull/1', 'state': 'open', 'pr_event': 'opened',
+                     'updated_at': _RECENT, 'number': 1, 'sha': 'abc123'},
+                    {'kind': 'workflow', 'repo': 'org/repo', 'project': 'product', 'title': 'CI',
+                     'url': 'https://github.com/org/repo/actions/runs/2', 'state': 'success',
+                     'workflow_name': 'CI', 'updated_at': _RECENT, 'sha': 'abc123'},
+                    {'kind': 'release', 'repo': 'org/repo', 'project': 'product', 'title': 'v1',
+                     'url': 'https://github.com/org/repo/releases/tag/v1', 'updated_at': _RECENT},
+                ],
+            }],
+            'refreshing': False,
+        }
+        with patch('server.timeline.remote_snapshot', return_value=cached):
+            result = timeline_snapshot(self.root)
+        rows = {r['title']: r for r in result['rows'] if r['source'] == 'github'}
+        self.assertEqual(rows['Ship it']['group_key'], 'github:org/repo:abc123')
+        self.assertEqual(rows['CI']['group_key'], 'github:org/repo:abc123')
+        self.assertEqual(rows['v1']['group_key'], '')
 
     def test_github_observed_at_uses_stale_cache_fill_on_failed_refresh(self):
         cache_fill = '2026-09-13T07:00:00+00:00'

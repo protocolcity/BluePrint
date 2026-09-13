@@ -150,3 +150,20 @@
 #map-project-context { padding-bottom: 14px; margin-block: 12px; border-bottom: 1px solid var(--ov-tile-border); }
 #map-project-context p,#map-project-context small { color: var(--ov-muted); line-height:1.5; font-size:12px; }
 #map-project-context nav { display:flex; flex-wrap:wrap; gap:10px 14px; margin-block:12px; }
+
+/* Timeline: collapsed source health strip so first-viewport space goes to
+   events, not four tall rows (pc-1488). Open state expands per-source
+   observation/error detail via the existing connectionRow renderer. */
+.bp-source-strip { margin-bottom: 16px; }
+.bp-source-strip > summary { cursor: pointer; color: var(--ov-muted); font-size: 12px; list-style: none; }
+.bp-source-strip > summary::-webkit-details-marker { display: none; }
+.bp-source-strip[open] > summary { margin-bottom: 10px; }
+.bp-timeline-group { border-top: 1px solid var(--ov-tile-border); padding: 9px 0; }
+.bp-timeline-group:first-child { border-top: 0; }
+.bp-timeline-group > summary { cursor: pointer; list-style: none; }
+.bp-timeline-group > summary::-webkit-details-marker { display: none; }
+.bp-timeline-group .bp-order { border-top: 0; padding: 6px 0 0; }
+.bp-timeline-group .bp-order:first-of-type { padding-top: 10px; }
+.bp-timeline-detail { margin-top: 6px; font-size: 12px; grid-column: 1 / -1; }
+.bp-timeline-detail summary { cursor: pointer; color: var(--ov-link); }
+.bp-timeline-detail p { margin: 6px 0 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -32,3 +32,14 @@ Do A now and file B as the follow-on once the change feed exists. A fixes the wr
 ## Held
 
 Synthetic activity, motion, notifications, any write action, cross-workspace feeds.
+
+## pc-1488 — summarized, grouped, source-accurate
+
+Timeline (option B) shipped; this refines its readability without adding sources:
+
+- Source health is a compact strip, auto-expanded only on a real exception; the row list gets the first desktop viewport.
+- Each row is a short action + work/project/actor headline and time; the badge names the source (never repeats the action word). The complete original comment stays behind a "Full text" expansion — never clipped away.
+- WorkForce shift rows (dispatch/start/recovery/terminal) group by the ledger's own identity+ticket fields; GitHub PR/CI rows group by their shared head commit sha. Both are structured, verified correlation keys — never prose or time proximity. The raw per-row view stays reachable inside the group.
+- A blank ledger `project=` no longer produces an ambiguous work-order link; it resolves from the ticket's own id prefix against the registered project stores, or falls back to a plain seat link.
+- The comment→event word mapping reads the first-line lifecycle heading (Parked:/Completed:/Released by/...) before an anywhere-in-body "Owner:" marker, so a parked or closed row with its own provenance line no longer misreads as a fresh claim.
+- Filters gained Period (client-side, over the existing 14-day server window) and a Clear action; a backgrounded refresh's "new events" affordance carries a count.
