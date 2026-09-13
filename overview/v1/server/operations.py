@@ -1005,11 +1005,9 @@ def operations_snapshot(binder):
                     assigned_you = you_qualifier or (item.get('gate_type') == 'human' and not routable_workers)
                     gate_expired = False
                     if item.get('gate_type') == 'timer' and item.get('gate_until'):
-                        try:
-                            due = datetime.fromisoformat(str(item['gate_until']).replace('Z', '+00:00'))
-                            gate_expired = bool(due.tzinfo) and due <= now
-                        except (ValueError, TypeError):
-                            pass
+                        from suite.api.calendar import parse_gate_until
+                        due = parse_gate_until(item['gate_until'])
+                        gate_expired = due is not None and due <= now
                     from .attention_view import face, face_reason, persona_text
                     attention_face = face(item, labels, now)
                     attention = bool(attention_face)

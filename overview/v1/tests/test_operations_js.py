@@ -44,6 +44,18 @@ class DefaultFilterTests(unittest.TestCase):
     def test_old_attention_status_links_map_to_the_attention_filter(self):
         self.assertIn("statusParam === 'attention'", _SRC)
         self.assertIn("statusParam.startsWith('face:')", _SRC)
+    def test_old_deferred_equals_1_link_maps_to_the_gate_filter(self):
+        """Review finding (pc-1482): the legacy checkbox link /work?deferred=1
+        must also map onto gate=deferred, same as status=deferred/gate:*."""
+        self.assertIn("query.get('deferred') === '1'", _SRC)
+        self.assertIn("gateParam = gateParam || 'deferred'", _SRC)
+    def test_legacy_link_is_canonicalised_on_first_paint(self):
+        """Review finding (pc-1482): once a legacy param is remapped, the
+        address bar must be rewritten to the canonical params on load (not
+        only inside updateFilters) so chips, counts and the URL agree from
+        the first paint."""
+        self.assertIn('legacyParam', _SRC)
+        self.assertIn('if (legacyParam)', _SRC)
 
 
 class ClaimPresentationTests(unittest.TestCase):
