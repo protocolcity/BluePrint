@@ -329,7 +329,7 @@ async function refreshRemote() {
         text.append(el('strong',deliveryRow(item)),el('span',`Observed ${date(item.updated_at)}`,'bp-order-meta'));
         row.append(text,badge(item.state));section.append(row);
       }
-      if(!(repo.items || []).length)empty(section,repo.quiet || repo.state==='connected'?'Quiet in the last 14 days.':'No verified delivery available.');
+      if(!(repo.items || []).length)empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
       container.append(section);
     }
     if(!data.repositories?.length && !data.refreshing)empty(container,'No repository delivery available. Check connection configuration or GitHub access.');
