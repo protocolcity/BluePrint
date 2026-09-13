@@ -775,15 +775,33 @@ export async function boot(opts = {}) {
       ev.preventDefault(); ev.target.dispatchEvent(new MouseEvent('click', {bubbles:true}));
     }
   });
+  // Shared by boot and the popstate handler below — walks a `path` (project-
+  // relative folder chain) one segment at a time via the existing dig
+  // machinery, exactly like a person clicking down through the browser list.
+  async function digToPath(path) {
+    let relative = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      relative = relative ? relative + '/' + part : part;
+      await digInto({ relPath: relative, name: part }, { mode: relative.includes('/') ? 'nest' : 'root' });
+    }
+  }
+
   // Deep-link boot only carries the project relPath in the URL — resolve
   // hasMd from the already-loaded tree so papersBranch reports correctly on
   // first paint instead of always reading "empty" (no state.project.hasMd).
   // Shared with the popstate handler below so back/forward across a focused
-  // project restores the same way a fresh deep link does.
+  // project restores the same way a fresh deep link does, including the
+  // `path` query param — Papers can be dug into a nested folder (the sidebar
+  // list still nests further while a project is focused), and that depth
+  // must match the address bar on Back/Forward, not just reset to the
+  // project root.
   async function applyProjectParams(initial) {
     const projectPath = initial.get('project');
     if (!projectPath) {
       if (viewState.snapshot().project) clearProjectFocusView();
+      const path = initial.get('path');
+      if (path) await digToPath(path);
+      else if (viewState.snapshot().dig) resetView();
       return;
     }
     const treeLot = tree.snapshot().lots.find(lot => lot.relPath === projectPath);
@@ -795,31 +813,43 @@ export async function boot(opts = {}) {
     const branch = initial.get('branch');
     if (branch) {
       await toggleBranchView(branch);
+      if (branch === 'papers') {
+        const path = initial.get('path');
+        if (path && path !== viewState.snapshot().dig?.relPath) await digToPath(path);
+      }
       const itemId = initial.get('item');
       if (itemId) applyDeepLinkItem(branch, itemId);
+    }
+  }
+
+  // The reader is independent of project/branch/item/path selection (Rule:
+  // md-viewer "does NOT touch MapViewState.dig") but still needs its own
+  // restore on Back/Forward — a popped `md` param must (re)open that paper,
+  // and a popped state that dropped `md` must close whatever is open, or the
+  // reader stays open/closed out of step with the address bar.
+  async function applyMdParam(params) {
+    const md = params.get('md');
+    if (md) {
+      if (viewer.currentPath() !== md) await openPaper(md, { label: md.split('/').pop() });
+    } else if (viewer.isOpen()) {
+      viewer.close();
     }
   }
 
   window.addEventListener('resize', applyCamera);
   window.addEventListener('popstate', async () => {
     restoring = true;
-    await applyProjectParams(new URLSearchParams(location.search));
+    const params = new URLSearchParams(location.search);
+    await applyProjectParams(params);
+    await applyMdParam(params);
     restoring = false;
     lastNavKey = projectNavKey(viewState.snapshot());
   });
   await tree.load();
   await refreshRemote();
   repaint();
-  if (initial.get('project')) {
-    await applyProjectParams(initial);
-  } else if(initial.get('path')) {
-    let relative='';
-    for(const part of initial.get('path').split('/').filter(Boolean)) {
-      relative=relative ? relative+'/'+part : part;
-      await digInto({relPath:relative,name:part},{mode:relative.includes('/')?'nest':'root'});
-    }
-  }
-  if(initial.get('md'))await openPaper(initial.get('md'),{label:initial.get('md').split('/').pop()});
+  await applyProjectParams(initial);
+  await applyMdParam(initial);
   // The restored state is not a fresh navigation — sync it with
   // replaceState (matching pre-existing boot behavior) rather than pushing
   // a duplicate history entry on top of the page load.

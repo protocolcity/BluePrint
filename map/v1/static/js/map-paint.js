@@ -369,6 +369,13 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
   layer.replaceChildren();
   if (!project) return;
 
+  // `.map-branch-item-enter` only sets the *starting* opacity:0 frame (CSS,
+  // scoped to `no-preference`) — nothing ever removed the class, so with
+  // motion enabled the chip stayed at its start state forever. Collect the
+  // just-appended enter nodes and drop the class on the next frame so the
+  // transition it declares actually runs to the base (opacity: 1) state.
+  const enterNodes = [];
+
   const center = el('g', { id: 'project-focus-node', class: 'map-hit map-project-node', 'data-hit-layer': 'hub', 'data-rel-path': project.relPath });
   center.appendChild(el('circle', { cx: 0, cy: 0, r: 50, class: 'map-hub-disc' }));
   center.appendChild(el('text', { x: 0, y: 6, class: 'map-hub-label', 'text-anchor': 'middle' }, truncateLotLabel(project.name || project.relPath, 18)));
@@ -414,6 +421,7 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
         node.appendChild(el('rect', { x: -50, y: -16, width: 100, height: 32, rx: 6, class: 'map-branch-item-plate' }));
         node.appendChild(el('text', { x: 0, y: 4, class: 'map-branch-item-label', 'text-anchor': 'middle' }, truncateLotLabel(item.label, 16)));
         layer.appendChild(node);
+        if (!reduceMotion) enterNodes.push(node);
       });
       if (extra > 0) {
         const a = count > 1 ? start + step * (count - 1) : angle;
@@ -429,9 +437,16 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
         node.appendChild(el('rect', { x: -50, y: -16, width: 100, height: 32, rx: 6, class: 'map-branch-item-plate' }));
         node.appendChild(el('text', { x: 0, y: 4, class: 'map-branch-item-label', 'text-anchor': 'middle' }, `+${extra} more`));
         layer.appendChild(node);
+        if (!reduceMotion) enterNodes.push(node);
       }
     }
   });
+
+  if (enterNodes.length > 0) {
+    requestAnimationFrame(() => {
+      enterNodes.forEach(node => node.classList.remove('map-branch-item-enter'));
+    });
+  }
 }
 
 export function clearProjectFocus(world) {
