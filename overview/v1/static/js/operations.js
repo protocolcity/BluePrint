@@ -516,8 +516,8 @@ function rowClocks(row) {
 function agendaGroup(row, origin) {
   const days=rowClocks(row).map(clock=>localDayKey(clock.at, clock.allDay)).filter(Boolean);
   if(days.some(day=>day===origin)) return 'today';
-  if(days.some(day=>day>origin)) return 'next';
-  return 'past';
+  if(days.some(day=>day<origin)) return 'past';
+  return 'next';
 }
 function clockLabel(clock) {
   if(clock.kind==='due') return 'Due';

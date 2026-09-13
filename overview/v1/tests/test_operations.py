@@ -457,6 +457,19 @@ class OperationsTests(unittest.TestCase):
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute("UPDATE tasks SET status='backlog' WHERE id=1")
         self.assertEqual(operations_snapshot(self.root)['projects'][0]['working'],0)
+    def test_date_only_gate_until_projects_as_all_day(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_until=? WHERE id=1',
+                         (json.dumps(['worker:agent']),'timer','2026-09-13'))
+        dates=operations_snapshot(self.root)['work_dates']
+        self.assertEqual(len(dates),1)
+        self.assertEqual(dates[0]['kind'],'timer')
+        self.assertTrue(dates[0]['all_day'])
+        self.assertEqual(dates[0]['dtstart'],'2026-09-13')
+        self.assertEqual(dates[0]['source'],'gate_until')
+
     def test_due_and_hold_until_remain_two_work_dates(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:

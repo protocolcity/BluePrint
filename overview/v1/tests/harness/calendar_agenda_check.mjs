@@ -48,6 +48,24 @@ assert.equal(clockLabel(hold), 'Expired hold');
 assert.equal(holdExpired('2026-08-10T12:00:00+00:00', false, new Date('2026-09-13T12:00:00Z')), true);
 assert.equal(holdExpired('2026-10-12T14:00:00+00:00', false, new Date('2026-09-13T12:00:00Z')), false);
 
+const overdue = mergeDatedWork([
+  {kind:'deadline', product:'product', task_id:'pc-4', summary:'Overdue plus later reminder', dtstart:'2026-09-01', all_day:true, source:'deadline:2026-09-01', attention_face:''},
+  {kind:'reminder', product:'product', task_id:'pc-4', summary:'Overdue plus later reminder', dtstart:'2026-09-20', all_day:true, source:'reminder:2026-09-20', attention_face:''},
+])[0];
+assert.equal(overdue.due, '2026-09-01');
+assert.equal(overdue.reminder, '2026-09-20');
+assert.equal(agendaGroup(overdue, origin), 'past');
+
+const localEndOfToday = new Date(2026, 8, 13, 23, 30);
+const localMorning = new Date(2026, 8, 13, 8, 0);
+assert.equal(holdExpired('2026-09-13', true, localEndOfToday), false);
+assert.equal(holdExpired('2026-09-12', true, localMorning), true);
+// America/Chicago: 2026-09-13T03:00:00Z is 22:00 on the 12th. A date-only
+// hold for the 13th stays active; the same instant as UTC midnight expires.
+const usPreviousEvening = new Date('2026-09-13T03:00:00Z');
+assert.equal(holdExpired('2026-09-13', true, usPreviousEvening), false);
+assert.equal(holdExpired('2026-09-13T00:00:00+00:00', false, usPreviousEvening), true);
+
 assert.equal(localDayKey('2026-09-13', true), '2026-09-13');
 assert.equal(allDayStamp('2026-09-13').includes('13'), true);
 assert.ok(datedStamp('2026-09-13', true).includes('All day'));
@@ -55,4 +73,4 @@ assert.equal(shiftDay('2026-09-13', 7), '2026-09-20');
 assert.equal(shiftDay('2026-09-13', -7), '2026-09-06');
 assert.match(todayKey(new Date(2026, 8, 13)), /^2026-09-13$/);
 
-console.log('Calendar agenda: merge, today/next/past, expired hold, mentioned date, all-day key passed.');
+console.log('Calendar agenda: merge, today/next/past, overdue dual-clock, date-only hold, mentioned date, all-day key passed.');

@@ -1,7 +1,9 @@
 """pc-1125 / pc-1181 / pc-1489: Workspace calendar — ICS from gates + dated labels.
 
 One feed for all project stores. Sources of record stay on WorkLane tickets:
-  - gate_type=timer + gate_until → timed VEVENT (kind timer, source gate_until)
+  - gate_type=timer + gate_until → timed VEVENT (kind timer, source gate_until);
+    a date-only gate_until is all-day VALUE=DATE and holds through that
+    local calendar day.
   - label deadline:YYYY-MM-DD → all-day Due (kind deadline, source that label)
   - label reminder:YYYY-MM-DD → all-day Reminder (kind reminder, source that label)
   - gate_type=human + gate_note CALENDAR/~/ISO date → all-day Mentioned date
@@ -61,6 +63,29 @@ def parse_gate_note_calendar_date(note: Any) -> Optional[date]:
         return date.fromisoformat(m.group(1))
     except ValueError:
         return None
+
+
+def gate_until_is_date_only(raw: Any) -> bool:
+    """True when gate_until is a calendar day, not a timed instant.
+
+    A date-only hold (YYYY-MM-DD, or a date instance) is all-day and must
+    not be serialised as UTC midnight. Timed strings and datetime values
+    stay instants even when the clock happens to be 00:00.
+    """
+    if raw is None:
+        return False
+    if isinstance(raw, datetime):
+        return False
+    if isinstance(raw, date):
+        return True
+    s = str(raw).strip()
+    if len(s) != 10:
+        return False
+    try:
+        date.fromisoformat(s)
+    except ValueError:
+        return False
+    return True
 
 
 def parse_gate_until(raw: Any) -> Optional[datetime]:
@@ -177,7 +202,18 @@ def events_from_task(
 
     gt = str(task.get("gate_type") or "").strip().lower()
     if gt == "timer":
-        when = parse_gate_until(task.get("gate_until"))
+        raw_until = task.get("gate_until")
+        all_day = gate_until_is_date_only(raw_until)
+        if all_day:
+            if isinstance(raw_until, date) and not isinstance(raw_until, datetime):
+                when = raw_until
+            else:
+                try:
+                    when = date.fromisoformat(str(raw_until).strip()[:10])
+                except ValueError:
+                    when = None
+        else:
+            when = parse_gate_until(raw_until)
         if when is not None:
             note = str(task.get("gate_note") or "").strip()
             if note:
@@ -199,7 +235,7 @@ def events_from_task(
                     "kind": "timer",
                     "source": "gate_until",
                     "dtstart": when,
-                    "all_day": False,
+                    "all_day": all_day,
                     "task_id": tid,
                     "product": product,
                 }
@@ -265,7 +301,10 @@ def events_from_task(
                 desc_parts.append(url)
             out.append(
                 {
-                    "uid": "%s-mentioned-%s@blueprint.calendar"
+                    # Kind and CATEGORIES are mentioned; the UID stays on the
+                    # pre-pc-1489 deadline form so existing ICS subscribers
+                    # update the same VEVENT instead of seeing a duplicate.
+                    "uid": "%s-deadline-%s@blueprint.calendar"
                     % (tid, d.isoformat()),
                     "summary": summary,
                     "description": "\n".join(desc_parts),
