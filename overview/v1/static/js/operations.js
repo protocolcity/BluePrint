@@ -12,7 +12,6 @@ const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
 function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
-$('attention-face').addEventListener('change',()=>overview());
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
 let streamState = 'connecting';
@@ -31,6 +30,8 @@ for(const [gate,label] of Object.entries({deferred:'Deferred',timer:'Timer gate'
 $('status-filter').value = query.get('status')==='deferred' ? 'gate:deferred' : query.get('status') || '';
 let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
+let showDeferred = query.get('deferred') === '1';
+$('show-deferred').checked = showDeferred;
 $('page-title').textContent = titles[page][0];
 $('page-description').textContent = titles[page][1];
 document.title = `BluePrint · ${titles[page][0]}`;
@@ -43,14 +44,30 @@ function date(value) { if(!value) return 'Not reported'; const d=new Date(value)
 function empty(parent, text) { parent.append(el('p',text,'bp-empty')); }
 function scheduleLabel(value) { if(value==='manual')return 'Manual';if(!value || value==='Not scheduled')return 'Not scheduled';return 'Automatic schedule'; }
 function workUrl(order) { return readerHref('/work-order?' + new URLSearchParams({project:order.project,id:order.id})); }
+function statusText(order) {
+  if(order.status==='in_progress' && order.live_with) return `Live with ${order.live_with} since ${date(order.since)}`;
+  if(order.status==='in_review' && order.parked_by) return `Parked by ${order.parked_by} since ${date(order.since)}`;
+  return order.status_word || order.status;
+}
 function orderRow(order) {
   const row=link('',workUrl(order),'bp-order');
   const content=el('div'); content.append(el('strong',order.title));
-  content.append(el('span',`${order.project_name} · ${order.id} · ${order.workers.length ? order.owner : 'No worker assigned'} · ${date(order.updated_at)}`,'bp-order-meta'));
-  if(order.attention_face==='watch')content.append(el('span',order.gate_type==='timer' ? (new Date(order.gate_until) <= new Date() ? 'Timer elapsed ' : 'Timer opens ')+date(order.gate_until) : 'No recent update · check progress before recovery','bp-order-note'));
-  if(order.gate_note) content.append(el('span',order.gate_note.length > 160 ? order.gate_note.slice(0,157) + '…' : order.gate_note,'bp-order-note'));
+  content.append(el('span',`${order.project_name} · ${order.id} · ${statusText(order)} · Assigned to ${order.owner} · ${date(order.updated_at)}`,'bp-order-meta'));
+  if(order.parent) content.append(el('span',`Part of ${order.parent}`,'bp-order-meta'));
+  if(order.blockers && order.blockers.length) content.append(el('span',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
+  if(order.ready_for) content.append(el('span',`Ready for ${order.ready_for}`,'bp-order-note'));
+  if(order.needs_routing) content.append(el('span','Needs routing','bp-order-note'));
+  if(order.attention_face && order.face_reason) { const reason=el('span',order.face_reason,'bp-order-note'); reason.title=order.face_reason; content.append(reason); }
+  if(order.gate_note) {
+    const truncated=order.gate_note.length > 160;
+    const details=el('details',undefined,'bp-order-note');
+    details.append(el('summary',truncated ? order.gate_note.slice(0,157) + '…' : order.gate_note));
+    if(truncated) details.append(el('p',order.gate_note));
+    content.append(details);
+  }
+  if(order.last_note) content.append(el('span',`Last note: ${order.last_note}`,'bp-order-meta'));
   const gateLabel={deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'}[order.gate_type];
-  row.append(content,badge(order.attention ? 'attention' : order.status, order.attention ? 'Needs you' : undefined));
+  row.append(content,badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined)));
   if(gateLabel) row.append(badge(order.gate_type,gateLabel));
   return row;
 }
@@ -67,27 +84,39 @@ function projectCard(project) {
   card.append(el('strong',project.name));
   card.append(el('p',project.state==='available' ? `${project.open} open · ${project.attention} need you` : 'Store unavailable'));
   card.append(el('span',project.folder || 'Folder mapping not found','bp-muted'));
-  const actions=el('div',undefined,'bp-project-actions');actions.append(link('Open work','/work?'+new URLSearchParams({project:project.id})),link('Project papers','/documents?'+new URLSearchParams({project:project.id})));card.append(actions);
+  const actions=el('div',undefined,'bp-project-actions');actions.append(link('Open work','/work?'+new URLSearchParams({project:project.id})));
+  if(project.attention) actions.append(link('For you','/work?'+new URLSearchParams({project:project.id,status:'attention'})));
+  actions.append(link('Project papers','/documents?'+new URLSearchParams({project:project.id})));card.append(actions);
   return card;
 }
+function faceEntry(order) {
+  const entry=el('div');entry.append(orderRow(order));
+  const mute=el('button','Mute here for 24 hours');mute.type='button';
+  mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();overview();});
+  entry.append(mute);
+  return entry;
+}
 function overview() {
-  const orders=snapshot.orders, attention=orders.filter(x=>x.attention);
-  const metrics=[['Needs you',attention.length,'/work?status=attention'],['In progress',orders.filter(x=>x.status==='in_progress').length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Agents & jobs',snapshot.agents.length,'/agents']];
+  const orders=snapshot.orders, forYou=orders.filter(o=>o.attention_face);
+  const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
+  const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
+  const metrics=[['For You',forYou.length,'/work?status=attention'],['Live',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   $('metrics').replaceChildren(...metrics.map(([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;}));
-  const selected=$('attention-face').value, list=$('attention-list');list.replaceChildren();
-  const band=orders.filter(o=>o.attention_face===selected);
-  const visible=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
-  for(const order of visible.slice(0,6)){
-    const entry=el('div');entry.append(orderRow(order));
-    const mute=el('button','Mute here for 24 hours');mute.type='button';
-    mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();overview();});entry.append(mute);list.append(entry);
+  let mutedCount=0;
+  for(const face of ['decide','read','watch','note']) {
+    const band=forYou.filter(o=>o.attention_face===face);
+    const visible=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
+    mutedCount+=band.length-visible.length;
+    const list=$('for-you-'+face);list.replaceChildren();
+    for(const order of visible.slice(0,6)) list.append(faceEntry(order));
+    if(!visible.length) empty(list,'No '+face+' items visible in the readable stores.');
   }
-  if(!visible.length)empty(list,'No '+selected+' items visible in the readable stores.');
-  const mutedCount=band.length-visible.length;
+  $('for-you-decide-heading').textContent=`Decide · ${forYou.filter(o=>o.attention_face==='decide').length}`;
+  $('for-you-read-heading').textContent=`Read · ${forYou.filter(o=>o.attention_face==='read').length}`;
+  $('for-you-watch-summary').textContent=`Watch · ${forYou.filter(o=>o.attention_face==='watch').length}`;
+  $('for-you-note-summary').textContent=`Note · ${forYou.filter(o=>o.attention_face==='note').length}`;
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-  for(const option of $('attention-face').options)option.textContent=option.value[0].toUpperCase()+option.value.slice(1)+' · '+orders.filter(o=>o.attention_face===option.value).length;
-  $('attention-list').closest('section').querySelector('.bp-section-head a').href='/work?status=face:'+selected;
 
   sources($('source-list'),false);
   const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
@@ -101,8 +130,8 @@ function filterOptions() {
   if(selectedProject && !snapshot.projects.some(p=>p.id===selectedProject)) select.add(new Option(selectedProject + ' (unavailable)', selectedProject));
   select.value=selectedProject;
   const assignment=$('assignment-filter');
-  assignment.replaceChildren(new Option('All assignments',''),new Option('No worker assigned','unassigned'),new Option('Needs routing','needs-routing'));
-  for(const worker of [...new Set(snapshot.orders.flatMap(o=>o.workers))].sort()) assignment.add(new Option(worker,'worker:'+worker));
+  assignment.replaceChildren(new Option('All assignments',''),new Option('Unassigned','unassigned'));
+  for(const seat of snapshot.agents.filter(a=>a.group==='seat')) assignment.add(new Option(seat.name,'worker:'+seat.id));
   if(selectedAssignment && !Array.from(assignment.options).some(o=>o.value===selectedAssignment)) assignment.add(new Option(selectedAssignment.replace(/^worker:/,''),selectedAssignment));
   assignment.value=selectedAssignment;
   const status=$('status-filter'), current=status.value;
@@ -113,7 +142,12 @@ function filterOptions() {
 }
 function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value;
-  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.length:selectedAssignment==='needs-routing'?o.needs_routing:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):status.startsWith('face:')?o.attention_face===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const base=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.length:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):status.startsWith('face:')?o.attention_face===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const parked=base.filter(o=>['deferred','tracking'].includes(o.gate_type));
+  $('deferred-count').textContent=parked.length;
+  $('deferred-toggle').hidden=!parked.length && !showDeferred;
+  const hideParked=!showDeferred && !status.startsWith('gate:');
+  const orders=hideParked ? base.filter(o=>!['deferred','tracking'].includes(o.gate_type)) : base;
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
   $('work-list').replaceChildren(...orders.slice(pageIndex*size,(pageIndex+1)*size).map(orderRow));
   if(!orders.length) empty($('work-list'),'No matching open work. Try another project, assignment, status, or search.');
@@ -288,12 +322,12 @@ async function refresh() {
   finally { pending=false;$('refresh').disabled=false;$('refresh').textContent='Refresh';freshness(); }
 }
 function updateFilters() {
-  selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
-  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('search').value)params.set('q',$('search').value);
+  selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;showDeferred=$('show-deferred').checked;pageIndex=0;
+  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('search').value)params.set('q',$('search').value);if(showDeferred)params.set('deferred','1');
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
-$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);
+$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('show-deferred').addEventListener('change',updateFilters);
 $('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});$('refresh').addEventListener('click',()=>{refresh();refreshRemote();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
