@@ -259,9 +259,19 @@ function heartbeatLine() {
   const ago=seconds<60?`${seconds}s ago`:`${Math.floor(seconds/60)}m ago`;
   return `WorkForce daemon: seen ${ago}`;
 }
-function projectOpenCount(slug) {
+function projectStoreState(slug) {
   const project=(snapshot.projects || []).find(p=>p.id===slug);
-  return project && project.state==='available' ? project.open : 0;
+  if(!project) return 'unknown';
+  return project.state==='available' ? 'available' : 'unavailable';
+}
+function projectOpenCount(slug) {
+  if(projectStoreState(slug)!=='available') return null;
+  return (snapshot.projects || []).find(p=>p.id===slug).open;
+}
+function coverageIsActive(row) {
+  if(row.present.length || row.held.length) return true;
+  if(projectStoreState(row.project)!=='available') return true;
+  return projectOpenCount(row.project) > 0;
 }
 function coverageCompactLine(row) {
   const staffed=[...row.present, ...row.held.map(p=>`${p} off`)];
@@ -270,8 +280,11 @@ function coverageCompactLine(row) {
   if(row.not_configured.length) line+=` · not configured: ${row.not_configured.join(', ')}`;
   return line;
 }
-function coverageHireBlock(row) {
-  const block=el('div',undefined,'bp-coverage-hire');
+function paintCoverageHireBody(hire, row) {
+  let body=hire.querySelector('.bp-coverage-hire');
+  if(!body) { body=el('div',undefined,'bp-coverage-hire'); hire.append(body); }
+  body.replaceChildren();
+  if(!hire.open) return;
   for(const provider of row.missing) {
     const command=row.hire_commands[provider];
     const wrap=el('p',undefined,'bp-muted');
@@ -279,41 +292,63 @@ function coverageHireBlock(row) {
     button.type='button';
     button.addEventListener('click',()=>navigator.clipboard.writeText(command));
     wrap.append(`Hire ${provider}: `,el('code',command),' ',button);
-    block.append(wrap);
+    body.append(wrap);
   }
-  if(row.not_configured.length) block.append(el('p',row.not_configured.map(p=>`${p}: ${row.install_hints[p]}`).join(' · '),'bp-muted bp-note'));
-  return block;
+  if(row.not_configured.length) body.append(el('p',row.not_configured.map(p=>`${p}: ${row.install_hints[p]}`).join(' · '),'bp-muted bp-note'));
 }
 function coverageRow(row) {
   const node=el('div',undefined,'bp-coverage-row');
   node.append(el('p',coverageCompactLine(row),'bp-muted'));
+  if(projectStoreState(row.project)!=='available') node.append(el('p','Store unavailable','bp-muted bp-note'));
   if(row.missing.length || row.not_configured.length) {
     const hire=el('details');
-    hire.append(el('summary','Hire…'));
-    hire.append(coverageHireBlock(row));
+    hire.dataset.coverageProject=row.project;
+    hire.append(el('summary','Hire…'),el('div',undefined,'bp-coverage-hire'));
     node.append(hire);
   }
   return node;
 }
+function coverageCollapsedBundle(rows) {
+  const bundle=el('details',undefined,'bp-coverage-collapsed');
+  const names=rows.map(row=>row.project).join(', ');
+  bundle.append(el('summary',`${rows.length} project${rows.length===1?'':'s'} unstaffed (${names})`));
+  const inner=el('div',undefined,'bp-coverage-collapsed-rows');
+  for(const row of rows) inner.append(coverageRow(row));
+  bundle.append(inner);
+  return bundle;
+}
+function refreshCoverageHireBodies(container) {
+  for(const hire of container.querySelectorAll('details[data-coverage-project]')) {
+    if(!hire.open) continue;
+    const row=(snapshot.coverage || []).find(item=>item.project===hire.dataset.coverageProject);
+    if(row) paintCoverageHireBody(hire, row);
+  }
+}
+function ensureCoverageHireDelegation() {
+  const container=$('coverage-list');
+  if(container.dataset.hireBound) return;
+  container.dataset.hireBound='1';
+  container.addEventListener('toggle',event=>{
+    const hire=event.target;
+    if(hire.tagName!=='DETAILS' || !hire.dataset.coverageProject) return;
+    const row=(snapshot.coverage || []).find(item=>item.project===hire.dataset.coverageProject);
+    if(row) paintCoverageHireBody(hire, row);
+  });
+}
 function renderCoverage() {
+  ensureCoverageHireDelegation();
   const rows=snapshot.coverage || [], active=[], collapsed=[];
   for(const row of rows) {
-    if(row.present.length || row.held.length || projectOpenCount(row.project) > 0) active.push(row);
+    if(coverageIsActive(row)) active.push(row);
     else collapsed.push(row);
   }
-  const container=$('coverage-list');
-  container.replaceChildren();
-  for(const row of active) container.append(coverageRow(row));
-  if(collapsed.length) {
-    const bundle=el('details',undefined,'bp-coverage-collapsed');
-    const names=collapsed.map(row=>row.project).join(', ');
-    bundle.append(el('summary',`${collapsed.length} project${collapsed.length===1?'':'s'} unstaffed (${names})`));
-    const inner=el('div',undefined,'bp-coverage-collapsed-rows');
-    for(const row of collapsed) inner.append(coverageRow(row));
-    bundle.append(inner);
-    container.append(bundle);
-  }
-  if(!rows.length) empty(container,'No registered projects.');
+  const items=[...active];
+  if(collapsed.length) items.push({project:'__collapsed__', rows:collapsed});
+  reconcileList($('coverage-list'), items, item=>item.project, item=>{
+    if(item.project==='__collapsed__') return coverageCollapsedBundle(item.rows);
+    return coverageRow(item);
+  }, {emptyText:'No registered projects.'});
+  refreshCoverageHireBodies($('coverage-list'));
 }
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');

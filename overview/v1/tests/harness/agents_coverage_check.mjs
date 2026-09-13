@@ -1,6 +1,6 @@
 // Agents coverage panel harness (pc-1480): seat cards before coverage, one
 // collapsed unstaffed line, hire commands hidden until a disclosure opens,
-// and no classifier jargon in the DOM.
+// open Hire disclosures survive repaints, and unavailable stores stay active.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
@@ -9,8 +9,12 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 class Element {
   constructor(tag = 'div') {
     this.tagName = String(tag).toUpperCase();
+    this.nodeType = tag === '#text' ? 3 : 1;
+    this.nodeName = this.tagName;
     this.children = [];
+    this.childNodes = this.children;
     this.listeners = {};
+    this.attributes = {};
     this.className = '';
     this.dataset = {};
     this.hidden = false;
@@ -21,6 +25,7 @@ class Element {
     this.value = '';
     this.checked = false;
     this.disabled = false;
+    this.ownerDocument = {createElement: tag => new Element(tag)};
     this.classList = {
       add: name => { this.className = `${this.className} ${name}`.trim(); },
       remove: name => { this.className = this.className.split(/\s+/).filter(x => x && x !== name).join(' '); },
@@ -34,9 +39,39 @@ class Element {
       this.children.push(child);
     }
   }
+  appendChild(node) { this.append(node); return node; }
+  insertBefore(node, ref) {
+    const idx = ref ? this.children.indexOf(ref) : this.children.length;
+    node.parent = this;
+    this.children.splice(idx < 0 ? this.children.length : idx, 0, node);
+    return node;
+  }
+  removeChild(node) {
+    const idx = this.children.indexOf(node);
+    if (idx >= 0) this.children.splice(idx, 1);
+    return node;
+  }
+  get firstChild() { return this.children[0] || null; }
+  get nextSibling() {
+    if (!this.parent) return null;
+    const idx = this.parent.children.indexOf(this);
+    return this.parent.children[idx + 1] || null;
+  }
   replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
-  setAttribute() {}
+  dispatchEvent(event) {
+    const evt = {type: event?.type, target: this};
+    let node = this;
+    while (node) {
+      for (const fn of node.listeners[event?.type] || []) fn.call(node, evt);
+      node = node.parent;
+    }
+    return true;
+  }
+  hasAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name); }
+  getAttribute(name) { return this.attributes[name] ?? null; }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  removeAttribute(name) { delete this.attributes[name]; }
   contains() { return false; }
   get textContent() {
     if (this.tagName === 'CODE') return this._text;
@@ -49,6 +84,7 @@ class Element {
       if (sel === 'details' && node.tagName === 'DETAILS') return node;
       if (sel === 'summary' && node.tagName === 'SUMMARY') return node;
       if (sel === 'code' && node.tagName === 'CODE') return node;
+      if (sel === '.bp-coverage-hire' && node.className.includes('bp-coverage-hire')) return node;
       for (const child of node.children) {
         const hit = walk(child);
         if (hit) return hit;
@@ -61,11 +97,105 @@ class Element {
     const out = [];
     const walk = node => {
       if (sel === 'details' && node.tagName === 'DETAILS') out.push(node);
+      if (sel === 'details[data-coverage-project]' && node.tagName === 'DETAILS' && node.dataset.coverageProject) out.push(node);
+      if (sel === 'code' && node.tagName === 'CODE') out.push(node);
       for (const child of node.children) walk(child);
     };
     walk(this);
     return out;
   }
+}
+
+const PRESERVED_ATTRS = new Set(['open']);
+
+function syncNode(oldEl, newEl) {
+  let changed = false;
+  for (const name of Object.keys(oldEl.attributes || {})) {
+    if (PRESERVED_ATTRS.has(name)) continue;
+    if (!newEl.hasAttribute(name)) { oldEl.removeAttribute(name); changed = true; }
+  }
+  for (const name of Object.keys(newEl.attributes || {})) {
+    if (PRESERVED_ATTRS.has(name)) continue;
+    if (oldEl.getAttribute(name) !== newEl.getAttribute(name)) { oldEl.setAttribute(name, newEl.getAttribute(name)); changed = true; }
+  }
+  if (oldEl.className !== newEl.className) { oldEl.className = newEl.className; changed = true; }
+  if (oldEl.dataset && newEl.dataset) {
+    for (const key of new Set([...Object.keys(oldEl.dataset), ...Object.keys(newEl.dataset)])) {
+      if ((oldEl.dataset[key] || '') !== (newEl.dataset[key] || '')) {
+        if (newEl.dataset[key] === undefined) delete oldEl.dataset[key];
+        else oldEl.dataset[key] = newEl.dataset[key];
+        changed = true;
+      }
+    }
+  }
+  if (syncChildren(oldEl, newEl)) changed = true;
+  return changed;
+}
+
+function syncChildren(oldParent, newParent) {
+  let changed = false;
+  const newNodes = newParent.children;
+  for (let i = 0; i < newNodes.length; i++) {
+    const newNode = newNodes[i];
+    const oldNode = oldParent.children[i];
+    if (!oldNode) { oldParent.appendChild(newNode); changed = true; continue; }
+    if (oldNode.nodeType !== newNode.nodeType || oldNode.tagName !== newNode.tagName) {
+      oldParent.insertBefore(newNode, oldNode);
+      oldParent.removeChild(oldNode);
+      changed = true;
+      continue;
+    }
+    if (newNode.nodeType === 3) {
+      if (oldNode.textContent !== newNode.textContent) { oldNode.textContent = newNode.textContent; changed = true; }
+      continue;
+    }
+    if (syncNode(oldNode, newNode)) changed = true;
+  }
+  while (oldParent.children.length > newNodes.length) {
+    oldParent.removeChild(oldParent.children[oldParent.children.length - 1]);
+    changed = true;
+  }
+  return changed;
+}
+
+function reconcileList(container, items, keyOf, buildRow, options = {}) {
+  const {emptyText} = options;
+  if (!items.length) {
+    container.replaceChildren();
+    if (emptyText) {
+      const p = new Element('p');
+      p.className = 'bp-empty';
+      p.textContent = emptyText;
+      container.append(p);
+    }
+    return;
+  }
+  const existing = new Map();
+  for (const node of [...container.children]) {
+    if (!node.dataset || node.dataset.key === undefined) continue;
+    if (existing.has(node.dataset.key)) { container.removeChild(node); continue; }
+    existing.set(node.dataset.key, node);
+  }
+  const seen = new Set();
+  let cursor = container.firstChild;
+  for (const item of items) {
+    const key = String(keyOf(item));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const rendered = buildRow(item);
+    rendered.dataset.key = key;
+    const node = existing.get(key);
+    if (node) {
+      existing.delete(key);
+      if (node !== cursor) container.insertBefore(node, cursor);
+      syncNode(node, rendered);
+      cursor = node.nextSibling;
+    } else {
+      container.insertBefore(rendered, cursor);
+      cursor = rendered.nextSibling;
+    }
+  }
+  for (const leftover of existing.values()) container.removeChild(leftover);
 }
 
 const IDS = [
@@ -88,6 +218,7 @@ const fixture = {
   projects: [
     {id: 'blueprint', name: 'BluePrint', open: 3, attention: 0, working: 1, state: 'available'},
     {id: 'workforce', name: 'WorkForce', open: 2, attention: 0, working: 0, state: 'available'},
+    {id: 'tradeos', name: 'tradeOS', open: 0, attention: 0, working: 0, state: 'unavailable'},
     {id: 'career', name: 'Career', open: 0, attention: 0, working: 0, state: 'available'},
     {id: 'comms', name: 'Comms', open: 0, attention: 0, working: 0, state: 'available'},
     {id: 'connector', name: 'Connector', open: 0, attention: 0, working: 0, state: 'available'},
@@ -118,6 +249,9 @@ const fixture = {
         Cursor: 'workforce hire wf-cursor-implementer --provider cursor --project workforce --repository /tmp/oneseo/workforce --schedule manual',
       },
       install_hints: {Grok: 'Install Grok CLI', Codex: 'Install Codex CLI'}, sources: {}},
+    {project: 'tradeos', name: 'tradeOS', present: [], held: [], missing: ['Claude'], not_configured: ['Cursor', 'Grok', 'Codex'],
+      text: 'tradeOS: none staffed · missing Claude', hire_commands: {Claude: 'workforce hire ts-claude-implementer --provider claude --project tradeos --repository /tmp/oneseo/tradeos --schedule manual'},
+      install_hints: {}, sources: {}},
     {project: 'career', name: 'Career', present: [], held: [], missing: ['Claude'], not_configured: ['Cursor', 'Grok', 'Codex'],
       text: 'Career: none staffed · missing Claude', hire_commands: {Claude: 'workforce hire career-claude-implementer --provider claude --project career --repository /tmp/oneseo/career --schedule manual'},
       install_hints: {}, sources: {}},
@@ -191,16 +325,6 @@ for (const id of ['project-filter', 'assignment-filter', 'status-filter', 'timel
 get('agents-view').hidden = false;
 get('refresh-preference').value = '15';
 get('motion-preference').value = 'system';
-const reconcileList = (parent, items, keyFn, render, opts = {}) => {
-  parent.replaceChildren();
-  if (!items.length) {
-    const empty = new Element('p');
-    empty.textContent = opts.emptyText || 'Empty';
-    parent.append(empty);
-    return;
-  }
-  for (const item of items) parent.append(render(item));
-};
 context.readerNav = {readerHref: path => path};
 context.changeFeed = {connectChanges() { return {stop() {}}; }};
 context.reconcileListFn = reconcileList;
@@ -214,11 +338,14 @@ raw = raw
 const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
-raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; agents();`;
+raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)};`;
 const scopeKeys = Object.keys(context);
 const scopeVals = Object.values(context);
-const boot = new Function(...scopeKeys, `return (async () => { ${raw} })();`);
-await boot(...scopeVals);
+const boot = new Function(...scopeKeys, `return (async () => { ${raw} return {agents, snapshot}; })();`);
+const runtime = await boot(...scopeVals);
+const {agents} = runtime;
+
+agents();
 
 const seatList = get('seat-list');
 const coverageList = get('coverage-list');
@@ -251,18 +378,31 @@ assert.match(collapsed.querySelector('summary').textContent, /6 projects unstaff
 assert.equal(coverageList.children.filter(c => c.className.includes('bp-coverage-collapsed')).length, 1,
   'exactly one collapsed unstaffed line');
 
+const unavailableRow = coverageList.children.find(c =>
+  c.className.includes('bp-coverage-row') && domText(c).includes('tradeOS') && domText(c).includes('Store unavailable'));
+assert.ok(unavailableRow, 'unavailable store must render as its own active row');
+assert.ok(!domText(collapsed).includes('tradeOS'), 'unavailable store must not sit inside the collapsed line');
+
 const closedText = domText(coverageList);
 assert.ok(!/workforce hire/i.test(closedText), 'hire commands must stay hidden until disclosure opens');
 assert.ok(!/classifier/i.test(closedText), 'classifier jargon must not appear');
+assert.equal(coverageList.querySelectorAll('code').length, 0, 'closed rows must not contain hire command nodes');
+const noHireNodesWhileClosed = coverageList.querySelectorAll('code').length === 0;
 
-const hireDisclosure = coverageList.querySelectorAll('details').find(d => {
+const hireDisclosure = coverageList.querySelectorAll('details[data-coverage-project]').find(d => {
   const summary = d.children.find(c => c.tagName === 'SUMMARY');
-  return summary && summary.textContent === 'Hire…';
+  return summary && summary.textContent === 'Hire…' && d.dataset.coverageProject === 'workforce';
 });
 assert.ok(hireDisclosure, 'an active row must expose a Hire disclosure');
 hireDisclosure.open = true;
+hireDisclosure.dispatchEvent({type: 'toggle'});
 const openText = domText(coverageList);
 assert.ok(/workforce hire/i.test(openText), 'opening disclosure must reveal hire commands');
+assert.ok(coverageList.querySelectorAll('code').length > 0, 'opened disclosure must render hire command nodes');
+
+agents();
+assert.ok(hireDisclosure.open, 'opened Hire disclosure must stay open across repaint');
+assert.ok(/workforce hire/i.test(domText(coverageList)), 'repaint must keep opened hire commands visible');
 
 process.stdout.write(JSON.stringify({
   seat_count: seatList.children.length,
@@ -270,4 +410,7 @@ process.stdout.write(JSON.stringify({
   collapsed_summary: collapsed.querySelector('summary').textContent,
   hire_hidden_until_open: !/workforce hire/i.test(closedText),
   no_classifier: !/classifier/i.test(closedText),
+  hire_open_survives_repaint: hireDisclosure.open && /workforce hire/i.test(domText(coverageList)),
+  unavailable_store_active: Boolean(unavailableRow),
+  no_hire_nodes_while_closed: noHireNodesWhileClosed,
 }));
