@@ -189,7 +189,20 @@ function truncateLotLabel(name, max) {
   return `${name.slice(0, max - 1)}…`;
 }
 
-export function paintLots(world, lots, { radius = 220, selectedRelPath = null } = {}) {
+function lotNodeState(lot, nodeState) {
+  const fromOps = nodeState && lot && lot.relPath ? nodeState[lot.relPath] : null;
+  if (fromOps) return fromOps;
+  if (!lot) return null;
+  if (lot.open == null && lot.attention == null && lot.working == null && !lot.storeState) return null;
+  return {
+    open: lot.open || 0,
+    attention: lot.attention || 0,
+    working: lot.working || 0,
+    state: lot.storeState || 'available',
+  };
+}
+
+export function paintLots(world, lots, { radius = 220, selectedRelPath = null, nodeState = null } = {}) {
   const layer = world.querySelector('#lots');
   layer.replaceChildren();
   const layout = computeHubLayout(lots, { baseRadius: radius });
@@ -204,12 +217,23 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
     const kind = lot.isDir === false ? 'file' : 'folder';
     const isSelected = selectedRelPath && lot.relPath === selectedRelPath;
     const denseClass = dense ? ' map-lot-dense' : '';
+    const state = kind === 'folder' ? lotNodeState(lot, nodeState) : null;
+    const countsLabel = state
+      ? (state.state && state.state !== 'available'
+        ? 'read-only'
+        : `${Number(state.open) || 0} · ${Number(state.attention) || 0} · ${Number(state.working) || 0}`)
+      : '';
+    const aria = countsLabel
+      ? (countsLabel === 'read-only'
+        ? `${lot.name}, read-only`
+        : `${lot.name}, ${Number(state.open) || 0} open, ${Number(state.attention) || 0} For You, ${Number(state.working) || 0} working`)
+      : lot.name;
     const group = el('g', {
       class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}${isSelected ? ' is-selected' : ''}${denseClass}`,
       transform: `translate(${pos.x.toFixed(2)},${pos.y.toFixed(2)})`,
       tabindex: '0',
       role: 'button',
-      'aria-label': lot.name,
+      'aria-label': aria,
       'data-rel-path': lot.relPath,
       'data-name': lot.name,
       'data-has-md': lot.hasMd ? '1' : '0',
@@ -237,6 +261,11 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null } 
     }, truncateLotLabel(rawName, max));
     label.appendChild(el('title', {}, rawName));
     group.appendChild(label);
+    if (countsLabel) {
+      group.appendChild(el('text', {
+        x: 0, y: plateH / 2 + 12, class: 'map-lot-counts', 'text-anchor': 'middle',
+      }, countsLabel));
+    }
     layer.appendChild(group);
   });
   return {

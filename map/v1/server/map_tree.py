@@ -116,6 +116,38 @@ def build_tree(root: Path, *, hidden_names: Iterable[str] | None = None) -> dict
     return {"binder": binder, "lots": lots, "git": _git_shape(root)}
 
 
+def attach_project_state(tree: dict, projects: Iterable[dict] | None) -> dict:
+    """Stamp open / For You / working counts onto lots that match a project folder.
+
+    Counts come from the same operations projection Overview uses. Lots without
+    a matching folder are unchanged. ``storeState`` is ``available`` or not —
+    the client paints a read-only mark when the store is not available.
+    """
+    by_folder: dict[str, dict] = {}
+    for project in projects or []:
+        if not isinstance(project, dict):
+            continue
+        folder = project.get("folder")
+        if isinstance(folder, str) and folder:
+            by_folder[folder] = project
+    lots = []
+    for lot in tree.get("lots") or []:
+        if not isinstance(lot, dict):
+            continue
+        project = by_folder.get(lot.get("relPath"))
+        if project is None:
+            lots.append(dict(lot))
+            continue
+        state = project.get("state") or "unavailable"
+        row = dict(lot)
+        row["open"] = int(project.get("open") or 0)
+        row["attention"] = int(project.get("attention") or 0)
+        row["working"] = int(project.get("working") or 0)
+        row["storeState"] = state
+        lots.append(row)
+    return {**tree, "lots": lots}
+
+
 def _safe_join(root: Path, rel: str) -> Path:
     """Reject rel-paths that escape the binder root."""
     if rel in ("", "/"):

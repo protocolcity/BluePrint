@@ -18,7 +18,7 @@ class Element {
 
 const payload = {
   workspace: {name: 'Desk', path: '/tmp/desk'},
-  projects: [{id: 'example', name: 'Example', folder: 'example', open: 1, state: 'available', has_instructions: false}],
+  projects: [{id: 'example', name: 'Example', folder: 'example', open: 1, attention: 0, working: 1, state: 'available', has_instructions: false}],
   orders: [{project: 'example', status: 'in_progress', gate_type: ''}],
   sources: [{name: 'WorkLane', state: 'available'}],
   truncated: false,
@@ -28,6 +28,9 @@ const payload = {
 let fetchCalls = 0, fakeNow = 0, tick = null;
 const nodes = new Map();
 const get = id => { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); };
+class FakeCustomEvent {
+  constructor(type, init) { this.type = type; this.detail = init && init.detail; }
+}
 const context = {
   URL, URLSearchParams, console,
   location: new URL('/map', 'https://desk.example'),
@@ -35,6 +38,7 @@ const context = {
   localStorage: {getItem() { return null; }},
   JSON,
   Date: {now: () => fakeNow},
+  CustomEvent: FakeCustomEvent,
   setInterval: fn => { tick = fn; return 1; },
   clearInterval() {},
   setTimeout() {},
@@ -43,6 +47,7 @@ context.document = {
   getElementById: get,
   createElement: () => new Element(),
   addEventListener(type, fn) { (context.document.listeners ||= {})[type] = fn; },
+  dispatchEvent() { return true; },
   body: new Element(),
   hidden: false,
 };
