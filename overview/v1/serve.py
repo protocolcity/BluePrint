@@ -298,6 +298,23 @@ class Handler(BaseHTTPRequestHandler):
             from server.remote_activity import remote_snapshot
             self._send_json(200, remote_snapshot(self.binder_root))
             return
+        if route == "/api/timeline":
+            import sqlite3
+            from server.timeline import timeline_snapshot
+            def _q(name: str) -> str:
+                value = query.get(name, "")
+                return value[0] if isinstance(value, list) else value
+            try:
+                self._send_json(200, timeline_snapshot(
+                    self.binder_root,
+                    project=_q("project"),
+                    source=_q("source"),
+                    actor=_q("actor"),
+                    cursor=_q("cursor"),
+                ))
+            except (OSError, ValueError, sqlite3.Error):
+                self._send_json(503, {"error": "Timeline could not be read."})
+            return
         if route == "/api/operations":
             from server.operations import operations_snapshot
             try:
@@ -317,7 +334,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        if route in ("/", "/overview", "/overview/", "/work", "/agents", "/delivery", "/delivery/", "/projects", "/connections", "/calendar", "/calendar/", "/settings", "/settings/"):
+        if route in ("/", "/overview", "/overview/", "/work", "/agents", "/delivery", "/delivery/", "/timeline", "/timeline/", "/projects", "/connections", "/calendar", "/calendar/", "/settings", "/settings/"):
             self._serve_static(_OV_STATIC_DIR, "operations.html")
             return
 

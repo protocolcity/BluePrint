@@ -6,8 +6,8 @@ const {connectChanges} = await import('/js/change-feed.mjs');
 const {reconcileList, syncNote} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
-const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents','Registered local agents, schedules, and reported runtime state.'],connections:['Connections','Where the information comes from and how current it is.']};
+const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
+const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents','Registered local agents, schedules, and reported runtime state.'],connections:['Connections','Where the information comes from and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
@@ -15,12 +15,17 @@ function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.p
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
+let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false;
+let timelineProject = '', timelineSource = '', timelineActor = '';
 let streamState = 'connecting', everOpened = false, consecutiveErrors = 0, lastChangeAt = null;
 let interval = 15, motion = 'system';
 try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,15,30].includes(saved.interval))interval=saved.interval;if(saved.motion==='off')motion='off'; } catch(error) { /* Unavailable storage uses defaults. */ }
 $('refresh-preference').value=String(interval);$('motion-preference').value=motion;
 document.body.classList.toggle('bp-reduce-motion',motion==='off');
 const query = new URLSearchParams(location.search);
+timelineProject = query.get('project') || '';
+timelineSource = query.get('source') || '';
+timelineActor = query.get('actor') || '';
 $('search').value = query.get('q') || '';
 for(const name of ['decide','read','watch','note'])$('status-filter').add(new Option(name[0].toUpperCase()+name.slice(1),'face:'+name));
 for(const [gate,label] of Object.entries({deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'})) {
@@ -150,6 +155,13 @@ function filterOptions() {
     if(!Array.from(status.options).some(option=>option.value===name)) status.add(new Option(name.replaceAll('_',' '),name));
   }
   status.value=current;
+  const timelineSelect=$('timeline-project');
+  if(timelineSelect) {
+    const currentTimeline=timelineSelect.value;
+    timelineSelect.replaceChildren(new Option('All projects',''));
+    for(const project of snapshot.projects) timelineSelect.add(new Option(project.name,project.id));
+    timelineSelect.value=currentTimeline || timelineProject;
+  }
 }
 function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value;
@@ -276,6 +288,49 @@ function agents() {
   reconcileList($('job-list'), jobs, a=>a.id, agentCard, {emptyText:'No jobs registered in the readable registry.'});
   supervisorPanel();
 }
+function timelineRow(row) {
+  const node = el('article', undefined, 'bp-order');
+  const content = el('div');
+  content.append(el('strong', row.title));
+  const local = date(row.at);
+  content.append(el('span', `${row.source} · ${row.project || 'desk'} · ${row.actor} · ${row.event} · ${local}`, 'bp-order-meta'));
+  const eventBadge = badge(row.source, row.event);
+  if (row.event_title) eventBadge.title = row.event_title;
+  node.append(content, eventBadge);
+  if (row.link?.href) {
+    const href = row.link.href;
+    const linkNode = row.link.external ? link(row.link.label || 'Open', href, 'bp-order-link') : link(row.link.label || 'Open', href, 'bp-order-link');
+    if (row.link.external) { linkNode.target = '_blank'; linkNode.rel = 'noopener noreferrer'; }
+    node.append(linkNode);
+  }
+  return node;
+}
+function timelineSources() {
+  reconcileList($('timeline-sources'), timelineData?.sources || [], source => source.name, source => {
+    const row = el('div', undefined, 'bp-source');
+    row.append(el('span', source.name), badge(source.state));
+    const detail = [source.detail, source.observed_at ? `Observed ${date(source.observed_at)}` : ''].filter(Boolean).join(' · ');
+    if (detail) row.append(el('p', detail, 'bp-muted'));
+    return row;
+  }, {emptyText: 'No timeline sources reported.'});
+}
+function timeline() {
+  reconcileList($('timeline-list'), timelineData?.rows || [], row => row.id, timelineRow, {emptyText: 'No timeline rows in the readable window.'});
+  timelineSources();
+  $('timeline-more').hidden = !timelineMore;
+}
+function updateTimelineFilters() {
+  timelineProject = $('timeline-project').value;
+  timelineSource = $('timeline-source').value;
+  timelineActor = $('timeline-actor').value.trim();
+  timelineCursor = '';
+  const params = new URLSearchParams();
+  if (timelineProject) params.set('project', timelineProject);
+  if (timelineSource) params.set('source', timelineSource);
+  if (timelineActor) params.set('actor', timelineActor);
+  history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
+  refreshTimeline(false);
+}
 function calendar() {
   const datedItems=[...(snapshot.work_dates || [])].sort((a,b)=>a.dtstart.localeCompare(b.dtstart));
   reconcileList($('dated-work'), datedItems, event=>`${event.product}:${event.task_id}`, event=>{
@@ -310,6 +365,7 @@ function paint() {
   if(page==='projects') { reconcileList($('projects-view'), snapshot.projects, p=>p.id, projectCard, {emptyText:'No local project stores found.'}); }
   if(page==='agents') agents();
   if(page==='calendar') calendar();
+  if(page==='timeline') timeline();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
   if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; syncNote($('connection-list'),'excluded-stores',excluded.length ? 'Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.' : null,'bp-note bp-muted');$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
@@ -325,6 +381,38 @@ function freshness() {
   status.dataset.state=lastError?'error':'ok';
   const indicator=liveIndicator();
   status.textContent=lastError && lastSuccess ? `Refresh failed · showing last read · ${indicator}` : indicator;
+}
+async function refreshTimeline(append) {
+  if (timelinePending || page !== 'timeline') return;
+  timelinePending = true;
+  try {
+    const params = new URLSearchParams();
+    if (timelineProject) params.set('project', timelineProject);
+    if (timelineSource) params.set('source', timelineSource);
+    if (timelineActor) params.set('actor', timelineActor);
+    if (append && timelineCursor) params.set('cursor', timelineCursor);
+    const response = await fetch('/api/timeline?' + params.toString(), {cache: 'no-store', signal: AbortSignal.timeout(10000)});
+    if (!response.ok) throw new Error('Unavailable');
+    const data = await response.json();
+    if (append && timelineData) {
+      const seen = new Set(timelineData.rows.map(row => row.id));
+      timelineData = {...data, rows: [...timelineData.rows, ...data.rows.filter(row => !seen.has(row.id))]};
+    } else {
+      timelineData = data;
+    }
+    timelineCursor = data.next_cursor || '';
+    timelineMore = Boolean(data.next_cursor);
+    timeline();
+    lastSuccess = Date.now();
+    lastError = false;
+    lastChangeAt = Date.now();
+  } catch (error) {
+    lastError = true;
+    if (!timelineData) empty($('timeline-list'), 'Timeline is unavailable right now.');
+  } finally {
+    timelinePending = false;
+    freshness();
+  }
 }
 async function refreshRemote() {
   if(remotePending || !['delivery','connections'].includes(page)) return;
@@ -379,12 +467,23 @@ function updateFilters() {
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
 $('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('show-deferred').addEventListener('change',updateFilters);
-$('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});$('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();});
+$('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});if ($('timeline-filters')) {
+  $('timeline-project').value = timelineProject;
+  $('timeline-source').value = timelineSource;
+  $('timeline-actor').value = timelineActor;
+  $('timeline-filters').addEventListener('submit', event => event.preventDefault());
+  $('timeline-project').addEventListener('change', updateTimelineFilters);
+  $('timeline-source').addEventListener('change', updateTimelineFilters);
+  $('timeline-actor').addEventListener('change', updateTimelineFilters);
+  $('timeline-actor').addEventListener('input', updateTimelineFilters);
+  $('timeline-more').addEventListener('click', () => refreshTimeline(true));
+}
+$('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false);});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();freshness();});
 $('preferences').addEventListener('submit',event=>event.preventDefault());
 $('preferences').addEventListener('change',()=>{interval=Number($('refresh-preference').value);motion=$('motion-preference').value;document.body.classList.toggle('bp-reduce-motion',motion==='off');try{localStorage.setItem('bp-display',JSON.stringify({interval,motion}));$('preference-status').textContent='Saved in this browser.';}catch(error){$('preference-status').textContent='Applied for this page; browser storage is unavailable.';}});
-connectChanges(()=>{if(!document.hidden)refresh();},state=>{streamState=state;if(state==='open'){everOpened=true;consecutiveErrors=0;}else if(state==='error'){consecutiveErrors++;}freshness();});
-setInterval(()=>{const effective=streamState==='open'?60:interval;if(effective && !document.hidden && Date.now()-lastAttempt>=effective*1000)refresh();},1000);setInterval(freshness,1000);setInterval(()=>{if(!document.hidden && Date.now()-remoteLast>15000)refreshRemote();},1000);refresh();refreshRemote();
+connectChanges(()=>{if(!document.hidden){refresh();if(page==='timeline')refreshTimeline(false);}},state=>{streamState=state;if(state==='open'){everOpened=true;consecutiveErrors=0;}else if(state==='error'){consecutiveErrors++;}freshness();});
+setInterval(()=>{const effective=streamState==='open'?60:interval;if(effective && !document.hidden && Date.now()-lastAttempt>=effective*1000)refresh();},1000);setInterval(freshness,1000);setInterval(()=>{if(!document.hidden && Date.now()-remoteLast>15000)refreshRemote();},1000);refresh();refreshRemote();if(page==='timeline')refreshTimeline(false);
 })();

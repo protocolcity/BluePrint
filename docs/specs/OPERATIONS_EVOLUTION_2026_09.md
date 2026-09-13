@@ -6,7 +6,7 @@ User decision: the application developed on :8803 is the forward BP baseline. Th
 
 BluePrint provides one view into the selected workspace's projects, work orders, agents, schedules, and data sources. Overview prioritizes explicitly human-gated work and gives project context. Work provides search, project/status/assignment filters, pagination, and links to a full description/comment reader. Projects groups registered stores. Agents distinguishes registry membership from fresh runtime evidence. Calendar distinguishes WorkForce next-run reports, dates derived from work orders, and optional manually supplied events. Connections explains source availability and excluded databases. Settings contains functioning browser display preferences and running package identity.
 
-The desk disclosure describes the selected workspace; it is not a cloud switch. GitHub delivery evidence is connected through an explicit repository allowlist on the Delivery page. Direct remote agent execution is not configured. A future remote adapter must carry source identity, observation time, and failure state. A local work order describing remote work is not proof of remote execution.
+The desk disclosure describes the selected workspace; it is not a cloud switch. GitHub delivery evidence is connected through an explicit repository allowlist on the Delivery page. Timeline joins WorkLane events, WorkForce ledger rows, supervisor passes and GitHub delivery into one source-labelled stream with honest freshness. Direct remote agent execution is not configured. A future remote adapter must carry source identity, observation time, and failure state. A local work order describing remote work is not proof of remote execution.
 
 ## Data and interaction rules
 
