@@ -19,7 +19,7 @@ import importlib.util
 import re
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, Optional
 
 from protocolcity.desk import (
     DEFAULT_DESK,
@@ -244,6 +244,81 @@ def looks_like_blueprint_scaffold(text: str) -> bool:
     return any(m in lower for m in markers)
 
 
+def plant_standard_seats(
+    root: Path,
+    project_slug: str,
+    *,
+    project_path: Path,
+    prefix: str,
+    hire: bool = False,
+    held: Optional[Iterable[str]] = None,
+    workforce_bin: str = "workforce",
+) -> Dict[str, object]:
+    """The standard-seat-set ``workforce hire`` commands for one project
+    (AGENT_ADOPTION.md D12): one bounded implementer per provider the host
+    has installed and this project has no seat for yet.
+
+    Reuses ``overview/v1/server/operations.py`` detect_providers /
+    hire_command / the seat-resolution helpers from pc-1474 rather than
+    duplicating provider detection here. Commands are always computed and
+    returned (RUNNING's rule that starting BluePrint must not hire); they
+    are only run against ``workforce_bin`` when ``hire=True`` — BluePrint
+    never writes the roster itself, ``workforce hire`` is the only writer.
+    """
+    import shlex
+    import subprocess
+
+    from overview.v1.server.operations import (
+        _PROVIDER_ORDER,
+        _project_remote,
+        _project_seat_providers,
+        detect_providers,
+        hire_command,
+        read_json,
+        resolve_roster_path,
+    )
+
+    held_set = {str(p).strip().title() for p in (held or ())}
+    host_providers = detect_providers()
+    roster_path = resolve_roster_path(root)
+    roster = read_json(roster_path, root) if roster_path else None
+    workers = (roster or {}).get("workers") if isinstance(roster, dict) else None
+    seats = _project_seat_providers(
+        workers if isinstance(workers, dict) else {}, project_slug, root, {}
+    )
+    remote = _project_remote(root, project_slug)
+
+    commands = []
+    hired = []
+    for provider in _PROVIDER_ORDER:
+        if not host_providers.get(provider) or seats.get(provider):
+            continue
+        text = hire_command(
+            provider,
+            project_slug=project_slug,
+            project_path=str(project_path),
+            prefix=prefix,
+            remote=remote,
+        )
+        if provider in held_set:
+            text = text + " --held"
+        commands.append({"provider": provider, "command": text})
+        if hire:
+            argv = [workforce_bin] + shlex.split(text)[1:]
+            proc = subprocess.run(argv, capture_output=True, text=True)
+            hired.append(
+                {
+                    "provider": provider,
+                    "command": text,
+                    "returncode": proc.returncode,
+                    "stdout": proc.stdout,
+                    "stderr": proc.stderr,
+                }
+            )
+
+    return {"ok": True, "project": project_slug, "commands": commands, "hired": hired}
+
+
 def adopt_neighborhood(
     city_root: Path,
     name: str,
@@ -255,6 +330,10 @@ def adopt_neighborhood(
     worker_id: str = "demo-worker",
     with_demo_worker: bool = False,
     allow_live_desk: bool = False,
+    plant_seats: bool = False,
+    hire_seats: bool = False,
+    held_providers: Optional[Iterable[str]] = None,
+    workforce_bin: str = "workforce",
 ) -> Dict[str, object]:
     """Lay out structure inside city_root/name so the office can manage it.
 
@@ -366,6 +445,18 @@ def adopt_neighborhood(
         if live_pref:
             prefix = live_pref
 
+    seats_result: Optional[Dict] = None
+    if plant_seats:
+        seats_result = plant_standard_seats(
+            root,
+            store_slug,
+            project_path=cab,
+            prefix=prefix,
+            hire=hire_seats,
+            held=held_providers,
+            workforce_bin=workforce_bin,
+        )
+
     if is_managed(cab) and not force:
         # Soft fill missing law / optional worker stubs (never clobber)
         created_soft = _ensure_companions(
@@ -414,6 +505,7 @@ def adopt_neighborhood(
             "prefix": prefix,
             "created": created_soft,
             "desk": desk_result,
+            "seats": seats_result,
             "doctor": "companions-only" if created_soft else "noop",
         }
 
@@ -466,6 +558,7 @@ def adopt_neighborhood(
         "prefix": prefix,
         "created": created,
         "desk": desk_result,
+        "seats": seats_result,
         "doctor": "adopted",
     }
 
