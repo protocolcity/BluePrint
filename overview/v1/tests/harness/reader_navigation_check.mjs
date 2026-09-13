@@ -2,34 +2,49 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as navigation from '../../static/js/reader-navigation.mjs';
+import * as navShell from '../../static/js/nav-shell.mjs';
 import * as reconcile from '../../static/js/dom-reconcile.mjs';
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 class Element {
-  constructor() { this.children=[];this.listeners={};this.value='';this.options=[];this.style={};this.dataset={};this.textContent='';this.classList={add(){},remove(){},toggle(){}}; }
+  constructor() { this.children=[];this.listeners={};this.value='';this.options=[];this.style={};this.dataset={};this.textContent='';this.innerHTML='';this.hidden=false;this.classList={add(){},remove(){},toggle(){}}; }
   append(...nodes){this.children.push(...nodes);}
   appendChild(node){this.append(node);}
-  replaceChildren(...nodes){this.children=nodes;}
+  replaceChildren(...nodes){this.children=nodes.length?nodes:[];}
   add(node){this.options.push(node);}
   addEventListener(type,fn){(this.listeners[type] ||= []).push(fn);}
   async fire(type,event={}){for(const fn of this.listeners[type] || [])await fn({preventDefault(){},...event});await settle();}
   setAttribute(){}
   querySelector(){return new Element();}
   getBoundingClientRect(){return {width:1000,height:800};}
+  focus(){}
+  scrollIntoView(){}
+}
+class TemplateElement extends Element {
+  set innerHTML(value) { this._html = value || ''; }
+  get content() {
+    const node = new Element();
+    node.textContent = this._html || '';
+    return node;
+  }
 }
 const settle = async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
 function environment(path) {
   const nodes=new Map(), get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
   const context={URL,URLSearchParams,AbortController,AbortSignal,Event,console,navigation,reconcile,location:new URL(path,'https://desk.example'),setInterval(){},setTimeout(){},clearTimeout(){},Option:class extends Element {constructor(text,value){super();this.textContent=text;this.value=value;}},localStorage:{getItem(){return null;}}};
   context.navigation={...navigation,readerHref:href=>navigation.readerHref(href,context.location)};
-  context.document={getElementById:get,createElement:()=>new Element(),querySelector:get,body:new Element(),addEventListener(){},dispatchEvent(){}};
-  context.window={addEventListener(){},dispatchEvent(){},__MAP_V1_AUTOBOOT__:false};
+  context.navShell=navShell;
+  context.document={getElementById:get,createElement:tag=>tag==='template'?new TemplateElement():new Element(),querySelector:get,body:new Element(),scrollingElement:new Element(),addEventListener(){},dispatchEvent(){}};
+  context.window={addEventListener(){},dispatchEvent(){},scrollTo(){},__MAP_V1_AUTOBOOT__:false};
+  context.sessionStorage={store:{},getItem(key){return this.store[key]||null;},setItem(key,value){this.store[key]=value;},removeItem(key){delete this.store[key];}};
   context.history={state:null,replaceState(state,unused,url){context.location=new URL(url,context.location);}};
   context.CustomEvent=class {};
   return {context:vm.createContext(context),get};
 }
 async function run(name,env) {
   // Inject the real shared module without Node needing browser absolute imports.
-  const source=read('../../static/js/'+name).replace("await import('/js/reader-navigation.mjs')",'navigation');
+  const source=read('../../static/js/'+name)
+    .replace("await import('/js/reader-navigation.mjs')",'navigation')
+    .replace("await import('/js/nav-shell.mjs')",'navShell');
   vm.runInContext(source,env.context);
   await settle();
 }

@@ -5,15 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BluePrint — Work order</title>
   <link rel="stylesheet" href="/css/overview.css" />
-<link rel="stylesheet" href="/css/operations.css"></head>
+  <link rel="stylesheet" href="/css/operations.css" />
+</head>
 <body class="bp-operations">
   <main id="work-order-shell" class="bp-reader-shell" aria-label="Work order">
-<header class="bp-header"><a class="bp-brand" href="/">BluePrint <small>Work order</small></a><a id="reader-back" href="/work">Back to Work</a></header><nav class="bp-nav" aria-label="Main navigation">
-<a href="/" data-page="overview">Overview</a><a href="/work" data-page="work">Work</a><a href="/projects" data-page="projects">Projects</a><a href="/agents" data-page="agents">Agents</a><a href="/activity">Activity</a><a href="/map">Map</a><a href="/calendar" data-page="calendar">Calendar</a><a href="/connections" data-page="connections">Connections</a><a href="/settings" data-page="settings">Settings</a>
-</nav>    <section class="bp-panel bp-reader" aria-live="polite" id="detail">
+    <header class="bp-header"><a class="bp-brand" href="/">BluePrint <small>Work order</small></a><a id="reader-back" href="/work">Back to Work</a></header>
+    <nav class="bp-nav" aria-label="Main navigation">
+      <a href="/" data-page="overview">Overview</a><a href="/work" data-page="work">Work</a><a href="/projects" data-page="projects">Projects</a><a href="/agents" data-page="agents">Agents</a><a href="/activity">Activity</a><a href="/map">Map</a><a href="/calendar" data-page="calendar">Calendar</a><a href="/connections" data-page="connections">Connections</a><a href="/settings" data-page="settings">Settings</a>
+    </nav>
+    <section class="bp-panel bp-reader" aria-live="polite" id="detail">
       <p id="message" role="status">Loading work order…</p>
       <article id="order" hidden>
-        <p id="identity"></p><h1 id="title"></h1><p id="state"></p>
+        <p id="identity"></p>
+        <h1 id="title"></h1>
+        <dl class="bp-facts" id="facts"></dl>
+        <p id="state" class="bp-muted"></p>
         <details class="bp-event" id="work-controls"><summary>Manage work order</summary>
           <p class="bp-muted">Changes are recorded by WorkLane as you. Assignment and releasing a hold do not start a runner; use the configured agent’s dispatch control.</p>
           <form id="action-form" class="bp-note-form">
@@ -28,7 +34,8 @@
             <button id="action-submit" type="submit">Apply change</button><p id="action-result" role="status"></p>
           </form>
         </details>
-        <h2>Description</h2><div id="description" style="white-space:pre-wrap;overflow-wrap:anywhere"></div>
+        <nav id="description-outline" class="bp-outline" hidden aria-label="Document outline"></nav>
+        <h2>Description</h2><div id="description" class="bp-md"></div>
         <h2>Comments</h2><div id="comments"></div>
         <form id="note-form" class="bp-note-form">
           <label for="note-body">Add a note as you</label>

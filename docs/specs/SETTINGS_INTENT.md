@@ -43,7 +43,7 @@ SETTINGS
 
 - Keep the fallback interval preference: the live feed is the normal path and the interval is what the page uses when that connection is down. The copy must say so; the audit confirmed it does.
 - Reduce motion here and the OS setting are the same switch for every surface (STATES_AND_TERMS motion contract).
-- Settings shares the shell: at 400px the active Settings tab must be visible in the navigation without horizontal discovery (pc-1491 mobile navigation).
+- Settings shares the shell: at 400px the active Settings tab must be visible in the navigation without horizontal discovery (pc-1491 mobile navigation). Implemented via scroll-padding on `.bp-nav` and `ensureActiveNavVisible()` when a tab carries `aria-current="page"`.
 - Nothing on this page sends a request that changes the workspace.
 
 Held: appearance themes (BluePrint dark is the only register), account or profile, notification channels, host configuration.
