@@ -34,17 +34,30 @@ let statusParam = query.get('status') || '';
 let gateParam = query.get('gate') || '';
 let attentionParam = query.get('attention') || '';
 let blockedParam = query.get('blocked') === '1';
-if (statusParam.startsWith('gate:')) { gateParam = gateParam || statusParam.slice(5); statusParam = ''; }
-else if (statusParam === 'deferred') { gateParam = gateParam || 'deferred'; statusParam = ''; }
-else if (statusParam.startsWith('face:')) { attentionParam = attentionParam || statusParam.slice(5); statusParam = ''; }
-else if (statusParam === 'attention') { attentionParam = attentionParam || 'any'; statusParam = ''; }
-else if (statusParam === 'blocked') { blockedParam = true; statusParam = ''; }
+let legacyParam = false;
+if (statusParam.startsWith('gate:')) { gateParam = gateParam || statusParam.slice(5); statusParam = ''; legacyParam = true; }
+else if (statusParam === 'deferred') { gateParam = gateParam || 'deferred'; statusParam = ''; legacyParam = true; }
+else if (statusParam.startsWith('face:')) { attentionParam = attentionParam || statusParam.slice(5); statusParam = ''; legacyParam = true; }
+else if (statusParam === 'attention') { attentionParam = attentionParam || 'any'; statusParam = ''; legacyParam = true; }
+else if (statusParam === 'blocked') { blockedParam = true; statusParam = ''; legacyParam = true; }
+if (query.get('deferred') === '1') { gateParam = gateParam || 'deferred'; legacyParam = true; }
 $('status-filter').value = statusParam;
 $('gate-filter').value = gateParam;
 $('attention-filter').value = attentionParam;
 $('blocked-filter').checked = blockedParam;
 let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
+if (legacyParam) {
+  const canonical = new URLSearchParams();
+  if (selectedProject) canonical.set('project', selectedProject);
+  if (selectedAssignment) canonical.set('assignment', selectedAssignment);
+  if (statusParam) canonical.set('status', statusParam);
+  if (gateParam) canonical.set('gate', gateParam);
+  if (attentionParam) canonical.set('attention', attentionParam);
+  if (blockedParam) canonical.set('blocked', '1');
+  if (query.get('q')) canonical.set('q', query.get('q'));
+  history.replaceState(null, '', location.pathname + (canonical.size ? '?' + canonical : '') + location.hash);
+}
 $('page-title').textContent = titles[page][0];
 $('page-description').textContent = titles[page][1];
 document.title = `BluePrint · ${titles[page][0]}`;

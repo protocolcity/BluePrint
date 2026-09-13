@@ -268,6 +268,28 @@ class OperationsTests(unittest.TestCase):
             conn.execute("UPDATE tasks SET gate_until=? WHERE id=1", ('2099-01-01T00:00:00Z',))
         order = operations_snapshot(self.root)['orders'][0]
         self.assertFalse(order['gate_expired'])
+    def test_gate_expired_treats_timezone_naive_gate_until_as_utc(self):
+        """Review finding (pc-1482): a naive gate_until (no offset, common in
+        the stores) must be treated as UTC, not silently read as not-expired."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type='timer', gate_until=? WHERE id=1",
+                         ('2020-01-01T00:00:00',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['gate_expired'])
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET gate_until=? WHERE id=1", ('2099-01-01T00:00:00',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['gate_expired'])
+    def test_gate_expired_never_raises_on_unparsable_gate_until(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type='timer', gate_until=? WHERE id=1",
+                         ('not-a-date',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['gate_expired'])
     def test_unregistered_work_labels_do_not_create_agents(self):
         self.seed()
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
