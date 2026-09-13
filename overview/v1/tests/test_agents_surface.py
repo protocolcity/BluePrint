@@ -185,6 +185,27 @@ class AgentsSurfaceTests(unittest.TestCase):
         self.assertFalse(row['preserved_reservation'])
         self.assertEqual(row['action'], 'dispatch')
 
+    def test_ledger_tail_truncated_inside_quoted_field_is_dropped_not_raised(self):
+        # A ledger past the 16 KB tail window whose seek point lands inside a
+        # quoted title= field must not raise; the partial first line is
+        # dropped and the real rows after it are still read.
+        self._daemon(fresh=True)
+        self._roster({'recovered': {'display': 'Recovered', 'command': ['runner'], 'identity': 'recovered', 'kind': 'lane'}})
+        started = self._stamp(timedelta(minutes=2))
+        errored = self._stamp(timedelta(minutes=1))
+        padding = self._stamp(timedelta(hours=1)) + ' CANDIDATE ticket=pc-1 title="' + ('x' * 20000) + '"\n'
+        self.assertGreater(len(padding), 16384)
+        self._ledger(
+            'recovered',
+            padding
+            + f'{started} START identity=recovered kind=lane budget_secs=1500 recovery=1\n'
+            + f'{started} CANDIDATE ticket=pc-2\n'
+            + f'{errored} ERROR reason="agent exit" rc=1\n'
+        )
+        row = next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == 'recovered')
+        self.assertEqual(row['badge'], 'LAST RUN FAILED')
+        self.assertEqual(row['recovery_attempts'], 1)
+
     # ---- Supervisor panel ----------------------------------------------------
 
     def test_supervisor_absent_when_not_on_roster(self):
