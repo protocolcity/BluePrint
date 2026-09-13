@@ -86,15 +86,28 @@ class AssignmentFilterTests(unittest.TestCase):
         self.assertIn("if(value==='you')returnorder.assigned_you", _SRC.replace(' ', ''))
 
 
-class BlockedFilterTests(unittest.TestCase):
-    """Blocked is a secondary filter on declared blockers, not a Status
-    lifecycle word (STATES_AND_TERMS.md §5: Status holds lifecycle only)."""
-    def test_blocked_filter_matches_declared_blockers_not_a_task_status(self):
-        self.assertIn("!blockedOnly||(o.blockers&&o.blockers.length)", _SRC.replace(' ', ''))
-    def test_blocked_is_not_a_status_option(self):
-        self.assertNotIn('<option value="blocked">', _HTML)
-    def test_blocked_filter_control_exists_in_the_markup(self):
-        self.assertIn('id="blocked-filter"', _HTML)
+class GateBlockedFilterTests(unittest.TestCase):
+    """Declared blockers are a Gate value, not a checkbox or Status word
+    (STATES_AND_TERMS.md §5, pc-1493)."""
+    def test_blocked_is_a_gate_filter_value_not_a_status_option(self):
+        self.assertIn('<option value="blocked">Blocked on another order</option>', _HTML)
+        status_section = _HTML.split('id="status-filter"')[1].split('</select>')[0]
+        self.assertNotIn('value="blocked"', status_section)
+    def test_blocked_filter_control_is_removed_from_the_markup(self):
+        self.assertNotIn('id="blocked-filter"', _HTML)
+    def test_gate_filter_matches_open_blockers_via_blocked_on(self):
+        self.assertIn("if(value==='blocked')returnorder.blocked_on==='open'||order.blocked_on==='unknown'", _SRC.replace(' ', ''))
+    def test_ungated_excludes_orders_with_open_blockers(self):
+        self.assertIn("if(value==='none')return!order.gate_type&&order.blocked_on==='clear'", _SRC.replace(' ', ''))
+    def test_gate_label_surfaces_blocked_on_another_order(self):
+        self.assertIn("if(order.blocked_on==='open'||order.blocked_on==='unknown')return'Blockedonanotherorder'", _SRC.replace(' ', ''))
+    def test_unknown_blocker_note_surfaces_in_reader_text(self):
+        self.assertIn("if(order.blocked_on==='unknown'&&order.blocked_note)returnorder.blocked_note", _SRC.replace(' ', ''))
+    def test_legacy_blocked_param_maps_to_gate_blocked(self):
+        self.assertIn("query.get('blocked') === '1'", _SRC)
+        self.assertIn("gateParam = gateParam || 'blocked'", _SRC)
+    def test_legacy_status_blocked_maps_to_gate_blocked(self):
+        self.assertIn("statusParam === 'blocked'", _SRC)
 
 
 class FiveAxisFilterTests(unittest.TestCase):
@@ -106,8 +119,8 @@ class FiveAxisFilterTests(unittest.TestCase):
         self.assertIn('<option value="in_progress">Live</option>', _HTML)
         self.assertIn('<option value="in_review">Parked</option>', _HTML)
         self.assertNotIn('For You (any face)', _HTML.split('id="gate-filter"')[0].split('id="status-filter"')[1])
-    def test_gate_filter_offers_the_five_gate_values(self):
-        for value in ('none', 'human', 'timer', 'deferred', 'tracking'):
+    def test_gate_filter_offers_the_gate_values_including_blocked(self):
+        for value in ('none', 'human', 'timer', 'deferred', 'tracking', 'blocked'):
             self.assertIn(f'value="{value}"', _HTML)
     def test_attention_filter_offers_the_four_faces_and_any(self):
         for value in ('any', 'decide', 'read', 'watch', 'due'):
@@ -126,16 +139,15 @@ class FiveAxisFilterTests(unittest.TestCase):
         self.assertIn('selectedProject||o.project===selectedProject', compact)
         self.assertIn('selectedAssignment||matchesAssignment', compact)
         self.assertIn('status||o.status===status', compact)
-        self.assertIn("gate||(gate==='none'?!o.gate_type:o.gate_type===gate)", compact)
+        self.assertIn('gate||matchesGate(o,gate)', compact)
         self.assertIn("attention||(attention==='any'?o.attention:o.attention_face===attention)", compact)
-        self.assertIn('blockedOnly||(o.blockers&&o.blockers.length)', compact)
     def test_results_state_filtered_of_total(self):
         self.assertIn("`${orders.length} of ${total} matching work order", _SRC)
     def test_clear_all_resets_every_filter(self):
         fn = _SRC.split("$('clear-filters').addEventListener('click',()=>{")[1].split('});')[0]
         for control in ("$('search').value=''", "$('project-filter').value=''", "$('assignment-filter').value=''",
                         "$('status-filter').value=''", "$('gate-filter').value=''", "$('kind-filter').value=''",
-                        "$('attention-filter').value=''", "$('blocked-filter').checked=false"):
+                        "$('attention-filter').value=''"):
             self.assertIn(control, fn.replace(' ', ''))
     def test_active_filters_render_as_dismissable_chips(self):
         self.assertIn("function renderActiveFilters()", _SRC)
@@ -243,7 +255,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'remote-repositories'):
+        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'remote-repositories'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
@@ -419,16 +431,99 @@ class DeliveryQuietCopyTests(unittest.TestCase):
 
 
 class PersonaChipTests(unittest.TestCase):
-    """pc-1473 review fix: the chip slot must print the persona text
-    (Your todo / Reminder <date> / Your note) instead of "Needs routing"
-    on you-qualifier rows, and still print "Needs routing" when there is
-    no persona."""
+    """pc-1484: persona and needs-routing move into the expandable detail body."""
 
-    def test_persona_renders_in_the_chip_slot_before_needs_routing(self):
-        self.assertIn("if(order.persona)content.append(el('span',order.persona,'bp-order-note'));", _SRC.replace(' ', ''))
+    def test_persona_renders_in_the_detail_body_before_needs_routing(self):
+        fn = _SRC.split('function orderDetailBody(order, content)')[1].split('function orderHasDetail')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("if(order.persona)content.append(el('p',order.persona,'bp-order-note'));", compact)
+        self.assertLess(compact.index('if(order.persona)'), compact.index('elseif(order.needs_routing)'))
 
-    def test_needs_routing_only_renders_when_there_is_no_persona(self):
-        self.assertIn("elseif(order.needs_routing)content.append(el('span','Needsrouting','bp-order-note'));", _SRC.replace(' ', ''))
+    def test_needs_routing_only_renders_in_detail_when_there_is_no_persona(self):
+        fn = _SRC.split('function orderDetailBody(order, content)')[1].split('function orderHasDetail')[0]
+        self.assertIn("elseif(order.needs_routing)content.append(el('p','Needsrouting','bp-order-note'));", fn.replace(' ', ''))
+
+
+class CompactRowTests(unittest.TestCase):
+    """pc-1484: compact Overview and Work rows with progressive disclosure."""
+
+    def test_work_row_uses_one_meta_line_not_assigned_to_owner(self):
+        fn = _SRC.split('function orderRow(order)')[1].split('function gateLabel')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('compactMetaLine(order)', compact)
+        self.assertNotIn('Assignedto${order.owner}', compact)
+
+    def test_assignment_summary_never_prefixes_assigned_to(self):
+        self.assertIn('function assignmentSummary(order)', _SRC)
+        self.assertNotIn("'Assigned to'", _SRC.split('function assignmentSummary')[1].split('function lifecycleSummary')[0])
+
+    def test_boilerplate_notes_are_filtered_from_summary_and_detail_gate(self):
+        self.assertIn('function isBoilerplateNote(note)', _SRC)
+        self.assertIn('Intake:', _SRC)
+        self.assertIn('!isBoilerplateNote(order.last_note)', _SRC.replace(' ', ''))
+
+    def test_overview_starts_with_current_execution_before_metrics(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertLess(compact.index("reconcileList($('overview-executions')"), compact.index("reconcileList($('metrics')"))
+
+    def test_overview_has_recent_changes_list(self):
+        self.assertIn('id="overview-executions"', _HTML)
+        self.assertIn('id="overview-recent"', _HTML)
+        self.assertIn("reconcileList($('overview-recent')", _SRC)
+
+    def test_for_you_uses_overview_face_row_not_full_order_row(self):
+        self.assertIn('function overviewFaceRow(order)', _SRC)
+        self.assertIn('overviewFaceRow(order)', _SRC.split('function faceEntry')[1].split('function faceHeading')[0])
+
+    def test_running_and_claimed_metrics_are_distinct(self):
+        self.assertIn("'Running'", _SRC)
+        self.assertIn("'Claimed'", _SRC)
+
+
+class CompactRowReviewFixTests(unittest.TestCase):
+    """pc-1484 review recovery 1: recent changes sort, More outside the link,
+    assignment summary from server owner."""
+
+    def test_recent_changes_sort_by_parsed_time_and_exclude_closed(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('function orderUpdatedAt(order)', _SRC)
+        self.assertIn('function isClosedOrder(order)', _SRC)
+        self.assertIn('!isClosedOrder(o)', compact)
+        self.assertIn('orderUpdatedAt(b)-orderUpdatedAt(a)', compact)
+        self.assertNotIn("localeCompare(String(a.updated_at", fn)
+
+    def test_more_disclosure_is_outside_the_row_link(self):
+        for fn_name in ('orderRow', 'overviewFaceRow'):
+            fn = _SRC.split(f'function {fn_name}(order)')[1].split('function ')[0]
+            compact = fn.replace(' ', '')
+            self.assertIn('anchor.append(content)', compact)
+            self.assertNotIn('anchor.append(details)', compact)
+            self.assertIn('row.append(details)', compact)
+            self.assertLess(fn.index('row.append(anchor'), fn.index('row.append(details)'))
+
+    def test_assignment_summary_uses_server_owner_field(self):
+        fn = _SRC.split('function assignmentSummary(order)')[1].split('function lifecycleSummary')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('order.owner', fn)
+        self.assertNotIn('order.assigned_you', compact)
+        self.assertNotIn('order.workers', compact)
+
+    def test_compact_row_dom_behavior(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping compact row harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'compact_row_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'compact row harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertTrue(result['persona_owner_shows_you'])
+        self.assertTrue(result['recent_sorts_by_real_time'])
+        self.assertTrue(result['done_order_excluded'])
+        self.assertTrue(result['more_outside_link'])
+        self.assertTrue(result['more_open_survives_repaint'])
 
 
 class SeatCoverageTests(unittest.TestCase):

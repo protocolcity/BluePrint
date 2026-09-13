@@ -107,3 +107,11 @@ Reconciliation keeps focus, selection, scroll, filters, expanded details and rea
 5. Installed acceptance across all ten surfaces at desktop and 400px, with keyboard, reduced motion, empty, stale, partial and unavailable states exercised (pc-1481).
 
 Each order updates the surface's record before code, keeps the current tokens and engine boundaries, verifies with disposable fixtures, and closes only on installed-build evidence.
+
+## Compact row contract (pc-1484)
+
+Overview and Work share one row shape: title, then a single meta line with project · id · lifecycle · gate · assignment · last change. Badges stay on the right. Gate notes, persona chips, blockers, parent links and non-boilerplate last notes move behind a keyboard-accessible **More** disclosure; the summary never repeats them.
+
+Overview opens with **Current execution** (WorkForce shift evidence on seats, distinct from WorkLane claims), then the For You faces (Decide and Read expanded; Watch and Note collapsed with total counts and a showing-N limit), then **Recent changes** (orders sorted by `updated_at`, skipping intake/owner/evidence boilerplate). Work reuses the same compact row; full detail remains one click away on the reader.
+
+Assignment on the meta line reads **You**, a seat name, **Needs routing**, or **Unassigned** — never "Assigned to Unassigned". Persona qualifiers (`Your todo`, reminders, notes) appear once in the disclosure, not as a second summary line.
