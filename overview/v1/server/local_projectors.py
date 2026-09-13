@@ -160,6 +160,10 @@ def ledger_open_shift(ledger_path: Path, now: datetime,
     if start_index is None:
         return None
     start = _split_row(lines[start_index])
+    if _row_fields(start).get("dry_run") == "1":
+        # Engine dry runs write START/DONE without STOP and never spawn a
+        # provider; they are not open shifts.
+        return None
     candidates: list[str] = []
     for line in lines[start_index + 1:]:
         parts = _split_row(line)
