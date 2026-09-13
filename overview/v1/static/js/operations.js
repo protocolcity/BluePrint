@@ -9,13 +9,14 @@ const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
 const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents',''],connections:['Connections','Where the information comes from and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
+let selectedAgentId = '';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
 function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
-let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false;
+let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false, timelineFingerprint = '', timelineExpanded = false;
 let timelineProject = '', timelineSource = '', timelineActor = '';
 let streamState = 'connecting', everOpened = false, consecutiveErrors = 0, lastChangeAt = null;
 let interval = 15, motion = 'system';
@@ -88,27 +89,82 @@ function statusText(order) {
   if(order.status==='in_review' && order.parked_by) return `Parked by ${order.parked_by} since ${date(order.since)}`;
   return order.status_word || order.status;
 }
-function orderRow(order) {
-  const row=link('',workUrl(order),'bp-order');
-  const content=el('div'); content.append(el('strong',order.title));
-  content.append(el('span',`${order.project_name} · ${order.id} · ${statusText(order)} · Assigned to ${order.owner} · ${date(order.updated_at)}`,'bp-order-meta'));
-  if(order.parent) content.append(el('span',`Part of ${order.parent}`,'bp-order-meta'));
-  if(order.blockers && order.blockers.length) content.append(el('span',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
-  if(order.ready_for) content.append(el('span',`Ready for ${order.ready_for}`,'bp-order-note'));
-  if(order.persona) content.append(el('span',order.persona,'bp-order-note'));
-  else if(order.needs_routing) content.append(el('span','Needs routing','bp-order-note'));
-  if(order.attention_face && order.face_reason) { const reason=el('span',order.face_reason,'bp-order-note'); reason.title=order.face_reason; content.append(reason); }
-  if(order.gate_note) {
-    const truncated=order.gate_note.length > 160;
-    const details=el('details',undefined,'bp-order-note');
-    details.append(el('summary',truncated ? order.gate_note.slice(0,157) + '…' : order.gate_note));
-    if(truncated) details.append(el('p',order.gate_note));
-    content.append(details);
-  }
-  if(order.last_note) content.append(el('span',`Last note: ${order.last_note}`,'bp-order-meta'));
+function truncateText(text, max) {
+  const value=(text || '').trim();
+  if(!value || value.length <= max) return value;
+  return value.slice(0, max - 1) + '…';
+}
+function isBoilerplateNote(note) {
+  const value=(note || '').trim();
+  if(!value) return true;
+  return /^(Intake:|Owner:|Actor:|Evidence:|Plan:|\u0055pdated fields:)/.test(value);
+}
+function assignmentSummary(order) {
+  const owner=(order.owner || '').trim();
+  if(owner && owner!=='Unassigned') return owner;
+  if(order.needs_routing) return 'Needs routing';
+  return 'Unassigned';
+}
+function orderUpdatedAt(order) {
+  const parsed=Date.parse(String(order.updated_at || ''));
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+function isClosedOrder(order) {
+  const status=order.status || '';
+  return status==='done' || status==='canceled' || status==='cancelled';
+}
+function lifecycleSummary(order) {
+  if(order.status==='in_progress' && order.live_with) return `Live · ${order.live_with}`;
+  if(order.status==='in_review' && order.parked_by) return `Parked · ${order.parked_by}`;
+  return order.status_word || order.status;
+}
+function compactMetaLine(order) {
+  return [order.project_name, order.id, lifecycleSummary(order), gateLabel(order), assignmentSummary(order), date(order.updated_at)].filter(Boolean).join(' · ');
+}
+function nextActionText(order) {
+  if(order.attention_face==='decide' && order.gate_note) return truncateText(order.gate_note, 120);
+  if(order.attention_face==='read') return 'Read the report, then clear or snooze';
+  if(order.attention_face==='watch' && order.gate_type==='timer') return 'Review when the hold expires';
+  if(order.attention_face==='watch') return 'Check for new evidence';
+  if(order.ready_for) return `Ready for ${order.ready_for}`;
+  if(order.blockers && order.blockers.length) return `Blocked on ${order.blockers.join(', ')}`;
+  if(!isBoilerplateNote(order.last_note)) return truncateText(order.last_note, 120);
+  return '';
+}
+function orderDetailBody(order, content) {
+  if(order.parent) content.append(el('p',`Part of ${order.parent}`,'bp-order-note'));
+  if(order.blockers && order.blockers.length) content.append(el('p',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
+  if(order.ready_for) content.append(el('p',`Ready for ${order.ready_for}`,'bp-order-note'));
+  if(order.persona) content.append(el('p',order.persona,'bp-order-note'));
+  else if(order.needs_routing) content.append(el('p','Needs routing','bp-order-note'));
+  if(order.gate_note) content.append(el('p',order.gate_note,'bp-order-note'));
+  if(!isBoilerplateNote(order.last_note)) content.append(el('p',`Last note: ${order.last_note}`,'bp-order-meta'));
+  if(order.status==='in_progress' && order.live_with && order.since) content.append(el('p',`Claimed live with ${order.live_with} since ${date(order.since)}`,'bp-order-meta'));
+  if(order.status==='in_review' && order.parked_by && order.since) content.append(el('p',`Parked by ${order.parked_by} since ${date(order.since)}`,'bp-order-meta'));
+}
+function orderHasDetail(order) {
+  return Boolean(order.parent || (order.blockers && order.blockers.length) || order.ready_for || order.persona || order.needs_routing || order.gate_note || !isBoilerplateNote(order.last_note) || (order.since && (order.live_with || order.parked_by)));
+}
+function orderBadges(order) {
   const gateWord=gateLabel(order);
-  row.append(content,badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined)));
-  if(gateWord) row.append(badge(order.gate_type+(order.gate_expired?'-expired':''),gateWord));
+  const badges=[badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined))];
+  if(gateWord) badges.push(badge(order.gate_type+(order.gate_expired?'-expired':''),gateWord));
+  return badges;
+}
+function orderRow(order) {
+  const row=el('div',undefined,'bp-order bp-order-compact');
+  const anchor=link('',workUrl(order),'bp-order-link');
+  const content=el('div');
+  content.append(el('strong',order.title));
+  content.append(el('span',compactMetaLine(order),'bp-order-meta'));
+  anchor.append(content);
+  row.append(anchor,...orderBadges(order));
+  if(orderHasDetail(order)) {
+    const details=el('details',undefined,'bp-order-detail');
+    details.append(el('summary','More'));
+    orderDetailBody(order, details);
+    row.append(details);
+  }
   return row;
 }
 function gateLabel(order) {
@@ -117,6 +173,42 @@ function gateLabel(order) {
   if(order.gate_type==='timer') return order.gate_expired ? 'Timer expired' : `Held until ${date(order.gate_until)}`;
   if(order.gate_type==='human') return 'Needs a decision';
   return '';
+}
+function overviewFaceRow(order) {
+  const row=el('div',undefined,'bp-order bp-order-compact bp-face-row');
+  const anchor=link('',workUrl(order),'bp-order-link');
+  const content=el('div');
+  content.append(el('strong',order.title));
+  const why=truncateText(order.face_reason || '', 140);
+  const meta=[order.project_name, order.id, why].filter(Boolean).join(' · ');
+  content.append(el('span',meta,'bp-order-meta'));
+  const action=nextActionText(order);
+  if(action && action !== why) content.append(el('span',action,'bp-order-note'));
+  anchor.append(content);
+  const faceBadge={decide:'Needs you',read:'Read',watch:'Watch',note:'Note'}[order.attention_face] || 'For You';
+  row.append(anchor,badge(order.attention_face==='decide' ? 'attention' : (order.attention_face || 'attention'), faceBadge));
+  if(orderHasDetail(order)) {
+    const details=el('details',undefined,'bp-order-detail');
+    details.append(el('summary','More'));
+    orderDetailBody(order, details);
+    row.append(details);
+  }
+  return row;
+}
+function executionRow(agent) {
+  const row=el('div',undefined,'bp-execution-row');
+  const main=el('div');
+  main.append(el('strong',agent.name));
+  const bits=[agent.badge];
+  if(agent.shift) bits.push(`since ${date(agent.shift.started_at)}`);
+  if(agent.held) bits.push(agent.held.id);
+  main.append(el('span',bits.join(' · '),'bp-order-meta'));
+  row.append(main,badge(agent.state,agent.badge));
+  const actions=el('div',undefined,'bp-execution-actions');
+  actions.append(link('Inspect seat','/agents'));
+  if(agent.held && agent.project) actions.append(link('Open order',workUrl({project:agent.project,id:agent.held.id,project_name:agent.project_name})));
+  row.append(actions);
+  return row;
 }
 function sources(parent, details) {
   reconcileList(parent, snapshot.sources, s=>s.name, source=>{
@@ -136,32 +228,56 @@ function projectCard(project) {
   return card;
 }
 function faceEntry(order) {
-  const entry=el('div');entry.append(orderRow(order));
-  const mute=el('button','Mute here for 24 hours');mute.type='button';
+  const entry=el('div',undefined,'bp-face-entry');entry.append(overviewFaceRow(order));
+  const mute=el('button','Mute 24h');mute.type='button';mute.className='bp-face-mute';
   mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();overview();});
   entry.append(mute);
   return entry;
 }
+function faceHeading(label, total, visible, href) {
+  let text=`${label} · ${total}`;
+  if(total > visible) text+=` · showing ${visible}`;
+  const heading=$(`for-you-${label.toLowerCase()}-heading`) || $(`for-you-${label.toLowerCase()}-summary`);
+  if(heading) heading.textContent=text;
+  const linkWrap=heading && heading.parentElement && heading.parentElement.querySelector('a');
+  if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
+}
+function overviewExecutionEmpty() {
+  const heartbeat=(snapshot.sources || []).find(s=>s.name==='WorkForce heartbeat');
+  if(!heartbeat || heartbeat.state==='unknown') return 'WorkForce daemon not reachable — no shift evidence to show.';
+  if(heartbeat.state==='stale') return 'WorkForce heartbeat is stale; running seats may not be reported.';
+  return 'No seats report an open shift right now.';
+}
 function overview() {
   const orders=snapshot.orders, forYou=orders.filter(o=>o.attention_face);
+  // Two independent facts, never merged into one 'Live': Claimed is a
+  // WorkLane claim (a days-old human claim counts here); Running is
+  // agent-evidence-only (fresh heartbeat plus an open shift or in-flight
+  // ticket) and cannot be inflated by claim age (pc-1483).
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
+  const running=snapshot.agents.filter(a=>a.group==='seat' && a.state==='working');
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
-  const metrics=[['For You',forYou.length,'/work?attention=any'],['Live',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
+  reconcileList($('overview-executions'), running, a=>a.id, executionRow, {emptyText:overviewExecutionEmpty()});
+  const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
+  const faceLimit={decide:6,read:6,watch:4,note:4};
   let mutedCount=0;
   for(const face of ['decide','read','watch','note']) {
     const band=forYou.filter(o=>o.attention_face===face);
-    const visible=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
-    mutedCount+=band.length-visible.length;
-    reconcileList($('for-you-'+face), visible.slice(0,6), o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
+    const unmuted=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
+    const visible=unmuted.slice(0,faceLimit[face]);
+    mutedCount+=band.length-unmuted.length;
+    reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
+    if(face==='decide' || face==='read') faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
+    else {
+      const summary=$(`for-you-${face}-summary`);
+      if(summary) summary.textContent=`${face.charAt(0).toUpperCase()+face.slice(1)} · ${band.length}${band.length>visible.length?` · showing ${visible.length}`:''}`;
+    }
   }
-  $('for-you-decide-heading').textContent=`Decide · ${forYou.filter(o=>o.attention_face==='decide').length}`;
-  $('for-you-read-heading').textContent=`Read · ${forYou.filter(o=>o.attention_face==='read').length}`;
-  $('for-you-watch-summary').textContent=`Watch · ${forYou.filter(o=>o.attention_face==='watch').length}`;
-  $('for-you-note-summary').textContent=`Note · ${forYou.filter(o=>o.attention_face==='note').length}`;
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-
+  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,8);
+  reconcileList($('overview-recent'), recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
   sources($('source-list'),false);
   const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
   reconcileList($('project-summary'), projects.slice(0,6), p=>p.id, projectCard, {emptyText:'No project stores found. Inspect Connections for source details.'});
@@ -255,30 +371,156 @@ function agentAction(agent, dispatchLabel) {
   nodes.push(button,feedback);
   return nodes;
 }
-function agentCard(agent) {
-  const card=el('article',undefined,'bp-panel');
-  const heading=el('div',undefined,'bp-section-head');
-  const title=el('div');title.append(el('h2',agent.name));
-  if(agent.group==='seat') title.append(el('span',`${agent.project_name || 'No project queue'} · ${agent.model}`,'bp-muted'));
-  title.append(el('p',agent.id,'bp-muted bp-note'));
-  heading.append(title,badge(agent.state,agent.badge));
-  card.append(heading,el('p',`Source: ${agent.badge_source}`,'bp-muted'));
-  if(agent.group==='job') {
-    const facts=el('dl',undefined,'bp-facts');
-    facts.append(el('dt','Schedule'),el('dd',scheduleLabel(agent.schedule)));
-    facts.append(el('dt','Next run'),el('dd',agent.schedule==='manual'?'On demand':date(agent.next_fire)));
-    card.append(facts);
+function currentOrderFor(agent) {
+  if(!agent.held) return null;
+  return (snapshot.orders || []).find(o=>o.id===agent.held.id && o.project===agent.held.project) || null;
+}
+function heldLink(agent) {
+  const order=currentOrderFor(agent);
+  if(order) return link(`${order.title} · ${order.id}`,workUrl(order));
+  if(agent.held) return link(agent.held.id,readerHref('/work-order?'+new URLSearchParams({project:agent.held.project,id:agent.held.id})));
+  return el('span','No current work','bp-muted');
+}
+function elapsedText(agent) {
+  if(agent.shift && agent.shift.age_seconds!=null) {
+    const mins=Math.floor(agent.shift.age_seconds/60);
+    const elapsed=mins ? `${mins}m` : `${agent.shift.age_seconds}s`;
+    return `${elapsed} of ${Math.round((agent.shift.budget_secs||0)/60)}m budget`;
   }
-  if(agent.group==='seat' && agent.held) card.append(el('p',`Holds ${agent.held.id}${agent.held_verified?' (owner verified)':' (not yet verified)'}${agent.shift && agent.shift.lock_held?' · lock held':''}`,'bp-note'));
-  if(agent.shift) card.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · since ${date(agent.shift.started_at)} · budget ${agent.shift.budget_secs}s${agent.shift.candidates.length?' · candidates '+agent.shift.candidates.join(', '):''} · ${agent.shift.source}${agent.shift.lock_held?' · lock held':''}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
-  if(agent.report) {
-    const report=el('div',undefined,'bp-note');report.append(badge(agent.report.state),el('p',agent.report.summary),el('p',`${date(agent.report.observed_at)} · ${agent.report.mode}`,'bp-muted'),el('p',agent.report.detail,'bp-muted'));card.append(report);
+  return '—';
+}
+function lastUpdateText(agent) {
+  if(agent.shift) return `Since ${date(agent.shift.started_at)}`;
+  if(agent.last_run) return date(agent.last_run.at);
+  return 'Not reported';
+}
+function selectAgent(id) {
+  selectedAgentId=selectedAgentId===id ? '' : id;
+  agents();
+}
+function agentRow(agent) {
+  const row=el('div',undefined,'bp-agent-row');
+  // Selection and action are two independent controls, never nested: the
+  // selectable region (name, provider, badge, held, elapsed, last update)
+  // carries role=button, and the action cell — a real <button>/<a> — is a
+  // sibling outside it, not inside it (no nested interactive controls).
+  const select=el('div',undefined,'bp-agent-select');
+  select.setAttribute('role','button');select.tabIndex=0;
+  select.dataset.agentId=agent.id;
+  const selected=selectedAgentId===agent.id;
+  select.dataset.selected=String(selected);
+  select.setAttribute('aria-pressed',String(selected));
+  select.append(el('span',agent.project_name || 'No project queue','bp-agent-cell'));
+  const nameCell=el('span',undefined,'bp-agent-cell bp-agent-name');
+  nameCell.append(el('strong',agent.name),el('span',` · ${agent.model}`,'bp-muted'));
+  select.append(nameCell);
+  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));select.append(stateCell);
+  const workCell=el('span',undefined,'bp-agent-cell bp-agent-work');workCell.append(heldLink(agent));select.append(workCell);
+  select.append(el('span',elapsedText(agent),'bp-agent-cell bp-muted'));
+  select.append(el('span',lastUpdateText(agent),'bp-agent-cell bp-muted'));
+  const activate=event=>{ if(event.target.closest('a')) return; event.preventDefault(); selectAgent(agent.id); };
+  select.addEventListener('click',activate);
+  select.addEventListener('keydown',event=>{ if((event.key==='Enter' || event.key===' ') && !event.target.closest('a')) { event.preventDefault(); selectAgent(agent.id); } });
+  row.append(select);
+  const actionCell=el('span',undefined,'bp-agent-cell bp-agent-action');actionCell.append(...agentAction(agent));row.append(actionCell);
+  return row;
+}
+function jobRow(agent) {
+  const row=el('div',undefined,'bp-agent-row');
+  const info=el('div',undefined,'bp-job-info');
+  info.append(el('span',agent.name,'bp-agent-cell'));
+  info.append(el('span',scheduleLabel(agent.schedule),'bp-agent-cell bp-muted'));
+  info.append(el('span',agent.schedule==='manual'?'On demand':date(agent.next_fire),'bp-agent-cell bp-muted'));
+  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));info.append(stateCell);
+  const reportText=agent.report ? `${agent.report.state} · ${agent.report.summary}` : (agent.last_run ? `${agent.last_run.outcome} · ${date(agent.last_run.at)}` : 'No report yet');
+  info.append(el('span',reportText,'bp-agent-cell bp-muted'));
+  row.append(info);
+  const actionCell=el('span',undefined,'bp-agent-cell bp-agent-action');actionCell.append(...agentAction(agent));row.append(actionCell);
+  return row;
+}
+function timelineStep(label, value) {
+  const step=el('div',undefined,'bp-agent-timeline-step');
+  step.append(el('dt',label),el('dd',value));
+  return step;
+}
+function agentTimelineValues(agent) {
+  let claim='Not reported';
+  if(agent.held) claim=agent.held_verified ? `Verified: holds ${agent.held.id}` : `Holds ${agent.held.id} · not yet verified against the last dispatch candidates`;
+  else if(agent.state==='last_run_failed') claim=agent.preserved_reservation ? 'No order currently held here; a preserved reservation is available to recover' : 'No order currently held here; the failed ticket may already be resolved by another provider';
+  let terminal='Not reported';
+  if(agent.shift) terminal='Open — no terminal row yet';
+  else if(agent.last_run) terminal=`${agent.last_run.outcome} · ${agent.last_run.reason} · ${date(agent.last_run.at)}`;
+  return [
+    ['Dispatch candidate', agent.last_candidates && agent.last_candidates.length ? agent.last_candidates.join(', ') : 'Not reported'],
+    ['Verified claim', claim],
+    ['Observed run start', agent.shift ? date(agent.shift.started_at) : 'Not reported'],
+    ['Recovery attempts', String(agent.recovery_attempts || 0)],
+    ['Terminal outcome', terminal],
+  ];
+}
+function agentTimeline(agent) {
+  const wrap=el('dl',undefined,'bp-agent-timeline');
+  for(const [label,value] of agentTimelineValues(agent)) wrap.append(timelineStep(label,value));
+  return wrap;
+}
+function syncAgentTimeline(wrap, agent) {
+  const steps=agentTimelineValues(agent), nodes=wrap.children;
+  steps.forEach(([,value], index)=>{
+    const dd=nodes[index] && nodes[index].querySelector('dd');
+    if(dd && dd.textContent!==value) dd.textContent=value;
+  });
+}
+function syncBadge(node, state, text) {
+  const label=text || state.replaceAll('_',' ');
+  if(node.textContent!==label) node.textContent=label;
+  if(node.dataset.state!==state) node.dataset.state=state;
+}
+// The selected-run inspector is repainted on every meaningful snapshot
+// change, but most of those changes belong to a different seat or a field
+// this inspector doesn't show; rebuilding container.replaceChildren() on
+// every call would tear down and recreate the panel (and lose focus/DOM
+// identity) even when the selected agent's own displayed fields are
+// unchanged. Keep the skeleton across repaints for the same agent id and
+// only write the text/state that actually moved.
+function agentDetail() {
+  const container=$('agent-detail');
+  const agent=snapshot.agents.find(a=>a.id===selectedAgentId && a.group==='seat');
+  if(!agent) {
+    if(!container.hidden || container._agentRefs) { container.hidden=true; container.replaceChildren(); container._agentRefs=null; }
+    return;
   }
-  if(agent.last_run) card.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)} · ${agent.last_run.reason} · ledger/${agent.id}.log`,'bp-note bp-muted'));
-  if(agent.group==='seat' && agent.recovery_attempts) card.append(el('p',`Recovery attempts: ${agent.recovery_attempts}`,'bp-note bp-muted'));
-  if(agent.group==='seat') card.append(link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
-  card.append(...agentAction(agent));
-  return card;
+  container.hidden=false;
+  const shiftText=agent.shift ? `${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · budget ${agent.shift.budget_secs}s${agent.shift.lock_held?' · lock held':''} · ${agent.shift.source}` : '';
+  if(!container._agentRefs || container._agentRefs.id!==agent.id) {
+    container.replaceChildren();
+    const heading=el('div',undefined,'bp-section-head');
+    const h2=el('h2',`Inspect · ${agent.name}`);
+    const stateBadge=badge(agent.state,agent.badge);
+    heading.append(h2,stateBadge);
+    container.append(heading);
+    const meta=el('p',`${agent.id} · source: ${agent.badge_source}`,'bp-muted bp-note');
+    container.append(meta);
+    const shiftLine=el('p',shiftText,agent.shift && agent.shift.stale?'bp-note':'bp-note bp-muted');
+    shiftLine.hidden=!agent.shift;
+    container.append(shiftLine);
+    const timelineWrap=agentTimeline(agent);
+    container.append(timelineWrap);
+    container.append(link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
+    const closeBtn=el('button','Close');closeBtn.type='button';closeBtn.addEventListener('click',()=>selectAgent(agent.id));
+    container.append(closeBtn);
+    container._agentRefs={id:agent.id,h2,stateBadge,meta,shiftLine,timelineWrap};
+    return;
+  }
+  const refs=container._agentRefs;
+  if(refs.h2.textContent!==`Inspect · ${agent.name}`) refs.h2.textContent=`Inspect · ${agent.name}`;
+  syncBadge(refs.stateBadge, agent.state, agent.badge);
+  const metaText=`${agent.id} · source: ${agent.badge_source}`;
+  if(refs.meta.textContent!==metaText) refs.meta.textContent=metaText;
+  if(refs.shiftLine.hidden!==!agent.shift) refs.shiftLine.hidden=!agent.shift;
+  if(refs.shiftLine.textContent!==shiftText) refs.shiftLine.textContent=shiftText;
+  const shiftClass=agent.shift && agent.shift.stale?'bp-note':'bp-note bp-muted';
+  if(refs.shiftLine.className!==shiftClass) refs.shiftLine.className=shiftClass;
+  syncAgentTimeline(refs.timelineWrap, agent);
 }
 function supervisorPanel() {
   const container=$('supervisor-panel');container.replaceChildren();
@@ -403,8 +645,9 @@ function renderCoverage() {
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
   $('agents-heartbeat').textContent=heartbeatLine();
-  reconcileList($('seat-list'), seats, a=>a.id, agentCard, {emptyText:'No seats registered in the readable registry.'});
-  reconcileList($('job-list'), jobs, a=>a.id, agentCard, {emptyText:'No jobs registered in the readable registry.'});
+  reconcileList($('seat-list'), seats, a=>a.id, agentRow, {emptyText:'No seats registered in the readable registry.'});
+  reconcileList($('job-list'), jobs, a=>a.id, jobRow, {emptyText:'No jobs registered in the readable registry.'});
+  agentDetail();
   supervisorPanel();
   renderCoverage();
 }
@@ -444,12 +687,13 @@ function updateTimelineFilters() {
   timelineSource = $('timeline-source').value;
   timelineActor = $('timeline-actor').value.trim();
   timelineCursor = '';
+  timelineExpanded = false;
   const params = new URLSearchParams();
   if (timelineProject) params.set('project', timelineProject);
   if (timelineSource) params.set('source', timelineSource);
   if (timelineActor) params.set('actor', timelineActor);
   history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
-  refreshTimeline(false);
+  refreshTimeline(false, {force: true});
 }
 function onDemandSeat(agent) {
   return agent.group==='seat' && (agent.schedule==='manual' || agent.schedule==='Not scheduled');
@@ -649,12 +893,21 @@ function paint() {
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
   if(page==='connections') { sources($('connection-list'),true);engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
+// Three independent clocks, never collapsed into one ambiguous word
+// (STATES_AND_TERMS.md, pc-1483): the transport (is the push connection
+// up), the last successful read (a fetch returned, whether or not its
+// content changed), and the last meaningful content change (only moves
+// when refresh()/refreshTimeline() see their content fingerprint differ —
+// never on a bare read-time or heartbeat-tick churn).
 function liveIndicator() {
   if(!lastSuccess) return lastError ? 'Unable to read workspace. Retry with Refresh.' : 'Connecting…';
-  if(document.hidden) return 'Paused';
-  if(streamState==='open') return lastChangeAt ? `Live · last change ${Math.floor((Date.now()-lastChangeAt)/1000)}s ago` : 'Live';
-  if(!everOpened) return 'Connecting…';
-  return consecutiveErrors>=3 ? 'Polling every 60 s' : 'Reconnecting';
+  const transport = document.hidden ? 'Updates paused'
+    : streamState==='open' ? 'Updates connected'
+    : !everOpened ? 'Updates connecting…'
+    : consecutiveErrors>=3 ? 'Updates polling every 60 s' : 'Updates reconnecting';
+  const readAge=Math.floor((Date.now()-lastSuccess)/1000);
+  const changeText=lastChangeAt ? `last change ${Math.floor((Date.now()-lastChangeAt)/1000)}s ago` : 'no change observed yet';
+  return `${transport} · last read ${readAge}s ago · ${changeText}`;
 }
 function freshness() {
   const status=$('freshness');
@@ -662,8 +915,15 @@ function freshness() {
   const indicator=liveIndicator();
   status.textContent=lastError && lastSuccess ? `Refresh failed · showing last read · ${indicator}` : indicator;
 }
-async function refreshTimeline(append) {
+async function refreshTimeline(append, opts = {}) {
   if (timelinePending || page !== 'timeline') return;
+  // Once the reader has loaded older pages (timelineExpanded), a quiet
+  // background poll (a change-feed push, not the reader's own Load more or
+  // the explicit Refresh button) must not move their reading position —
+  // it surfaces an affordance instead (pc-1483: "While reading older
+  // events show a new-events affordance instead of moving the reading
+  // position").
+  const background = !append && timelineExpanded && !opts.force;
   timelinePending = true;
   try {
     const params = new URLSearchParams();
@@ -674,18 +934,31 @@ async function refreshTimeline(append) {
     const response = await fetch('/api/timeline?' + params.toString(), {cache: 'no-store', signal: AbortSignal.timeout(10000)});
     if (!response.ok) throw new Error('Unavailable');
     const data = await response.json();
+    if (background) {
+      const currentTop = timelineData?.rows?.[0]?.id;
+      $('timeline-new-events').hidden = !(data.rows.length && data.rows[0].id !== currentTop);
+      lastSuccess = Date.now();
+      lastError = false;
+      return;
+    }
     if (append && timelineData) {
       const seen = new Set(timelineData.rows.map(row => row.id));
       timelineData = {...data, rows: [...timelineData.rows, ...data.rows.filter(row => !seen.has(row.id))]};
     } else {
       timelineData = data;
+      timelineExpanded = false;
+      $('timeline-new-events').hidden = true;
     }
     timelineCursor = data.next_cursor || '';
     timelineMore = Boolean(data.next_cursor);
     timeline();
     lastSuccess = Date.now();
     lastError = false;
-    lastChangeAt = Date.now();
+    // A successful read that returns the same rows is not a meaningful
+    // change (pc-1483): only row ids and their event content move this
+    // clock, never a bare identical read.
+    const timelineKey = JSON.stringify((timelineData.rows || []).map(row => [row.id, row.event, row.title]));
+    if (timelineKey !== timelineFingerprint) { timelineFingerprint = timelineKey; lastChangeAt = Date.now(); }
   } catch (error) {
     lastError = true;
     if (!timelineData) empty($('timeline-list'), 'Timeline is unavailable right now.');
@@ -693,6 +966,24 @@ async function refreshTimeline(append) {
     timelinePending = false;
     freshness();
   }
+}
+function deliveryItemRow(item) {
+  const url=new URL(item.url);
+  const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';const text=el('div');
+  text.append(el('strong',deliveryRow(item)),el('span',`Observed ${date(item.updated_at)}`,'bp-order-meta'));
+  row.append(text,badge(item.state));
+  return row;
+}
+function repoSection(repo) {
+  const section=el('section',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');
+  heading.append(el('h2',repo.repo),badge(repo.state));section.append(heading);
+  section.append(el('p',`${repo.role || 'Repository'} · ${repo.private===true?'Private':repo.private===false?'Public':'Visibility unknown'} · Observed ${date(repo.observed_at)}`,'bp-muted'));
+  if(repo.error)section.append(el('p',repo.error,'bp-warning'));
+  if(repo.missing?.length)section.append(el('p','Unavailable evidence: '+repo.missing.join(', '),'bp-warning'));
+  const items=(repo.items || []).filter(item=>{try{const url=new URL(item.url);return url.protocol==='https:' && url.hostname==='github.com';}catch(error){return false;}});
+  if(!items.length) empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
+  else for(const item of items) section.append(deliveryItemRow(item));
+  return section;
 }
 async function refreshRemote() {
   if(remotePending || !['delivery','connections'].includes(page)) return;
@@ -704,27 +995,35 @@ async function refreshRemote() {
     const status=data.refreshing ? 'Refreshing GitHub evidence…' : `GitHub: ${data.state.replaceAll('_',' ')}`;
     $('github-connection-status').textContent=status;
     $('remote-status').textContent=status + (data.error ? ' · '+data.error : '');
-    const container=$('remote-repositories');
-    container.replaceChildren();
-    for(const repo of data.repositories || []) {
-      const section=el('section',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');
-      heading.append(el('h2',repo.repo),badge(repo.state));section.append(heading);
-      section.append(el('p',`${repo.role || 'Repository'} · ${repo.private===true?'Private':repo.private===false?'Public':'Visibility unknown'} · Observed ${date(repo.observed_at)}`,'bp-muted'));
-      if(repo.error)section.append(el('p',repo.error,'bp-warning'));
-      if(repo.missing?.length)section.append(el('p','Unavailable evidence: '+repo.missing.join(', '),'bp-warning'));
-      for(const item of repo.items || []) {
-        let url;try{url=new URL(item.url);}catch(error){continue;}
-        if(url.protocol!=='https:' || url.hostname!=='github.com')continue;
-        const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';const text=el('div');
-        text.append(el('strong',deliveryRow(item)),el('span',`Observed ${date(item.updated_at)}`,'bp-order-meta'));
-        row.append(text,badge(item.state));section.append(row);
-      }
-      if(!(repo.items || []).length)empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
-      container.append(section);
-    }
-    if(!data.repositories?.length && !data.refreshing)empty(container,'No repository delivery available. Check connection configuration or GitHub access.');
+    // Reconciled, not a wholesale replaceChildren: an unchanged repository
+    // section keeps its node identity and does not flash (pc-1483).
+    reconcileList($('remote-repositories'), data.repositories || [], repo=>repo.repo, repoSection,
+      {emptyText: data.refreshing ? '' : 'No repository delivery available. Check connection configuration or GitHub access.'});
   } catch(error) { $('remote-status').textContent='GitHub refresh failed. Previously displayed evidence may be stale.';$('github-connection-status').textContent='GitHub unavailable'; }
   finally { remotePending=false; }
+}
+// The content-change fingerprint ignores read-time and heartbeat-tick
+// churn: 'observed_at' is stamped fresh on every read, 'sources[].last_at'
+// and 'agents[].last_at' mirror the same daemon heartbeat tick on every
+// entry, 'agents[].shift.age_seconds' is recomputed from the wall clock on
+// every read of an otherwise-unchanged open shift, and the WorkLane API
+// health probe's 'observed_at' is a bare probe-time stamp — none of those
+// are application content, so a snapshot that only differs in these fields
+// must not read as a meaningful change (pc-1483: "Content-change
+// fingerprints ignore read times/heartbeat tick churn").
+function stripShiftAge(shift) {
+  if(!shift) return shift;
+  const {age_seconds, ...rest}=shift;
+  return rest;
+}
+function contentKey(next) {
+  if(page==='work') return JSON.stringify({orders:next.orders,projects:next.projects,workspace:next.workspace,sources:next.sources.map(s=>({name:s.name,state:s.state})),truncated:next.truncated});
+  const sources=(next.sources || []).map(({last_at, ...rest})=>rest);
+  const agents=(next.agents || []).map(({last_at, shift, ...rest})=>({...rest,shift:stripShiftAge(shift)}));
+  const supervisor=next.supervisor ? (({last_at, shift, ...rest})=>({...rest,shift:stripShiftAge(shift)}))(next.supervisor) : next.supervisor;
+  const worklaneApi=next.engines?.worklane_api ? {...next.engines.worklane_api,observed_at:null} : next.engines?.worklane_api;
+  const engines=next.engines ? {...next.engines,worklane_api:worklaneApi} : next.engines;
+  return JSON.stringify({...next,observed_at:null,sources,agents,supervisor,engines});
 }
 async function refresh(manual) {
   if(pending) return;
@@ -734,7 +1033,7 @@ async function refresh(manual) {
     const response=await fetch('/api/operations',{cache:'no-store',signal:AbortSignal.timeout(10000)});
     if(!response.ok) throw new Error('Source request failed');
     const next=await response.json();
-    const key=JSON.stringify(page==='work' ? {orders:next.orders,projects:next.projects,workspace:next.workspace,sources:next.sources.map(s=>({name:s.name,state:s.state})),truncated:next.truncated} : {...next,observed_at:null});
+    const key=contentKey(next);
     snapshot=next;lastSuccess=Date.now();lastError=false;
     if(key!==fingerprint) { paint();fingerprint=key;lastChangeAt=Date.now(); }
   } catch(error) { lastError=true; }
@@ -765,10 +1064,21 @@ if ($('timeline-filters')) {
   $('timeline-source').addEventListener('change', updateTimelineFilters);
   $('timeline-actor').addEventListener('change', updateTimelineFilters);
   $('timeline-actor').addEventListener('input', updateTimelineFilters);
-  $('timeline-more').addEventListener('click', () => refreshTimeline(true));
+  $('timeline-more').addEventListener('click', () => { timelineExpanded = true; refreshTimeline(true); });
+  $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; refreshTimeline(false, {force: true}); });
 }
-$('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false);});
-document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
+$('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false, {force: true});});
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Escape') return;
+  if(page==='agents' && selectedAgentId) {
+    const closedId=selectedAgentId;
+    selectAgent(closedId);
+    const row=document.querySelector(`.bp-agent-select[data-agent-id="${CSS.escape(closedId)}"]`);
+    if(row) row.focus();
+    return;
+  }
+  $('desk-scope').open=false;
+});
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();freshness();});
 $('preferences').addEventListener('submit',event=>event.preventDefault());

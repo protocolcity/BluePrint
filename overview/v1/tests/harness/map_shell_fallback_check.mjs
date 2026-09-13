@@ -18,7 +18,7 @@ class Element {
 
 const payload = {
   workspace: {name: 'Desk', path: '/tmp/desk'},
-  projects: [{id: 'example', name: 'Example', folder: 'example', open: 1, attention: 0, working: 1, state: 'available', has_instructions: false}],
+  projects: [{id: 'example', name: 'Example', folder: 'example', open: 1, attention: 0, claimed: 1, running: 0, state: 'available', has_instructions: false}],
   orders: [{project: 'example', status: 'in_progress', gate_type: ''}],
   sources: [{name: 'WorkLane', state: 'available'}],
   truncated: false,

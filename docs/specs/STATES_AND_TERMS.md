@@ -79,6 +79,8 @@ Three clocks stay separate: a timer gate is an embargo, a reminder label is a da
 
 Badge vocabulary and one-action-per-row rules are in AGENTS_INTENT.
 
+**Running is seats only (pc-1483).** A project's Running count — Overview's `Running` metric and the per-project `running` field the Map reads — counts a fresh heartbeat plus an open shift or in-flight ticket for a **seat** row only. A job (chief-of-staff, health-patrol and the like) shows `working` on its own Agents card while its shift is open, but it never claims a work order and must not add to a project's execution count; the two surfaces apply the identical `group === 'seat'` filter so a working job cannot make Map say a project is running while Overview says it is not.
+
 ## 3. What each surface must show per item
 
 Legend: ✓ shown today · ○ missing · — not needed there.
