@@ -33,6 +33,18 @@ Do A now and file B as the follow-on once the change feed exists. A fixes the wr
 
 Synthetic activity, motion, notifications, any write action, cross-workspace feeds.
 
+## pc-1487 — exception-first repository rollups
+
+Delivery (option A) now reads as a release summary, not a flat CI list:
+
+- Each repository opens with a compact summary line: open PRs, failed/pending checks, recent merges/releases, and an installed revision when a workspace deployment receipt matches a commit or release tag. Missing deployment evidence stays **unknown**, never assumed.
+- Checks group under their PR or commit identity; multi-event groups expand to show every raw GitHub row with **Event** time separate from **Fetched** time on the repository header.
+- Exception-first ordering surfaces failed and pending checks before quiet success runs. Merged PRs badge **merged**, not a contradictory **closed**.
+- Repository, type and period filters plus a loaded/total boundary line; list position and `<details>` expansions survive identical 15-second cache reads via keyed reconciliation.
+- One concise source label with optional explanation; cache age is reported independently of the desk live-update indicator.
+
+Optional `receipt` on a `connections.json` repository entry points at a workspace deployment file; protocolcity/blueprint defaults to `.blueprint/deployment.json`, other projects to `local/<project>/deployment.json`.
+
 ## pc-1488 — summarized, grouped, source-accurate
 
 Timeline (option B) shipped; this refines its readability without adding sources:

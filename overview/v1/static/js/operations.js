@@ -15,7 +15,8 @@ let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') ||
 function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
-let remotePending = false, remoteLast = 0;
+let remotePending = false, remoteLast = 0, remoteData = null;
+let deliveryRepo = '', deliveryType = '', deliveryPeriod = '';
 let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false, timelineFingerprint = '', timelineExpanded = false;
 let timelineProject = '', timelineSource = '', timelineActor = '', timelinePeriod = '';
 let streamState = 'connecting', everOpened = false, consecutiveErrors = 0, lastChangeAt = null;
@@ -28,6 +29,9 @@ timelineProject = query.get('project') || '';
 timelineSource = query.get('source') || '';
 timelineActor = query.get('actor') || '';
 timelinePeriod = query.get('period') || '';
+deliveryRepo = query.get('repo') || '';
+deliveryType = query.get('type') || '';
+deliveryPeriod = query.get('period') || '';
 $('search').value = query.get('q') || '';
 // Compatible mapping for pre-pc-1482 links: status carried gate/attention
 // values and a deferred=1 toggle; those axes now have their own filters
@@ -73,6 +77,7 @@ document.title = `BluePrint · ${titles[page][0]}`;
 $(page + '-view').hidden = false;
 if(page==='projects' && $('projects-filter')) $('projects-filter').value=projectsFilter;
 document.querySelector(`[data-page="${page}"]`).setAttribute('aria-current','page');
+import('/js/nav-shell.mjs').then(m => m.ensureActiveNavVisible()).catch(() => {});
 function el(tag, text, cls) { const node = document.createElement(tag); if(text !== undefined) node.textContent = text; if(cls) node.className = cls; return node; }
 function link(text, href, cls) { const node = el('a',text,cls); node.href=href; return node; }
 function badge(state, text) { const node=el('span',text || state.replaceAll('_',' '),'bp-badge'); node.dataset.state=state; return node; }
@@ -85,11 +90,101 @@ function deliveryRow(item) {
     return `CI · ${item.workflow_name || item.title} · ${item.state} · ${commit}${count}`;
   }
   if(item.kind==='pull_request') {
-    const event=item.pr_event || (item.state==='open'?'opened':item.state);
-    return `PR #${item.number} · ${item.title} · ${event} · ${date(item.updated_at)}`;
+    const event=deliveryPullEvent(item);
+    return `PR #${item.number} · ${item.title} · ${event}`;
   }
-  if(item.kind==='release') return `Release · ${item.title} · ${date(item.updated_at)}`;
-  return `${item.kind.replaceAll('_',' ')} · ${item.title} · ${date(item.updated_at)}`;
+  if(item.kind==='release') return `Release · ${item.title}`;
+  return `${item.kind.replaceAll('_',' ')} · ${item.title}`;
+}
+function deliveryPullEvent(item) {
+  if(item.merged_at || item.merged) return 'merged';
+  if(item.pr_event) return item.pr_event;
+  if(item.state==='open') return 'opened';
+  return item.state;
+}
+function deliveryBadgeState(group, deployment) {
+  if(group.deploy_state==='deployed') {
+    // Activated only with a real activation time; a receipt without one is
+    // Installed (pc-1487 second pass: never overclaim activation).
+    const when=deployment?.activated_at ? date(deployment.activated_at) : '';
+    const version=deployment?.version ? ` · ${deployment.version}` : '';
+    const label=when ? `Activated ${when}` : `Installed${version}`;
+    return ['deployed', label];
+  }
+  if(group.deploy_state==='version_note') {
+    const version=deployment?.version ? ` ${deployment.version}` : '';
+    return ['version_note', `Version note${version}`];
+  }
+  return [group.badge || 'unknown', (group.badge || 'unknown').replaceAll('_',' ')];
+}
+function deliveryPeriodCutoff() {
+  if(!deliveryPeriod) return null;
+  const days=Number(deliveryPeriod);
+  return Number.isFinite(days) && days>0 ? Date.now()-days*86400000 : null;
+}
+function deliveryVisibleGroups(repo) {
+  const groups=repo.groups || [];
+  const cutoff=deliveryPeriodCutoff();
+  return groups.filter(group=>{
+    if(deliveryType && group.kind!==deliveryType) return false;
+    if(!cutoff) return true;
+    const at=Date.parse(group.updated_at || '');
+    return Number.isNaN(at) || at>=cutoff;
+  });
+}
+function deliverySummaryLine(repo) {
+  const summary=repo.summary || {};
+  const parts=[];
+  if(summary.open_prs) parts.push(`${summary.open_prs} open PR${summary.open_prs===1?'':'s'}`);
+  if(summary.failed_checks) parts.push(`${summary.failed_checks} failed check${summary.failed_checks===1?'':'s'}`);
+  if(summary.pending_checks) parts.push(`${summary.pending_checks} pending check${summary.pending_checks===1?'':'s'}`);
+  if(summary.recent_merges) parts.push(`${summary.recent_merges} merged`);
+  if(summary.recent_releases) parts.push(`${summary.recent_releases} release${summary.recent_releases===1?'':'s'}`);
+  if(repo.deployment?.version) {
+    // Same rule as the group badges: the receipt counts as running only when a
+    // group carries the sha match (deploy_state deployed), and Activated only
+    // with an activation time (pc-1487 second pass).
+    const activated=repo.deployment.activated_at ? date(repo.deployment.activated_at) : '';
+    const shaMatched=(repo.groups || []).some(g=>g.deploy_state==='deployed');
+    if(shaMatched) {
+      const bit=activated ? `Activated ${activated}` : 'Installed';
+      parts.push(`${bit} · ${repo.deployment.version}`);
+    } else parts.push(`Version note ${repo.deployment.version}`);
+  }
+  return parts.length ? parts.join(' · ') : (repo.quiet ? 'Quiet in the last 14 days.' : 'No verified delivery available.');
+}
+function deliveryEvidenceRow(item) {
+  const url=new URL(item.url);
+  const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';
+  const text=el('div');
+  text.append(el('strong',deliveryRow(item)),el('span',`Event ${date(item.updated_at)}`,'bp-order-meta'));
+  const badgeState=item.kind==='pull_request' ? deliveryPullEvent(item) : item.state;
+  row.append(text,badge(badgeState));
+  return row;
+}
+function deliveryGroupRow(group, deployment) {
+  if(group.items.length===1) {
+    const item=group.items[0];
+    const url=item.url ? new URL(item.url) : null;
+    const row=url ? link('',url.href,'bp-order') : el('div','', 'bp-order');
+    if(url) { row.target='_blank'; row.rel='noopener noreferrer'; }
+    const text=el('div');
+    text.append(el('strong',group.headline || deliveryRow(item)),el('span',`Event ${date(group.updated_at || item.updated_at)}`,'bp-order-meta'));
+    row.append(text);
+    const [state,label]=deliveryBadgeState(group, deployment);
+    row.append(badge(state,label));
+    return row;
+  }
+  const wrap=el('details',undefined,'bp-delivery-group');
+  const summary=el('summary');
+  const head=el('div');
+  head.append(el('strong',group.headline || 'Delivery group'),el('span',`${group.items.length} events · Event ${date(group.updated_at)}`,'bp-order-meta'));
+  summary.append(head);
+  const [state,label]=deliveryBadgeState(group, deployment);
+  summary.append(badge(state,label));
+  wrap.append(summary);
+  for(const item of group.items) wrap.append(deliveryEvidenceRow(item));
+  return wrap;
 }
 function scheduleLabel(value) { if(value==='manual')return 'Manual';if(!value || value==='Not scheduled')return 'Not scheduled';return 'Automatic schedule'; }
 function workUrl(order) { return readerHref('/work-order?' + new URLSearchParams({project:order.project,id:order.id})); }
@@ -1281,7 +1376,7 @@ function paint() {
   ];
   $('source-warning').hidden=!issues.length && !snapshot.truncated;
   $('source-warning').textContent=issues.length ? `Some sources need attention: ${issues.map(s=>`${s.name} (${s.state})`).join(', ')}. Counts may be incomplete.` : 'Large stores are limited to 2,000 open records each. Filtered counts may be incomplete.';
-  $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Activity`;
+  $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Delivery`;
   filterOptions();
   if(page==='overview') overview();
   if(page==='work') work();
@@ -1289,7 +1384,7 @@ function paint() {
   if(page==='agents') agents();
   if(page==='calendar') calendar();
   if(page==='timeline') timeline();
-  if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
+  if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; if($('settings-updates')) $('settings-updates').textContent=liveIndicator(); }
   if(page==='connections') { connectionExceptions();sources($('connection-list'),true);capabilities();engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 // Three independent clocks, never collapsed into one ambiguous word
@@ -1313,6 +1408,7 @@ function freshness() {
   status.dataset.state=lastError?'error':'ok';
   const indicator=liveIndicator();
   status.textContent=lastError && lastSuccess ? `Refresh failed · showing last read · ${indicator}` : indicator;
+  if(page==='settings' && $('settings-updates')) $('settings-updates').textContent=indicator;
 }
 async function refreshTimeline(append, opts = {}) {
   if (timelinePending || page !== 'timeline') return;
@@ -1376,23 +1472,105 @@ async function refreshTimeline(append, opts = {}) {
     freshness();
   }
 }
-function deliveryItemRow(item) {
-  const url=new URL(item.url);
-  const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';const text=el('div');
-  text.append(el('strong',deliveryRow(item)),el('span',`Observed ${date(item.updated_at)}`,'bp-order-meta'));
-  row.append(text,badge(item.state));
-  return row;
-}
 function repoSection(repo) {
-  const section=el('section',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');
-  heading.append(el('h2',repo.repo),badge(repo.state));section.append(heading);
-  section.append(el('p',`${repo.role || 'Repository'} · ${repo.private===true?'Private':repo.private===false?'Public':'Visibility unknown'} · Observed ${date(repo.observed_at)}`,'bp-muted'));
-  if(repo.error)section.append(el('p',repo.error,'bp-warning'));
-  if(repo.missing?.length)section.append(el('p','Unavailable evidence: '+repo.missing.join(', '),'bp-warning'));
-  const items=(repo.items || []).filter(item=>{try{const url=new URL(item.url);return url.protocol==='https:' && url.hostname==='github.com';}catch(error){return false;}});
-  if(!items.length) empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
-  else for(const item of items) section.append(deliveryItemRow(item));
+  const section=el('section',undefined,'bp-panel bp-delivery-repo');
+  section.dataset.deliveryRepo=repo.repo;
+  const heading=el('div',undefined,'bp-section-head');
+  heading.append(el('h2',repo.repo),badge(repo.state));
+  section.append(heading);
+  section.append(el('p',deliverySummaryLine(repo),'bp-delivery-summary'));
+  const meta=[repo.role || 'Repository', repo.private===true?'Private':repo.private===false?'Public':'Visibility unknown'];
+  if(repo.deployment?.sha) meta.push(`Receipt commit ${String(repo.deployment.sha).slice(0,7)}`);
+  meta.push(`Fetched ${date(repo.observed_at)}`);
+  section.append(el('p',meta.join(' · '),'bp-muted'));
+  if(repo.error) section.append(el('p',repo.error,'bp-warning'));
+  if(repo.missing?.length) section.append(el('p','Unavailable evidence: '+repo.missing.join(', '),'bp-warning'));
+  const groups=deliveryVisibleGroups(repo);
+  if(!groups.length) empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
+  else section.append(el('div',undefined,'bp-delivery-groups'));
   return section;
+}
+function deliveryBoundaryText(data) {
+  const repos=(data.repositories || []).filter(repo=>!deliveryRepo || repo.repo===deliveryRepo);
+  const loaded=repos.reduce((sum,repo)=>sum+deliveryVisibleGroups(repo).length,0);
+  const total=repos.reduce((sum,repo)=>sum+(repo.summary?.loaded || (repo.groups || []).length),0);
+  const truncated=repos.some(repo=>repo.summary?.truncated);
+  if(!loaded && !total) return '';
+  let text=`Showing ${loaded} of ${total} grouped event${total===1?'':'s'}`;
+  if(truncated) text += ' · GitHub list truncated at 100 runs per repository';
+  return text;
+}
+function deliveryFilterChips() {
+  const chips=[];
+  if(deliveryRepo) chips.push(deliveryRepo);
+  if(deliveryType) chips.push($('delivery-type').selectedOptions[0].text);
+  if(deliveryPeriod) chips.push($('delivery-period').selectedOptions[0].text);
+  return chips;
+}
+function deliveryFilters() {
+  const repos=remoteData?.repositories || [];
+  const select=$('delivery-repo');
+  const previous=deliveryRepo;
+  const names=repos.map(repo=>repo.repo).sort();
+  while(select.options.length>1) select.remove(1);
+  for(const name of names) select.append(new Option(name,name));
+  if(previous && names.includes(previous)) select.value=previous;
+  else deliveryRepo=select.value;
+  $('delivery-clear-filters').hidden=!deliveryFilterChips().length;
+  const boundary=$('delivery-boundary');
+  const text=remoteData ? deliveryBoundaryText(remoteData) : '';
+  boundary.textContent=text;
+  boundary.hidden=!text;
+}
+function updateDeliveryFilters() {
+  deliveryRepo=$('delivery-repo').value;
+  deliveryType=$('delivery-type').value;
+  const params=new URLSearchParams();
+  if(deliveryRepo) params.set('repo',deliveryRepo);
+  if(deliveryType) params.set('type',deliveryType);
+  if(deliveryPeriod) params.set('period',deliveryPeriod);
+  history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
+  deliveryFilters();
+  if(remoteData) paintDelivery(remoteData);
+}
+function updateDeliveryPeriod() {
+  deliveryPeriod=$('delivery-period').value;
+  const params=new URLSearchParams();
+  if(deliveryRepo) params.set('repo',deliveryRepo);
+  if(deliveryType) params.set('type',deliveryType);
+  if(deliveryPeriod) params.set('period',deliveryPeriod);
+  history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
+  deliveryFilters();
+  if(remoteData) paintDelivery(remoteData);
+}
+function clearDeliveryFilters() {
+  $('delivery-repo').value='';
+  $('delivery-type').value='';
+  $('delivery-period').value='';
+  deliveryRepo='';deliveryType='';deliveryPeriod='';
+  history.replaceState(null,'',location.pathname+location.hash);
+  deliveryFilters();
+  if(remoteData) paintDelivery(remoteData);
+}
+function paintDelivery(data) {
+  const repos=(data.repositories || []).filter(repo=>!deliveryRepo || repo.repo===deliveryRepo);
+  reconcileList($('remote-repositories'), repos, repo=>repo.repo, repoSection,
+    {emptyText: data.refreshing ? '' : 'No repository delivery available. Check connection configuration or GitHub access.'});
+  for(const repo of repos) {
+    const container=document.querySelector(`[data-delivery-repo="${repo.repo}"] .bp-delivery-groups`);
+    if(!container) continue;
+    reconcileList(container, deliveryVisibleGroups(repo), group=>group.id, group=>deliveryGroupRow(group, repo.deployment),
+      {emptyText: repo.quiet ? 'Quiet in the last 14 days.' : 'No verified delivery available.'});
+  }
+  deliveryFilters();
+}
+function remoteStatusText(data) {
+  const parts=[];
+  parts.push(data.refreshing ? 'Refreshing GitHub evidence…' : `GitHub: ${String(data.state || 'unknown').replaceAll('_',' ')}`);
+  if(typeof data.cache_age_seconds==='number') parts.push(`cache ${data.cache_age_seconds}s old`);
+  if(data.fetched_at) parts.push(`fetched ${date(data.fetched_at)}`);
+  if(data.error) parts.push(data.error);
+  return parts.join(' · ');
 }
 async function refreshRemote() {
   if(remotePending || !['delivery','connections'].includes(page)) return;
@@ -1401,15 +1579,17 @@ async function refreshRemote() {
     const response=await fetch('/api/remote-activity',{cache:'no-store',signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw new Error('Unavailable');
     const data=await response.json();
-    const status=data.refreshing ? 'Refreshing GitHub evidence…' : `GitHub: ${data.state.replaceAll('_',' ')}`;
+    remoteData=data;
+    const status=remoteStatusText(data);
     $('github-connection-status').textContent=status;
-    $('remote-status').textContent=status + (data.error ? ' · '+data.error : '');
-    // Reconciled, not a wholesale replaceChildren: an unchanged repository
-    // section keeps its node identity and does not flash (pc-1483).
-    reconcileList($('remote-repositories'), data.repositories || [], repo=>repo.repo, repoSection,
-      {emptyText: data.refreshing ? '' : 'No repository delivery available. Check connection configuration or GitHub access.'});
-  } catch(error) { $('remote-status').textContent='GitHub refresh failed. Previously displayed evidence may be stale.';$('github-connection-status').textContent='GitHub unavailable'; }
-  finally { remotePending=false; }
+    if(page==='delivery') {
+      $('remote-status').textContent=status;
+      paintDelivery(data);
+    }
+  } catch(error) {
+    $('remote-status').textContent='GitHub refresh failed. Previously displayed evidence may be stale.';
+    $('github-connection-status').textContent='GitHub unavailable';
+  } finally { remotePending=false; }
 }
 // The content-change fingerprint ignores read-time and heartbeat-tick
 // churn: 'observed_at' is stamped fresh on every read, 'sources[].last_at'
@@ -1487,6 +1667,15 @@ if ($('timeline-filters')) {
   $('timeline-clear-filters').addEventListener('click', clearTimelineFilters);
   $('timeline-more').addEventListener('click', () => { timelineExpanded = true; refreshTimeline(true); });
   $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; refreshTimeline(false, {force: true}); });
+}
+if ($('delivery-filters')) {
+  $('delivery-type').value = deliveryType;
+  $('delivery-period').value = deliveryPeriod;
+  $('delivery-filters').addEventListener('submit', event => event.preventDefault());
+  $('delivery-repo').addEventListener('change', updateDeliveryFilters);
+  $('delivery-type').addEventListener('change', updateDeliveryFilters);
+  $('delivery-period').addEventListener('change', updateDeliveryPeriod);
+  $('delivery-clear-filters').addEventListener('click', clearDeliveryFilters);
 }
 $('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false, {force: true});});
 document.addEventListener('keydown',event=>{

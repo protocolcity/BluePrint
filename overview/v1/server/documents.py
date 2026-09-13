@@ -1,5 +1,6 @@
 """An allowlisted local paper catalog; never a general filesystem endpoint."""
 from pathlib import Path
+from .markdown import render_reader_content
 from .operations import project_registry
 
 ROOT_PAPERS = ('README.md','MARKETING.md','PRODUCT.md','ARCHITECTURE.md','AGENTS.md','BOUNDARIES.md','INSTALL.md','RUNNING.md','PROCESS.md','CONSOLIDATION.md','ENTRY.md')
@@ -42,4 +43,12 @@ def read_document(binder, project, name):
     path=(folder/name).resolve()
     if not path.is_relative_to(folder.resolve()): raise ValueError('Invalid document path.')
     if path.stat().st_size>512000: raise ValueError('Document is too large for this reader.')
-    return {**paper, 'project':project, 'content':path.read_text(encoding='utf-8')}
+    text = path.read_text(encoding='utf-8')
+    rendered = render_reader_content(text)
+    return {
+        **paper,
+        'project': project,
+        'content': text,
+        'content_html': rendered['html'],
+        'content_outline': rendered['outline'],
+    }
