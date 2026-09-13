@@ -107,6 +107,59 @@ class ChangeFeedTests(unittest.TestCase):
         self.assertIsNotNone(feed.subscribe())
         feed.stop()
 
+    def test_same_basename_in_different_subfolders_not_conflated(self) -> None:
+        """A ledger member sharing the daemon's basename must not shadow it.
+
+        Regression for a keying bug: signatures keyed by plain basename
+        conflated "daemon.json" (workforce root) with a same-named file
+        placed under ``ledger/`` — a later real change to the top-level
+        daemon file could be silently attributed away.
+        """
+        local = self.root / ".protocolcity" / "workforce" / "local"
+        colliding = local / "ledger" / "daemon.json"
+        colliding.write_text("{}")
+        self.feed.poll_once()
+        _drain(self.inbox)
+        time.sleep(DEBOUNCE_SECS + 0.05)
+        (local / "daemon.json").write_text('{"tick": 1}')
+        self.feed.poll_once()
+        events = _drain(self.inbox)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["source"], "workforce")
+        self.assertEqual(events[0]["path"], "daemon.json")
+
+    def test_workforce_paths_stay_within_workspace_boundary(self) -> None:
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        (outside / "daemon.json").write_text("{}")
+        local = self.root / ".protocolcity" / "workforce" / "local"
+        (local / "daemon.json").unlink()
+        (local / "daemon.json").symlink_to(outside / "daemon.json")
+        self.feed.poll_once()
+        _drain(self.inbox)
+        time.sleep(DEBOUNCE_SECS + 0.05)
+        (outside / "daemon.json").write_text('{"tick": 1}')
+        self.feed.poll_once()
+        events = _drain(self.inbox)
+        self.assertEqual(events, [])
+
+    def test_supervisor_paths_stay_within_workspace_boundary(self) -> None:
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        outside_reports = outside / "reports" / "supervisor"
+        outside_reports.mkdir(parents=True)
+        reports = self.root / ".protocolcity" / "workforce" / "local" / "reports"
+        shutil.rmtree(reports)
+        reports.parent.mkdir(parents=True, exist_ok=True)
+        reports.symlink_to(outside / "reports")
+        self.feed.poll_once()
+        _drain(self.inbox)
+        time.sleep(DEBOUNCE_SECS + 0.05)
+        (outside_reports / "report.json").write_text("{}")
+        self.feed.poll_once()
+        events = _drain(self.inbox)
+        self.assertEqual(events, [])
+
     def test_no_path_leaks_only_basename(self) -> None:
         db = self.root / "worklane" / "worklane" / "local" / "data" / "acme.db"
         db.write_bytes(b"x")
