@@ -35,21 +35,20 @@ let statusParam = query.get('status') || '';
 let gateParam = query.get('gate') || '';
 let kindParam = query.get('kind') || '';
 let attentionParam = query.get('attention') || '';
-let blockedParam = query.get('blocked') === '1';
 let legacyParam = false;
 if (statusParam.startsWith('gate:')) { gateParam = gateParam || statusParam.slice(5); statusParam = ''; legacyParam = true; }
 else if (statusParam === 'deferred') { gateParam = gateParam || 'deferred'; statusParam = ''; legacyParam = true; }
 else if (statusParam.startsWith('face:')) { attentionParam = attentionParam || statusParam.slice(5); statusParam = ''; legacyParam = true; }
 else if (statusParam === 'attention') { attentionParam = attentionParam || 'any'; statusParam = ''; legacyParam = true; }
-else if (statusParam === 'blocked') { blockedParam = true; statusParam = ''; legacyParam = true; }
+else if (statusParam === 'blocked') { gateParam = gateParam || 'blocked'; statusParam = ''; legacyParam = true; }
 if (query.get('deferred') === '1') { gateParam = gateParam || 'deferred'; legacyParam = true; }
 // Pre-D16 links used the retired Note face value; map it to Due (STATES_AND_TERMS.md §1.4).
 if (attentionParam === 'note') { attentionParam = 'due'; legacyParam = true; }
+if (query.get('blocked') === '1') { gateParam = gateParam || 'blocked'; legacyParam = true; }
 $('status-filter').value = statusParam;
 $('gate-filter').value = gateParam;
 $('kind-filter').value = kindParam;
 $('attention-filter').value = attentionParam;
-$('blocked-filter').checked = blockedParam;
 let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
 let calendarDay = query.get('day') || '';
@@ -61,7 +60,6 @@ if (legacyParam) {
   if (gateParam) canonical.set('gate', gateParam);
   if (kindParam) canonical.set('kind', kindParam);
   if (attentionParam) canonical.set('attention', attentionParam);
-  if (blockedParam) canonical.set('blocked', '1');
   if (query.get('q')) canonical.set('q', query.get('q'));
   if (calendarDay) canonical.set('day', calendarDay);
   history.replaceState(null, '', location.pathname + (canonical.size ? '?' + canonical : '') + location.hash);
@@ -96,27 +94,87 @@ function statusText(order) {
   if(order.status==='in_review' && order.parked_by) return `Parked by ${order.parked_by} since ${date(order.since)}`;
   return order.status_word || order.status;
 }
-function orderRow(order) {
-  const row=link('',workUrl(order),'bp-order');
-  const content=el('div'); content.append(el('strong',order.title));
-  content.append(el('span',`${order.project_name} · ${order.id} · ${statusText(order)} · Assigned to ${order.owner} · ${date(order.updated_at)}`,'bp-order-meta'));
-  if(order.parent) content.append(el('span',`Part of ${order.parent}`,'bp-order-meta'));
-  if(order.blockers && order.blockers.length) content.append(el('span',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
-  if(order.ready_for) content.append(el('span',`Ready for ${order.ready_for}`,'bp-order-note'));
-  if(order.persona) content.append(el('span',order.persona,'bp-order-note'));
-  else if(order.needs_routing) content.append(el('span','Needs routing','bp-order-note'));
-  if(order.attention_face && order.face_reason) { const reason=el('span',order.face_reason,'bp-order-note'); reason.title=order.face_reason; content.append(reason); }
-  if(order.gate_note) {
-    const truncated=order.gate_note.length > 160;
-    const details=el('details',undefined,'bp-order-note');
-    details.append(el('summary',truncated ? order.gate_note.slice(0,157) + '…' : order.gate_note));
-    if(truncated) details.append(el('p',order.gate_note));
-    content.append(details);
-  }
-  if(order.last_note) content.append(el('span',`Last note: ${order.last_note}`,'bp-order-meta'));
+function truncateText(text, max) {
+  const value=(text || '').trim();
+  if(!value || value.length <= max) return value;
+  return value.slice(0, max - 1) + '…';
+}
+function isBoilerplateNote(note) {
+  const value=(note || '').trim();
+  if(!value) return true;
+  return /^(Intake:|Owner:|Actor:|Evidence:|Plan:|\u0055pdated fields:)/.test(value);
+}
+function assignmentSummary(order) {
+  const owner=(order.owner || '').trim();
+  if(owner && owner!=='Unassigned') return owner;
+  if(order.needs_routing) return 'Needs routing';
+  return 'Unassigned';
+}
+function orderUpdatedAt(order) {
+  const parsed=Date.parse(String(order.updated_at || ''));
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+function isClosedOrder(order) {
+  const status=order.status || '';
+  return status==='done' || status==='canceled' || status==='cancelled';
+}
+function lifecycleSummary(order) {
+  if(order.status==='in_progress' && order.live_with) return `Live · ${order.live_with}`;
+  if(order.status==='in_review' && order.parked_by) return `Parked · ${order.parked_by}`;
+  return order.status_word || order.status;
+}
+function compactMetaLine(order) {
+  return [order.project_name, order.id, lifecycleSummary(order), gateLabel(order), assignmentSummary(order), date(order.updated_at)].filter(Boolean).join(' · ');
+}
+function nextActionText(order) {
+  if(order.attention_face==='decide' && order.gate_note) return truncateText(order.gate_note, 120);
+  if(order.attention_face==='read') return 'Read the report, then clear or snooze';
+  if(order.attention_face==='watch' && order.gate_type==='timer') return 'Review when the hold expires';
+  if(order.attention_face==='watch') return 'Check for new evidence';
+  if(order.ready_for) return `Ready for ${order.ready_for}`;
+  if(order.blocked_on==='unknown' && order.blocked_note) return order.blocked_note;
+  if(order.blocked_on==='open' && order.blockers && order.blockers.length) return `Blocked on ${order.blockers.join(', ')}`;
+  if(!isBoilerplateNote(order.last_note)) return truncateText(order.last_note, 120);
+  return '';
+}
+function orderDetailBody(order, content) {
+  if(order.parent) content.append(el('p',`Part of ${order.parent}`,'bp-order-note'));
+  if(order.blocked_on==='unknown' && order.blocked_note) content.append(el('p',order.blocked_note,'bp-order-note'));
+  else if(order.blocked_on==='open' && order.blockers && order.blockers.length) content.append(el('p',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
+  if(order.ready_for) content.append(el('p',`Ready for ${order.ready_for}`,'bp-order-note'));
+  if(order.persona) content.append(el('p',order.persona,'bp-order-note'));
+  else if(order.needs_routing) content.append(el('p','Needs routing','bp-order-note'));
+  if(order.gate_note) content.append(el('p',order.gate_note,'bp-order-note'));
+  if(!isBoilerplateNote(order.last_note)) content.append(el('p',`Last note: ${order.last_note}`,'bp-order-meta'));
+  if(order.status==='in_progress' && order.live_with && order.since) content.append(el('p',`Claimed live with ${order.live_with} since ${date(order.since)}`,'bp-order-meta'));
+  if(order.status==='in_review' && order.parked_by && order.since) content.append(el('p',`Parked by ${order.parked_by} since ${date(order.since)}`,'bp-order-meta'));
+}
+function orderHasDetail(order) {
+  return Boolean(order.parent || order.blocked_on==='open' || order.blocked_on==='unknown' || order.ready_for || order.persona || order.needs_routing || order.gate_note || !isBoilerplateNote(order.last_note) || (order.since && (order.live_with || order.parked_by)));
+}
+function orderBadges(order) {
   const gateWord=gateLabel(order);
-  row.append(content,badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined)));
-  if(gateWord) row.append(badge(order.gate_type+(order.gate_expired?'-expired':''),gateWord));
+  const badges=[badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined))];
+  if(gateWord) {
+    const gateKind=order.gate_type || ((order.blocked_on==='open' || order.blocked_on==='unknown') ? 'blocked' : '');
+    badges.push(badge(gateKind+(order.gate_expired?'-expired':''),gateWord));
+  }
+  return badges;
+}
+function orderRow(order) {
+  const row=el('div',undefined,'bp-order bp-order-compact');
+  const anchor=link('',workUrl(order),'bp-order-link');
+  const content=el('div');
+  content.append(el('strong',order.title));
+  content.append(el('span',compactMetaLine(order),'bp-order-meta'));
+  anchor.append(content);
+  row.append(anchor,...orderBadges(order));
+  if(orderHasDetail(order)) {
+    const details=el('details',undefined,'bp-order-detail');
+    details.append(el('summary','More'));
+    orderDetailBody(order, details);
+    row.append(details);
+  }
   return row;
 }
 function gateLabel(order) {
@@ -124,7 +182,44 @@ function gateLabel(order) {
   if(order.gate_type==='tracking') return 'Tracking';
   if(order.gate_type==='timer') return order.gate_expired ? 'Timer expired' : `Held until ${date(order.gate_until)}`;
   if(order.gate_type==='human') return 'Needs a decision';
+  if(order.blocked_on==='open' || order.blocked_on==='unknown') return 'Blocked on another order';
   return '';
+}
+function overviewFaceRow(order) {
+  const row=el('div',undefined,'bp-order bp-order-compact bp-face-row');
+  const anchor=link('',workUrl(order),'bp-order-link');
+  const content=el('div');
+  content.append(el('strong',order.title));
+  const why=truncateText(order.face_reason || '', 140);
+  const meta=[order.project_name, order.id, why].filter(Boolean).join(' · ');
+  content.append(el('span',meta,'bp-order-meta'));
+  const action=nextActionText(order);
+  if(action && action !== why) content.append(el('span',action,'bp-order-note'));
+  anchor.append(content);
+  const faceBadge={decide:'Needs you',read:'Read',watch:'Watch',note:'Note'}[order.attention_face] || 'For You';
+  row.append(anchor,badge(order.attention_face==='decide' ? 'attention' : (order.attention_face || 'attention'), faceBadge));
+  if(orderHasDetail(order)) {
+    const details=el('details',undefined,'bp-order-detail');
+    details.append(el('summary','More'));
+    orderDetailBody(order, details);
+    row.append(details);
+  }
+  return row;
+}
+function executionRow(agent) {
+  const row=el('div',undefined,'bp-execution-row');
+  const main=el('div');
+  main.append(el('strong',agent.name));
+  const bits=[agent.badge];
+  if(agent.shift) bits.push(`since ${date(agent.shift.started_at)}`);
+  if(agent.held) bits.push(agent.held.id);
+  main.append(el('span',bits.join(' · '),'bp-order-meta'));
+  row.append(main,badge(agent.state,agent.badge));
+  const actions=el('div',undefined,'bp-execution-actions');
+  actions.append(link('Inspect seat','/agents'));
+  if(agent.held && agent.project) actions.append(link('Open order',workUrl({project:agent.project,id:agent.held.id,project_name:agent.project_name})));
+  row.append(actions);
+  return row;
 }
 function sources(parent, details) {
   reconcileList(parent, snapshot.sources, s=>s.name, source=>{
@@ -144,11 +239,25 @@ function projectCard(project) {
   return card;
 }
 function faceEntry(order) {
-  const entry=el('div');entry.append(orderRow(order));
-  const mute=el('button','Mute here for 24 hours');mute.type='button';
+  const entry=el('div',undefined,'bp-face-entry');entry.append(overviewFaceRow(order));
+  const mute=el('button','Mute 24h');mute.type='button';mute.className='bp-face-mute';
   mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();overview();});
   entry.append(mute);
   return entry;
+}
+function faceHeading(label, total, visible, href) {
+  let text=`${label} · ${total}`;
+  if(total > visible) text+=` · showing ${visible}`;
+  const heading=$(`for-you-${label.toLowerCase()}-heading`) || $(`for-you-${label.toLowerCase()}-summary`);
+  if(heading) heading.textContent=text;
+  const linkWrap=heading && heading.parentElement && heading.parentElement.querySelector('a');
+  if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
+}
+function overviewExecutionEmpty() {
+  const heartbeat=(snapshot.sources || []).find(s=>s.name==='WorkForce heartbeat');
+  if(!heartbeat || heartbeat.state==='unknown') return 'WorkForce daemon not reachable — no shift evidence to show.';
+  if(heartbeat.state==='stale') return 'WorkForce heartbeat is stale; running seats may not be reported.';
+  return 'No seats report an open shift right now.';
 }
 function overview() {
   const orders=snapshot.orders, forYou=orders.filter(o=>o.attention_face);
@@ -159,22 +268,27 @@ function overview() {
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
   const running=snapshot.agents.filter(a=>a.group==='seat' && a.state==='working');
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
+  reconcileList($('overview-executions'), running, a=>a.id, executionRow, {emptyText:overviewExecutionEmpty()});
   const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
+  const faceLimit={decide:6,read:6,watch:4,note:4};
   let mutedCount=0;
   for(const face of ['decide','read','watch','due']) {
     const band=forYou.filter(o=>o.attention_face===face);
-    const visible=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
-    mutedCount+=band.length-visible.length;
-    reconcileList($('for-you-'+face), visible.slice(0,6), o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
+    const unmuted=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
+    const visible=unmuted.slice(0,faceLimit[face]);
+    mutedCount+=band.length-unmuted.length;
+    reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
+    if(face==='decide' || face==='read') faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
+    else {
+      const summary=$(`for-you-${face}-summary`);
+      if(summary) summary.textContent=`${face.charAt(0).toUpperCase()+face.slice(1)} · ${band.length}${band.length>visible.length?` · showing ${visible.length}`:''}`;
+    }
   }
-  $('for-you-decide-heading').textContent=`Decide · ${forYou.filter(o=>o.attention_face==='decide').length}`;
-  $('for-you-read-heading').textContent=`Read · ${forYou.filter(o=>o.attention_face==='read').length}`;
-  $('for-you-watch-summary').textContent=`Watch · ${forYou.filter(o=>o.attention_face==='watch').length}`;
-  $('for-you-due-summary').textContent=`Due · ${forYou.filter(o=>o.attention_face==='due').length}`;
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-
+  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,8);
+  reconcileList($('overview-recent'), recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
   sources($('source-list'),false);
   const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
   reconcileList($('project-summary'), projects.slice(0,6), p=>p.id, projectCard, {emptyText:'No project stores found. Inspect Connections for source details.'});
@@ -204,6 +318,11 @@ function matchesAssignment(order, value) {
   if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
   return order.workers.includes(value.slice(7));
 }
+function matchesGate(order, value) {
+  if(value==='none') return !order.gate_type && order.blocked_on==='clear';
+  if(value==='blocked') return order.blocked_on==='open' || order.blocked_on==='unknown';
+  return order.gate_type===value;
+}
 function filterChips() {
   const chips=[];
   if($('search').value) chips.push(['Search: '+$('search').value,()=>{$('search').value='';}]);
@@ -213,7 +332,6 @@ function filterChips() {
   if($('gate-filter').value) chips.push(['Gate: '+$('gate-filter').selectedOptions[0].text,()=>{$('gate-filter').value='';}]);
   if($('kind-filter').value) chips.push(['Kind: '+$('kind-filter').selectedOptions[0].text,()=>{$('kind-filter').value='';}]);
   if($('attention-filter').value) chips.push(['For You: '+$('attention-filter').selectedOptions[0].text,()=>{$('attention-filter').value='';}]);
-  if($('blocked-filter').checked) chips.push(['Blocked only',()=>{$('blocked-filter').checked=false;}]);
   return chips;
 }
 function renderActiveFilters() {
@@ -227,9 +345,9 @@ function renderActiveFilters() {
   $('clear-filters').hidden=!chips.length;
 }
 function work() {
-  const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, kind=$('kind-filter').value, attention=$('attention-filter').value, blockedOnly=$('blocked-filter').checked;
+  const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, kind=$('kind-filter').value, attention=$('attention-filter').value;
   const total=snapshot.orders.length;
-  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || (gate==='none' ? !o.gate_type : o.gate_type===gate)) && (!kind || o.kind===kind) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!blockedOnly || (o.blockers && o.blockers.length)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
   reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, gate, or search.'});
   $('results').textContent=`${orders.length} of ${total} matching work order${orders.length===1?'':'s'}`;
@@ -935,12 +1053,12 @@ async function refresh(manual) {
 }
 function updateFilters() {
   selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
-  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('kind-filter').value)params.set('kind',$('kind-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('blocked-filter').checked)params.set('blocked','1');if($('search').value)params.set('q',$('search').value);
+  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('kind-filter').value)params.set('kind',$('kind-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('search').value)params.set('q',$('search').value);
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
-$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('gate-filter').addEventListener('change',updateFilters);$('kind-filter').addEventListener('change',updateFilters);$('attention-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('blocked-filter').addEventListener('change',updateFilters);
-$('clear-filters').addEventListener('click',()=>{$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('kind-filter').value='';$('attention-filter').value='';$('blocked-filter').checked=false;updateFilters();});
+$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('gate-filter').addEventListener('change',updateFilters);$('kind-filter').addEventListener('change',updateFilters);$('attention-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);
+$('clear-filters').addEventListener('click',()=>{$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('kind-filter').value='';$('attention-filter').value='';updateFilters();});
 $('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});
 if ($('calendar-filters')) {
   $('calendar-filters').addEventListener('submit', event => event.preventDefault());
