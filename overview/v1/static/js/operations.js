@@ -57,7 +57,8 @@ function orderRow(order) {
   if(order.parent) content.append(el('span',`Part of ${order.parent}`,'bp-order-meta'));
   if(order.blockers && order.blockers.length) content.append(el('span',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
   if(order.ready_for) content.append(el('span',`Ready for ${order.ready_for}`,'bp-order-note'));
-  if(order.needs_routing) content.append(el('span','Needs routing','bp-order-note'));
+  if(order.persona) content.append(el('span',order.persona,'bp-order-note'));
+  else if(order.needs_routing) content.append(el('span','Needs routing','bp-order-note'));
   if(order.attention_face && order.face_reason) { const reason=el('span',order.face_reason,'bp-order-note'); reason.title=order.face_reason; content.append(reason); }
   if(order.gate_note) {
     const truncated=order.gate_note.length > 160;
