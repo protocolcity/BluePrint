@@ -462,6 +462,54 @@ class ProviderModelResolutionTests(unittest.TestCase):
                                  'model': 'claude-sonnet-5'}})
         self.assertEqual(self._agent()['model'], 'Claude claude-sonnet-5')
 
+    def test_bare_pin_with_unresolvable_command_still_names_the_provider(self):
+        """pc-1479: the row's own model text must agree with what
+        provider_coverage counts it as — a roster row whose id differs
+        from its ``identity`` field, with a command that resolves no
+        executable/config, still gets its provider prefixed from the pin
+        family (same fallback ``_project_seat_providers`` already used for
+        coverage), instead of showing the bare pin or 'Local job'."""
+        self._roster({'demo': {'display': 'Demo Worker', 'identity': 'demo-worker', 'kind': 'lane',
+                                'command': ['python', 'launch.py'], 'model': 'claude-sonnet-5'}})
+        self.assertEqual(self._agent('demo')['model'], 'Claude claude-sonnet-5')
+
+    def test_unresolvable_seat_with_no_provider_reads_none_instead_of_raising(self):
+        """review finding, pc-1479 follow-up: ``resolve_provider_model``
+        returning ``None`` must not raise from the ``startswith`` check —
+        an unresolvable seat's row model is ``None``, not a crash."""
+        from server import operations
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['mystery-tool']}})
+        with patch.object(operations, 'resolve_provider_model', return_value=None):
+            model = self._agent()['model']
+        self.assertIsNone(model)
+
+    def test_job_row_keeps_bare_pin_never_gains_provider_prefix(self):
+        """review finding, pc-1479 follow-up: the fallback chain only
+        applies to rows the Seats group counts as seats (a lane, or a row
+        with no ``kind``) — a job row keeps ``resolve_provider_model``'s
+        bare pin text as is, even when the pin names a known provider
+        family, since a job is never counted or labeled as a provider
+        seat."""
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['mystery-tool'], 'model': 'claude-sonnet-5'}})
+        self.assertEqual(self._agent()['model'], 'claude-sonnet-5')
+
+    def test_pin_heuristic_never_reads_provider_from_resolved_text(self):
+        """review finding, pc-1479 follow-up: ``_provider_from_pin`` must
+        only ever read the roster's own ``model`` pin, never
+        ``resolve_provider_model``'s returned text — a seat with no model
+        pin keeps its resolved text as is even when that text happens to
+        contain a provider name as a substring (a path or module name),
+        since the executable provider comes only from a resolved
+        executable under the trusted roots, not from text sniffing."""
+        from server import operations
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', '-m', 'cursor_tools']}})
+        with patch.object(operations, 'resolve_provider_model', return_value='cursor-something'):
+            model = self._agent()['model']
+        self.assertEqual(model, 'cursor-something')
+
 
 class SeatProjectFieldTests(unittest.TestCase):
     """pc-1474 scope addition: every seat names its project from the queue,
