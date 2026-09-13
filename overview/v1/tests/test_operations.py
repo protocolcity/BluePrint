@@ -137,6 +137,45 @@ class OperationsTests(unittest.TestCase):
         order = operations_snapshot(self.root)['orders'][0]
         self.assertEqual(order['owner'], 'Unassigned')
         self.assertTrue(order['needs_routing'])
+    def test_persona_qualifier_labels_never_need_routing(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                         ('backlog', json.dumps(['worker:you', 'you:todo'])))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['needs_routing'])
+        self.assertEqual(order['face_reason'], 'Your todo')
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=? WHERE id=1',
+                         (json.dumps(['worker:you', 'you:remind', 'reminder:2026-12-20']),))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['needs_routing'])
+        self.assertEqual(order['face_reason'], 'Reminder 2026-12-20')
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=? WHERE id=1',
+                         (json.dumps(['worker:you', 'you:note']),))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['needs_routing'])
+        self.assertEqual(order['face_reason'], 'Your note')
+    def test_worker_you_with_retired_host_qualifier_still_needs_routing(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                         ('backlog', json.dumps(['worker:you', 'you:host'])))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['needs_routing'])
+    def test_unlabeled_backlog_needs_routing(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type=NULL WHERE id=1")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['needs_routing'])
+    def test_deferred_gate_never_needs_routing(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type='deferred' WHERE id=1")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['needs_routing'])
     def test_unregistered_work_labels_do_not_create_agents(self):
         self.seed()
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
