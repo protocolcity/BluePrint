@@ -218,6 +218,55 @@ class HostFocusWiringTests(unittest.TestCase):
         self.assertIn("window.addEventListener('popstate'", self.host)
         self.assertIn("async function applyProjectParams(initial)", self.host)
 
+    def test_escape_unwinds_the_focused_project_one_level_at_a_time(self) -> None:
+        # integrator pass: there was no Escape path out of a focused
+        # project/branch/item at all — Backspace only ever popped the
+        # (unrelated) top-level dig trail. Escape must clear the selected
+        # item, then the expanded branch, then the project itself.
+        match = re.search(
+            r"document\.addEventListener\('keydown', \(ev\) => \{([\s\S]*?)\n  \}\);\n\n  for \(const \[id, delta\]",
+            self.host,
+        )
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("ev.key !== 'Escape'", body)
+        self.assertIn("viewState.clearItem(); scheduleRepaint(); return;", body)
+        self.assertIn("viewState.clearBranch(); scheduleRepaint(); return;", body)
+        self.assertIn("clearProjectFocusView();", body)
+
+    def test_dig_in_fan_is_not_painted_under_a_focused_project(self) -> None:
+        # integrator pass: renderBrowser() painted the legacy #dig-in-layer
+        # fan whenever snap.dig was set, even while a project was focused
+        # (e.g. Papers expanded) — leaving stray, clickable folder chips in
+        # the gaps around the exploded branch canvas.
+        render_browser = re.search(r"async function renderBrowser\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(render_browser)
+        body = render_browser.group(1)
+        self.assertIn("if (snap.dig && !snap.project)", body)
+
+    def test_branch_buttons_carry_a_focus_key(self) -> None:
+        # integrator pass: renderProjectPanel() built #map-branch-buttons
+        # without dataset.branch, so captureFocusKey() returned null for a
+        # branch toggle and withFocusPreserved() could not restore keyboard
+        # focus after an operations-driven repaint (primary surface at
+        # ≤400px, where the sidebar is the only control).
+        panel = re.search(r"function renderProjectPanel\(snap\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(panel)
+        self.assertIn("btn.dataset.branch = branch.key;", panel.group(1))
+
+    def test_identical_operations_and_remote_reads_do_not_repaint(self) -> None:
+        # integrator pass: bp:map-operations always ran refreshRemote() then
+        # scheduleRepaint() with no equality guard, so an unchanged poll
+        # still rebuilt the sidebar DOM and re-triggered the branch-item
+        # enter animation. Gate the data-driven repaint on a fingerprint of
+        # the combined operations/remote snapshot.
+        self.assertIn("function applyDataUpdate()", self.host)
+        self.assertIn("if (key === lastAppliedDataKey) return;", self.host)
+        refresh_remote = re.search(r"async function refreshRemote\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(refresh_remote)
+        self.assertIn("applyDataUpdate();", refresh_remote.group(1))
+        self.assertIn("if (json === lastNodeStateJson) return;", self.host)
+
 
 class HitRouterFocusRowsTests(unittest.TestCase):
     def setUp(self) -> None:
