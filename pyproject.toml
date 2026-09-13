@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "protocolcity-blueprint"
-version = "0.1.47+consolidation.45"
+version = "0.1.47+consolidation.46"
 description = "BluePrint isolated runtime consolidation candidate"
 readme = "README.md"
 requires-python = ">=3.11"
