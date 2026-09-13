@@ -58,13 +58,29 @@ class Element {
     return this.parent.children[idx + 1] || null;
   }
   replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
-  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  addEventListener(type, fn, options) {
+    const capture = options === true || options?.capture;
+    const key = capture ? `${type}:capture` : type;
+    (this.listeners[key] ||= []).push(fn);
+  }
   dispatchEvent(event) {
-    const evt = {type: event?.type, target: this};
+    const type = event?.type;
+    const bubbles = event?.bubbles === true;
+    const evt = {type, target: this, bubbles};
+    const path = [];
     let node = this;
     while (node) {
-      for (const fn of node.listeners[event?.type] || []) fn.call(node, evt);
+      path.unshift(node);
       node = node.parent;
+    }
+    for (const n of path) {
+      for (const fn of n.listeners[`${type}:capture`] || []) fn.call(n, evt);
+    }
+    for (const fn of this.listeners[type] || []) fn.call(this, evt);
+    if (bubbles) {
+      for (let i = path.length - 2; i >= 0; i--) {
+        for (const fn of path[i].listeners[type] || []) fn.call(path[i], evt);
+      }
     }
     return true;
   }
@@ -395,7 +411,7 @@ const hireDisclosure = coverageList.querySelectorAll('details[data-coverage-proj
 });
 assert.ok(hireDisclosure, 'an active row must expose a Hire disclosure');
 hireDisclosure.open = true;
-hireDisclosure.dispatchEvent({type: 'toggle'});
+hireDisclosure.dispatchEvent({type: 'toggle', bubbles: false});
 const openText = domText(coverageList);
 assert.ok(/workforce hire/i.test(openText), 'opening disclosure must reveal hire commands');
 assert.ok(coverageList.querySelectorAll('code').length > 0, 'opened disclosure must render hire command nodes');
