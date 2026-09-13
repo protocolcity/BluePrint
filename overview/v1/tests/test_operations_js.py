@@ -644,6 +644,37 @@ class AgentsCoverageHarnessTests(unittest.TestCase):
         self.assertTrue(self.result['no_hire_nodes_while_closed'])
 
 
+class RefreshTimelinePositionHarnessTests(unittest.TestCase):
+    """pc-1488 cursor-reviewer finding #2: a background poll on the default
+    first page (no Load more used) must keep the reader's scroll position
+    and surface a new-events count, anchored on scroll depth — not only
+    after timelineExpanded is set by Load more."""
+
+    _HARNESS = Path(__file__).resolve().parent / 'harness' / 'refresh_timeline_check.mjs'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping refreshTimeline harness')
+        proc = subprocess.run([node, str(cls._HARNESS)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'refreshTimeline harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        cls.result = json.loads(proc.stdout)
+
+    def test_position_kept_while_scrolled_on_default_first_page(self) -> None:
+        self.assertTrue(self.result['kept_position_while_scrolled'])
+
+    def test_new_events_count_shown_without_load_more(self) -> None:
+        self.assertRegex(self.result['new_events_count_shown_on_first_page'], r'1 new event')
+
+    def test_poll_at_top_may_still_bring_in_newest_rows(self) -> None:
+        self.assertEqual(self.result['replaced_rows_when_at_top'], ['r5', 'r4', 'r3', 'r2', 'r1'])
+
+
 class SeatHeaderProjectNameTests(unittest.TestCase):
     """pc-1474 scope addition: seat headers always name their project from
     the queue, not just held seats — 'No project queue' replaces the old
@@ -792,6 +823,38 @@ class ConnectionsEngineTests(unittest.TestCase):
     def test_transport_warning_includes_engine_exceptions(self):
         self.assertIn("engineRows().filter(([,engine])=>isException(engine))", _SRC.replace(' ', ''))
         self.assertIn("The live indicator is only the update transport.", _HTML)
+
+
+class SeatParkedClaimRowTests(unittest.TestCase):
+    """pc-1495: seat rows show finishing and parked handoff copy."""
+
+    def test_held_link_prefers_live_claim_then_finishing_then_parked(self):
+        fn = _SRC.split('function heldLink(agent)')[1].split('function elapsedText')[0]
+        compact = fn.replace(' ', '')
+        self.assertLess(compact.index('currentOrderFor(agent)'), compact.index('agent.finishing'))
+        self.assertLess(compact.index('agent.finishing'), compact.index('parkedIds.length'))
+        self.assertIn('Finishing·parked', compact.replace(' ', ''))
+        self.assertIn('Parked:', fn)
+        self.assertIn('awaiting integration', fn)
+
+    def test_timeline_uses_parked_time_when_no_live_claim(self):
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
+        self.assertIn('agent.parked', fn)
+        self.assertIn('p.verified', fn)
+        self.assertIn('latestParkedSince(agent)', fn)
+        self.assertIn('currentShiftParkedIds(agent)', _SRC)
+
+class TimelineClearResetsPeriodTests(unittest.TestCase):
+    """pc-1488 browser check on .58: Clear reset the period select but left
+    ?period= in the URL because clearTimelineFilters never cleared the
+    client-side timelinePeriod that timelineFilterParams() serialises."""
+
+    def test_clear_timeline_filters_clears_period_state(self):
+        source = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'operations.js').read_text()
+        start = source.index('function clearTimelineFilters()')
+        body = source[start:source.index('\n}\n', start)]
+        self.assertIn("timelinePeriod = ''", body)
+        self.assertLess(body.index("timelinePeriod = ''"), body.index('updateTimelineFilters()'))
 
 
 if __name__ == '__main__':
