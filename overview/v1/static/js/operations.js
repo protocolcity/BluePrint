@@ -3,7 +3,7 @@
 'use strict';
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
-const {reconcileList, syncNote} = await import('/js/dom-reconcile.mjs');
+const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -383,6 +383,26 @@ function calendar() {
     return row;
   }, {emptyText:'No local calendar events. Agent schedules above are independent of the calendar file.'});
 }
+function engines() {
+  const rows=[['WorkLane engine',snapshot.engines && snapshot.engines.worklane],['WorkForce engine',snapshot.engines && snapshot.engines.workforce],['WorkLane API',snapshot.engines && snapshot.engines.worklane_api],['Supervisor last pass',snapshot.engines && snapshot.engines.supervisor]].filter(([,engine])=>engine);
+  reconcileList($('engine-list'), rows, ([name])=>name, ([name, engine])=>{
+    const row=el('div',undefined,'bp-source');
+    row.append(el('span',name),badge(engine.state));
+    const bits=[];
+    if(engine.detail) bits.push(engine.detail);
+    if(engine.source) bits.push('Source: '+engine.source);
+    if(engine.observed_at) bits.push('Observed '+date(engine.observed_at));
+    row.append(el('p',bits.join(' · ') || 'Unavailable.','bp-muted'));
+    return row;
+  }, {emptyText:'Engine receipts are not available in this workspace.'});
+}
+function excludedStores() {
+  const excluded=(snapshot.excluded_stores || []).map(name=>({name}));
+  reconcileList($('excluded-store-list'), excluded, store=>store.name, store=>{
+    const row=el('div',undefined,'bp-source');row.append(el('span',store.name));
+    return row;
+  }, {emptyText:'No unregistered databases in this workspace.'});
+}
 function paint() {
   const workspace=snapshot.workspace;
   $('desk-name').textContent=workspace ? `${workspace.name} · Local` : 'No workspace';
@@ -399,7 +419,7 @@ function paint() {
   if(page==='calendar') calendar();
   if(page==='timeline') timeline();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
-  if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; syncNote($('connection-list'),'excluded-stores',excluded.length ? 'Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.' : null,'bp-note bp-muted');$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
+  if(page==='connections') { sources($('connection-list'),true);engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 function liveIndicator() {
   if(!lastSuccess) return lastError ? 'Unable to read workspace. Retry with Refresh.' : 'Connecting…';

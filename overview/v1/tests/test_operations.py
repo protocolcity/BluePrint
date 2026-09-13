@@ -1,9 +1,11 @@
+import io
 import json
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
+from unittest.mock import patch
 from server.operations import operations_snapshot
 from server.work_order import read_work_order
 
@@ -325,6 +327,15 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(dates[0]['task_id'],'pc-1')
         self.assertEqual(dates[0]['product'],'product')
         self.assertEqual(dates[0]['dtstart'],'2026-09-20')
+    def test_project_working_count_is_live_claim_not_status_alone(self):
+        self.seed()
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['working'],0)
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-grok-implementer\nStart: 2026-09-13T09:00:00Z','bp-grok-implementer','2026-09-13T09:00:00Z')")
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['working'],1)
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog' WHERE id=1")
+        self.assertEqual(operations_snapshot(self.root)['projects'][0]['working'],0)
     def test_due_and_hold_until_remain_two_work_dates(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
@@ -334,3 +345,54 @@ class OperationsTests(unittest.TestCase):
         dates=operations_snapshot(self.root)['work_dates']
         self.assertEqual(sorted(d['kind'] for d in dates),['deadline','timer'])
         self.assertEqual({d['task_id'] for d in dates},{'pc-1'})
+    def test_engine_receipts_missing_are_unavailable(self):
+        result=operations_snapshot(self.root)
+        for key in ('worklane','workforce','worklane_api','supervisor'):
+            engine=result['engines'][key]
+            self.assertEqual(engine['state'],'unavailable')
+            self.assertIsNone(engine['observed_at'])
+        self.assertIn('receipt',result['engines']['worklane']['detail'].lower())
+        self.assertEqual(result['engines']['worklane']['source'],'local/worklane/deployment.json')
+        self.assertEqual(result['engines']['workforce']['source'],'local/workforce/deployment.json')
+    def test_engine_versions_reachability_and_supervisor_pass(self):
+        (self.root/'local/worklane').mkdir(parents=True)
+        (self.root/'local/workforce').mkdir(parents=True)
+        (self.root/'local/worklane/deployment.json').write_text(json.dumps({
+            'version':'0.1.7+test','port':8799,'activated_at':'2026-09-13T00:21:04+00:00'}))
+        (self.root/'local/workforce/deployment.json').write_text(json.dumps({
+            'version':'0.1.9+test','api_origin':'http://127.0.0.1:8797','activated_at':'2026-09-13T08:29:50+00:00'}))
+        class FakeResponse(io.BytesIO):
+            def __init__(self, payload=None, status=200):
+                super().__init__(json.dumps(payload if payload is not None else {}).encode())
+                self.status=status
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+        def fake_open(request, timeout=3):
+            url=request.full_url
+            if url.endswith('/health'):
+                return FakeResponse(status=200)
+            return FakeResponse({'passes':[{'generated_at':'2026-09-13T03:41:00Z','pass_outcome':'dispatched'}]})
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect=fake_open
+            result=operations_snapshot(self.root)
+        self.assertEqual(result['engines']['worklane']['state'],'available')
+        self.assertEqual(result['engines']['worklane']['version'],'0.1.7+test')
+        self.assertEqual(result['engines']['worklane']['source'],'local/worklane/deployment.json')
+        self.assertEqual(result['engines']['worklane']['observed_at'],'2026-09-13T00:21:04+00:00')
+        self.assertEqual(result['engines']['workforce']['version'],'0.1.9+test')
+        self.assertEqual(result['engines']['worklane_api']['state'],'available')
+        self.assertEqual(result['engines']['worklane_api']['source'],'http://127.0.0.1:8799/health')
+        self.assertIsNotNone(result['engines']['worklane_api']['observed_at'])
+        self.assertEqual(result['engines']['supervisor']['state'],'available')
+        self.assertEqual(result['engines']['supervisor']['outcome'],'dispatched')
+        self.assertEqual(result['engines']['supervisor']['source'],'WorkForce /api/supervisor')
+    def test_worklane_reachability_unavailable_when_probe_fails(self):
+        (self.root/'local/worklane').mkdir(parents=True)
+        (self.root/'local/worklane/deployment.json').write_text(json.dumps({'version':'0.1.7','port':8799}))
+        from urllib.error import URLError
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect=URLError('down')
+            result=operations_snapshot(self.root)
+        self.assertEqual(result['engines']['worklane']['state'],'available')
+        self.assertEqual(result['engines']['worklane_api']['state'],'unavailable')
+        self.assertIn('not reachable',result['engines']['worklane_api']['detail'].lower())
