@@ -59,7 +59,7 @@ You qualifiers (see D11): `you:todo` (personal task), `you:remind` (dated remind
 | **Note** | `reminder:<date>` label or `you:note` / `you:todo` / `you:remind` | your own list; no gate | no |
 | (none) | everything else, including all deferred and tracking orders | nothing | no |
 
-Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only.
+Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only. A `deadline:YYYY-MM-DD` label is Due. A date taken from a gate note, title, or history is a mentioned date, not a deadline. An expired timer is labelled expired; it is not currently blocking. Needs you is the Decide face, never the existence of a date. Calendar presentation is in [OVERVIEW_CALENDAR_SETTINGS.md](OVERVIEW_CALENDAR_SETTINGS.md).
 
 **Naming decision (D6).** Overview says "Needs you 10" while the panel opens on "Decide · 8". They measure the same pile with different filters. The record fixes one word: the metric and the panel are both **For You**, the number is the whole pile, and the breakdown shows the faces (8 decide · 2 read · 2 watch · 5 note). Decide and Read are open by default; Watch and Note are collapsed with counts. "Needs you" survives only as the badge on a Decide row.
 
@@ -95,7 +95,7 @@ Legend: ✓ shown today · ○ missing · — not needed there.
 | blockers and parent | ○ | — | ○ | — | — | — |
 | updated, and by whom | ✓ time | ✓ time | ✓ | ○ last activity | — | — |
 | last note snippet | ○ | ✓ gate note | ✓ full | — | — | — |
-| dated fields (due, hold until, reminder) | ○ | ○ | ✓ | — | ✓ | — |
+| dated fields (due, hold until, reminder, mentioned date) | ○ | ○ | ✓ | — | ✓ with source field | — |
 | counts: open, For You, deferred | — | — | — | ✓ open, ✓ need you, ○ deferred | — | — |
 
 The gaps in the "live with / parked by" column are the ones that made the desk feel unwired: an order can be live with a seat and the Work row still says "you". The change feed (D2) makes the live column worth having; without push it would be stale on arrival.

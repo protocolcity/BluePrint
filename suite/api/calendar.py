@@ -1,14 +1,17 @@
-"""pc-1125 / pc-1181: Workspace calendar — ICS from gates + deadline dates.
+"""pc-1125 / pc-1181 / pc-1489: Workspace calendar — ICS from gates + dated labels.
 
 One feed for all project stores. Sources of record stay on WorkLane tickets:
-  - gate_type=timer + gate_until → timed VEVENT
-  - label deadline:YYYY-MM-DD → all-day VEVENT
-  - gate_type=human + gate_note CALENDAR/~/ISO date → all-day VEVENT (pc-1181)
-    (bridges pre-deadline: cutover WOs; label wins on same date)
+  - gate_type=timer + gate_until → timed VEVENT (kind timer, source gate_until);
+    a date-only gate_until is all-day VALUE=DATE and holds through that
+    local calendar day.
+  - label deadline:YYYY-MM-DD → all-day Due (kind deadline, source that label)
+  - label reminder:YYYY-MM-DD → all-day Reminder (kind reminder, source that label)
+  - gate_type=human + gate_note CALENDAR/~/ISO date → all-day Mentioned date
+    (kind mentioned, source gate_note). A narrative date is never Due.
+    A deadline: label for the same day wins and the mention is omitted.
 Scheduled jobs are optional (include_jobs=False by default — noise control).
 
-No second date store. Hands/founders express real-world dates as those
-conventions; this module only renders them.
+No second date store. Titles, comments, and history are not scanned for dates.
 """
 
 from __future__ import annotations
@@ -60,6 +63,29 @@ def parse_gate_note_calendar_date(note: Any) -> Optional[date]:
         return date.fromisoformat(m.group(1))
     except ValueError:
         return None
+
+
+def gate_until_is_date_only(raw: Any) -> bool:
+    """True when gate_until is a calendar day, not a timed instant.
+
+    A date-only hold (YYYY-MM-DD, or a date instance) is all-day and must
+    not be serialised as UTC midnight. Timed strings and datetime values
+    stay instants even when the clock happens to be 00:00.
+    """
+    if raw is None:
+        return False
+    if isinstance(raw, datetime):
+        return False
+    if isinstance(raw, date):
+        return True
+    s = str(raw).strip()
+    if len(s) != 10:
+        return False
+    try:
+        date.fromisoformat(s)
+    except ValueError:
+        return False
+    return True
 
 
 def parse_gate_until(raw: Any) -> Optional[datetime]:
@@ -153,7 +179,8 @@ def events_from_task(
 
     Each event dict:
       uid, summary, description, url,
-      kind: 'timer' | 'deadline',
+      kind: 'timer' | 'deadline' | 'reminder' | 'mentioned',
+      source: durable field name that produced the clock,
       dtstart: datetime (timed) or date (all-day),
       all_day: bool,
       task_id, product (optional)
@@ -175,7 +202,18 @@ def events_from_task(
 
     gt = str(task.get("gate_type") or "").strip().lower()
     if gt == "timer":
-        when = parse_gate_until(task.get("gate_until"))
+        raw_until = task.get("gate_until")
+        all_day = gate_until_is_date_only(raw_until)
+        if all_day:
+            if isinstance(raw_until, date) and not isinstance(raw_until, datetime):
+                when = raw_until
+            else:
+                try:
+                    when = date.fromisoformat(str(raw_until).strip()[:10])
+                except ValueError:
+                    when = None
+        else:
+            when = parse_gate_until(raw_until)
         if when is not None:
             note = str(task.get("gate_note") or "").strip()
             if note:
@@ -195,8 +233,9 @@ def events_from_task(
                     "description": "\n".join(desc_parts),
                     "url": url,
                     "kind": "timer",
+                    "source": "gate_until",
                     "dtstart": when,
-                    "all_day": False,
+                    "all_day": all_day,
                     "task_id": tid,
                     "product": product,
                 }
@@ -211,7 +250,8 @@ def events_from_task(
             continue
         out.append({'uid': '%s-reminder-%s@blueprint.calendar' % (tid, when.isoformat()),
                     'summary': '%s · %s' % (tid, title), 'description': 'Calendar reminder; work eligibility is unchanged.',
-                    'url': url, 'kind': 'reminder', 'dtstart': when, 'all_day': True,
+                    'url': url, 'kind': 'reminder', 'source': 'reminder:%s' % when.isoformat(),
+                    'dtstart': when, 'all_day': True,
                     'task_id': tid, 'product': product})
 
     seen_dates = set()
@@ -234,6 +274,7 @@ def events_from_task(
                 "description": "\n".join(desc_parts),
                 "url": url,
                 "kind": "deadline",
+                "source": "deadline:%s" % d.isoformat(),
                 "dtstart": d,
                 "all_day": True,
                 "task_id": tid,
@@ -241,15 +282,16 @@ def events_from_task(
             }
         )
 
-    # pc-1181: human Decide gate_note CALENDAR/~ date → all-day deadline.
-    # Label deadline: for the same date wins (seen_dates). Never parse
-    # gate_note dates for timer/deferred/other gate types.
+    # pc-1489: a date in a human gate_note is a mentioned date, not Due.
+    # deadline: for the same day still wins (seen_dates). Never parse
+    # gate_note dates for timer/deferred/other gate types. Titles are
+    # not scanned.
     if gt == "human":
         d = parse_gate_note_calendar_date(task.get("gate_note"))
         if d is not None and d not in seen_dates:
             seen_dates.add(d)
             summary = "%s · %s" % (tid, title) if title else tid
-            desc_parts = ["deadline %s" % d.isoformat()]
+            desc_parts = ["mentioned date %s from gate_note; not a deadline" % d.isoformat()]
             note = str(task.get("gate_note") or "").strip()
             if note:
                 desc_parts.append(_WS.sub(" ", note)[:160])
@@ -259,12 +301,16 @@ def events_from_task(
                 desc_parts.append(url)
             out.append(
                 {
+                    # Kind and CATEGORIES are mentioned; the UID stays on the
+                    # pre-pc-1489 deadline form so existing ICS subscribers
+                    # update the same VEVENT instead of seeing a duplicate.
                     "uid": "%s-deadline-%s@blueprint.calendar"
                     % (tid, d.isoformat()),
                     "summary": summary,
                     "description": "\n".join(desc_parts),
                     "url": url,
-                    "kind": "deadline",
+                    "kind": "mentioned",
+                    "source": "gate_note",
                     "dtstart": d,
                     "all_day": True,
                     "task_id": tid,
@@ -389,6 +435,9 @@ def render_vevent(ev: Mapping[str, Any], *, dtstamp: Optional[datetime] = None) 
     kind = str(ev.get("kind") or "").strip()
     if kind:
         lines.append("CATEGORIES:%s" % _ics_escape(kind))
+    source = str(ev.get("source") or "").strip()
+    if source:
+        lines.append("X-BLUEPRINT-SOURCE:%s" % _ics_escape(source))
     lines.append("END:VEVENT")
     return "\r\n".join(_fold_line(ln) for ln in lines)
 
