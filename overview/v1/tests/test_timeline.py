@@ -45,6 +45,14 @@ class TimelineMappingTests(unittest.TestCase):
         self.assertEqual(_comment_event_word('Blocked: needs credentials'), 'gated')
         self.assertEqual(_comment_event_word('A regular note'), 'note')
 
+    def test_parked_body_with_embedded_owner_marker_reads_as_parked_not_claimed(self):
+        # wl_park's real body shape (worklane write.py): "Parked: {reason}\n
+        # Owner: {author}" — the Owner line is provenance, not a fresh claim
+        # (pc-1488 Done-when: distinguish terminal completion/lifecycle
+        # transitions from a claim marker embedded in the body).
+        self.assertEqual(_comment_event_word('Parked: waiting on review\nOwner: bp-claude-implementer'), 'parked')
+        self.assertEqual(_comment_event_word('Completed: shipped\nOwner: bp-claude-implementer'), 'closed')
+
     def test_ledger_event_word_mapping(self):
         self.assertEqual(_ledger_event_word('START', {}), {'event': 'started'})
         self.assertEqual(_ledger_event_word('START', {'recovery': '1'}), {'event': 'recovered'})
@@ -148,7 +156,58 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(worklane[0]['event'], 'claimed')
         self.assertEqual(worklane[0]['title'], 'Owner: seat')
         self.assertEqual(worklane[1]['event'], 'claimed')
-        self.assertEqual(worklane[1]['title'], 'Owner: seat\nAlso parked context')
+        # The extra same-second comment never pairs with an event, but it
+        # must still get the same first-line title / full-body detail split
+        # as a merged row — never the whole multiline body as the bold
+        # headline (pc-1488 cursor-reviewer finding #1).
+        self.assertEqual(worklane[1]['title'], 'Owner: seat')
+        self.assertEqual(worklane[1]['detail'], 'Owner: seat\nAlso parked context')
+
+    def test_merged_row_keeps_full_comment_behind_detail(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-12", "Blocked task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","backlog","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                         ('Released by seat returning to backlog\nWaiting on credentials from ops.', _RECENT))
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['title'], 'Released by seat returning to backlog')
+        self.assertEqual(worklane[0]['detail'],
+                          'Released by seat returning to backlog\nWaiting on credentials from ops.')
+
+    def test_unmerged_long_parked_comment_gets_title_and_detail(self):
+        """No same-second event exists to pair with (e.g. a background sweep
+        wrote the comment without a matching status_change row): the comment
+        must still split into a short first-line title with the full body
+        reachable behind detail, not one giant bold headline (pc-1488
+        cursor-reviewer finding #1)."""
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-13", "Parked task")')
+            conn.execute(
+                'INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                ('Parked: Implementation complete; both suites green.\nOwner: seat', _RECENT),
+            )
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['title'], 'Parked: Implementation complete; both suites green.')
+        self.assertEqual(
+            worklane[0]['detail'],
+            'Parked: Implementation complete; both suites green.\nOwner: seat',
+        )
 
     def test_release_event_and_released_comment_collapse_to_one_row(self):
         self._register()
@@ -199,6 +258,35 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(len(workforce), 1)
         self.assertEqual(workforce[0]['event'], 'failed')
 
+    def test_workforce_ticket_resolves_blank_project_from_registered_prefix(self):
+        self._register('product', 'pc')
+        sqlite3.connect(self._db('product')).close()
+        runtime = self.root / 'workforce/local'
+        (runtime / 'ledger').mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {}}))
+        (runtime / 'daemon.json').write_text(json.dumps({'last_tick': _RECENT, 'in_flight': []}))
+        # No project= field on the ledger line (the observed pc-1480 gap):
+        # the ticket's own id prefix must resolve it against the registry.
+        (runtime / 'ledger/seat.log').write_text(f'{_RECENT} CANDIDATE ticket=pc-9\n')
+        result = timeline_snapshot(self.root)
+        workforce = [r for r in result['rows'] if r['source'] == 'workforce']
+        self.assertEqual(len(workforce), 1)
+        self.assertEqual(workforce[0]['project'], 'product')
+        self.assertEqual(workforce[0]['link'], {'href': '/work-order?project=product&id=pc-9', 'label': 'pc-9'})
+        self.assertEqual(workforce[0]['group_key'], 'workforce:seat:pc-9')
+
+    def test_workforce_ticket_with_unresolvable_project_gets_no_ambiguous_link(self):
+        runtime = self.root / 'workforce/local'
+        (runtime / 'ledger').mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {}}))
+        (runtime / 'daemon.json').write_text(json.dumps({'last_tick': _RECENT, 'in_flight': []}))
+        (runtime / 'ledger/seat.log').write_text(f'{_RECENT} CANDIDATE ticket=zz-9\n')
+        result = timeline_snapshot(self.root)
+        workforce = [r for r in result['rows'] if r['source'] == 'workforce']
+        self.assertEqual(len(workforce), 1)
+        self.assertEqual(workforce[0]['project'], '')
+        self.assertEqual(workforce[0]['link'], {'href': '/agents', 'label': 'zz-9'})
+
     def test_workforce_rows_capped_per_source(self):
         runtime = self.root / 'workforce/local'
         (runtime / 'ledger').mkdir(parents=True)
@@ -238,6 +326,41 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(len(supervisor_rows), 1)
         self.assertEqual(supervisor_rows[0]['event'], 'dispatched')
         self.assertEqual(supervisor_rows[0]['at'], _RECENT)
+
+    def test_supervisor_row_title_is_outcome_only_not_source_repeated(self):
+        """The source badge already reads "Supervisor"; the title must not
+        repeat it (pc-1488 cursor-reviewer finding #3: headline read
+        "Passed · Supervisor pass · passed")."""
+        runtime = self.root / 'workforce/local'
+        runtime.mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {'bp-supervisor': {'kind': 'job'}}}))
+        deployment = self.root / 'local/workforce/deployment.json'
+        deployment.parent.mkdir(parents=True)
+        deployment.write_text(json.dumps({'api_origin': 'http://127.0.0.1:9999'}))
+        payload = {'ok': True, 'passes': [
+            {'generated_at': _RECENT, 'pass_outcome': 'passed', 'evidence_file': 'pass.json'},
+            {'generated_at': _RECENT, 'pass_outcome': 'provider_failed', 'evidence_file': 'fail.json',
+             'dispatched': [{'worker': 'bp-claude-implementer', 'outcome': 'failed'},
+                            {'worker': 'bp-cursor-implementer', 'outcome': 'exception'}]},
+        ]}
+        class _FakeResponse:
+            def read(self):
+                return json.dumps(payload).encode('utf-8')
+        with patch('server.timeline.build_opener') as build_opener:
+            build_opener.return_value.open.return_value.__enter__.return_value = _FakeResponse()
+            result = timeline_snapshot(self.root)
+        supervisor_rows = [r for r in result['rows'] if r['source'] == 'supervisor']
+        self.assertEqual(len(supervisor_rows), 2)
+        for row in supervisor_rows:
+            self.assertNotIn('Supervisor', row['title'])
+            # The title must not repeat the action word the headline already
+            # carries from the outcome (second-pass finding: "Passed · Passed").
+            self.assertNotEqual(row['title'].lower(), str(row['event']).replace('_', ' ').lower())
+        titles = {row['title'] for row in supervisor_rows}
+        self.assertEqual(titles, {
+            'no seat dispatched',
+            '2 seats · bp-claude-implementer failed, bp-cursor-implementer exception',
+        })
 
     def test_github_source_unavailable_when_not_configured(self):
         result = timeline_snapshot(self.root)
@@ -279,6 +402,34 @@ class TimelineProjectionTests(unittest.TestCase):
         rows = [r for r in result['rows'] if r['source'] == 'github']
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['title'], 'Ship it')
+
+    def test_github_pr_and_ci_run_group_by_shared_head_sha(self):
+        cached = {
+            'state': 'connected',
+            'repositories': [{
+                'repo': 'org/repo',
+                'project': 'product',
+                'state': 'connected',
+                'observed_at': _RECENT,
+                'items': [
+                    {'kind': 'pull_request', 'repo': 'org/repo', 'project': 'product', 'title': 'Ship it',
+                     'url': 'https://github.com/org/repo/pull/1', 'state': 'open', 'pr_event': 'opened',
+                     'updated_at': _RECENT, 'number': 1, 'sha': 'abc123'},
+                    {'kind': 'workflow', 'repo': 'org/repo', 'project': 'product', 'title': 'CI',
+                     'url': 'https://github.com/org/repo/actions/runs/2', 'state': 'success',
+                     'workflow_name': 'CI', 'updated_at': _RECENT, 'sha': 'abc123'},
+                    {'kind': 'release', 'repo': 'org/repo', 'project': 'product', 'title': 'v1',
+                     'url': 'https://github.com/org/repo/releases/tag/v1', 'updated_at': _RECENT},
+                ],
+            }],
+            'refreshing': False,
+        }
+        with patch('server.timeline.remote_snapshot', return_value=cached):
+            result = timeline_snapshot(self.root)
+        rows = {r['title']: r for r in result['rows'] if r['source'] == 'github'}
+        self.assertEqual(rows['Ship it']['group_key'], 'github:org/repo:abc123')
+        self.assertEqual(rows['CI']['group_key'], 'github:org/repo:abc123')
+        self.assertEqual(rows['v1']['group_key'], '')
 
     def test_github_observed_at_uses_stale_cache_fill_on_failed_refresh(self):
         cache_fill = '2026-09-13T07:00:00+00:00'
