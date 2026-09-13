@@ -43,6 +43,8 @@ else if (statusParam.startsWith('face:')) { attentionParam = attentionParam || s
 else if (statusParam === 'attention') { attentionParam = attentionParam || 'any'; statusParam = ''; legacyParam = true; }
 else if (statusParam === 'blocked') { blockedParam = true; statusParam = ''; legacyParam = true; }
 if (query.get('deferred') === '1') { gateParam = gateParam || 'deferred'; legacyParam = true; }
+// Pre-D16 links used the retired Note face value; map it to Due (STATES_AND_TERMS.md §1.4).
+if (attentionParam === 'note') { attentionParam = 'due'; legacyParam = true; }
 $('status-filter').value = statusParam;
 $('gate-filter').value = gateParam;
 $('kind-filter').value = kindParam;

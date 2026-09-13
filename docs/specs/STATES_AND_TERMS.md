@@ -55,11 +55,18 @@ You qualifiers (see D11): `you:todo` (personal task), `you:remind` (dated remind
 |---|---|---|---|
 | **Decide** | gate human with an act-now note (not parking language), or `gate:human` / `needs:founder-decision` label | act now; the note says what and what clears it | yes |
 | **Read** | `inbox-report` label, still open (a report was written for you and not yet cleared) | read, then clear or snooze | yes |
-| **Watch** | timer gate, or a live/parked order untouched for 90 minutes | look at evidence; not proof anything died | no |
-| **Due** | `reminder:YYYY-MM-DD` or `deadline:YYYY-MM-DD` label whose date is today or past | your own list, now due; no gate | no |
-| (none) | everything else, including an undated todo/note and all deferred and tracking orders | nothing | no |
+| **Watch** | timer gate, or a live order untouched for 90 minutes, or a parked order untouched for 90 minutes and held by You (not a registered seat) | look at evidence; not proof anything died | no |
+| **Due** | the earliest date across every `reminder:YYYY-MM-DD` and `deadline:YYYY-MM-DD` label on the order is today or past, on the workspace's local calendar day | your own list, now due; no gate | no |
+| (none) | everything else, including an undated todo/note, an order whose earliest reminder/deadline date is still ahead, a seat-parked handoff under 90 minutes, and all deferred and tracking orders | nothing | no |
 
 **Decision D16 (2026-09-13, user question).** Kind and For You used to overlap: the old Note face fired on the same labels that define the personal item kinds (`you:todo`, `you:note`, `you:remind`, `reminder:*`), and Read equalled Kind=report. Two of the four faces restated Kind instead of answering "does it want a person now" — 17 of 30 For You items were Note, 13 of them undated todos asking for nothing today. Due replaces Note: it fires only when a reminder or deadline date has arrived. An undated todo or note is Kind only (`kind_of` in attention_view.py); it never enters For You and shows under Assignment=You and Kind=todo/note on Work instead. `you:remind` carries no date of its own (§6): with a `reminder:<date>` label present it adds nothing to Due; without one it is an undated personal item and reads as Kind todo — "Reminder (no date)" must never appear.
+
+**Review findings fixed (2026-09-13, cursor-reviewer on PR #109 / pc-1494 recovery).** Five corrections to the D16 implementation, all in `attention_view.py`:
+- **Local day, not UTC.** Due compares the earliest reminder/deadline date against the host's local calendar day (`now.astimezone().date()`), not a bare UTC `.date()` — a UTC-only compare read tomorrow's reminder as due after roughly 19:00 in a US timezone.
+- **Earliest date wins, not first label.** When an order carries more than one `reminder:`/`deadline:` label (or both), Due and its reason text use the earliest parsed date across all of them, not whichever label happens to come first; a future reminder no longer hides a past deadline.
+- **`deadline:` is Kind reminder.** `kind_of` treats a `deadline:YYYY-MM-DD` label the same as `reminder:YYYY-MM-DD` for the Kind axis (§6) — a deadline-only order is Kind reminder, not Kind work.
+- **Seat-parked handoffs are exempt from Watch.** Per PROTOCOL 7a, an `in_review` order parked by a registered seat is the host integrator's queue, not a person's attention; only an `in_review` order parked by You (no seat identity on the Owner marker) or an `in_progress` order can earn Watch from the 90-minute clock.
+- **Legacy `?attention=note` still resolves.** Pre-D16 links using the retired Note value map to Due on load and are canonicalised, same as the other legacy status/gate mappings (§5).
 
 Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only. A `deadline:YYYY-MM-DD` label also drives the Due face and the Calendar's Due clock. A date taken from a gate note, title, or history is a mentioned date, not a deadline. An expired timer is labelled expired; it is not currently blocking. Needs you is the Decide face, never the existence of a date. Calendar presentation is in [OVERVIEW_CALENDAR_SETTINGS.md](OVERVIEW_CALENDAR_SETTINGS.md).
 

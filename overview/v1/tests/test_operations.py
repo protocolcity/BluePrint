@@ -81,6 +81,26 @@ class OperationsTests(unittest.TestCase):
         self.assertIsNone(order['live_with'])
         self.assertEqual(order['since'], '2026-09-12T05:00:00Z')
         self.assertEqual(order['last_note'], 'Parked: done for now')
+    def test_watch_exempts_a_seat_parked_handoff_but_not_a_you_parked_one(self):
+        """PROTOCOL 7a / review finding (pc-1494 recovery): a parked order
+        held by a registered seat is the host integrator's queue, not a
+        person's Watch; the same order parked by You still earns Watch."""
+        self.seed()
+        runtime = self.root/'workforce/local'; runtime.mkdir(parents=True)
+        (runtime/'roster.json').write_text(json.dumps(
+            {'workers': {'bp-claude-implementer': {'display': 'Seat', 'kind': 'lane'}}}))
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='in_review', gate_type=NULL, updated_at='2020-01-01T00:00:00Z' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-claude-implementer\nStart: t','bp-claude-implementer','2020-01-01T00:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['parked_by'], 'bp-claude-implementer')
+        self.assertEqual(order['attention_face'], '')
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('DELETE FROM task_comments')
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: you\nStart: t','you','2020-01-01T00:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['parked_by'], 'you')
+        self.assertEqual(order['attention_face'], 'watch')
     def test_release_comment_clears_prior_owner_marker(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
@@ -245,6 +265,15 @@ class OperationsTests(unittest.TestCase):
                 self.assertEqual(order['assigned_you'], expected_assigned_you)
                 self.assertEqual(order['attention_face'], expected_face)
                 self.assertEqual(order['kind'], expected_kind)
+    def test_deadline_only_order_reads_kind_reminder_not_work(self):
+        """Review finding (pc-1494 recovery): a deadline:-only order is Kind
+        reminder (§6), not Kind work."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                         ('backlog', json.dumps(['deadline:2026-12-20'])))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['kind'], 'reminder')
     def test_agent_owned_human_gate_stays_assigned_to_the_agent_in_for_you(self):
         """STATES_AND_TERMS.md §5 fixture 2: an agent-owned human gate is
         visible in For You (attention_face='decide') but still assigned to
