@@ -27,17 +27,24 @@ timelineProject = query.get('project') || '';
 timelineSource = query.get('source') || '';
 timelineActor = query.get('actor') || '';
 $('search').value = query.get('q') || '';
-for(const name of ['decide','read','watch','note'])$('status-filter').add(new Option(name[0].toUpperCase()+name.slice(1),'face:'+name));
-for(const [gate,label] of Object.entries({deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'})) {
-  const existing=Array.from($('status-filter').options).find(option=>option.value===gate);
-  if(existing) existing.value='gate:'+gate;
-  else $('status-filter').add(new Option(label,'gate:'+gate));
-}
-$('status-filter').value = query.get('status')==='deferred' ? 'gate:deferred' : query.get('status') || '';
+// Compatible mapping for pre-pc-1482 links: status carried gate/attention
+// values and a deferred=1 toggle; those axes now have their own filters
+// (STATES_AND_TERMS.md §5) and Status holds lifecycle words only.
+let statusParam = query.get('status') || '';
+let gateParam = query.get('gate') || '';
+let attentionParam = query.get('attention') || '';
+let blockedParam = query.get('blocked') === '1';
+if (statusParam.startsWith('gate:')) { gateParam = gateParam || statusParam.slice(5); statusParam = ''; }
+else if (statusParam === 'deferred') { gateParam = gateParam || 'deferred'; statusParam = ''; }
+else if (statusParam.startsWith('face:')) { attentionParam = attentionParam || statusParam.slice(5); statusParam = ''; }
+else if (statusParam === 'attention') { attentionParam = attentionParam || 'any'; statusParam = ''; }
+else if (statusParam === 'blocked') { blockedParam = true; statusParam = ''; }
+$('status-filter').value = statusParam;
+$('gate-filter').value = gateParam;
+$('attention-filter').value = attentionParam;
+$('blocked-filter').checked = blockedParam;
 let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
-let showDeferred = query.get('deferred') === '1';
-$('show-deferred').checked = showDeferred;
 $('page-title').textContent = titles[page][0];
 $('page-description').textContent = titles[page][1];
 document.title = `BluePrint · ${titles[page][0]}`;
@@ -86,10 +93,17 @@ function orderRow(order) {
     content.append(details);
   }
   if(order.last_note) content.append(el('span',`Last note: ${order.last_note}`,'bp-order-meta'));
-  const gateLabel={deferred:'Deferred',timer:'Timer gate',tracking:'Tracking'}[order.gate_type];
+  const gateWord=gateLabel(order);
   row.append(content,badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined)));
-  if(gateLabel) row.append(badge(order.gate_type,gateLabel));
+  if(gateWord) row.append(badge(order.gate_type+(order.gate_expired?'-expired':''),gateWord));
   return row;
+}
+function gateLabel(order) {
+  if(order.gate_type==='deferred') return 'Deferred';
+  if(order.gate_type==='tracking') return 'Tracking';
+  if(order.gate_type==='timer') return order.gate_expired ? 'Timer expired' : `Held until ${date(order.gate_until)}`;
+  if(order.gate_type==='human') return 'Needs a decision';
+  return '';
 }
 function sources(parent, details) {
   reconcileList(parent, snapshot.sources, s=>s.name, source=>{
@@ -104,7 +118,7 @@ function projectCard(project) {
   card.append(el('p',project.state==='available' ? `${project.open} open · ${project.attention} need you` : 'Store unavailable'));
   card.append(el('span',project.folder || 'Folder mapping not found','bp-muted'));
   const actions=el('div',undefined,'bp-project-actions');actions.append(link('Open work','/work?'+new URLSearchParams({project:project.id})));
-  if(project.attention) actions.append(link('For you','/work?'+new URLSearchParams({project:project.id,status:'attention'})));
+  if(project.attention) actions.append(link('For you','/work?'+new URLSearchParams({project:project.id,attention:'any'})));
   actions.append(link('Project papers','/documents?'+new URLSearchParams({project:project.id})));card.append(actions);
   return card;
 }
@@ -119,7 +133,7 @@ function overview() {
   const orders=snapshot.orders, forYou=orders.filter(o=>o.attention_face);
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
-  const metrics=[['For You',forYou.length,'/work?status=attention'],['Live',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
+  const metrics=[['For You',forYou.length,'/work?attention=any'],['Live',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
   let mutedCount=0;
   for(const face of ['decide','read','watch','note']) {
@@ -146,15 +160,11 @@ function filterOptions() {
   if(selectedProject && !snapshot.projects.some(p=>p.id===selectedProject)) select.add(new Option(selectedProject + ' (unavailable)', selectedProject));
   select.value=selectedProject;
   const assignment=$('assignment-filter');
-  assignment.replaceChildren(new Option('All assignments',''),new Option('Unassigned','unassigned'));
+  assignment.replaceChildren(new Option('All assignments',''),new Option('You','you'));
   for(const seat of snapshot.agents.filter(a=>a.group==='seat')) assignment.add(new Option(seat.name,'worker:'+seat.id));
+  assignment.add(new Option('Unassigned','unassigned'));
   if(selectedAssignment && !Array.from(assignment.options).some(o=>o.value===selectedAssignment)) assignment.add(new Option(selectedAssignment.replace(/^worker:/,''),selectedAssignment));
   assignment.value=selectedAssignment;
-  const status=$('status-filter'), current=status.value;
-  for(const name of new Set(snapshot.orders.map(o=>o.status))) {
-    if(!Array.from(status.options).some(option=>option.value===name)) status.add(new Option(name.replaceAll('_',' '),name));
-  }
-  status.value=current;
   const timelineSelect=$('timeline-project');
   if(timelineSelect) {
     const currentTimeline=timelineSelect.value;
@@ -163,17 +173,40 @@ function filterOptions() {
     timelineSelect.value=currentTimeline || timelineProject;
   }
 }
+function matchesAssignment(order, value) {
+  if(value==='you') return order.assigned_you;
+  if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
+  return order.workers.includes(value.slice(7));
+}
+function filterChips() {
+  const chips=[];
+  if($('search').value) chips.push(['Search: '+$('search').value,()=>{$('search').value='';}]);
+  if(selectedProject) { const opt=Array.from($('project-filter').options).find(o=>o.value===selectedProject); chips.push(['Project: '+(opt?opt.text:selectedProject),()=>{$('project-filter').value='';}]); }
+  if(selectedAssignment) { const opt=Array.from($('assignment-filter').options).find(o=>o.value===selectedAssignment); chips.push(['Assignment: '+(opt?opt.text:selectedAssignment),()=>{$('assignment-filter').value='';}]); }
+  if($('status-filter').value) chips.push(['Status: '+$('status-filter').selectedOptions[0].text,()=>{$('status-filter').value='';}]);
+  if($('gate-filter').value) chips.push(['Gate: '+$('gate-filter').selectedOptions[0].text,()=>{$('gate-filter').value='';}]);
+  if($('attention-filter').value) chips.push(['For You: '+$('attention-filter').selectedOptions[0].text,()=>{$('attention-filter').value='';}]);
+  if($('blocked-filter').checked) chips.push(['Blocked only',()=>{$('blocked-filter').checked=false;}]);
+  return chips;
+}
+function renderActiveFilters() {
+  const chips=filterChips(), container=$('active-filters');
+  container.replaceChildren();
+  for(const [label,clear] of chips) {
+    const chip=el('button',label,'bp-filter-chip');chip.type='button';
+    chip.addEventListener('click',()=>{clear();updateFilters();});
+    container.append(chip);
+  }
+  $('clear-filters').hidden=!chips.length;
+}
 function work() {
-  const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value;
-  const base=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.filter(w=>w!=='you').length:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status==='blocked'?o.blockers && o.blockers.length:status.startsWith('gate:')?o.gate_type===status.slice(5):status.startsWith('face:')?o.attention_face===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
-  const parked=base.filter(o=>['deferred','tracking'].includes(o.gate_type));
-  $('deferred-count').textContent=parked.length;
-  $('deferred-toggle').hidden=!parked.length && !showDeferred;
-  const hideParked=!showDeferred && !status.startsWith('gate:');
-  const orders=hideParked ? base.filter(o=>!['deferred','tracking'].includes(o.gate_type)) : base;
+  const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, attention=$('attention-filter').value, blockedOnly=$('blocked-filter').checked;
+  const total=snapshot.orders.length;
+  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || (gate==='none' ? !o.gate_type : o.gate_type===gate)) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!blockedOnly || (o.blockers && o.blockers.length)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
-  reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, or search.'});
-  $('results').textContent=`${orders.length} matching work order${orders.length===1?'':'s'}`;
+  reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, gate, or search.'});
+  $('results').textContent=`${orders.length} of ${total} matching work order${orders.length===1?'':'s'}`;
+  renderActiveFilters();
   $('page-count').textContent=`Page ${pageIndex+1} of ${pages}`;
   $('previous').disabled=pageIndex===0;$('next').disabled=pageIndex>=pages-1;
 }
@@ -583,12 +616,13 @@ async function refresh(manual) {
   finally { pending=false;if(manual) { $('refresh').disabled=false;$('refresh').textContent='Refresh'; }freshness(); }
 }
 function updateFilters() {
-  selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;showDeferred=$('show-deferred').checked;pageIndex=0;
-  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('search').value)params.set('q',$('search').value);if(showDeferred)params.set('deferred','1');
+  selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
+  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('blocked-filter').checked)params.set('blocked','1');if($('search').value)params.set('q',$('search').value);
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
-$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('show-deferred').addEventListener('change',updateFilters);
+$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('gate-filter').addEventListener('change',updateFilters);$('attention-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('blocked-filter').addEventListener('change',updateFilters);
+$('clear-filters').addEventListener('click',()=>{$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('attention-filter').value='';$('blocked-filter').checked=false;updateFilters();});
 $('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});if ($('timeline-filters')) {
   $('timeline-project').value = timelineProject;
   $('timeline-source').value = timelineSource;

@@ -998,6 +998,18 @@ def operations_snapshot(binder):
                     workers = [x[7:] for x in labels if isinstance(x, str) and x.startswith('worker:') and x[7:]]
                     routable_workers = [w for w in workers if w != 'you']
                     you_qualifier = any(label in ('you:todo', 'you:remind', 'you:note') for label in labels if isinstance(label, str))
+                    # A human gate with nobody routed to it is a decision that
+                    # belongs to You; one with a routable worker stays that
+                    # worker's (STATES_AND_TERMS.md §5: agent-owned gates stay
+                    # assigned to the agent even while they appear in For You).
+                    assigned_you = you_qualifier or (item.get('gate_type') == 'human' and not routable_workers)
+                    gate_expired = False
+                    if item.get('gate_type') == 'timer' and item.get('gate_until'):
+                        try:
+                            due = datetime.fromisoformat(str(item['gate_until']).replace('Z', '+00:00'))
+                            gate_expired = bool(due.tzinfo) and due <= now
+                        except (ValueError, TypeError):
+                            pass
                     from .attention_view import face, face_reason, persona_text
                     attention_face = face(item, labels, now)
                     attention = bool(attention_face)
@@ -1016,11 +1028,13 @@ def operations_snapshot(binder):
                         'face_reason': face_reason(item, labels, attention_face, now),
                         'gate_until':item.get('gate_until'),
                         'gate_type': item.get('gate_type') or '',
+                        'gate_expired': gate_expired,
                         'gate_note': item.get('gate_note') or '',
                         'workers': workers,
                         'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not you_qualifier,
                         'persona': persona_text(item, labels),
-                        'owner': ', '.join(routable_workers) or 'Unassigned',
+                        'assigned_you': assigned_you,
+                        'owner': 'You' if assigned_you else (', '.join(routable_workers) or 'Unassigned'),
                         'live_with': marker['identity'] if marker and status == 'in_progress' else None,
                         'parked_by': marker['identity'] if marker and status == 'in_review' else None,
                         'since': marker['since'] if marker and status in ('in_progress', 'in_review') else None,
