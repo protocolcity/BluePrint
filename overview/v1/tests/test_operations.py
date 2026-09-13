@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
-from server.operations import operations_snapshot
+from server.operations import operations_snapshot, WORKLANE_API_PATH
 from server.work_order import read_work_order
 
 class OperationsTests(unittest.TestCase):
@@ -467,14 +467,37 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(sorted(d['kind'] for d in dates),['deadline','timer'])
         self.assertEqual({d['task_id'] for d in dates},{'pc-1'})
     def test_engine_receipts_missing_are_unavailable(self):
-        result=operations_snapshot(self.root)
+        with patch('server.operations.build_opener') as build_opener:
+            result=operations_snapshot(self.root)
+            build_opener.assert_not_called()
         for key in ('worklane','workforce','worklane_api','supervisor'):
             engine=result['engines'][key]
             self.assertEqual(engine['state'],'unavailable')
             self.assertIsNone(engine['observed_at'])
+            self.assertIsNone(engine['activated_at'])
+            self.assertFalse(engine['usable'])
         self.assertIn('receipt',result['engines']['worklane']['detail'].lower())
         self.assertEqual(result['engines']['worklane']['source'],'local/worklane/deployment.json')
         self.assertEqual(result['engines']['workforce']['source'],'local/workforce/deployment.json')
+    def _engine_http(self, products=None, products_status=200, products_raw=None,
+                     passes=None, pass_status=200, raise_products=None, raise_supervisor=None):
+        class FakeResponse(io.BytesIO):
+            def __init__(self, payload=None, status=200, raw=None):
+                body=raw if raw is not None else json.dumps(payload if payload is not None else {}).encode()
+                super().__init__(body)
+                self.status=status
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+        def fake_open(request, timeout=3):
+            url=request.full_url
+            if WORKLANE_API_PATH in url:
+                if raise_products: raise raise_products
+                if products_raw is not None:
+                    return FakeResponse(status=products_status, raw=products_raw)
+                return FakeResponse(products if products is not None else {'ok':True,'products':[]}, products_status)
+            if raise_supervisor: raise raise_supervisor
+            return FakeResponse({'passes': passes if passes is not None else []}, pass_status)
+        return fake_open
     def test_engine_versions_reachability_and_supervisor_pass(self):
         (self.root/'local/worklane').mkdir(parents=True)
         (self.root/'local/workforce').mkdir(parents=True)
@@ -482,30 +505,30 @@ class OperationsTests(unittest.TestCase):
             'version':'0.1.7+test','port':8799,'activated_at':'2026-09-13T00:21:04+00:00'}))
         (self.root/'local/workforce/deployment.json').write_text(json.dumps({
             'version':'0.1.9+test','api_origin':'http://127.0.0.1:8797','activated_at':'2026-09-13T08:29:50+00:00'}))
-        class FakeResponse(io.BytesIO):
-            def __init__(self, payload=None, status=200):
-                super().__init__(json.dumps(payload if payload is not None else {}).encode())
-                self.status=status
-            def __enter__(self): return self
-            def __exit__(self, *args): return False
-        def fake_open(request, timeout=3):
-            url=request.full_url
-            if url.endswith('/health'):
-                return FakeResponse(status=200)
-            return FakeResponse({'passes':[{'generated_at':'2026-09-13T03:41:00Z','pass_outcome':'dispatched'}]})
         with patch('server.operations.build_opener') as build_opener:
-            build_opener.return_value.open.side_effect=fake_open
+            build_opener.return_value.open.side_effect=self._engine_http(
+                products={'ok':True,'products':[{'slug':'product'}]},
+                passes=[{'generated_at':'2026-09-13T03:41:00Z','pass_outcome':'dispatched'}])
             result=operations_snapshot(self.root)
-        self.assertEqual(result['engines']['worklane']['state'],'available')
-        self.assertEqual(result['engines']['worklane']['version'],'0.1.7+test')
-        self.assertEqual(result['engines']['worklane']['source'],'local/worklane/deployment.json')
-        self.assertEqual(result['engines']['worklane']['observed_at'],'2026-09-13T00:21:04+00:00')
+        receipt=result['engines']['worklane']
+        self.assertEqual(receipt['state'],'installed')
+        self.assertEqual(receipt['version'],'0.1.7+test')
+        self.assertEqual(receipt['source'],'local/worklane/deployment.json')
+        self.assertEqual(receipt['activated_at'],'2026-09-13T00:21:04+00:00')
+        self.assertIsNone(receipt['observed_at'])
         self.assertEqual(result['engines']['workforce']['version'],'0.1.9+test')
-        self.assertEqual(result['engines']['worklane_api']['state'],'available')
-        self.assertEqual(result['engines']['worklane_api']['source'],'http://127.0.0.1:8799/health')
-        self.assertIsNotNone(result['engines']['worklane_api']['observed_at'])
+        self.assertEqual(result['engines']['workforce']['state'],'installed')
+        api=result['engines']['worklane_api']
+        self.assertEqual(api['state'],'available')
+        self.assertTrue(api['reachable'])
+        self.assertTrue(api['usable'])
+        self.assertEqual(api['http_status'],200)
+        self.assertEqual(api['source'],'http://127.0.0.1:8799'+WORKLANE_API_PATH)
+        self.assertIsNotNone(api['observed_at'])
+        self.assertEqual(api['last_success_at'],api['observed_at'])
         self.assertEqual(result['engines']['supervisor']['state'],'available')
         self.assertEqual(result['engines']['supervisor']['outcome'],'dispatched')
+        self.assertTrue(result['engines']['supervisor']['usable'])
         self.assertEqual(result['engines']['supervisor']['source'],'WorkForce /api/supervisor')
     def test_worklane_reachability_unavailable_when_probe_fails(self):
         (self.root/'local/worklane').mkdir(parents=True)
@@ -514,6 +537,53 @@ class OperationsTests(unittest.TestCase):
         with patch('server.operations.build_opener') as build_opener:
             build_opener.return_value.open.side_effect=URLError('down')
             result=operations_snapshot(self.root)
-        self.assertEqual(result['engines']['worklane']['state'],'available')
+        self.assertEqual(result['engines']['worklane']['state'],'installed')
         self.assertEqual(result['engines']['worklane_api']['state'],'unavailable')
+        self.assertFalse(result['engines']['worklane_api']['reachable'])
+        self.assertFalse(result['engines']['worklane_api']['usable'])
         self.assertIn('not reachable',result['engines']['worklane_api']['detail'].lower())
+    def test_worklane_api_http_404_is_reachable_not_usable(self):
+        from urllib.error import HTTPError
+        (self.root/'local/worklane').mkdir(parents=True)
+        (self.root/'local/worklane/deployment.json').write_text(json.dumps({'version':'0.1.7','port':8799}))
+        error=HTTPError('http://127.0.0.1:8799'+WORKLANE_API_PATH, 404, 'Not Found', hdrs=None, fp=io.BytesIO(b''))
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect=self._engine_http(raise_products=error)
+            result=operations_snapshot(self.root)
+        api=result['engines']['worklane_api']
+        self.assertEqual(api['state'],'reachable')
+        self.assertTrue(api['reachable'])
+        self.assertFalse(api['usable'])
+        self.assertEqual(api['http_status'],404)
+        self.assertIn('health not verified',api['detail'].lower())
+        self.assertIn('404',api['detail'])
+        self.assertIn('/api/admin/products',api['source'])
+        self.assertNotIn('/health',api['source'])
+        self.assertTrue(api['next_step'])
+    def test_worklane_api_200_without_products_list_is_not_usable(self):
+        (self.root/'local/worklane').mkdir(parents=True)
+        (self.root/'local/worklane/deployment.json').write_text(json.dumps({'version':'0.1.7','port':8799}))
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect=self._engine_http(
+                products={'ok':True}, products_status=200)
+            result=operations_snapshot(self.root)
+        api=result['engines']['worklane_api']
+        self.assertEqual(api['state'],'reachable')
+        self.assertTrue(api['reachable'])
+        self.assertFalse(api['usable'])
+    def test_supervisor_failed_pass_is_failed_outcome_not_available(self):
+        (self.root/'local/workforce').mkdir(parents=True)
+        (self.root/'local/workforce/deployment.json').write_text(json.dumps({
+            'version':'0.1.9+test','api_origin':'http://127.0.0.1:8797'}))
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect=self._engine_http(
+                passes=[{'generated_at':'2026-09-13T03:41:00Z','pass_outcome':'provider_failed'}])
+            result=operations_snapshot(self.root)
+        supervisor=result['engines']['supervisor']
+        self.assertEqual(supervisor['state'],'failed')
+        self.assertEqual(supervisor['outcome'],'provider_failed')
+        self.assertTrue(supervisor['usable'])
+        self.assertTrue(supervisor['reachable'])
+        self.assertIn('provider failed',supervisor['detail'])
+        self.assertTrue(supervisor['next_step'])
+        self.assertNotEqual(supervisor['state'],'available')

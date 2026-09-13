@@ -7,7 +7,7 @@ const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents',''],connections:['Connections','Where the information comes from and how current it is.']};
+const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents',''],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
@@ -118,12 +118,93 @@ function gateLabel(order) {
   if(order.gate_type==='human') return 'Needs a decision';
   return '';
 }
+const EXCEPTION_STATES = new Set(['unavailable','failed','partial','stale','reachable','unknown']);
+function isException(item) {
+  if(!item) return false;
+  if(EXCEPTION_STATES.has(item.state)) return true;
+  return item.reachable===true && item.usable===false && item.state!=='not_configured' && item.state!=='empty';
+}
+function sourceSeverity(item) {
+  if(!item) return 9;
+  if(item.state==='unavailable' || item.state==='failed') return 0;
+  if(item.state==='partial' || item.state==='stale' || item.state==='reachable') return 1;
+  if(item.state==='unknown') return 2;
+  if(item.state==='empty') return 3;
+  if(item.state==='not_configured') return 4;
+  return 5;
+}
+function capabilityState(record) {
+  if(record.reachable===true && record.usable===false && record.state!=='not_configured' && record.state!=='empty') {
+    return record.state==='failed' ? 'failed' : (record.state || 'reachable');
+  }
+  return record.state || 'unavailable';
+}
+function capabilityText(state) {
+  if(state==='not_configured') return 'not configured';
+  if(state==='last_run_failed') return 'last run failed';
+  return String(state || 'unavailable').replaceAll('_',' ');
+}
+function capabilityBits(record) {
+  const bits=[];
+  if(record.detail) bits.push(record.detail);
+  if(record.outcome) {
+    const outcome=String(record.outcome).replaceAll('_',' ');
+    if(!(record.detail || '').toLowerCase().includes(outcome)) bits.push('Last outcome '+outcome);
+  }
+  if(record.activated_at) bits.push('Activated '+date(record.activated_at));
+  else if(record.version) bits.push('Version '+record.version);
+  if(record.observed_at) bits.push('Last observation '+date(record.observed_at));
+  if(record.last_success_at && record.last_success_at!==record.observed_at) bits.push('Last successful observation '+date(record.last_success_at));
+  if(record.last_at) bits.push('Last tick: '+date(record.last_at));
+  return bits;
+}
+function rawDetails(record) {
+  const bits=[];
+  if(record.source) bits.push(record.source);
+  if(record.version) bits.push('version '+record.version);
+  if(record.http_status) bits.push('HTTP '+record.http_status);
+  if(record.reachable===true) bits.push('reachable');
+  else if(record.reachable===false) bits.push('not reachable');
+  if(record.usable===true) bits.push('usable');
+  else if(record.usable===false) bits.push('not usable');
+  return bits.join(' · ');
+}
+function connectionRow(name, record, mode) {
+  const state=capabilityState(record);
+  const exception=isException(record);
+  const compact=mode==='compact' && !exception;
+  const row=el('div',undefined,'bp-source'+(compact?' bp-source-compact':''));
+  row.append(el('span',name),badge(state, capabilityText(state)));
+  const bits=capabilityBits(record);
+  if(bits.length && (mode!=='compact' || exception)) row.append(el('p',bits.join(' · '),'bp-muted'));
+  if((mode==='exception' || mode==='details') && exception && record.next_step) row.append(el('p','Next: '+record.next_step,'bp-source-next'));
+  if(mode==='details' || mode==='exception') {
+    const raw=rawDetails(record);
+    if(raw) {
+      const box=el('details',undefined,'bp-source-raw');
+      box.append(el('summary','Endpoint, path and version'));
+      box.append(el('p',raw,'bp-muted'));
+      row.append(box);
+    }
+  }
+  return row;
+}
+function sortBySeverity(items, nameOf) {
+  return [...items].sort((a,b)=>sourceSeverity(a)-sourceSeverity(b) || String(nameOf(a)).localeCompare(String(nameOf(b))));
+}
+function engineRows() {
+  const engines=snapshot.engines || {};
+  return [['WorkLane engine',engines.worklane],['WorkForce engine',engines.workforce],['WorkLane API',engines.worklane_api],['Supervisor last pass',engines.supervisor]].filter(([,engine])=>engine);
+}
 function sources(parent, details) {
-  reconcileList(parent, snapshot.sources, s=>s.name, source=>{
-    const row=el('div',undefined,'bp-source'); row.append(el('span',source.name),badge(source.state));
-    if(details) row.append(el('p',source.detail + (source.last_at ? ` Last tick: ${date(source.last_at)}` : ''),'bp-muted'));
-    return row;
-  });
+  const rows=sortBySeverity(snapshot.sources || [], s=>s.name);
+  reconcileList(parent, rows, s=>s.name, source=>connectionRow(source.name, source, details?'details':'compact'), {emptyText:'No data sources reported.'});
+}
+function connectionExceptions() {
+  const items=[];
+  for(const source of snapshot.sources || []) if(isException(source)) items.push({id:'source:'+source.name, name:source.name, record:source});
+  for(const [name, engine] of engineRows()) if(isException(engine)) items.push({id:'engine:'+name, name, record:engine});
+  reconcileList($('connection-exceptions'), items, item=>item.id, item=>connectionRow(item.name, item.record, 'exception'), {emptyText:'No source exceptions.'});
 }
 function projectCard(project) {
   const card=el('article',undefined,'bp-project');
@@ -500,17 +581,8 @@ function calendar() {
   }, {emptyText:'No local calendar events. Agent schedules above are independent of the calendar file.'});
 }
 function engines() {
-  const rows=[['WorkLane engine',snapshot.engines && snapshot.engines.worklane],['WorkForce engine',snapshot.engines && snapshot.engines.workforce],['WorkLane API',snapshot.engines && snapshot.engines.worklane_api],['Supervisor last pass',snapshot.engines && snapshot.engines.supervisor]].filter(([,engine])=>engine);
-  reconcileList($('engine-list'), rows, ([name])=>name, ([name, engine])=>{
-    const row=el('div',undefined,'bp-source');
-    row.append(el('span',name),badge(engine.state));
-    const bits=[];
-    if(engine.detail) bits.push(engine.detail);
-    if(engine.source) bits.push('Source: '+engine.source);
-    if(engine.observed_at) bits.push('Observed '+date(engine.observed_at));
-    row.append(el('p',bits.join(' · ') || 'Unavailable.','bp-muted'));
-    return row;
-  }, {emptyText:'Engine receipts are not available in this workspace.'});
+  const rows=sortBySeverity(engineRows().map(([name, engine])=>({...engine, name})), row=>row.name);
+  reconcileList($('engine-list'), rows, row=>row.name, row=>connectionRow(row.name, row, 'details'), {emptyText:'Engine receipts are not available in this workspace.'});
 }
 function excludedStores() {
   const excluded=(snapshot.excluded_stores || []).map(name=>({name}));
@@ -523,7 +595,10 @@ function paint() {
   const workspace=snapshot.workspace;
   $('desk-name').textContent=workspace ? `${workspace.name} · Local` : 'No workspace';
   $('scope-path').textContent=workspace?.path || 'Start BluePrint with a workspace selected.';
-  const issues=snapshot.sources.filter(s=>!['available','fresh','not_configured'].includes(s.state));
+  const issues=[
+    ...(snapshot.sources || []).filter(isException),
+    ...engineRows().filter(([,engine])=>isException(engine)).map(([name, engine])=>({name, state:engine.state})),
+  ];
   $('source-warning').hidden=!issues.length && !snapshot.truncated;
   $('source-warning').textContent=issues.length ? `Some sources need attention: ${issues.map(s=>`${s.name} (${s.state})`).join(', ')}. Counts may be incomplete.` : 'Large stores are limited to 2,000 open records each. Filtered counts may be incomplete.';
   $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Activity`;
@@ -535,7 +610,7 @@ function paint() {
   if(page==='calendar') calendar();
   if(page==='timeline') timeline();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
-  if(page==='connections') { sources($('connection-list'),true);engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
+  if(page==='connections') { connectionExceptions();sources($('connection-list'),true);engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 function liveIndicator() {
   if(!lastSuccess) return lastError ? 'Unable to read workspace. Retry with Refresh.' : 'Connecting…';
