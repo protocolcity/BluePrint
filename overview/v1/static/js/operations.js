@@ -288,32 +288,41 @@ function selectAgent(id) {
 }
 function agentRow(agent) {
   const row=el('div',undefined,'bp-agent-row');
-  row.setAttribute('role','button');row.tabIndex=0;
+  // Selection and action are two independent controls, never nested: the
+  // selectable region (name, provider, badge, held, elapsed, last update)
+  // carries role=button, and the action cell — a real <button>/<a> — is a
+  // sibling outside it, not inside it (no nested interactive controls).
+  const select=el('div',undefined,'bp-agent-select');
+  select.setAttribute('role','button');select.tabIndex=0;
+  select.dataset.agentId=agent.id;
   const selected=selectedAgentId===agent.id;
-  row.dataset.selected=String(selected);
-  row.setAttribute('aria-pressed',String(selected));
-  row.append(el('span',agent.project_name || 'No project queue','bp-agent-cell'));
+  select.dataset.selected=String(selected);
+  select.setAttribute('aria-pressed',String(selected));
+  select.append(el('span',agent.project_name || 'No project queue','bp-agent-cell'));
   const nameCell=el('span',undefined,'bp-agent-cell bp-agent-name');
   nameCell.append(el('strong',agent.name),el('span',` · ${agent.model}`,'bp-muted'));
-  row.append(nameCell);
-  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));row.append(stateCell);
-  const workCell=el('span',undefined,'bp-agent-cell bp-agent-work');workCell.append(heldLink(agent));row.append(workCell);
-  row.append(el('span',elapsedText(agent),'bp-agent-cell bp-muted'));
-  row.append(el('span',lastUpdateText(agent),'bp-agent-cell bp-muted'));
+  select.append(nameCell);
+  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));select.append(stateCell);
+  const workCell=el('span',undefined,'bp-agent-cell bp-agent-work');workCell.append(heldLink(agent));select.append(workCell);
+  select.append(el('span',elapsedText(agent),'bp-agent-cell bp-muted'));
+  select.append(el('span',lastUpdateText(agent),'bp-agent-cell bp-muted'));
+  const activate=event=>{ if(event.target.closest('a')) return; event.preventDefault(); selectAgent(agent.id); };
+  select.addEventListener('click',activate);
+  select.addEventListener('keydown',event=>{ if((event.key==='Enter' || event.key===' ') && !event.target.closest('a')) { event.preventDefault(); selectAgent(agent.id); } });
+  row.append(select);
   const actionCell=el('span',undefined,'bp-agent-cell bp-agent-action');actionCell.append(...agentAction(agent));row.append(actionCell);
-  const activate=event=>{ if(event.target.closest('button') || event.target.closest('a')) return; event.preventDefault(); selectAgent(agent.id); };
-  row.addEventListener('click',activate);
-  row.addEventListener('keydown',event=>{ if((event.key==='Enter' || event.key===' ') && !event.target.closest('button') && !event.target.closest('a')) { event.preventDefault(); selectAgent(agent.id); } });
   return row;
 }
 function jobRow(agent) {
   const row=el('div',undefined,'bp-agent-row');
-  row.append(el('span',agent.name,'bp-agent-cell'));
-  row.append(el('span',scheduleLabel(agent.schedule),'bp-agent-cell bp-muted'));
-  row.append(el('span',agent.schedule==='manual'?'On demand':date(agent.next_fire),'bp-agent-cell bp-muted'));
-  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));row.append(stateCell);
+  const info=el('div',undefined,'bp-job-info');
+  info.append(el('span',agent.name,'bp-agent-cell'));
+  info.append(el('span',scheduleLabel(agent.schedule),'bp-agent-cell bp-muted'));
+  info.append(el('span',agent.schedule==='manual'?'On demand':date(agent.next_fire),'bp-agent-cell bp-muted'));
+  const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));info.append(stateCell);
   const reportText=agent.report ? `${agent.report.state} · ${agent.report.summary}` : (agent.last_run ? `${agent.last_run.outcome} · ${date(agent.last_run.at)}` : 'No report yet');
-  row.append(el('span',reportText,'bp-agent-cell bp-muted'));
+  info.append(el('span',reportText,'bp-agent-cell bp-muted'));
+  row.append(info);
   const actionCell=el('span',undefined,'bp-agent-cell bp-agent-action');actionCell.append(...agentAction(agent));row.append(actionCell);
   return row;
 }
@@ -322,36 +331,84 @@ function timelineStep(label, value) {
   step.append(el('dt',label),el('dd',value));
   return step;
 }
-function agentTimeline(agent) {
-  const wrap=el('dl',undefined,'bp-agent-timeline');
-  wrap.append(timelineStep('Dispatch candidate', agent.last_candidates && agent.last_candidates.length ? agent.last_candidates.join(', ') : 'Not reported'));
+function agentTimelineValues(agent) {
   let claim='Not reported';
   if(agent.held) claim=agent.held_verified ? `Verified: holds ${agent.held.id}` : `Holds ${agent.held.id} · not yet verified against the last dispatch candidates`;
   else if(agent.state==='last_run_failed') claim=agent.preserved_reservation ? 'No order currently held here; a preserved reservation is available to recover' : 'No order currently held here; the failed ticket may already be resolved by another provider';
-  wrap.append(timelineStep('Verified claim', claim));
-  wrap.append(timelineStep('Observed run start', agent.shift ? date(agent.shift.started_at) : 'Not reported'));
-  wrap.append(timelineStep('Recovery attempts', String(agent.recovery_attempts || 0)));
   let terminal='Not reported';
   if(agent.shift) terminal='Open — no terminal row yet';
   else if(agent.last_run) terminal=`${agent.last_run.outcome} · ${agent.last_run.reason} · ${date(agent.last_run.at)}`;
-  wrap.append(timelineStep('Terminal outcome', terminal));
+  return [
+    ['Dispatch candidate', agent.last_candidates && agent.last_candidates.length ? agent.last_candidates.join(', ') : 'Not reported'],
+    ['Verified claim', claim],
+    ['Observed run start', agent.shift ? date(agent.shift.started_at) : 'Not reported'],
+    ['Recovery attempts', String(agent.recovery_attempts || 0)],
+    ['Terminal outcome', terminal],
+  ];
+}
+function agentTimeline(agent) {
+  const wrap=el('dl',undefined,'bp-agent-timeline');
+  for(const [label,value] of agentTimelineValues(agent)) wrap.append(timelineStep(label,value));
   return wrap;
 }
+function syncAgentTimeline(wrap, agent) {
+  const steps=agentTimelineValues(agent), nodes=wrap.children;
+  steps.forEach(([,value], index)=>{
+    const dd=nodes[index] && nodes[index].querySelector('dd');
+    if(dd && dd.textContent!==value) dd.textContent=value;
+  });
+}
+function syncBadge(node, state, text) {
+  const label=text || state.replaceAll('_',' ');
+  if(node.textContent!==label) node.textContent=label;
+  if(node.dataset.state!==state) node.dataset.state=state;
+}
+// The selected-run inspector is repainted on every meaningful snapshot
+// change, but most of those changes belong to a different seat or a field
+// this inspector doesn't show; rebuilding container.replaceChildren() on
+// every call would tear down and recreate the panel (and lose focus/DOM
+// identity) even when the selected agent's own displayed fields are
+// unchanged. Keep the skeleton across repaints for the same agent id and
+// only write the text/state that actually moved.
 function agentDetail() {
   const container=$('agent-detail');
   const agent=snapshot.agents.find(a=>a.id===selectedAgentId && a.group==='seat');
-  if(!agent) { container.hidden=true; container.replaceChildren(); return; }
+  if(!agent) {
+    if(!container.hidden || container._agentRefs) { container.hidden=true; container.replaceChildren(); container._agentRefs=null; }
+    return;
+  }
   container.hidden=false;
-  container.replaceChildren();
-  const heading=el('div',undefined,'bp-section-head');
-  heading.append(el('h2',`Inspect · ${agent.name}`),badge(agent.state,agent.badge));
-  container.append(heading);
-  container.append(el('p',`${agent.id} · source: ${agent.badge_source}`,'bp-muted bp-note'));
-  if(agent.shift) container.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · budget ${agent.shift.budget_secs}s${agent.shift.lock_held?' · lock held':''} · ${agent.shift.source}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
-  container.append(agentTimeline(agent));
-  container.append(link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
-  const closeBtn=el('button','Close');closeBtn.type='button';closeBtn.addEventListener('click',()=>selectAgent(agent.id));
-  container.append(closeBtn);
+  const shiftText=agent.shift ? `${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · budget ${agent.shift.budget_secs}s${agent.shift.lock_held?' · lock held':''} · ${agent.shift.source}` : '';
+  if(!container._agentRefs || container._agentRefs.id!==agent.id) {
+    container.replaceChildren();
+    const heading=el('div',undefined,'bp-section-head');
+    const h2=el('h2',`Inspect · ${agent.name}`);
+    const stateBadge=badge(agent.state,agent.badge);
+    heading.append(h2,stateBadge);
+    container.append(heading);
+    const meta=el('p',`${agent.id} · source: ${agent.badge_source}`,'bp-muted bp-note');
+    container.append(meta);
+    const shiftLine=el('p',shiftText,agent.shift && agent.shift.stale?'bp-note':'bp-note bp-muted');
+    shiftLine.hidden=!agent.shift;
+    container.append(shiftLine);
+    const timelineWrap=agentTimeline(agent);
+    container.append(timelineWrap);
+    container.append(link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
+    const closeBtn=el('button','Close');closeBtn.type='button';closeBtn.addEventListener('click',()=>selectAgent(agent.id));
+    container.append(closeBtn);
+    container._agentRefs={id:agent.id,h2,stateBadge,meta,shiftLine,timelineWrap};
+    return;
+  }
+  const refs=container._agentRefs;
+  if(refs.h2.textContent!==`Inspect · ${agent.name}`) refs.h2.textContent=`Inspect · ${agent.name}`;
+  syncBadge(refs.stateBadge, agent.state, agent.badge);
+  const metaText=`${agent.id} · source: ${agent.badge_source}`;
+  if(refs.meta.textContent!==metaText) refs.meta.textContent=metaText;
+  if(refs.shiftLine.hidden!==!agent.shift) refs.shiftLine.hidden=!agent.shift;
+  if(refs.shiftLine.textContent!==shiftText) refs.shiftLine.textContent=shiftText;
+  const shiftClass=agent.shift && agent.shift.stale?'bp-note':'bp-note bp-muted';
+  if(refs.shiftLine.className!==shiftClass) refs.shiftLine.className=shiftClass;
+  syncAgentTimeline(refs.timelineWrap, agent);
 }
 function supervisorPanel() {
   const container=$('supervisor-panel');container.replaceChildren();
@@ -899,7 +956,17 @@ if ($('timeline-filters')) {
   $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; refreshTimeline(false, {force: true}); });
 }
 $('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false, {force: true});});
-document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Escape') return;
+  if(page==='agents' && selectedAgentId) {
+    const closedId=selectedAgentId;
+    selectAgent(closedId);
+    const row=document.querySelector(`.bp-agent-select[data-agent-id="${CSS.escape(closedId)}"]`);
+    if(row) row.focus();
+    return;
+  }
+  $('desk-scope').open=false;
+});
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();freshness();});
 $('preferences').addEventListener('submit',event=>event.preventDefault());

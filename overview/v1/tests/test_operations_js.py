@@ -282,7 +282,7 @@ class AgentCardBodyTests(unittest.TestCase):
     def test_recovery_attempts_is_seat_only(self):
         """pc-1485: recovery attempts moved into the seat-only run timeline;
         jobRow never references it."""
-        self.assertIn("timelineStep('Recovery attempts'", _SRC)
+        self.assertIn("'Recovery attempts'", _SRC.split('function agentTimelineValues')[1].split('function ')[0])
         self.assertNotIn('recovery_attempts', _SRC.split('function jobRow')[1].split('function ')[0])
 
 
@@ -318,10 +318,20 @@ class AgentCompactRowAndInspectorTests(unittest.TestCase):
 
     def test_row_is_keyboard_operable_without_reactivating_on_button_or_link_clicks(self):
         fn = _SRC.split('function agentRow(agent)')[1].split('function jobRow')[0]
-        self.assertIn("row.setAttribute('role','button')", fn)
-        self.assertIn('row.tabIndex=1'.replace('1', '0'), fn.replace(' ', ''))
-        self.assertIn("event.target.closest('button')", fn)
+        self.assertIn("select.setAttribute('role','button')", fn)
+        self.assertIn('select.tabIndex=1'.replace('1', '0'), fn.replace(' ', ''))
+        self.assertIn("event.target.closest('a')", fn)
         self.assertIn("event.key==='Enter'", fn)
+
+    def test_action_cell_is_not_inside_the_selectable_region(self):
+        """pc-1485 review fix: the action cell (a real button/link) must
+        not be nested inside the role=button selectable region — it is a
+        sibling of it on the row."""
+        fn = _SRC.split('function agentRow(agent)')[1].split('function jobRow')[0]
+        select_body = fn.split('row.append(select);')[0]
+        self.assertNotIn('bp-agent-action', select_body)
+        self.assertIn("row.append(select);", fn)
+        self.assertIn("row.append(actionCell);", fn.split('row.append(select);')[1])
 
     def test_elapsed_is_a_time_budget_never_a_percent(self):
         fn = _SRC.split('function elapsedText(agent)')[1].split('function ')[0]
@@ -334,19 +344,19 @@ class AgentCompactRowAndInspectorTests(unittest.TestCase):
         self.assertIn('workUrl(order)', fn)
 
     def test_timeline_covers_the_five_source_labelled_phases_in_order(self):
-        fn = _SRC.split('function agentTimeline(agent)')[1].split('function agentDetail')[0]
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
         for phase in ('Dispatch candidate', 'Verified claim', 'Observed run start', 'Recovery attempts', 'Terminal outcome'):
-            self.assertIn(f"timelineStep('{phase}'", fn)
-        order = [fn.index(f"timelineStep('{phase}'") for phase in
+            self.assertIn(f"'{phase}'", fn)
+        order = [fn.index(f"'{phase}'") for phase in
                  ('Dispatch candidate', 'Verified claim', 'Observed run start', 'Recovery attempts', 'Terminal outcome')]
         self.assertEqual(order, sorted(order))
 
     def test_missing_timeline_phases_read_not_reported_not_inferred(self):
-        fn = _SRC.split('function agentTimeline(agent)')[1].split('function agentDetail')[0]
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
         self.assertIn("'Not reported'", fn)
 
     def test_an_old_failure_no_longer_held_is_distinguished_from_a_current_failure(self):
-        fn = _SRC.split('function agentTimeline(agent)')[1].split('function agentDetail')[0]
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
         self.assertIn("state==='last_run_failed'", fn)
         self.assertIn('resolved by another provider', fn)
 
@@ -361,6 +371,28 @@ class AgentCompactRowAndInspectorTests(unittest.TestCase):
         fn = _SRC.split('function agentDetail()')[1].split('})();')[0]
         self.assertIn("a.group==='seat'", fn)
         self.assertIn('container.hidden=true', fn)
+
+    def test_inspector_reconciliation_escape_and_row_control_split(self):
+        """pc-1485 review recovery 1: DOM-behavioral guards a source-string
+        check cannot make honest — (1) an identical repaint of the selected
+        agent leaves every inspector node untouched and a single changed
+        field updates only that field; (2) Escape clears the seat selection,
+        hides the inspector, and returns focus to the row; (3) the action
+        cell is never nested inside the role=button selectable region."""
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping agent inspector harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'agent_inspector_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'agent inspector harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertTrue(result['identical_repaint_stable'])
+        self.assertTrue(result['changed_phase_isolated'])
+        self.assertTrue(result['escape_clears_selection'])
+        self.assertTrue(result['escape_hides_inspector'])
+        self.assertTrue(result['escape_returns_focus'])
+        self.assertTrue(result['action_cell_outside_select_region'])
 
 
 class DeliveryQuietCopyTests(unittest.TestCase):
@@ -564,24 +596,24 @@ class CalendarRowTests(unittest.TestCase):
 
 
 class ActivityCueTests(unittest.TestCase):
-    """pc-1483: a restrained activity cue and elapsed clock on a seat card,
-    gated strictly to fresh 'working' evidence — never shown on a
-    stale/terminal/off shift."""
+    """pc-1483/pc-1485: elapsed feedback on a seat row is restrained and
+    evidence-bound — read only from the server-reported shift.age_seconds
+    on each real refresh, never a local per-second ticking animation, and
+    always a time budget, never a fake percent-complete value."""
 
-    def test_cue_and_elapsed_are_gated_to_fresh_working_evidence(self):
-        fn = _SRC.split('function agentCard(agent)')[1].split('function supervisorPanel()')[0]
-        compact = fn.replace(' ', '')
-        self.assertIn("active=agent.state==='working'&&!agent.shift.stale", compact)
-        self.assertIn("if(active){", compact)
-        self.assertIn("'bp-shift-cue'", fn)
-        self.assertIn("'bp-elapsed'", fn)
+    def test_elapsed_is_read_from_server_shift_evidence_not_a_local_timer(self):
+        fn = _SRC.split('function elapsedText(agent)')[1].split('\nfunction ')[0]
+        self.assertIn('agent.shift.age_seconds', fn)
+        self.assertNotIn('setInterval', fn)
+        self.assertNotIn('Date.now()', fn)
 
     def test_elapsed_text_is_a_real_duration_not_a_fake_progress_value(self):
-        self.assertIn('function elapsedText(startedAt)', _SRC)
-        fn = _SRC.split('function elapsedText(startedAt)')[1].split('\n}')[0]
+        self.assertIn('function elapsedText(agent)', _SRC)
+        fn = _SRC.split('function elapsedText(agent)')[1].split('\n}')[0]
         ret = [line for line in fn.splitlines() if 'return' in line]
         self.assertTrue(ret)
         self.assertFalse(any('%' in line for line in ret))
+        self.assertIn('budget', fn)
 
 
 class NewEventsAffordanceTests(unittest.TestCase):
