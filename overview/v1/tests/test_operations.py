@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
-from server.operations import operations_snapshot, WORKLANE_API_PATH
+from server.operations import operations_snapshot, store_last_change, WORKLANE_API_PATH
 from server.work_order import read_work_order
 
 class OperationsTests(unittest.TestCase):
@@ -584,6 +584,43 @@ class OperationsTests(unittest.TestCase):
         result=operations_snapshot(self.root)
         self.assertEqual(result['agents'][0]['state'],'working')
         self.assertEqual(result['projects'][0]['running'],1)
+    def test_project_summary_counts_deferred_and_parked_separately(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog', gate_type='deferred' WHERE id=1")
+            conn.execute("INSERT INTO tasks VALUES(3,NULL,'parked','in_review',2,'2026-09-12','[]',NULL,NULL)")
+            conn.execute("INSERT INTO task_comments VALUES(1,3,'Owner: agent\nStart: 2026-09-12T05:00:00Z','agent','2026-09-12T05:00:00Z')")
+        project=operations_snapshot(self.root)['projects'][0]
+        self.assertEqual(project['deferred'], 1)
+        self.assertEqual(project['parked'], 1)
+
+    def test_project_last_change_uses_the_latest_meaningful_comment(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Intake: filed','you','2026-09-13T10:00:00Z')")
+            conn.execute("INSERT INTO task_comments VALUES(2,1,'Owner: bp-cursor-implementer\nStart: 2026-09-13T14:58:00Z','bp-cursor-implementer','2026-09-13T14:58:00Z')")
+        change=operations_snapshot(self.root)['projects'][0]['last_change']
+        self.assertEqual(change['order_id'], 'pc-1')
+        self.assertEqual(change['verb'], 'claim')
+        self.assertEqual(change['actor'], 'bp-cursor-implementer')
+
+    def test_store_last_change_skips_intake_boilerplate(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.row_factory = sqlite3.Row
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Intake: filed','you','2026-09-13T10:00:00Z')")
+            change=store_last_change(conn, 'pc')
+        self.assertIsNone(change)
+
+    def test_project_partial_flag_when_store_exceeds_limit(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            for idx in range(2, 2003):
+                conn.execute("INSERT INTO tasks VALUES(?,NULL,'task','backlog',3,'2026-09-12','[]',NULL,NULL)", (idx,))
+        project=operations_snapshot(self.root)['projects'][0]
+        self.assertTrue(project['partial'])
+        self.assertGreater(project['open'], 2000)
+
     def test_project_running_count_is_seats_only_a_working_job_does_not_count(self):
         # Review finding (pc-1483 recovery 2): overview() and the project
         # rollup here must apply one shared Running rule (seats only,
