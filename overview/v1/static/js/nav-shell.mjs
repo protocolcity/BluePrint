@@ -3,7 +3,13 @@ export function ensureActiveNavVisible(root = document) {
   const current = root.querySelector('.bp-nav a[aria-current="page"]');
   if (!nav || !current) return;
   const reduce = root.body?.classList.contains('bp-reduce-motion');
-  current.scrollIntoView({inline: 'center', block: 'nearest', behavior: reduce ? 'auto' : 'smooth'});
+  const navRect = nav.getBoundingClientRect();
+  const linkRect = current.getBoundingClientRect();
+  const target = linkRect.left - navRect.left + nav.scrollLeft - (nav.clientWidth - current.clientWidth) / 2;
+  const maxScroll = Math.max(0, nav.scrollWidth - nav.clientWidth);
+  const next = Math.min(maxScroll, Math.max(0, target));
+  if (reduce) nav.scrollLeft = next;
+  else nav.scrollTo({left: next, behavior: 'smooth'});
 }
 
 export function backLabel(pathname) {

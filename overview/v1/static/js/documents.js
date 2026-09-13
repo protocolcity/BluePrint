@@ -19,7 +19,8 @@
       if (!response.ok) throw new Error(paper.error);
       $('paper-title').textContent = paper.title;
       $('paper-source').textContent = `${paper.path} · ${paper.exposure}`;
-      setTrustedHtml($('paper-content'), paper.content_html || paper.content || '');
+      if (paper.content_html) setTrustedHtml($('paper-content'), paper.content_html);
+      else $('paper-content').textContent = paper.content || '';
       paintOutline($('paper-outline'), paper.content_outline);
       $('paper-reader').hidden = false;
       history.replaceState(null, '', '/documents?' + new URLSearchParams({

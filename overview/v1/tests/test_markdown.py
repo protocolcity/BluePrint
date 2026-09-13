@@ -15,3 +15,9 @@ class MarkdownTests(unittest.TestCase):
         rendered = render_reader_content(text, collapsible_after=10)
         self.assertEqual(len(rendered['outline']), 40)
         self.assertIn('bp-md-section', rendered['html'])
+
+    def test_collapsed_sections_keep_outline_anchor_ids(self):
+        text = '\n'.join(['## First', 'body one', '## Second', 'body two'] * 20)
+        rendered = render_reader_content(text, collapsible_after=10)
+        for item in rendered['outline']:
+            self.assertIn(f'id="{item["id"]}"', rendered['html'])
