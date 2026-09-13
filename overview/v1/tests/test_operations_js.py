@@ -130,21 +130,27 @@ class FiveAxisFilterTests(unittest.TestCase):
 
 
 class LiveIndicatorTests(unittest.TestCase):
-    """D2 live rendering (pc-1470): header reads Live/Reconnecting/Polling,
-    never a ticking 'Updated Xs ago' counter."""
+    """pc-1483: the freshness line separates three independent clocks —
+    transport (Updates connected/reconnecting/polling/paused), last
+    successful source read/age, and last meaningful content change — never
+    one ambiguous word. Supersedes pc-1470's ban on a ticking 'Updated Xs
+    ago' counter: that decision was about conflating read time with content
+    change into a single label; these are three distinct, self-explanatory
+    clauses instead (STATES_AND_TERMS.md, OPERATIONS_EVOLUTION_2026_09.md)."""
 
-    def test_no_more_ticking_updated_ago_counter(self):
-        self.assertNotIn('Updated', _SRC)
-        self.assertNotIn('${Math.floor((Date.now()-lastSuccess)', _SRC.replace(' ', ''))
-
-    def test_open_stream_reads_live_with_last_change_age(self):
-        self.assertIn("streamState==='open'", _SRC)
-        self.assertIn('Live · last change', _SRC)
-
-    def test_dropped_stream_reads_reconnecting_then_polling(self):
-        self.assertIn("'Reconnecting'", _SRC)
-        self.assertIn("'Polling every 60 s'", _SRC)
+    def test_transport_state_is_its_own_clause(self):
+        self.assertIn("'Updates connected'", _SRC)
+        self.assertIn("'Updates reconnecting'", _SRC)
+        self.assertIn("'Updates polling every 60 s'", _SRC)
+        self.assertIn("'Updates paused'", _SRC)
         self.assertIn('consecutiveErrors', _SRC)
+
+    def test_last_read_age_is_its_own_clause(self):
+        self.assertIn('last read ${readAge}s ago', _SRC)
+
+    def test_last_change_age_is_its_own_clause_and_never_a_bare_read(self):
+        self.assertIn('last change ${Math.floor((Date.now()-lastChangeAt)/1000)}s ago', _SRC)
+        self.assertIn('no change observed yet', _SRC)
 
     def test_refresh_button_label_only_flips_on_a_manual_read(self):
         compact = _SRC.replace(' ', '')
@@ -154,6 +160,31 @@ class LiveIndicatorTests(unittest.TestCase):
         # resume) must not pass `true` — only the click handler does.
         auto_call_sites = _SRC.count('refresh();')
         self.assertGreaterEqual(auto_call_sites, 3)
+
+
+class ContentFingerprintTests(unittest.TestCase):
+    """pc-1483: a fingerprint used to decide whether the content actually
+    changed must not include pure read-time/heartbeat-tick fields, or a
+    silent identical re-read repaints and bumps 'last change' every poll."""
+
+    def test_content_key_strips_heartbeat_tick_and_probe_read_time(self):
+        fn = _SRC.split('function contentKey(next)')[1].split('async function refresh(')[0]
+        self.assertIn('last_at', fn)
+        self.assertIn("worklane_api", fn)
+        self.assertIn('observed_at:null', fn)
+
+    def test_refresh_uses_content_key_not_a_raw_json_stringify(self):
+        fn = _SRC.split('async function refresh(manual)')[1].split('function updateFilters()')[0]
+        self.assertIn('contentKey(next)', fn)
+
+    def test_timeline_change_clock_ignores_an_identical_successful_read(self):
+        """refreshTimeline() must not stamp lastChangeAt on every successful
+        read (STATES_AND_TERMS.md/pc-1483: 'Timeline successful identical
+        reads must not reset last meaningful change')."""
+        fn = _SRC.split('async function refreshTimeline(append)')[1].split('async function refreshRemote(')[0]
+        self.assertNotIn('lastChangeAt = Date.now();\n  } catch (error) {', fn)
+        self.assertIn('timelineFingerprint', fn)
+        self.assertIn('timelineKey!==timelineFingerprint', fn.replace(' ', ''))
 
 
 class RowReconciliationTests(unittest.TestCase):
@@ -168,8 +199,15 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list'):
+        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'remote-repositories'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
+
+    def test_delivery_no_longer_replaces_all_repository_children(self):
+        """pc-1483: refreshRemote() must reconcile repository sections by
+        key instead of tearing the whole list down on every poll."""
+        fn = _SRC.split('async function refreshRemote()')[1].split('async function refresh(')[0]
+        self.assertNotIn("container.replaceChildren()", fn)
+        self.assertIn("reconcileList($('remote-repositories')", fn)
 
     def test_excluded_stores_are_a_reconciled_list_not_a_joined_note(self):
         self.assertIn("reconcileList($('excluded-store-list')", _SRC)
@@ -375,6 +413,41 @@ class CalendarRowTests(unittest.TestCase):
         self.assertIn("row.hold=", compact)
         self.assertIn("' · Due'", _SRC)
         self.assertIn("' · Hold until'", _SRC)
+
+
+class ActivityCueTests(unittest.TestCase):
+    """pc-1483: a restrained activity cue and elapsed clock on a seat card,
+    gated strictly to fresh 'working' evidence — never shown on a
+    stale/terminal/off shift."""
+
+    def test_cue_and_elapsed_are_gated_to_fresh_working_evidence(self):
+        fn = _SRC.split('function agentCard(agent)')[1].split('function supervisorPanel()')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("active=agent.state==='working'&&!agent.shift.stale", compact)
+        self.assertIn("if(active){", compact)
+        self.assertIn("'bp-shift-cue'", fn)
+        self.assertIn("'bp-elapsed'", fn)
+
+    def test_elapsed_text_is_a_real_duration_not_a_fake_progress_value(self):
+        self.assertIn('function elapsedText(startedAt)', _SRC)
+        self.assertNotIn('%', _SRC.split('function elapsedText(startedAt)')[1].split('}')[0])
+
+
+class NewEventsAffordanceTests(unittest.TestCase):
+    """pc-1483: a background Timeline refresh while the reader has loaded
+    older pages must not silently move the reading position — it shows an
+    affordance instead."""
+
+    def test_new_events_control_exists_in_the_markup(self):
+        self.assertIn('id="timeline-new-events"', _HTML)
+
+    def test_background_refresh_does_not_replace_an_expanded_reading_position(self):
+        fn = _SRC.split('async function refreshTimeline(append)')[1].split('async function refreshRemote(')[0]
+        self.assertIn('timelineExpanded', fn)
+
+    def test_loading_more_marks_the_reader_as_expanded(self):
+        self.assertIn('timelineExpanded = true', _SRC.replace(' ', '') and _SRC)
+        self.assertIn('timelineExpanded=true', _SRC.replace(' ', ''))
 
 
 class ConnectionsEngineTests(unittest.TestCase):
