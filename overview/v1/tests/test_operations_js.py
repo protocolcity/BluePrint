@@ -109,5 +109,39 @@ class RowReconciliationTests(unittest.TestCase):
         self.assertIn("syncNote($('connection-list'),'excluded-stores'", _SRC)
 
 
+class AgentCardBodyTests(unittest.TestCase):
+    """pc-1472: lean card body, dropped daemon heartbeat row, dropped
+    pre-design intro copy, vocabulary fixes (SUITE_VOCABULARY.md)."""
+
+    def test_identity_type_configuration_rows_are_dropped(self):
+        for label in ('Identity', 'Type', 'Configuration', 'Scheduler heartbeat'):
+            self.assertNotIn(f"['{label}',", _SRC)
+
+    def test_pre_design_intro_copy_is_gone(self):
+        self.assertNotIn('These are registered local agents', _HTML)
+        self.assertNotIn('Runtime state is unknown when the heartbeat', _HTML)
+
+    def test_intro_copy_matches_agents_intent_ruling(self):
+        self.assertIn('Seats claim work orders; jobs run duties. State comes from the WorkForce ledger.', _HTML)
+
+    def test_group_headings_drop_the_parenthetical(self):
+        self.assertIn('<h2>Seats</h2>', _HTML)
+        self.assertIn('<h2>Jobs</h2>', _HTML)
+        self.assertNotIn('implementation lanes', _HTML)
+        self.assertNotIn('scheduled duties', _HTML)
+
+    def test_daemon_heartbeat_is_one_line_in_the_page_header_not_per_card(self):
+        self.assertIn('id="agents-heartbeat"', _HTML)
+        self.assertIn('function heartbeatLine()', _SRC)
+        self.assertIn("'WorkForce daemon: not reachable'", _SRC)
+        self.assertIn('WorkForce daemon: seen', _SRC)
+
+    def test_find_assigned_work_is_seat_only(self):
+        self.assertIn("if(agent.group==='seat')card.append(link('Findassignedwork'", _SRC.replace(' ', ''))
+
+    def test_recovery_attempts_is_seat_only(self):
+        self.assertIn("if(agent.group==='seat' && agent.recovery_attempts)", _SRC)
+
+
 if __name__ == '__main__':
     unittest.main()
