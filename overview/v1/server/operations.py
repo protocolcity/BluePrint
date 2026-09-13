@@ -1160,10 +1160,14 @@ def operations_snapshot(binder):
     # 'running' is agent-evidence-only (fresh heartbeat plus an open shift or
     # in-flight ticket) — never inflated by a WorkLane claim's age, unlike
     # 'claimed' above (pc-1483: "a days-old human claim" must not read as a
-    # running agent).
+    # running agent). It is also seats-only, the same rule overview()
+    # applies on the Overview metric (STATES_AND_TERMS §2): a working job
+    # (a scheduled duty that never claims work) shows as running on Agents
+    # but must not count toward a project's execution (review finding,
+    # pc-1483 recovery 2 — a working job made Map disagree with Overview).
     project_index = {p['id']: p for p in result['projects']}
     for agent in result['agents']:
-        if agent['state'] == 'working' and agent['project'] in project_index:
+        if agent['group'] == 'seat' and agent['state'] == 'working' and agent['project'] in project_index:
             project_index[agent['project']]['running'] += 1
     placeholders = [a['name'] for a in result['agents'] if not a['configured']]
     if placeholders:

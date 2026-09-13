@@ -173,6 +173,25 @@ class ContentFingerprintTests(unittest.TestCase):
         self.assertIn("worklane_api", fn)
         self.assertIn('observed_at:null', fn)
 
+    def test_content_key_strips_shift_age_seconds(self):
+        """Review finding (pc-1483 recovery 2): an agent's open-shift
+        age_seconds is recomputed from the wall clock on every read, so two
+        otherwise-identical snapshots that only differ there must fingerprint
+        the same — the prior fix stripped last_at from agents/supervisor but
+        kept the full shift object, which still carried age_seconds."""
+        fn = _SRC.split('function contentKey(next)')[1].split('async function refresh(')[0]
+        self.assertIn('stripShiftAge', fn)
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping contentKey behavioral check')
+        harness = Path(__file__).resolve().parent / 'harness' / 'content_key_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'content key harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertTrue(result['same_key_for_different_age_seconds'])
+        self.assertTrue(result['different_key_for_different_started_at'])
+
     def test_refresh_uses_content_key_not_a_raw_json_stringify(self):
         fn = _SRC.split('async function refresh(manual)')[1].split('function updateFilters()')[0]
         self.assertIn('contentKey(next)', fn)
@@ -185,6 +204,17 @@ class ContentFingerprintTests(unittest.TestCase):
         self.assertNotIn('lastChangeAt = Date.now();\n  } catch (error) {', fn)
         self.assertIn('timelineFingerprint', fn)
         self.assertIn('timelineKey!==timelineFingerprint', fn.replace(' ', ''))
+
+    def test_manual_refresh_forces_a_full_timeline_reload(self):
+        """Review finding (pc-1483 recovery 2): after Load more sets
+        timelineExpanded, refreshTimeline(false) alone takes the background
+        path (only toggling the new-events affordance), so the explicit
+        Refresh button did nothing visible. The click handler must pass
+        {force: true} so a manual refresh always reloads the list, the same
+        way the new-events affordance click already does."""
+        handler = _SRC.split("$('refresh').addEventListener('click',")[1].split(');\n')[0]
+        compact = handler.replace(' ', '')
+        self.assertIn('refreshTimeline(false,{force:true})', compact)
 
 
 class RowReconciliationTests(unittest.TestCase):
