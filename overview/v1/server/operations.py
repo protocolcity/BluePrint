@@ -400,7 +400,6 @@ def project_registry(root):
 _PROVIDER_ORDER = ('Claude', 'Cursor', 'Grok', 'Codex')
 _PROVIDER_COMMAND = {'Claude': 'claude', 'Cursor': 'cursor-agent', 'Grok': 'grok', 'Codex': 'codex'}
 _PROVIDER_PIN = {'Claude': 'claude-sonnet-5', 'Cursor': 'composer-2.5', 'Grok': 'grok-4.6', 'Codex': 'gpt-6-astra'}
-_PROVIDER_HIRE_TIER = {'Claude': 'generalist', 'Cursor': 'specialty', 'Grok': 'heavy', 'Codex': 'specialty'}
 _PROVIDER_INSTALL_HINT = {
     'Claude': 'not on PATH — install: https://docs.claude.com/en/docs/claude-code',
     'Cursor': 'not on PATH — install: https://cursor.com/cli',
@@ -434,17 +433,40 @@ def detect_providers(env=None, app_path_exists=None):
     return found
 
 
-def hire_command(provider, *, project_slug, project_path, prefix):
-    """The exact ``blueprint hire`` command text for one missing seat
+def hire_command(provider, *, project_slug, project_path, prefix, remote=None):
+    """The exact ``workforce hire`` command text for one missing seat
     (AGENT_ADOPTION.md D13/D15) — host-run only; BP never writes the roster.
+
+    Canonical shape on this host (WorkForce 0.1.9+consolidation.9, review
+    finding pc-1474): ``workforce hire <name> --provider <p> --project <slug>
+    --repository <path> --remote <url> --schedule manual --model <pin>``, with
+    ``--remote`` only when the project's registration names one. Every
+    argument is shell-quoted — a project path or remote can carry spaces or
+    shell metacharacters.
     """
     name = f'{(prefix or project_slug).rstrip("-")}-{provider.lower()}-implementer'
-    return (
-        f'blueprint hire {name} --workdir {project_path} '
-        f'--role "{provider} implementer" --tier {_PROVIDER_HIRE_TIER[provider]} '
-        f'--model {_PROVIDER_PIN[provider]} --project {project_slug} '
-        f'--schedule manual --dry-run'
-    )
+    parts = ['workforce', 'hire', name, '--provider', provider, '--project', project_slug,
+             '--repository', project_path]
+    if remote:
+        parts += ['--remote', remote]
+    parts += ['--schedule', 'manual', '--model', _PROVIDER_PIN[provider]]
+    return shlex.join(parts)
+
+
+def _project_remote(root, slug):
+    """The project's git remote URL from ``.blueprint/connections.json``
+    (review finding pc-1474: the Hire command should name the repository the
+    hired seat pushes to, when the workspace's registration knows it), or
+    ``None`` when the project carries no registered repository."""
+    config = read_json(root / '.blueprint/connections.json', root) or {}
+    specs = (config.get('github') or {}).get('repositories')
+    if not isinstance(specs, list):
+        return None
+    for spec in specs:
+        if isinstance(spec, dict) and spec.get('project') == slug and isinstance(spec.get('repo'), str) \
+                and re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', spec['repo']):
+            return f'https://github.com/{spec["repo"]}'
+    return None
 
 
 def _row_project_slug(row):
@@ -456,23 +478,73 @@ def _row_project_slug(row):
     return scope[0] if scope else None
 
 
+_PIN_PROVIDER_PREFIXES = (('claude', 'Claude'), ('composer', 'Cursor'), ('cursor', 'Cursor'),
+                          ('grok', 'Grok'), ('gpt', 'Codex'), ('codex', 'Codex'))
+
+
+def _provider_from_pin(pin):
+    """The provider family a bare model pin belongs to — ``claude-*`` ->
+    Claude, ``composer-*``/``cursor-*`` -> Cursor, ``grok-*`` -> Grok,
+    ``gpt-*``/``codex`` -> Codex (review finding pc-1474: a roster ``model``
+    of a bare pin like ``claude-sonnet-5`` names no display text, only the
+    pin family), or ``None`` when the pin matches no known family."""
+    if not isinstance(pin, str):
+        return None
+    lowered = pin.strip().lower()
+    for prefix, provider in _PIN_PROVIDER_PREFIXES:
+        if lowered == prefix or lowered.startswith(prefix + '-'):
+            return provider
+    return None
+
+
+def _seat_executable_provider(row, root, config_cache):
+    """The provider display name from the seat's actually resolved
+    executable — its own roster command, or the runner config it names via
+    ``--config``/the launcher fallback — independent of what the roster's
+    ``model`` field says (review finding pc-1474: a bare pin in ``model``
+    should not block resolving the real command)."""
+    command = row.get('command')
+    provider = _PROVIDER_DISPLAY.get(_executable_name(command))
+    if provider:
+        return provider
+    config_path = _config_argument(command) or _launcher_config_fallback(command)
+    resolved_path = _resolved_config_path(config_path, root)
+    if resolved_path is None:
+        return None
+    if config_cache is not None and resolved_path in config_cache:
+        config = config_cache[resolved_path]
+    else:
+        config = read_json(resolved_path, root)
+        if config_cache is not None:
+            config_cache[resolved_path] = config
+    inner_command = (config or {}).get('command')
+    return _PROVIDER_DISPLAY.get(_executable_name(inner_command))
+
+
 def _project_seat_providers(workers, project_slug, root, config_cache):
     """``{provider display: 'present'|'held'}`` for one project's implementer
     seats — a seat's ``queue_url`` names its project (AGENT_ADOPTION.md D12:
-    one bounded implementation seat per project x provider)."""
+    one bounded implementation seat per project x provider). A seat with no
+    ``kind`` still counts as a seat here, consistent with the Seats group
+    (review finding pc-1474); only an explicit non-``lane`` kind excludes it.
+    """
     result = {}
     if not isinstance(workers, dict):
         return result
     for identity, row in workers.items():
         if not isinstance(row, dict) or identity == 'demo-worker':
             continue
-        if (row.get('kind') or 'agent') != 'lane':
+        if row.get('kind') not in (None, 'lane'):
             continue
         if _row_project_slug(row) != project_slug:
             continue
         model_text = resolve_provider_model(row, root, config_cache)
         provider = next((p for p in _PROVIDER_ORDER
                           if model_text == p or model_text.startswith(p + ' ')), None)
+        if not provider:
+            provider = _seat_executable_provider(row, root, config_cache)
+        if not provider:
+            provider = _provider_from_pin(model_text)
         if not provider:
             continue
         result[provider] = 'held' if row.get('enabled') is False else 'present'
@@ -508,12 +580,13 @@ def provider_coverage(root, registry, workers, config_cache, host_providers=None
         if not_configured:
             text += f' · not configured: {", ".join(not_configured)}'
         project_path = str(root / project['folder']) if project.get('folder') else slug
+        remote = _project_remote(root, slug)
         rows.append({
             'project': slug, 'name': name, 'present': present, 'held': held,
             'missing': missing, 'not_configured': not_configured, 'text': text,
             'install_hints': {p: _PROVIDER_INSTALL_HINT[p] for p in not_configured},
             'hire_commands': {p: hire_command(p, project_slug=slug, project_path=project_path,
-                                               prefix=project.get('prefix') or slug)
+                                               prefix=project.get('prefix') or slug, remote=remote)
                                for p in missing},
         })
     return rows
