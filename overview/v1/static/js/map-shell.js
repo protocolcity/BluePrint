@@ -22,14 +22,15 @@
     const unavailable=project ? project.state!=='available' : data.sources.some(s=>s.name==='WorkLane' && s.state!=='available');
     const count=project ? project.open : data.projects.reduce((n,p)=>n+p.open,0);
     const attention=project ? (project.attention||0) : data.projects.reduce((n,p)=>n+(p.attention||0),0);
-    const working=project ? (project.working||0) : data.projects.reduce((n,p)=>n+(p.working||0),0);
-    const key=JSON.stringify([project?.id,unavailable,count,attention,working,data.truncated,project?.has_instructions]);
+    const claimed=project ? (project.claimed||0) : data.projects.reduce((n,p)=>n+(p.claimed||0),0);
+    const running=project ? (project.running||0) : data.projects.reduce((n,p)=>n+(p.running||0),0);
+    const key=JSON.stringify([project?.id,unavailable,count,attention,claimed,running,data.truncated,project?.has_instructions]);
     if(key===renderFingerprint) { if(noteEl)noteEl.textContent=noteText(); return; }
     try {
       context.replaceChildren();
       const heading=document.createElement('strong');heading.textContent=project?.name || 'Workspace work';context.append(heading);
       const summary=document.createElement('p');
-      summary.textContent=unavailable ? 'Work source unavailable; counts are incomplete.' : `${count} open · ${attention} For You · ${working} working`;
+      summary.textContent=unavailable ? 'Work source unavailable; counts are incomplete.' : `${count} open · ${attention} For You · ${running} running · ${claimed} claimed`;
       if(data.truncated)summary.textContent+=' · Partial detail';
       context.append(summary);
       const links=document.createElement('nav');links.setAttribute('aria-label','Project context');
