@@ -1001,6 +1001,9 @@ class ReaderNavAndOutlineTests(unittest.TestCase):
         for name in ('work-order.js', 'documents.js'):
             reader = (Path(__file__).resolve().parents[1] / 'static' / 'js' / name).read_text()
             self.assertIn('bindHashReveal(document)', reader)
+            # The reader imports nav-shell dynamically; the helper must be part of
+            # that destructuring or the paint aborts after the outline (.63 defect).
+            self.assertRegex(reader, r"const \{[^}]*bindHashReveal[^}]*\} = await import\('/js/nav-shell.mjs'\)")
 
 
 class DeliverySurfaceTests(unittest.TestCase):
