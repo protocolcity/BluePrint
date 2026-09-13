@@ -9,7 +9,7 @@ import sqlite3
 import shlex
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
 
@@ -146,9 +146,18 @@ def preserved_reservation(root, command, order_id):
     worker = config.get('worker')
     if not isinstance(state_dir, str) or not state_dir or not isinstance(worker, str) or not worker:
         return False
-    slug = re.sub(r'[^a-zA-Z0-9._-]', '-', str(order_id))
+    slug = str(order_id)
+    if not re.fullmatch(r'[A-Za-z0-9._-]+', slug):
+        return False
     receipt = Path(state_dir) / worker / slug / 'preparation.json'
     return read_json(receipt, root) is not None
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    """Refuse to leave the verified origin; a 3xx becomes an HTTPError."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise HTTPError(newurl, code, msg, headers, fp)
 
 
 def supervisor_snapshot(root):
@@ -165,10 +174,13 @@ def supervisor_snapshot(root):
             or parsed.query or parsed.fragment):
         return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.', 'passes': []}
     request = Request(origin.rstrip('/') + '/api/supervisor?limit=3')
+    opener = build_opener(_NoRedirect())
     try:
-        with urlopen(request, timeout=3) as response:
+        with opener.open(request, timeout=3) as response:
             payload = json.load(response)
     except HTTPError as exc:
+        if 300 <= exc.code < 400:
+            return {'state': 'unavailable', 'detail': 'WorkForce redirected the supervisor read; refusing to leave the verified origin.', 'passes': []}
         if exc.code == 404:
             return {'state': 'not_configured', 'detail': 'This WorkForce engine does not report supervisor passes.', 'passes': []}
         return {'state': 'unavailable', 'detail': 'WorkForce declined the supervisor read.', 'passes': []}
