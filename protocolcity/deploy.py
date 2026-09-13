@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -87,14 +88,16 @@ def register_agent(domain, agent, label):
     raise RuntimeError('Service registration did not settle: '+result.stderr.strip())
 
 
-def activate(release, workspace, port, legacy_ports=None):
-    current=workspace/'local/blueprint/current'
-    if current.exists() and not current.is_symlink():
-        raise RuntimeError('Current release path is not a symlink; inspect before activation.')
-    receipt = json.loads((release/'build.json').read_text())
-    executable = Path(receipt['entrypoint'])
-    if not executable.is_file() or not executable.resolve().is_relative_to(release):
-        raise RuntimeError('Invalid release entrypoint.')
+def activate_agent(executable, receipt, workspace, port, legacy_ports=None, backup_dir=None):
+    """Write and bootstrap the single blueprint-overview launch agent.
+
+    Shared by ``activate`` (source-built release) and ``upgrade`` (installed
+    package entrypoint); the launch-agent shape and the deployment receipt are
+    identical either way.
+    """
+    executable = Path(executable)
+    if not executable.is_file():
+        raise RuntimeError('Invalid entrypoint: '+str(executable))
     # Verify the installed package before touching launchd. Port 0 asks the OS
     # to allocate a port; the readiness check below uses an independently bound
     # candidate port from a short-lived socket, with a startup failure detected.
@@ -121,10 +124,11 @@ def activate(release, workspace, port, legacy_ports=None):
     config.setdefault('EnvironmentVariables', {}).update(PATH='/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', PYTHONDONTWRITEBYTECODE='1')
     domain = f'gui/{os.getuid()}'
     previous_receipt = workspace/'.blueprint/deployment.json'
-    if previous:
-        (release/'previous-launch-agent.plist').write_bytes(previous)
-    if previous_receipt.exists():
-        (release/'previous-deployment.json').write_bytes(previous_receipt.read_bytes())
+    if backup_dir is not None:
+        if previous:
+            (backup_dir/'previous-launch-agent.plist').write_bytes(previous)
+        if previous_receipt.exists():
+            (backup_dir/'previous-deployment.json').write_bytes(previous_receipt.read_bytes())
     agent.parent.mkdir(parents=True, exist_ok=True)
     try:
         subprocess.run(['launchctl','bootout',domain+'/'+LABEL], capture_output=True, timeout=30)
@@ -141,6 +145,18 @@ def activate(release, workspace, port, legacy_ports=None):
         raise
     write_json(previous_receipt, {**receipt, 'port':port, 'launch_agent':str(agent), 'active':True,
         'activated_at':datetime.now(timezone.utc).isoformat()})
+    return snapshot
+
+
+def activate(release, workspace, port, legacy_ports=None):
+    current=workspace/'local/blueprint/current'
+    if current.exists() and not current.is_symlink():
+        raise RuntimeError('Current release path is not a symlink; inspect before activation.')
+    receipt = json.loads((release/'build.json').read_text())
+    executable = Path(receipt['entrypoint'])
+    if not executable.is_file() or not executable.resolve().is_relative_to(release):
+        raise RuntimeError('Invalid release entrypoint.')
+    snapshot = activate_agent(executable, receipt, workspace, port, legacy_ports, backup_dir=release)
     current=workspace/'local/blueprint/current'
     if current.exists() and not current.is_symlink():
         raise RuntimeError('App activated, but current release path is not a symlink; inspect it before changing commands.')
@@ -149,6 +165,118 @@ def activate(release, workspace, port, legacy_ports=None):
     pending.symlink_to(release, target_is_directory=True)
     pending.replace(current)
     print(json.dumps({'active':receipt['version'], 'url':f'http://127.0.0.1:{port}', 'projects':len(snapshot['projects'])}))
+
+
+def resolve_installed_executable(python=None):
+    """Locate the packaged ``blueprint-overview`` entrypoint (brew or venv install)."""
+    python = Path(python) if python else Path(sys.executable)
+    candidate = python.parent/'blueprint-overview'
+    if candidate.is_file():
+        return candidate
+    found = shutil.which('blueprint-overview')
+    if found:
+        return Path(found)
+    raise RuntimeError('blueprint-overview entrypoint not found next to '+str(python)+' or on PATH.')
+
+
+def installed_version():
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        return version('protocolcity-blueprint')
+    except PackageNotFoundError as exc:
+        raise RuntimeError('Could not determine the installed BluePrint version: '+str(exc)) from exc
+
+
+def url_map(port, legacy_ports):
+    lines = [f'http://127.0.0.1:{legacy_port}/  ->  http://127.0.0.1:{port}/  (307 redirect)' for legacy_port in legacy_ports]
+    aliases = {'/desk':'/work', '/roster':'/agents', '/workspace-map':'/map', '/overview':'/'}
+    lines += [f'http://127.0.0.1:{port}{old}  ->  http://127.0.0.1:{port}{new}' for old, new in aliases.items()]
+    return lines
+
+
+def deployment_matches(agent_path, deployment_path, executable, version, port, legacy_ports):
+    if not agent_path.is_file() or not deployment_path.is_file():
+        return False
+    try:
+        existing = json.loads(deployment_path.read_text())
+        config = plistlib.loads(agent_path.read_bytes())
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return False
+    args = config.get('ProgramArguments', [])
+    existing_legacy = [int(args[i+1]) for i,value in enumerate(args[:-1]) if value=='--legacy-port']
+    return (existing.get('version')==version and existing.get('port')==port
+            and existing.get('entrypoint')==str(executable) and existing_legacy==list(legacy_ports))
+
+
+def _looks_like_workspace(workspace):
+    """True when ``workspace`` has a BluePrint marker to write against.
+
+    Refuses arbitrary directories: requires ``.blueprint/``, ``.protocolcity/``,
+    or at least one project's ``.protocolcity/desk-join.json``.
+    """
+    if (workspace/'.blueprint').is_dir() or (workspace/'.protocolcity').is_dir():
+        return True
+    return any(workspace.glob('*/.protocolcity/desk-join.json'))
+
+
+def upgrade(workspace, *, port=8803, legacy_ports=(8801,8802), python=None, quiet=False, dry_run=False):
+    """Convert an existing three-lane install to the single consolidated app.
+
+    Boots out and retires the legacy launch agents, then writes the single
+    blueprint-overview agent for the *installed* package (no build/stage
+    step). Idempotent: a second run with nothing to change is a no-op.
+    """
+    from . import service as service_mod
+    workspace = Path(workspace).expanduser().resolve()
+    if not workspace.is_dir():
+        raise RuntimeError('Workspace must already exist.')
+    if not service_mod.is_macos():
+        raise RuntimeError('blueprint upgrade manages launchd agents and is macOS-only today.')
+    if not _looks_like_workspace(workspace):
+        raise RuntimeError(
+            f"'{workspace}' does not look like a BluePrint workspace (expected "
+            ".blueprint/, .protocolcity/, or a project's .protocolcity/desk-join.json)."
+        )
+    legacy_ports = list(legacy_ports)
+    legacy = service_mod.retire_legacy_agents(workspace=workspace, quiet=quiet, dry_run=dry_run)
+    executable = resolve_installed_executable(python)
+    version = installed_version()
+    agent_path = Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist'
+    deployment_path = workspace/'.blueprint/deployment.json'
+    already_current = deployment_matches(agent_path, deployment_path, executable, version, port, legacy_ports)
+    plan = {'workspace':str(workspace), 'legacy_agents':legacy, 'entrypoint':str(executable),
+            'version':version, 'port':port, 'legacy_ports':legacy_ports, 'already_current':already_current}
+    if dry_run:
+        plan['action']='dry-run'
+        if not quiet:
+            print(json.dumps(plan, indent=2))
+        return plan
+    if already_current:
+        plan['action']='no-op'
+        if not quiet:
+            print('BluePrint agent already reflects the installed build; nothing to do.')
+            print('\n'.join(url_map(port, legacy_ports)))
+        return plan
+    receipt = {'version':version, 'source':'installed-package', 'entrypoint':str(executable),
+               'built_at':datetime.now(timezone.utc).isoformat()}
+    backup_dir = workspace/'local/blueprint/retired-services'/datetime.now(timezone.utc).strftime('%Y-%m-%d')/'upgrade-backup'
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        activate_agent(executable, receipt, workspace, port, legacy_ports, backup_dir=backup_dir)
+    except Exception:
+        # activate_agent already restores the previous launch agent plist from
+        # memory on failure; restore the deployment receipt from the snapshot
+        # taken just above so :8803's on-disk record does not point at a build
+        # that never went live.
+        backup_receipt = backup_dir/'previous-deployment.json'
+        if backup_receipt.is_file():
+            deployment_path.write_bytes(backup_receipt.read_bytes())
+        raise
+    plan['action']='activated'
+    if not quiet:
+        print(json.dumps({'active':version, 'url':f'http://127.0.0.1:{port}'}))
+        print('\n'.join(url_map(port, legacy_ports)))
+    return plan
 
 
 def main():

@@ -11,13 +11,27 @@ from urllib.request import urlopen
 def main(argv=None):
     args=list(sys.argv[1:] if argv is None else argv)
     if not args or args == ['--help'] or args == ['-h']:
-        print('BluePrint operations interface\n\n  status --root WORKSPACE\n  serve --foreground --root WORKSPACE [--port PORT]\n  service start|restart|stop --root WORKSPACE\n  stage --source CHECKOUT --workspace WORKSPACE\n  activate --release RELEASE --workspace WORKSPACE\n\nWorkspace utilities: doctor, found, seed-ops, hire. Use COMMAND --help for details.\nStarting the interface never hires agents or starts other engines.')
+        print('BluePrint operations interface\n\n  status --root WORKSPACE\n  serve --foreground --root WORKSPACE [--port PORT]\n  service start|restart|stop --root WORKSPACE\n  stage --source CHECKOUT --workspace WORKSPACE\n  activate --release RELEASE --workspace WORKSPACE\n  upgrade --root WORKSPACE [--quiet] [--dry-run]\n\nWorkspace utilities: doctor, found, seed-ops, hire. Use COMMAND --help for details.\nStarting the interface never hires agents or starts other engines.')
         return 0
     if args and args[0] in ('stage','activate'):
         from .deploy import main as deploy
         original=sys.argv
         try: sys.argv=[original[0],*args]; return deploy() or 0
         finally: sys.argv=original
+    if args and args[0]=='upgrade':
+        args.pop(0)
+        parser=argparse.ArgumentParser(prog='blueprint upgrade', description='Convert an existing three-lane install to the single consolidated app.')
+        parser.add_argument('--root', required=True, type=Path)
+        parser.add_argument('--quiet', action='store_true')
+        parser.add_argument('--dry-run', action='store_true')
+        options=parser.parse_args(args)
+        from .deploy import upgrade
+        try:
+            result=upgrade(options.root, quiet=options.quiet, dry_run=options.dry_run)
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr); return 1
+        if options.quiet: print(json.dumps(result))
+        return 0
     if args and args[0] in ('serve','status','service'):
         command=args.pop(0)
         service_action=args.pop(0) if command=='service' and args else 'status'
