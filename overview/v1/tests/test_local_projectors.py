@@ -17,6 +17,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -28,6 +29,7 @@ from server import overview_state  # noqa: E402
 from server.local_projectors import (  # noqa: E402
     classify_task,
     project_agents,
+    ledger_open_shift,
     project_jobs,
     project_local_overview,
 )
@@ -79,6 +81,54 @@ class AbsentStoresTests(unittest.TestCase):
         self.assertEqual(st["agents"], [])
         self.assertEqual(st["jobs"], [])
         self.assertEqual(st["buckets"], {"waiting": 0, "ready": 0, "blocked": 0})
+
+
+class LedgerShiftProjectorTests(unittest.TestCase):
+    def _binder(self, ledger_text: str, in_flight: list | None = None) -> Path:
+        self.temp = tempfile.TemporaryDirectory()
+        binder = Path(self.temp.name)
+        runtime = binder / ".protocolcity" / "workforce" / "local"
+        (runtime / "ledger").mkdir(parents=True)
+        (runtime / "roster.json").write_text(json.dumps({"workers": {
+            "agent": {"display": "Agent · Desk", "identity": "agent", "kind": "lane", "command": ["x"]},
+            "other": {"display": "Other · Desk", "identity": "other", "kind": "lane", "command": ["x"]},
+        }}))
+        (runtime / "daemon.json").write_text(json.dumps({"last_tick": "2026-09-13T00:00:00Z", "in_flight": in_flight or []}))
+        (runtime / "ledger" / "agent.log").write_text(ledger_text)
+        return binder
+
+    def tearDown(self) -> None:
+        if getattr(self, "temp", None):
+            self.temp.cleanup()
+
+    @staticmethod
+    def _stamp(delta: timedelta) -> str:
+        return (datetime.now(timezone.utc) - delta).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def test_open_ledger_shift_paints_working(self) -> None:
+        started = self._stamp(timedelta(minutes=1))
+        binder = self._binder(f"{started} START identity=agent kind=lane budget_secs=1500\n")
+        by_name = {a["name"]: a["state"] for a in project_agents(binder)}
+        self.assertEqual(by_name["Agent · Desk"], "working")
+        self.assertEqual(by_name["Other · Desk"], "idle")
+
+    def test_terminal_and_stale_shifts_paint_idle(self) -> None:
+        started = self._stamp(timedelta(minutes=5))
+        binder = self._binder(f"{started} START identity=agent kind=lane budget_secs=1500\n{started} STOP reason=done\n")
+        self.assertEqual({a["name"]: a["state"] for a in project_agents(binder)}["Agent · Desk"], "idle")
+        stale = self._stamp(timedelta(hours=4))
+        binder = self._binder(f"{stale} START identity=agent kind=lane budget_secs=1500\n")
+        self.assertEqual({a["name"]: a["state"] for a in project_agents(binder)}["Agent · Desk"], "idle")
+
+    def test_ledger_open_shift_parses_candidates_and_budget(self) -> None:
+        now = datetime.now(timezone.utc)
+        started = self._stamp(timedelta(minutes=1))
+        binder = self._binder(f"{started} START identity=agent kind=lane budget_secs=900\n{started} CANDIDATE ticket=wf-1 title=\"A b\"\n{started} CANDIDATE ticket=wf-2\n")
+        shift = ledger_open_shift(binder / ".protocolcity/workforce/local/ledger/agent.log", now)
+        self.assertEqual(shift["candidates"], ["wf-1", "wf-2"])
+        self.assertEqual(shift["budget_secs"], 900)
+        self.assertFalse(shift["stale"])
+        self.assertIsNone(ledger_open_shift(binder / "missing.log", now))
 
 
 class RosterProjectorTests(unittest.TestCase):

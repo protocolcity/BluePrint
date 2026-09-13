@@ -7,7 +7,7 @@ from pathlib import Path
 import sqlite3
 import shlex
 
-from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path
+from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
 
 
 def last_run(daemon_path, root, identity):
@@ -151,7 +151,9 @@ def operations_snapshot(binder):
     if isinstance(workers, dict):
         for identity, row in workers.items():
             if not isinstance(row, dict) or identity == 'demo-worker': continue
-            state = 'unknown' if not fresh else ('working' if identity in flight else 'idle')
+            shift = engine_open_shift(resolve_daemon_path(root), root, identity, now)
+            open_shift = shift is not None and not shift['stale']
+            state = 'unknown' if not fresh else ('working' if (identity in flight or open_shift) else ('stale_shift' if shift else 'idle'))
             command = row.get('command')
             configured = isinstance(command, list) and bool(command) and command not in (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh','-c','true'], ['bash','-c','true'])
             if not configured: state = 'not_configured'
@@ -159,7 +161,7 @@ def operations_snapshot(binder):
             live = runtime.get(identity, {})
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
             result['agents'].append({'id': identity, 'name': row.get('display') or identity,
-                'last_run': last_run(resolve_daemon_path(root), root, identity),
+                'last_run': last_run(resolve_daemon_path(root), root, identity), 'shift': shift,
                 'report': {k:report.get(k) for k in ('title','observed_at','state','summary','detail','mode')} if report else None,
                 'state': state, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': row.get('kind') or 'agent', 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
