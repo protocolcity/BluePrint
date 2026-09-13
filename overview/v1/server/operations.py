@@ -340,6 +340,47 @@ class _NoRedirect(HTTPRedirectHandler):
         raise HTTPError(newurl, code, msg, headers, fp)
 
 
+def verified_local_origin(receipt):
+    """Return a verified http://127.0.0.1|localhost origin, or None.
+
+    Prefers ``api_origin`` when present (WorkForce receipts). WorkLane
+    receipts typically carry ``port`` instead; only a 1–65535 integer is
+    accepted, always bound to 127.0.0.1.
+    """
+    if not isinstance(receipt, dict):
+        return None
+    origin = receipt.get('api_origin', '')
+    if isinstance(origin, str) and origin.strip():
+        parsed = urlparse(origin)
+        if (parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1')
+                or parsed.username or parsed.password or parsed.path not in ('', '/')
+                or parsed.query or parsed.fragment):
+            return None
+        return origin.rstrip('/')
+    port = receipt.get('port')
+    if isinstance(port, str) and port.isdigit():
+        port = int(port)
+    if isinstance(port, int) and 1 <= port <= 65535:
+        return 'http://127.0.0.1:%d' % port
+    return None
+
+
+def probe_local_http(origin, path):
+    """GET ``origin+path`` without following redirects. Any HTTP reply is reachable."""
+    request = Request(origin.rstrip('/') + path)
+    opener = build_opener(_NoRedirect())
+    try:
+        with opener.open(request, timeout=3) as response:
+            status = getattr(response, 'status', None) or getattr(response, 'code', 200)
+            return {'ok': True, 'status': status}
+    except HTTPError as exc:
+        if 300 <= exc.code < 400:
+            return {'ok': False, 'redirect': True}
+        return {'ok': True, 'status': exc.code}
+    except (URLError, TimeoutError, ValueError, OSError):
+        return {'ok': False}
+
+
 def supervisor_snapshot(root):
     """Read GET /api/supervisor on the verified local WorkForce origin.
 
@@ -347,11 +388,8 @@ def supervisor_snapshot(root):
     plain read with a 3 s timeout — the one upstream call this surface adds.
     """
     receipt = read_json(root / 'local/workforce/deployment.json', root) or {}
-    origin = receipt.get('api_origin', '')
-    parsed = urlparse(origin)
-    if (parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1')
-            or parsed.username or parsed.password or parsed.path not in ('', '/')
-            or parsed.query or parsed.fragment):
+    origin = verified_local_origin(receipt)
+    if not origin:
         return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.', 'passes': []}
     request = Request(origin.rstrip('/') + '/api/supervisor?limit=3')
     opener = build_opener(_NoRedirect())
@@ -380,6 +418,76 @@ def read_json(path, root):
         return value if isinstance(value, dict) else None
     except (OSError, ValueError):
         return None
+
+
+def _empty_engine(source, detail):
+    return {'state': 'unavailable', 'version': None, 'source': source,
+            'observed_at': None, 'outcome': None, 'detail': detail}
+
+
+def _engine_receipt(root, relative):
+    """Version + activation time from a workspace installation receipt."""
+    source = Path(relative).as_posix()
+    receipt = read_json(root / relative, root)
+    if not receipt:
+        return _empty_engine(source, 'No installation receipt in this workspace.')
+    version = receipt.get('version')
+    activated = receipt.get('activated_at') if isinstance(receipt.get('activated_at'), str) else None
+    if not isinstance(version, str) or not version.strip():
+        return {'state': 'unavailable', 'version': None, 'source': source,
+                'observed_at': activated, 'outcome': None,
+                'detail': 'Installation receipt is missing a version.'}
+    return {'state': 'available', 'version': version.strip(), 'source': source,
+            'observed_at': activated, 'outcome': None,
+            'detail': 'Version ' + version.strip() + ((' · activated ' + activated) if activated else '')}
+
+
+def _worklane_reachability(root, now):
+    source_file = 'local/worklane/deployment.json'
+    receipt = read_json(root / source_file, root)
+    if not receipt:
+        return _empty_engine(source_file, 'No installation receipt in this workspace.')
+    origin = verified_local_origin(receipt)
+    if not origin:
+        return _empty_engine(source_file, 'A verified local WorkLane connection is required.')
+    source = origin + '/health'
+    probe = probe_local_http(origin, '/health')
+    observed = now.isoformat()
+    if probe.get('redirect'):
+        return {'state': 'unavailable', 'version': None, 'source': source, 'observed_at': observed,
+                'outcome': None, 'detail': 'WorkLane redirected the health read; refusing to leave the verified origin.'}
+    if not probe.get('ok'):
+        return {'state': 'unavailable', 'version': None, 'source': source, 'observed_at': observed,
+                'outcome': None, 'detail': 'WorkLane API is not reachable.'}
+    status = probe.get('status')
+    return {'state': 'available', 'version': None, 'source': source, 'observed_at': observed,
+            'outcome': None, 'detail': 'Reachable' + ((' · HTTP %s' % status) if status else '')}
+
+
+def _supervisor_pass_fields(payload):
+    source = 'WorkForce /api/supervisor'
+    state = payload.get('state') or 'unavailable'
+    if state != 'available':
+        return _empty_engine(source, payload.get('detail') or 'Supervisor pass record unavailable.') | {'state': state}
+    passes = [item for item in (payload.get('passes') or []) if isinstance(item, dict)]
+    if not passes:
+        return {'state': 'available', 'version': None, 'source': source, 'observed_at': None,
+                'outcome': None, 'detail': 'No supervisor passes recorded yet.'}
+    latest = max(passes, key=lambda item: str(item.get('generated_at') or ''))
+    generated = latest.get('generated_at') if isinstance(latest.get('generated_at'), str) else None
+    outcome = latest.get('pass_outcome') if isinstance(latest.get('pass_outcome'), str) else None
+    return {'state': 'available', 'version': None, 'source': source, 'observed_at': generated,
+            'outcome': outcome,
+            'detail': (outcome or 'outcome not reported') + ' · ' + (generated or 'time not reported')}
+
+
+def _unavailable_engines(detail):
+    return {
+        'worklane': _empty_engine('local/worklane/deployment.json', detail),
+        'workforce': _empty_engine('local/workforce/deployment.json', detail),
+        'worklane_api': _empty_engine('local/worklane/deployment.json', detail),
+        'supervisor': _empty_engine('WorkForce /api/supervisor', detail),
+    }
 
 
 def project_registry(root):
@@ -612,6 +720,7 @@ def operations_snapshot(binder):
     result = {'observed_at': now.isoformat(), 'build': build, 'workspace': None,
               'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
               'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
+              'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
         result['sources'].append({'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.'})
@@ -629,7 +738,7 @@ def operations_snapshot(binder):
     paths = [p for p in paths if p.stem in registry]
     for path in paths:
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
-        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'state': 'available'}
+        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'working': 0, 'state': 'available'}
         try:
             if not path.resolve().is_relative_to(root):
                 raise OSError('external store')
@@ -680,6 +789,8 @@ def operations_snapshot(binder):
                         'parent': parent, 'blockers': declared_blockers(item.get('description')),
                         'ready_for': None})
                     summary['attention'] += int(attention)
+                    # Same fact Overview's Live metric uses: in_progress with a claim.
+                    summary['working'] += int(status == 'in_progress' and marker is not None)
         except (OSError, sqlite3.Error):
             summary['state'] = 'unavailable'
         result['projects'].append(summary)
@@ -692,7 +803,7 @@ def operations_snapshot(binder):
     found = {p.stem for p in paths}
     for slug, project in registry.items():
         if slug not in found:
-            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'state': 'unavailable'})
+            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'working': 0, 'state': 'unavailable'})
     failed = [p['name'] for p in result['projects'] if p['state'] != 'available']
     result['sources'].append({'name': 'WorkLane', 'state': 'partial' if failed else ('available' if paths else 'unavailable'),
                              'detail': f"{sum(p['state'] == 'available' for p in result['projects'])} project stores readable" + ('. Unavailable: ' + ', '.join(failed) if failed else '')})
@@ -705,6 +816,13 @@ def operations_snapshot(binder):
                              'detail': 'Local agent registry' if roster else 'Registry could not be read.'})
     result['sources'].append({'name': 'WorkForce heartbeat', 'state': 'fresh' if fresh else ('stale' if age is not None else 'unknown'),
                              'detail': 'Last reported activity; not a process health check.', 'last_at': tick})
+    passes_payload = supervisor_snapshot(root)
+    result['engines'] = {
+        'worklane': _engine_receipt(root, 'local/worklane/deployment.json'),
+        'workforce': _engine_receipt(root, 'local/workforce/deployment.json'),
+        'worklane_api': _worklane_reachability(root, now),
+        'supervisor': _supervisor_pass_fields(passes_payload),
+    }
     workers = (roster or {}).get('workers', {})
     runtime = (daemon or {}).get('workers', {})
     flight = (daemon or {}).get('in_flight', [])
@@ -763,7 +881,7 @@ def operations_snapshot(binder):
                 'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}
             if group == 'supervisor':
-                result['supervisor'] = {**agent_row, 'passes': supervisor_snapshot(root)}
+                result['supervisor'] = {**agent_row, 'passes': passes_payload}
             else:
                 result['agents'].append(agent_row)
     result['agents'].sort(key=lambda a: (STATE_ORDER.get(a['state'], 9), a['name']))

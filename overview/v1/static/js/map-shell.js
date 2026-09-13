@@ -10,25 +10,26 @@
     lastLoad=Date.now();
     try {
       const response=await fetch('/api/operations');if(!response.ok)throw new Error();
-      data=await response.json();name.textContent=data.workspace ? data.workspace.name+' · Local' : 'No workspace';path.textContent=data.workspace?.path || 'No workspace selected.';render();
+      data=await response.json();
+      try { document.dispatchEvent(new CustomEvent('bp:map-operations',{detail:data})); } catch (_) { /* Map host subscribes when present. */ }
+      name.textContent=data.workspace ? data.workspace.name+' · Local' : 'No workspace';path.textContent=data.workspace?.path || 'No workspace selected.';render();
     } catch(error) {name.textContent='Workspace unavailable';path.textContent='Could not verify the selected workspace.';if(context)context.textContent='Work source unavailable.';}
   }
   function noteText() { return 'Status is not agent liveness. Read '+new Date(data.observed_at).toLocaleTimeString(); }
   function render() {
     if(!context || !data)return;
     const project=data.projects.find(p=>locationPath===p.folder || locationPath.startsWith(p.folder+'/'));
-    const orders=data.orders.filter(o=>!project || o.project===project.id);
     const unavailable=project ? project.state!=='available' : data.sources.some(s=>s.name==='WorkLane' && s.state!=='available');
     const count=project ? project.open : data.projects.reduce((n,p)=>n+p.open,0);
-    const deferred=orders.filter(o=>['deferred','tracking'].includes(o.gate_type)).length;
-    const inProgress=orders.filter(o=>o.status==='in_progress').length;
-    const key=JSON.stringify([project?.id,unavailable,count,deferred,inProgress,data.truncated,project?.has_instructions]);
+    const attention=project ? (project.attention||0) : data.projects.reduce((n,p)=>n+(p.attention||0),0);
+    const working=project ? (project.working||0) : data.projects.reduce((n,p)=>n+(p.working||0),0);
+    const key=JSON.stringify([project?.id,unavailable,count,attention,working,data.truncated,project?.has_instructions]);
     if(key===renderFingerprint) { if(noteEl)noteEl.textContent=noteText(); return; }
     try {
       context.replaceChildren();
       const heading=document.createElement('strong');heading.textContent=project?.name || 'Workspace work';context.append(heading);
       const summary=document.createElement('p');
-      summary.textContent=unavailable ? 'Work source unavailable; counts are incomplete.' : `${count} open · ${deferred} deferred/tracking · ${inProgress} in progress`;
+      summary.textContent=unavailable ? 'Work source unavailable; counts are incomplete.' : `${count} open · ${attention} For You · ${working} working`;
       if(data.truncated)summary.textContent+=' · Partial detail';
       context.append(summary);
       const links=document.createElement('nav');links.setAttribute('aria-label','Project context');
