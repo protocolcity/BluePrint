@@ -22,39 +22,57 @@ Calendar and Settings are **lenses**, not Overview embeds. Overview never hosts 
 
 ---
 
-## Calendar — V1
+## Calendar — current (pc-1489, 2026-09-13)
+
+Supersedes the V1 week-or-day list as the primary Calendar law. The operations Calendar at `/calendar` is the time lens: WorkForce next runs, WorkLane clocks, and an optional local calendar file. Dark PC tokens only. Map verbs stay off this surface.
 
 ### Is / Is-not
 
 | Calendar IS | Calendar IS NOT |
 |---|---|
-| Local desk events from truth on this machine | Multi-desk / cloud calendar theater |
-| Quiet list (week or day primary) | Wall-style activity feed |
-| Honest empty | Fake busy cinema / synthetic events |
-| Hand-off to Overview / Map / Settings via four-lens nav | Map-lite or dig chrome |
+| A Today-and-Next agenda of verified clocks on this desk | A chronological dump that opens on the oldest dated work |
+| One work item with separately labelled Due, Reminder, Hold until, and Mentioned date | Two rows for the same order when it has more than one clock |
+| Next scheduled jobs and latest result in the first screen | Manual seats listed as empty "not scheduled" rows |
+| Source-accurate dates (the field or rule that produced each clock) | A date from a title, comment, or gate note shown as Due |
+| Honest empty, missing file, and no-next-run states | Synthetic events or inferred liveness |
 
-### V1 surfaces
+### Agenda
 
-1. **Primary:** week **or** day list (Builder picks one; week list recommended).
-2. **Event row:** title · when · source (`routine` · `WO` · `manual`) · status (`scheduled` · `due` · `done`).
-3. **Detail sheet** (click row): title, time, notes — local only.
-4. **Honest empty:** `No events` (Writer may lock exact string).
-5. **Four-lens nav** switches for real (same chrome as Overview).
+Default view centres **Today** and **Next**. Past and overdue items are counted in a collapsed group; they are not the first paint. Optional week navigation shifts the selected day by seven days and keeps that day (and project) in the URL so the work-order reader can return here.
 
-### Out of V1
+Agenda buckets per clock, not by the latest clock on the row: any clock on the selected day → Today; else any clock before that day → Past and overdue; else Next. An overdue due with a later reminder is Past, not Next.
 
-- Multi-workspace calendars  
-- Cloud sync theater / fabricated attendees  
-- Map-lite tile / dig verbs  
-- Recurrence editor complexity beyond what local truth already stores  
+Timed values display in the browser timezone. All-day dates stay on the calendar day they were recorded; they are not shifted by UTC midnight. A date-only `gate_until` is an all-day hold and remains active through the end of that local calendar day.
 
-### Glass DoD (Calendar)
+### Clocks and provenance
 
-1. Four-lens nav live — Calendar is current.  
-2. Empty paints `No events` (or Writer lock).  
-3. Populated rows show title · when · source · status.  
-4. Dark PC tokens (`#0f1114` family) — no cream.  
-5. No Map verbs / no Wall feed.
+Three durable WorkLane clocks plus one narrative label. Every displayed date names its source field.
+
+| Clock on the row | Source field / rule | Not this |
+|---|---|---|
+| **Due** | `deadline:YYYY-MM-DD` label | A date found in a title, description, comment, or gate note |
+| **Reminder** | `reminder:YYYY-MM-DD` label | A timer gate; a reminder does not embargo work |
+| **Hold until** | `gate_type=timer` + `gate_until` while that instant is still in the future | A reminder; a human-gate note |
+| **Expired hold** | the same timer clock after `gate_until` | Currently blocking; Needs you |
+| **Mentioned date** | a date extracted from a human `gate_note` (including `CALENDAR · ~YYYY-MM-DD` and a bare ISO date in that note) | Due |
+
+Ratification notes that happen to contain today's ISO date, and report titles that contain a historical date, are not deadlines. Needs you is the Decide face from attention policy; a date alone never paints it.
+
+ICS keeps one VEVENT per clock, with all-day `VALUE=DATE`, timed values as UTC `Z`, `CATEGORIES` equal to the clock kind (`deadline` · `reminder` · `timer` · `mentioned`), and `X-BLUEPRINT-SOURCE` equal to the source field. A mentioned date from `gate_note` keeps the pre-change UID (`…-deadline-YYYY-MM-DD@blueprint.calendar`) so subscribers update the existing VEVENT; kind and CATEGORIES may change, the UID may not.
+
+### Jobs and local events
+
+Scheduled jobs (a next-run time), all-day work dates, and manual/on-demand jobs are visibly different. Manual seats collapse to one on-demand count. A job with no next run says so. Latest result is shown when the ledger has one.
+
+A missing local calendar file is **not configured**, not empty events. An unreadable file is **unavailable**. Agent schedules do not depend on that file.
+
+### Out of scope here
+
+- Multi-workspace or cloud calendars
+- Fabricated attendees or synthetic busy cinema
+- Editing live dates, gates, or reminders
+- Recurrence editors beyond what WorkForce already stores
+- Map verbs / Wall feed / cream tokens
 
 ---
 

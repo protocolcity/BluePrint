@@ -7,7 +7,7 @@ const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents',''],connections:['Connections','Where the information comes from and how current it is.']};
+const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents',''],connections:['Connections','Where the information comes from and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
@@ -47,6 +47,7 @@ $('attention-filter').value = attentionParam;
 $('blocked-filter').checked = blockedParam;
 let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
+let calendarDay = query.get('day') || '';
 if (legacyParam) {
   const canonical = new URLSearchParams();
   if (selectedProject) canonical.set('project', selectedProject);
@@ -56,6 +57,7 @@ if (legacyParam) {
   if (attentionParam) canonical.set('attention', attentionParam);
   if (blockedParam) canonical.set('blocked', '1');
   if (query.get('q')) canonical.set('q', query.get('q'));
+  if (calendarDay) canonical.set('day', calendarDay);
   history.replaceState(null, '', location.pathname + (canonical.size ? '?' + canonical : '') + location.hash);
 }
 $('page-title').textContent = titles[page][0];
@@ -474,36 +476,136 @@ function updateTimelineFilters() {
 function onDemandSeat(agent) {
   return agent.group==='seat' && (agent.schedule==='manual' || agent.schedule==='Not scheduled');
 }
+function todayKey(from) {
+  const d=from || new Date();
+  return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-');
+}
+function shiftDay(key, days) {
+  const [y,m,d]=String(key).split('-').map(Number);
+  return todayKey(new Date(y, m-1, d+days));
+}
+function calendarOrigin() {
+  return calendarDay || todayKey();
+}
+function localDayKey(value, allDay) {
+  if(!value) return '';
+  const raw=String(value);
+  if(allDay || /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw.slice(0,10);
+  const parsed=new Date(raw);
+  if(Number.isNaN(parsed.valueOf())) return raw.slice(0,10);
+  return todayKey(parsed);
+}
+function allDayStamp(value) {
+  const [y,m,d]=String(value).slice(0,10).split('-').map(Number);
+  if(!y || !m || !d) return String(value);
+  return new Date(y, m-1, d).toLocaleDateString([], {month:'short', day:'numeric'});
+}
+function datedStamp(value, allDay) {
+  return allDay || /^\d{4}-\d{2}-\d{2}$/.test(String(value||'')) ? allDayStamp(value)+' · All day' : date(value);
+}
+function holdExpired(value, allDay, now) {
+  if(!value) return false;
+  const instant=now || new Date();
+  if(allDay || /^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value).slice(0,10) < todayKey(instant);
+  const parsed=new Date(value);
+  return !Number.isNaN(parsed.valueOf()) && parsed < instant;
+}
 function mergeDatedWork(items) {
   const merged=new Map(), extras=[];
   for(const event of items) {
-    if(event.kind!=='deadline' && event.kind!=='timer') { extras.push(event); continue; }
+    if(event.kind!=='deadline' && event.kind!=='timer' && event.kind!=='reminder' && event.kind!=='mentioned') { extras.push(event); continue; }
     const key=event.product+':'+event.task_id;
-    const row=merged.get(key) || {product:event.product,task_id:event.task_id,summary:event.summary,attention:false,dtstart:event.dtstart,due:null,hold:null,due_all_day:false};
-    if(event.kind==='deadline') { row.due=event.dtstart; row.due_all_day=!!event.all_day; }
-    if(event.kind==='timer') row.hold=event.dtstart;
-    if(event.attention) row.attention=true;
+    const row=merged.get(key) || {product:event.product,task_id:event.task_id,summary:event.summary,attention:false,attention_face:'',dtstart:event.dtstart,due:null,hold:null,reminder:null,mentioned:null,due_all_day:false,hold_all_day:false,reminder_all_day:false,mentioned_all_day:false,due_source:'',hold_source:'',reminder_source:'',mentioned_source:''};
+    if(event.kind==='deadline') { row.due=event.dtstart; row.due_all_day=!!event.all_day; row.due_source=event.source || ('deadline:'+String(event.dtstart).slice(0,10)); }
+    if(event.kind==='timer') { row.hold=event.dtstart; row.hold_all_day=!!event.all_day; row.hold_source=event.source || 'gate_until'; }
+    if(event.kind==='reminder') { row.reminder=event.dtstart; row.reminder_all_day=!!event.all_day; row.reminder_source=event.source || ('reminder:'+String(event.dtstart).slice(0,10)); }
+    if(event.kind==='mentioned') { row.mentioned=event.dtstart; row.mentioned_all_day=!!event.all_day; row.mentioned_source=event.source || 'gate_note'; }
+    if(event.attention_face==='decide') { row.attention_face='decide'; row.attention=true; }
+    else if(!row.attention_face && event.attention_face) row.attention_face=event.attention_face;
     if(event.summary) row.summary=event.summary;
-    if(event.dtstart < row.dtstart) row.dtstart=event.dtstart;
+    if(String(event.dtstart) < String(row.dtstart)) row.dtstart=event.dtstart;
     merged.set(key,row);
   }
-  return [...merged.values(), ...extras].sort((a,b)=>String(a.dtstart).localeCompare(String(b.dtstart)));
+  return [...merged.values(), ...extras];
 }
-function datedStamp(value, allDay) {
-  return allDay ? value+' · All day' : date(value);
+function rowClocks(row) {
+  const clocks=[];
+  if(row.due) clocks.push({kind:'due', at:row.due, allDay:!!row.due_all_day, source:row.due_source});
+  if(row.reminder) clocks.push({kind:'reminder', at:row.reminder, allDay:!!row.reminder_all_day, source:row.reminder_source});
+  if(row.hold) clocks.push({kind:'hold', at:row.hold, allDay:!!row.hold_all_day, source:row.hold_source, expired:holdExpired(row.hold, row.hold_all_day)});
+  if(row.mentioned) clocks.push({kind:'mentioned', at:row.mentioned, allDay:!!row.mentioned_all_day, source:row.mentioned_source});
+  if(!clocks.length && row.dtstart) clocks.push({kind:row.kind==='timer'?'hold':(row.kind==='reminder'?'reminder':(row.kind==='mentioned'?'mentioned':'due')), at:row.dtstart, allDay:!!row.all_day, source:row.source||''});
+  return clocks;
+}
+function agendaGroup(row, origin) {
+  const days=rowClocks(row).map(clock=>localDayKey(clock.at, clock.allDay)).filter(Boolean);
+  if(days.some(day=>day===origin)) return 'today';
+  if(days.some(day=>day<origin)) return 'past';
+  return 'next';
+}
+function clockLabel(clock) {
+  if(clock.kind==='due') return 'Due';
+  if(clock.kind==='reminder') return 'Reminder';
+  if(clock.kind==='hold') return clock.expired ? 'Expired hold' : 'Hold until';
+  return 'Mentioned date';
+}
+function datedHref(event) {
+  return readerHref('/work-order?'+new URLSearchParams({project:event.product,id:event.task_id}));
+}
+function datedRow(event) {
+  const row=link('', datedHref(event),'bp-order');
+  const details=el('div');
+  details.append(el('strong',event.summary || 'Untitled work'));
+  const clocks=rowClocks(event);
+  for(const clock of clocks) {
+    const bits=[clockLabel(clock), datedStamp(clock.at, clock.allDay)];
+    if(clock.source) bits.push(clock.source);
+    details.append(el('span', bits.join(' · '),'bp-order-meta'));
+  }
+  details.append(el('span', event.product,'bp-order-meta'));
+  const decide=event.attention_face==='decide';
+  const hold=clocks.find(clock=>clock.kind==='hold');
+  const state=decide?'attention':(hold && hold.expired?'expired':(event.due?'all_day':(event.reminder?'scheduled':'dated')));
+  const label=decide?'Needs you':(hold && hold.expired?'Expired':(event.due?'Due':(event.reminder?'Reminder':(event.mentioned?'Mentioned':'Dated work'))));
+  row.append(details,badge(state,label));
+  return row;
+}
+function formatDayHeading(key) {
+  const [y,m,d]=String(key).split('-').map(Number);
+  return new Date(y, m-1, d).toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+}
+function updateCalendarContext() {
+  if($('calendar-project')) selectedProject=$('calendar-project').value;
+  if(calendarDay && calendarDay===todayKey()) calendarDay='';
+  const params=new URLSearchParams();
+  if(selectedProject) params.set('project', selectedProject);
+  if(calendarDay) params.set('day', calendarDay);
+  history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
+  if(snapshot) calendar();
 }
 function calendar() {
-  const datedItems=mergeDatedWork(snapshot.work_dates || []);
-  reconcileList($('dated-work'), datedItems, event=>event.due||event.hold ? event.product+':'+event.task_id+':dated' : event.product+':'+event.task_id+':'+event.kind+':'+event.dtstart, event=>{
-    const row=link('', '/work-order?'+new URLSearchParams({project:event.product,id:event.task_id}),'bp-order');
-    const parts=[];
-    if(event.due) parts.push(datedStamp(event.due,event.due_all_day)+' · Due');
-    if(event.hold) parts.push(date(event.hold)+' · Hold until');
-    if(!parts.length) parts.push((event.all_day?event.dtstart+' · All day':date(event.dtstart))+' · '+(event.kind==='timer'?'Hold until':'Due'));
-    const details=el('div');details.append(el('strong',event.summary),el('span',parts.join(' · ')+' · '+event.product,'bp-order-meta'));
-    row.append(details,badge(event.attention?'attention':'scheduled',event.attention?'Needs you':'Dated work'));
-    return row;
-  }, {emptyText:'No dated work orders in the readable stores.'});
+  const origin=calendarOrigin();
+  const actualToday=todayKey();
+  const datedItems=mergeDatedWork(snapshot.work_dates || []).filter(event=>!selectedProject || event.product===selectedProject);
+  const todayItems=datedItems.filter(event=>agendaGroup(event, origin)==='today').sort((a,b)=>String(a.dtstart).localeCompare(String(b.dtstart)));
+  const nextItems=datedItems.filter(event=>agendaGroup(event, origin)==='next').sort((a,b)=>String(a.dtstart).localeCompare(String(b.dtstart)));
+  const pastItems=datedItems.filter(event=>agendaGroup(event, origin)==='past').sort((a,b)=>String(b.dtstart).localeCompare(String(a.dtstart)));
+  $('calendar-today-heading').textContent=origin===actualToday ? 'Today' : formatDayHeading(origin);
+  $('calendar-next-heading').textContent='Next';
+  $('calendar-past-summary').textContent=(origin===actualToday ? 'Past and overdue' : 'Before this day')+' · '+pastItems.length;
+  $('calendar-past-wrap').hidden=!pastItems.length;
+  $('calendar-range').textContent=origin===actualToday ? 'Agenda from today.' : 'Agenda centred on '+formatDayHeading(origin)+'.';
+  if($('calendar-project')) {
+    const select=$('calendar-project');
+    const current=selectedProject;
+    select.replaceChildren(new Option('All projects',''));
+    for(const project of snapshot.projects) select.add(new Option(project.name, project.id));
+    if(current && !snapshot.projects.some(project=>project.id===current)) select.add(new Option(current+' (unavailable)', current));
+    select.value=current;
+  }
+  reconcileList($('calendar-today'), todayItems, event=>event.product+':'+event.task_id, datedRow, {emptyText:origin===actualToday ? 'Nothing dated today.' : 'Nothing dated on this day.'});
+  reconcileList($('calendar-next'), nextItems, event=>event.product+':'+event.task_id, datedRow, {emptyText:'No upcoming dated work.'});
+  reconcileList($('calendar-past'), pastItems, event=>event.product+':'+event.task_id, datedRow, {emptyText:'No past dated work.'});
   const demand=snapshot.agents.filter(onDemandSeat);
   const scheduled=[...snapshot.agents.filter(agent=>!onDemandSeat(agent))].sort((a,b)=>String(a.next_fire || 'z').localeCompare(String(b.next_fire || 'z')));
   const scheduleItems=demand.length ? scheduled.concat([{id:'_on-demand-seats', on_demand:demand.length}]) : scheduled;
@@ -511,17 +613,25 @@ function calendar() {
     if(agent.on_demand) {
       const row=el('div',undefined,'bp-source');
       row.append(el('strong','On demand seats: '+agent.on_demand));
+      row.append(el('p','Manual seats have no next run.','bp-muted'));
       return row;
     }
-    const row=el('div',undefined,'bp-source');row.append(el('strong',agent.name),badge(agent.state==='unknown'?'unknown':(agent.state==='off'?'off':(agent.next_fire?'scheduled':'not_scheduled'))));
-    row.append(el('p',`${date(agent.next_fire)} · ${scheduleLabel(agent.schedule)}`,'bp-muted'));
+    const manual=agent.schedule==='manual' || agent.schedule==='Not scheduled';
+    const state=agent.state==='unknown'?'unknown':(agent.state==='off'?'off':(agent.next_fire?'scheduled':(manual?'manual':'not_scheduled')));
+    const row=el('div',undefined,'bp-source');
+    row.append(el('strong',agent.name),badge(state, manual?'Manual':(agent.next_fire?'Scheduled':'No next run')));
+    const when=agent.next_fire ? date(agent.next_fire) : (manual ? 'No next run' : 'No next run reported');
+    row.append(el('p',`${when} · ${scheduleLabel(agent.schedule)}`,'bp-muted'));
+    if(agent.last_run) row.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)}${agent.last_run.reason?' · '+agent.last_run.reason:''}`,'bp-muted'));
     return row;
   }, {emptyText:'No agent schedules available.'});
+  const calendarSource=(snapshot.sources || []).find(source=>source.name==='Calendar');
+  const eventEmpty=calendarSource?.state==='not_configured' ? 'No local calendar file. Agent schedules above are independent of a calendar file.' : (calendarSource?.state==='unavailable' ? 'Local calendar file could not be read.' : 'No local calendar events. Agent schedules above are independent of the calendar file.');
   const eventItems=[...snapshot.events].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
   reconcileList($('event-list'), eventItems, event=>`${event.title}|${event.at}`, event=>{
     const row=el('details',undefined,'bp-event');const summary=el('summary');summary.append(el('strong',event.title || 'Untitled event'),el('span',`${date(event.at)} · ${event.source || 'Local calendar'} · ${event.state || 'State not specified'}`,'bp-order-meta'));row.append(summary,el('p',event.notes || 'No additional notes.','bp-note bp-muted'));
     return row;
-  }, {emptyText:'No local calendar events. Agent schedules above are independent of the calendar file.'});
+  }, {emptyText:eventEmpty});
 }
 function engines() {
   const rows=[['WorkLane engine',snapshot.engines && snapshot.engines.worklane],['WorkForce engine',snapshot.engines && snapshot.engines.workforce],['WorkLane API',snapshot.engines && snapshot.engines.worklane_api],['Supervisor last pass',snapshot.engines && snapshot.engines.supervisor]].filter(([,engine])=>engine);
@@ -709,7 +819,15 @@ function updateFilters() {
 $('filters').addEventListener('submit',event=>event.preventDefault());
 $('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('gate-filter').addEventListener('change',updateFilters);$('attention-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('blocked-filter').addEventListener('change',updateFilters);
 $('clear-filters').addEventListener('click',()=>{$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('attention-filter').value='';$('blocked-filter').checked=false;updateFilters();});
-$('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});if ($('timeline-filters')) {
+$('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});
+if ($('calendar-filters')) {
+  $('calendar-filters').addEventListener('submit', event => event.preventDefault());
+  $('calendar-project').addEventListener('change', updateCalendarContext);
+  $('calendar-prev-week').addEventListener('click', () => { calendarDay = shiftDay(calendarOrigin(), -7); updateCalendarContext(); });
+  $('calendar-next-week').addEventListener('click', () => { calendarDay = shiftDay(calendarOrigin(), 7); updateCalendarContext(); });
+  $('calendar-today-btn').addEventListener('click', () => { calendarDay = ''; updateCalendarContext(); });
+}
+if ($('timeline-filters')) {
   $('timeline-project').value = timelineProject;
   $('timeline-source').value = timelineSource;
   $('timeline-actor').value = timelineActor;
