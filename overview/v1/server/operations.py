@@ -399,7 +399,7 @@ def operations_snapshot(binder):
                     workers = [x[7:] for x in labels if isinstance(x, str) and x.startswith('worker:') and x[7:]]
                     routable_workers = [w for w in workers if w != 'you']
                     you_qualifier = any(label in ('you:todo', 'you:remind', 'you:note') for label in labels if isinstance(label, str))
-                    from .attention_view import face, face_reason
+                    from .attention_view import face, face_reason, persona_text
                     attention_face = face(item, labels, now)
                     attention = bool(attention_face)
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
@@ -420,6 +420,7 @@ def operations_snapshot(binder):
                         'gate_note': item.get('gate_note') or '',
                         'workers': workers,
                         'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not you_qualifier,
+                        'persona': persona_text(item, labels),
                         'owner': ', '.join(routable_workers) or 'Unassigned',
                         'live_with': marker['identity'] if marker and status == 'in_progress' else None,
                         'parked_by': marker['identity'] if marker and status == 'in_review' else None,

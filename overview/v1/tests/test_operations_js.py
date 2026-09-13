@@ -143,5 +143,18 @@ class AgentCardBodyTests(unittest.TestCase):
         self.assertIn("if(agent.group==='seat' && agent.recovery_attempts)", _SRC)
 
 
+class PersonaChipTests(unittest.TestCase):
+    """pc-1473 review fix: the chip slot must print the persona text
+    (Your todo / Reminder <date> / Your note) instead of "Needs routing"
+    on you-qualifier rows, and still print "Needs routing" when there is
+    no persona."""
+
+    def test_persona_renders_in_the_chip_slot_before_needs_routing(self):
+        self.assertIn("if(order.persona)content.append(el('span',order.persona,'bp-order-note'));", _SRC.replace(' ', ''))
+
+    def test_needs_routing_only_renders_when_there_is_no_persona(self):
+        self.assertIn("elseif(order.needs_routing)content.append(el('span','Needsrouting','bp-order-note'));", _SRC.replace(' ', ''))
+
+
 if __name__ == '__main__':
     unittest.main()
