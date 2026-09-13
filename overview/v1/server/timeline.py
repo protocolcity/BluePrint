@@ -216,8 +216,8 @@ def _task_public_id(prefix: str, ext_id, numeric_id) -> str:
 
 def _collapse_worklane_pairs(rows: list[dict]) -> list[dict]:
     """One row per action when an event and its marker comment describe the same thing."""
-    comment_index: dict[tuple, dict] = {}
-    merged_keys: set[tuple] = set()
+    comment_index: dict[tuple, list[dict]] = {}
+    merged_comment_ids: set[str] = set()
     collapsed: list[dict] = []
     for row in rows:
         if row.get('_kind') != 'comment':
@@ -226,28 +226,31 @@ def _collapse_worklane_pairs(rows: list[dict]) -> list[dict]:
         if event_key == 'note':
             continue
         key = (row['project'], row['_task_id'], row['at'], row['actor'], event_key)
-        comment_index[key] = row
+        comment_index.setdefault(key, []).insert(0, row)
     for row in rows:
         if row.get('_kind') != 'event':
             continue
         event_key = row.get('_event_key')
         key = (row['project'], row['_task_id'], row['at'], row['actor'], event_key)
-        comment = comment_index.get(key)
-        if comment is not None:
+        comments = comment_index.get(key)
+        if comments:
+            comment = comments.pop(0)
+            merged_comment_ids.add(comment['id'])
             body = (comment.get('_body') or '').strip()
             detail = body.splitlines()[0] if body else row['title']
             collapsed.append({k: v for k, v in row.items() if not k.startswith('_')} | {'title': detail})
-            merged_keys.add(key)
         else:
             collapsed.append({k: v for k, v in row.items() if not k.startswith('_')})
     for row in rows:
         if row.get('_kind') != 'comment':
             continue
-        event_key = row.get('_event_key')
-        key = (row['project'], row['_task_id'], row['at'], row['actor'], event_key)
-        if key in merged_keys:
+        if row['id'] in merged_comment_ids:
             continue
-        collapsed.append({k: v for k, v in row.items() if not k.startswith('_')})
+        out = {k: v for k, v in row.items() if not k.startswith('_')}
+        body = (row.get('_body') or '').strip()
+        if body:
+            out['title'] = body
+        collapsed.append(out)
     return collapsed
 
 
@@ -475,6 +478,16 @@ def _github_kind_key(item: dict) -> str:
     return f"{item.get('kind')}:{item.get('number') or item.get('sha') or item.get('workflow_name')}"
 
 
+def _github_cache_observed(snapshot: dict) -> str:
+    """Most recent cache fill time from remote_activity repositories."""
+    stamps = [_parse_time(repo.get('observed_at'))
+              for repo in (snapshot.get('repositories') or []) if isinstance(repo, dict)]
+    stamps = [stamp for stamp in stamps if stamp is not None]
+    if not stamps:
+        return _now_iso()
+    return max(stamps).isoformat()
+
+
 def _github_source_state(snapshot: dict, rows: list[dict]) -> str:
     """Mirror /api/remote-activity: unavailable only with no cache or a failed client."""
     state = snapshot.get('state', 'not_configured')
@@ -499,8 +512,8 @@ def _github_source_state(snapshot: dict, rows: list[dict]) -> str:
 def _github_rows(root: Path) -> tuple[list[dict], dict]:
     snapshot = remote_snapshot(root)
     state = snapshot.get('state', 'not_configured')
-    observed = _now_iso()
     repositories = [repo for repo in (snapshot.get('repositories') or []) if isinstance(repo, dict)]
+    observed = _github_cache_observed(snapshot) if repositories else _now_iso()
     detail = str(snapshot.get('error') or '')
     if state in ('not_configured', 'invalid_config'):
         return [], {'name': 'github', 'state': state, 'observed_at': observed,
