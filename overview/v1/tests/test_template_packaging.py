@@ -125,6 +125,18 @@ for name in ('chief-of-staff', 'health-patrol', 'workspace-efficiency', 'papers-
     assert receipt['ok'], name
     for path in receipt['files']:
         assert (workspace / path).read_text() == (found._templates_dir() / 'ops' / name / Path(path).name).read_text()
+founded = base / 'new-workspace'
+found.found(founded, city_name='Example', neighborhood='sample-product',
+            with_desk=False, sample_ticket=False)
+for filename in ('CONTRACT.md', 'prompt.md'):
+    body = (founded / 'sample-product/workers/demo-worker' / filename).read_text()
+    assert 'worker:(fill me)' not in body
+    assert 'project=(fill me)' not in body
+    assert 'demo-worker' in body
+    assert 'project=sample-product' in body
+contract = founded / 'sample-product/workers/demo-worker/CONTRACT.md'
+assert 'Vendor CLI: `(fill me)`' in contract.read_text()
+assert not list(founded.rglob('roster.json'))
 assert not list(workspace.rglob('*.db'))
 assert not list(workspace.rglob('roster.json'))
 print('wheel planting: worker, director, efficiency skill, four ops packs; no engines')
