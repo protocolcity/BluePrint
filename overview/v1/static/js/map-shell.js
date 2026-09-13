@@ -4,9 +4,10 @@
   const name=document.getElementById('desk-name'), path=document.getElementById('scope-path');
   const context=document.getElementById('map-project-context');
   try { document.body.classList.toggle('bp-reduce-motion', JSON.parse(localStorage.getItem('bp-display') || '{}').motion === 'off'); } catch (_) { /* System preference applies when storage is unavailable. */ }
-  let data=null, locationPath=new URLSearchParams(location.search).get('path') || '';
+  let data=null, locationPath=new URLSearchParams(location.search).get('path') || '', lastLoad=0;
   document.getElementById('refresh')?.addEventListener('click',()=>location.reload());
   async function load() {
+    lastLoad=Date.now();
     try {
       const response=await fetch('/api/operations');if(!response.ok)throw new Error();
       data=await response.json();name.textContent=data.workspace ? data.workspace.name+' · Local' : 'No workspace';path.textContent=data.workspace?.path || 'No workspace selected.';render();
@@ -34,5 +35,6 @@
   }
   document.addEventListener('bp:map-location',event=>{locationPath=event.detail.path;render();});
   connectChanges(()=>{if(!document.hidden)load();});
+  setInterval(()=>{if(!document.hidden && Date.now()-lastLoad>=60000)load();},1000);
   await load();
 })();
