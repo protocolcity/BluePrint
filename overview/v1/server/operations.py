@@ -184,32 +184,64 @@ def _is_python_executable(name):
     return name in ('python', 'python3') or (name or '').startswith('python3.')
 
 
+def _model_flag_value(value):
+    return value if isinstance(value, str) and value and '{' not in value else None
+
+
 def _model_flag(command):
-    """The value of an inline ``--model`` argument, ignoring an unfilled template."""
+    """The value of a ``--model``/``-m`` argument, separate or ``=``-joined,
+    ignoring an unfilled template."""
     if not isinstance(command, list):
         return None
     for index, item in enumerate(command):
-        if item == '--model' and index + 1 < len(command):
-            value = command[index + 1]
-            return value if isinstance(value, str) and value and '{' not in value else None
+        if not isinstance(item, str):
+            continue
+        if item in ('--model', '-m') and index + 1 < len(command):
+            value = _model_flag_value(command[index + 1])
+            if value:
+                return value
+        for prefix in ('--model=', '-m='):
+            if item.startswith(prefix):
+                value = _model_flag_value(item[len(prefix):])
+                if value:
+                    return value
     return None
 
 
-def resolve_provider_model(row, root):
+def _resolved_config_path(config_path, root):
+    """The runner config path, resolved against ``root`` when relative, or
+    ``None`` when it falls outside the workspace."""
+    if not config_path:
+        return None
+    path = Path(config_path)
+    resolved = (root / path).resolve() if not path.is_absolute() else path.resolve()
+    return resolved if resolved.is_relative_to(root) else None
+
+
+def resolve_provider_model(row, root, config_cache=None):
     """Provider/model display text, in the order AGENTS_INTENT.md fixes:
 
     the roster's own ``model``; else the seat's runner config (the actual
     provider command it names, read via the roster command's ``--config``
     path); else the roster command's own executable, with the model left
     blank at that tier. Never returns the literal "Not specified".
+
+    ``config_cache`` is an optional dict shared across one snapshot's rows,
+    keyed by resolved config path, so a runner file shared by several seats
+    is only read once.
     """
     command = row.get('command')
     roster_model = row.get('model')
     if isinstance(roster_model, str) and roster_model.strip():
         return roster_model.strip()
-    config_path = _config_argument(command)
-    if config_path and Path(config_path).is_absolute():
-        config = read_json(Path(config_path), root)
+    resolved_path = _resolved_config_path(_config_argument(command), root)
+    if resolved_path is not None:
+        if config_cache is not None and resolved_path in config_cache:
+            config = config_cache[resolved_path]
+        else:
+            config = read_json(resolved_path, root)
+            if config_cache is not None:
+                config_cache[resolved_path] = config
         inner_command = (config or {}).get('command')
         provider = _PROVIDER_DISPLAY.get(_executable_name(inner_command))
         if provider:
@@ -426,6 +458,7 @@ def operations_snapshot(binder):
     if not isinstance(runtime, dict): runtime = {}
     if not isinstance(flight, list): flight = []
     daemon_path = resolve_daemon_path(root)
+    runner_config_cache = {}
     if isinstance(workers, dict):
         for identity, row in workers.items():
             if not isinstance(row, dict) or identity == 'demo-worker': continue
@@ -468,7 +501,7 @@ def operations_snapshot(binder):
                 'badge_source': 'daemon' if (state == 'working' and not shift) else BADGE_SOURCE[state],
                 'group': group, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
-                'model': resolve_provider_model(row, root), 'last_at': tick, 'source': 'Local WorkForce',
+                'model': resolve_provider_model(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'held': {'id': held['id'], 'project': held['project_name']} if held else None,
                 'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}

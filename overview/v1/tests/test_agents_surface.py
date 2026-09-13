@@ -318,6 +318,49 @@ class ProviderModelResolutionTests(unittest.TestCase):
         self.assertNotEqual(model, 'Not specified')
         self.assertEqual(model, 'Provider unknown')
 
+    def test_inline_equals_model_flag_resolves(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model=sonnet', '-p', 'x']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Claude sonnet')
+
+    def test_grok_short_model_flag_resolves(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/grok', '-m', 'grok-4', '-p', 'x']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Grok grok-4')
+
+    def test_relative_config_path_resolves_against_workspace_root(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model', 'sonnet']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', 'runner.json']}})
+        self.assertEqual(self._agent()['model'], 'Claude sonnet')
+
+    def test_relative_config_path_outside_workspace_falls_through(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['/usr/local/bin/claude', '--config', '../../etc/runner.json']}})
+        self.assertEqual(self._agent()['model'], 'Claude')
+
+    def test_shared_runner_config_read_once_per_snapshot(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model', 'sonnet']}))
+        self._roster({
+            'agent-one': {'display': 'Agent One', 'identity': 'agent-one', 'kind': 'lane',
+                          'command': ['python', 'launch.py', '--config', str(config)]},
+            'agent-two': {'display': 'Agent Two', 'identity': 'agent-two', 'kind': 'lane',
+                          'command': ['python', 'launch.py', '--config', str(config)]},
+        })
+        from server import operations
+        with patch.object(operations, 'read_json', wraps=operations.read_json) as read_json:
+            snapshot = operations_snapshot(self.root)
+        config_reads = [c for c in read_json.call_args_list if c.args and c.args[0] == config.resolve()]
+        self.assertEqual(len(config_reads), 1)
+        self.assertEqual(next(a for a in snapshot['agents'] if a['id'] == 'agent-one')['model'], 'Claude sonnet')
+        self.assertEqual(next(a for a in snapshot['agents'] if a['id'] == 'agent-two')['model'], 'Claude sonnet')
+
 
 class _FakeResponse:
     def __init__(self, payload):
