@@ -31,6 +31,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from protocolcity.audit_coverage import coverage, coverage_text, snapshot_process
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -157,7 +158,7 @@ def load_roster(
             for worker_id, row in workers.items()
             if isinstance(row, dict)
         }
-        return str(path.resolve()), clean, ""
+        return str(path.resolve()), clean, "malformed worker entries" if len(clean) != len(workers) else ""
     if errors:
         return "", {}, "; ".join(errors)
     return "", {}, "no WorkForce roster found"
@@ -488,6 +489,7 @@ def audit_retired_seats(
     retired_ids: Sequence[str],
     *,
     timeout: float = DEFAULT_TIMEOUT,
+    task_data=None,
 ) -> Dict[str, Any]:
     """Open tickets still labeled worker:<retired> (succession drift)."""
     hits: List[Dict[str, Any]] = []
@@ -496,9 +498,10 @@ def audit_retired_seats(
         for retired in retired_ids:
             label = "worker:%s" % retired
             for status in statuses:
-                for task in _list_tasks_for_label(
-                    product, label, status=status, timeout=timeout
-                ):
+                for task in ([t for t in task_data.get(product, {}).get("all", [])
+                              if t.get("status") == status and label in (t.get("labels") or [])]
+                             if task_data is not None else _list_tasks_for_label(
+                                 product, label, status=status, timeout=timeout)):
                     hits.append(
                         {
                             "id": task.get("id") or task.get("task_id"),
@@ -521,6 +524,7 @@ def audit_decay(
     products: Optional[Sequence[str]] = None,
     retired_ids: Optional[Sequence[str]] = None,
     timeout: float = DEFAULT_TIMEOUT,
+    task_data=None,
 ) -> Dict[str, Any]:
     """Process-decay patrol: law-vs-enforcement drift (pc-965).
 
@@ -546,7 +550,7 @@ def audit_decay(
         DEFAULT_RETIRED_WORKER_IDS
     )
     prods = list(products) if products else ["protocolcity"]
-    retired_report = audit_retired_seats(prods, retired, timeout=timeout)
+    retired_report = audit_retired_seats(prods, retired, timeout=timeout, task_data=task_data)
 
     findings: List[str] = []
     if not skills.get("skipped") and not skills.get("ok"):
@@ -676,6 +680,7 @@ def audit_history(
     limit: int = 80,
     *,
     timeout: float = DEFAULT_TIMEOUT,
+    task_data=None,
 ) -> Dict[str, Any]:
     """Scan open statuses + recent done for worker:you pattern mixups."""
     by_class: Counter = Counter()
@@ -689,7 +694,8 @@ def audit_history(
     total_you = 0
     for prod in products:
         for st in ("backlog", "in_progress", "in_review", "done"):
-            tasks = fetch_tasks_status(prod, st, limit=limit, timeout=timeout)
+            tasks = ([t for t in task_data.get(prod, {}).get("all", []) if t.get("status") == st][:limit]
+                     if task_data is not None else fetch_tasks_status(prod, st, limit=limit, timeout=timeout))
             for t in tasks:
                 labs = t.get("labels") or []
                 cls = classify_you_ticket(labs)
@@ -721,13 +727,13 @@ def audit_history(
 
 
 def audit_feeds(
-    products: List[str], *, timeout: float = DEFAULT_TIMEOUT
+    products: List[str], *, timeout: float = DEFAULT_TIMEOUT, task_data=None
 ) -> Dict[str, Any]:
     by_product: Dict[str, Any] = {}
     starve: List[Dict[str, Any]] = []
     seat_hist: Counter = Counter()
     for prod in products:
-        tasks = fetch_ready_product(prod, timeout=timeout)
+        tasks = task_data.get(prod, {}).get("ready", []) if task_data is not None else fetch_ready_product(prod, timeout=timeout)
         seats: Counter = Counter()
         for t in tasks:
             labs = t.get("labels") or []
@@ -759,8 +765,33 @@ def audit_feeds(
         "by_product": by_product,
         "you_starve": starve,
         "you_starve_n": len(starve),
+        "you_starve_basis": "Label heuristic only; zero does not establish staffing or execution coverage.",
         "seat_totals": dict(seat_hist),
     }
+
+
+def load_workspace_snapshot(root: Path, timeout: float) -> Dict[str, Any]:
+    """Invoke only the selected engine, with an isolated environment."""
+    root = root.resolve()
+    installed = root / 'local/worklane/current/venv/bin/python'
+    executable = installed if installed.is_file() else root / 'worklane/.venv/bin/python'
+    if not executable.is_file():
+        return {'error': 'Selected workspace WorkLane runtime unavailable'}
+    env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
+           'PYTHONDONTWRITEBYTECODE': '1', 'WL_WAKE_DISABLE': '1',
+           'WL_NTFY_DISABLE': '1', 'WL_WORKFORCE_LOCAL_ONLY': '1',
+           'WORKLANE_RUNTIME_DIR': str(root / 'worklane/worklane/local'),
+           'WL_WORKFORCE_ROSTER': str(root / '.protocolcity/workforce/local/roster.json')}
+    try:
+        result = subprocess.run([str(executable), str(Path(__file__).with_name('audit_snapshot.py')), str(root)],
+                                cwd=root, env=env, capture_output=True, text=True,
+                                timeout=max(15, timeout))
+        value = json.loads(result.stdout)
+        if result.returncode or not isinstance(value, dict) or 'stores' not in value:
+            return {'error': value.get('error', 'Unreadable WorkLane snapshot') if isinstance(value, dict) else 'Unreadable WorkLane snapshot'}
+        return value
+    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+        return {'error': str(exc)}
 
 
 def run_audit(
@@ -781,14 +812,20 @@ def run_audit(
     ``decay`` probes still run when the board is offline (disk checks).
     """
     scene_urls = list(urls) if urls else list(DEFAULT_SCENE)
-    scene = load_scene(scene_urls, timeout=timeout)
+    snapshot = load_workspace_snapshot(Path(city_root), timeout) if city_root is not None else None
+    scene = snapshot if snapshot is not None and not snapshot.get('error') else None
+    if snapshot is None:
+        scene = load_scene(scene_urls, timeout=timeout)
+    roster_path, workers, roster_error = load_roster(roster, city_root=city_root)
+    feed_error = (snapshot or {}).get('error', '') or '; '.join(
+        f"{key}: {value}" for key, value in (snapshot or {}).get('errors', {}).items())
     if scene is None:
         out_offline: Dict[str, Any] = {
             "ok": False,
             "reachable": False,
-            "total_open": 0,
-            "total_ready": 0,
-            "total_in_motion": 0,
+            "total_open": None,
+            "total_ready": None,
+            "total_in_motion": None,
             "projects": [],
             "note": "suite/WL offline — start with: blueprint serve",
             "law": "docs/specs/ALWAYS_WORK_PROCESS.md",
@@ -800,10 +837,16 @@ def run_audit(
                 "For You is gate_type=human only — not all open work",
             ],
         }
+        out_offline['coverage'] = coverage({}, workers, feed_error=feed_error or 'WorkLane unavailable',
+                                           roster_error=roster_error, roster_path=roster_path)
+        out_offline['note'] = feed_error or 'WorkLane source unavailable'
         if decay:
             out_offline["decay"] = audit_decay(
-                city_root=city_root, products=[], timeout=timeout
+                city_root=city_root, products=[], timeout=timeout,
+                task_data={} if city_root is not None else None
             )
+            if city_root is not None:
+                out_offline["decay"].update(ok=False, error=feed_error or "Readiness unavailable")
         return out_offline
 
     stores = scene.get("stores") or []
@@ -860,23 +903,39 @@ def run_audit(
     if not prods_scan:
         prods_scan = products
 
+    task_data = snapshot.get('tasks', {}) if snapshot is not None else None
+    if task_data is not None:
+        out['coverage'] = coverage({p: data['ready'] for p, data in task_data.items()}, workers,
+                                   feed_error=feed_error, roster_error=roster_error, roster_path=roster_path,
+                                   desk_urls=snapshot.get('desk_urls', {}))
+        if feed_error:
+            out.update(ok=False, total_open=None, total_ready=None, total_in_motion=None)
     if feeds:
         prods = [r["project"] for r in rows if int(r.get("ready") or 0) > 0]
         if not prods:
             prods = prods_scan
-        out["feeds"] = audit_feeds(prods, timeout=timeout)
+        out["feeds"] = audit_feeds(prods, timeout=timeout, task_data=task_data)
+        if task_data is None:
+            out['coverage'] = coverage({}, workers, feed_error='Workspace-scoped readiness unavailable; select --workspace',
+                                       roster_error=roster_error, roster_path=roster_path)
 
     if history:
         out["history"] = audit_history(
-            prods_scan, limit=history_limit, timeout=timeout
+            prods_scan, limit=history_limit, timeout=timeout, task_data=task_data
         )
 
-    if process:
+    if process and snapshot is not None:
+        out['process'] = snapshot_process(task_data, workers, roster_path, feed_error or roster_error)
+    elif process:
         out["process"] = audit_process(
             roster, city_root=city_root, timeout=timeout
         )
 
-    if decay:
+    if decay and snapshot is not None:
+        out['decay'] = audit_decay(city_root=city_root, products=prods_scan, timeout=timeout, task_data=task_data)
+        if feed_error:
+            out['decay'].update(ok=False, error=feed_error)
+    elif decay:
         out["decay"] = audit_decay(
             city_root=city_root,
             products=prods_scan or products or ["protocolcity"],
@@ -888,14 +947,16 @@ def run_audit(
 
 def print_audit_text(out: Dict[str, Any]) -> None:
     """Human-readable audit print (CLI and doctor section)."""
+    if out.get('coverage'):
+        print(coverage_text(out['coverage']))
     if not out.get("reachable", True) and not out.get("ok"):
         print("Workspace open-work audit")
-        print("  (suite/WL offline — start with: blueprint serve)")
+        print("  " + (out.get("note") or "WorkLane unavailable"))
         return
 
-    total_open = int(out.get("total_open") or 0)
-    total_ready = int(out.get("total_ready") or 0)
-    total_ip = int(out.get("total_in_motion") or 0)
+    total_open = out.get("total_open") if out.get("total_open") is not None else "unknown"
+    total_ready = out.get("total_ready") if out.get("total_ready") is not None else "unknown"
+    total_ip = out.get("total_in_motion") if out.get("total_in_motion") is not None else "unknown"
     rows = out.get("projects") or []
     print("Workspace open-work audit")
     print(f"  open={total_open}  ready={total_ready}  in_motion={total_ip}")
@@ -919,11 +980,11 @@ def print_audit_text(out: Dict[str, Any]) -> None:
             print(f"  {prod}: n={info['ready_n']}  {info.get('by_seat')}")
         sn = int(feeds.get("you_starve_n") or 0)
         print()
-        print(f"You-starve ready (implement park on You seat): {sn}")
+        print(f"You-starve label heuristic: {sn}")
         for t in feeds.get("you_starve") or []:
             print(f"  {t.get('id')}  {(t.get('title') or '')[:56]}")
         if sn == 0:
-            print("  (none — good)")
+            print("  No label matches; this does not establish staffing or execution coverage.")
 
     if out.get("history"):
         hist = out["history"]
@@ -1061,7 +1122,7 @@ def main() -> int:
         help="Scene URL (repeatable). Defaults to suite then Desk.",
     )
     args = ap.parse_args()
-    urls = args.url or list(DEFAULT_SCENE)
+    urls = args.url or None
     out = run_audit(
         urls=urls,
         feeds=bool(args.feeds),
