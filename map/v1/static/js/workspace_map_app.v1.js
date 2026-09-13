@@ -33,6 +33,28 @@ const CONFIG = {
   maxZoom: 4,
 };
 
+function indexNodeState(projects) {
+  const map = {};
+  for (const project of projects || []) {
+    if (project && project.folder) {
+      map[project.folder] = {
+        open: project.open || 0,
+        attention: project.attention || 0,
+        working: project.working || 0,
+        state: project.state || 'unavailable',
+      };
+    }
+  }
+  return map;
+}
+
+let nodeState = {};
+let paintNodeState = null;
+document.addEventListener('bp:map-operations', event => {
+  nodeState = indexNodeState(event.detail && event.detail.projects);
+  if (paintNodeState) paintNodeState();
+});
+
 export async function boot(opts = {}) {
   const cfg = { ...CONFIG, ...opts };
   const stage = document.getElementById(cfg.stageId);
@@ -100,7 +122,7 @@ export async function boot(opts = {}) {
     const selectedRelPath = snap.trail.length > 0 ? snap.trail[0].relPath : null;
     paintHub(world, snap.dig || tree.binder);
     world.querySelector('#lots').style.display = snap.dig ? 'none' : '';
-    const layout = paintLots(world, tree.topLots(snap.filters).slice(page * pageSize, (page + 1) * pageSize), { radius: cfg.radius, selectedRelPath });
+    const layout = paintLots(world, tree.topLots(snap.filters).slice(page * pageSize, (page + 1) * pageSize), { radius: cfg.radius, selectedRelPath, nodeState });
     currentOuterRadius = (layout && Number.isFinite(layout.outerRadius))
       ? Math.max(cfg.radius, layout.outerRadius)
       : cfg.radius;
@@ -154,6 +176,15 @@ export async function boot(opts = {}) {
           : '<svg viewBox="0 0 20 20"><path d="M5 2h7l4 4v12H5zM12 2v5h4M8 10h5M8 13h5"/></svg>';
         const label = document.createElement('span'); label.textContent = node.name;
         button.append(icon, label);
+        const state = node.isDir && !snap.dig ? nodeState[node.relPath] : null;
+        if (state) {
+          const counts = document.createElement('span');
+          counts.className = 'map-browser-counts';
+          counts.textContent = state.state && state.state !== 'available'
+            ? 'read-only'
+            : `${state.open} · ${state.attention} · ${state.working}`;
+          button.append(counts);
+        }
         button.addEventListener('click', async () => {
           try {
             if (node.isDir) await digInto(node, {mode:snap.dig ? 'nest' : 'root'});
@@ -170,6 +201,7 @@ export async function boot(opts = {}) {
     repaintScheduled = true;
     Promise.resolve().then(() => { repaintScheduled = false; repaint(); });
   }
+  paintNodeState = scheduleRepaint;
 
   async function digInto(node, { mode = 'root' } = {}) {
     if (!node || !node.relPath) return;

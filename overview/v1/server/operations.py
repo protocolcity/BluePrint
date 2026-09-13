@@ -289,12 +289,15 @@ def _provider_model_flag(provider, command):
 def resolve_provider_model(row, root, config_cache=None):
     """Provider/model display text, in the order AGENTS_INTENT.md fixes:
 
-    the roster's own ``model``; else the seat's runner config (the actual
-    provider command it names, read via the roster command's ``--config``
-    path, or the sibling ``runner.json`` next to a thin launcher script when
-    no ``--config`` is named); else the roster command's own executable, with
-    the model left blank at that tier. Never returns the literal "Not
-    specified".
+    the roster's own ``model``, prefixed with the provider name resolved
+    from the seat's own command when the pin is a bare token like
+    ``claude-sonnet-5`` (pc-1476: a bare first token such as ``claude``
+    still names its provider, so the pin alone is never the whole story);
+    else the seat's runner config (the actual provider command it names,
+    read via the roster command's ``--config`` path, or the sibling
+    ``runner.json`` next to a thin launcher script when no ``--config`` is
+    named); else the roster command's own executable, with the model left
+    blank at that tier. Never returns the literal "Not specified".
 
     ``config_cache`` is an optional dict shared across one snapshot's rows,
     keyed by resolved config path, so a runner file shared by several seats
@@ -310,6 +313,13 @@ def resolve_provider_model(row, root, config_cache=None):
     roster_model = row.get('model')
     model = roster_model.strip() if isinstance(roster_model, str) and roster_model.strip() else None
     if model and not _command_is_template(command):
+        provider = _seat_executable_provider(row, root, config_cache)
+        if provider:
+            first_token, _, rest = model.partition(' ')
+            if first_token.lower() == provider.lower():
+                rest = rest.strip()
+                return f'{provider} {rest}' if rest else provider
+            return f'{provider} {model}'
         return model
     config_path = _config_argument(command) or _launcher_config_fallback(command)
     resolved_path = _resolved_config_path(config_path, root)
@@ -371,6 +381,47 @@ class _NoRedirect(HTTPRedirectHandler):
         raise HTTPError(newurl, code, msg, headers, fp)
 
 
+def verified_local_origin(receipt):
+    """Return a verified http://127.0.0.1|localhost origin, or None.
+
+    Prefers ``api_origin`` when present (WorkForce receipts). WorkLane
+    receipts typically carry ``port`` instead; only a 1–65535 integer is
+    accepted, always bound to 127.0.0.1.
+    """
+    if not isinstance(receipt, dict):
+        return None
+    origin = receipt.get('api_origin', '')
+    if isinstance(origin, str) and origin.strip():
+        parsed = urlparse(origin)
+        if (parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1')
+                or parsed.username or parsed.password or parsed.path not in ('', '/')
+                or parsed.query or parsed.fragment):
+            return None
+        return origin.rstrip('/')
+    port = receipt.get('port')
+    if isinstance(port, str) and port.isdigit():
+        port = int(port)
+    if isinstance(port, int) and 1 <= port <= 65535:
+        return 'http://127.0.0.1:%d' % port
+    return None
+
+
+def probe_local_http(origin, path):
+    """GET ``origin+path`` without following redirects. Any HTTP reply is reachable."""
+    request = Request(origin.rstrip('/') + path)
+    opener = build_opener(_NoRedirect())
+    try:
+        with opener.open(request, timeout=3) as response:
+            status = getattr(response, 'status', None) or getattr(response, 'code', 200)
+            return {'ok': True, 'status': status}
+    except HTTPError as exc:
+        if 300 <= exc.code < 400:
+            return {'ok': False, 'redirect': True}
+        return {'ok': True, 'status': exc.code}
+    except (URLError, TimeoutError, ValueError, OSError):
+        return {'ok': False}
+
+
 def supervisor_snapshot(root):
     """Read GET /api/supervisor on the verified local WorkForce origin.
 
@@ -378,11 +429,8 @@ def supervisor_snapshot(root):
     plain read with a 3 s timeout — the one upstream call this surface adds.
     """
     receipt = read_json(root / 'local/workforce/deployment.json', root) or {}
-    origin = receipt.get('api_origin', '')
-    parsed = urlparse(origin)
-    if (parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1')
-            or parsed.username or parsed.password or parsed.path not in ('', '/')
-            or parsed.query or parsed.fragment):
+    origin = verified_local_origin(receipt)
+    if not origin:
         return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.', 'passes': []}
     request = Request(origin.rstrip('/') + '/api/supervisor?limit=3')
     opener = build_opener(_NoRedirect())
@@ -411,6 +459,76 @@ def read_json(path, root):
         return value if isinstance(value, dict) else None
     except (OSError, ValueError):
         return None
+
+
+def _empty_engine(source, detail):
+    return {'state': 'unavailable', 'version': None, 'source': source,
+            'observed_at': None, 'outcome': None, 'detail': detail}
+
+
+def _engine_receipt(root, relative):
+    """Version + activation time from a workspace installation receipt."""
+    source = Path(relative).as_posix()
+    receipt = read_json(root / relative, root)
+    if not receipt:
+        return _empty_engine(source, 'No installation receipt in this workspace.')
+    version = receipt.get('version')
+    activated = receipt.get('activated_at') if isinstance(receipt.get('activated_at'), str) else None
+    if not isinstance(version, str) or not version.strip():
+        return {'state': 'unavailable', 'version': None, 'source': source,
+                'observed_at': activated, 'outcome': None,
+                'detail': 'Installation receipt is missing a version.'}
+    return {'state': 'available', 'version': version.strip(), 'source': source,
+            'observed_at': activated, 'outcome': None,
+            'detail': 'Version ' + version.strip() + ((' · activated ' + activated) if activated else '')}
+
+
+def _worklane_reachability(root, now):
+    source_file = 'local/worklane/deployment.json'
+    receipt = read_json(root / source_file, root)
+    if not receipt:
+        return _empty_engine(source_file, 'No installation receipt in this workspace.')
+    origin = verified_local_origin(receipt)
+    if not origin:
+        return _empty_engine(source_file, 'A verified local WorkLane connection is required.')
+    source = origin + '/health'
+    probe = probe_local_http(origin, '/health')
+    observed = now.isoformat()
+    if probe.get('redirect'):
+        return {'state': 'unavailable', 'version': None, 'source': source, 'observed_at': observed,
+                'outcome': None, 'detail': 'WorkLane redirected the health read; refusing to leave the verified origin.'}
+    if not probe.get('ok'):
+        return {'state': 'unavailable', 'version': None, 'source': source, 'observed_at': observed,
+                'outcome': None, 'detail': 'WorkLane API is not reachable.'}
+    status = probe.get('status')
+    return {'state': 'available', 'version': None, 'source': source, 'observed_at': observed,
+            'outcome': None, 'detail': 'Reachable' + ((' · HTTP %s' % status) if status else '')}
+
+
+def _supervisor_pass_fields(payload):
+    source = 'WorkForce /api/supervisor'
+    state = payload.get('state') or 'unavailable'
+    if state != 'available':
+        return _empty_engine(source, payload.get('detail') or 'Supervisor pass record unavailable.') | {'state': state}
+    passes = [item for item in (payload.get('passes') or []) if isinstance(item, dict)]
+    if not passes:
+        return {'state': 'available', 'version': None, 'source': source, 'observed_at': None,
+                'outcome': None, 'detail': 'No supervisor passes recorded yet.'}
+    latest = max(passes, key=lambda item: str(item.get('generated_at') or ''))
+    generated = latest.get('generated_at') if isinstance(latest.get('generated_at'), str) else None
+    outcome = latest.get('pass_outcome') if isinstance(latest.get('pass_outcome'), str) else None
+    return {'state': 'available', 'version': None, 'source': source, 'observed_at': generated,
+            'outcome': outcome,
+            'detail': (outcome or 'outcome not reported') + ' · ' + (generated or 'time not reported')}
+
+
+def _unavailable_engines(detail):
+    return {
+        'worklane': _empty_engine('local/worklane/deployment.json', detail),
+        'workforce': _empty_engine('local/workforce/deployment.json', detail),
+        'worklane_api': _empty_engine('local/worklane/deployment.json', detail),
+        'supervisor': _empty_engine('WorkForce /api/supervisor', detail),
+    }
 
 
 def project_registry(root):
@@ -447,24 +565,109 @@ _PROVIDER_INSTALL_HINT = {
 _CODEX_APP_PATH = '/Applications/ChatGPT.app/Contents/Resources/codex'
 
 
-def detect_providers(env=None, app_path_exists=None):
+def _well_known_candidates(command, home):
+    candidates = [home / '.local' / 'bin' / command,
+                  Path('/opt/homebrew/bin') / command,
+                  Path('/usr/local/bin') / command]
+    if command == 'grok':
+        candidates.insert(1, home / '.grok' / 'bin' / 'grok')
+    return candidates
+
+
+# Roots an executable path must resolve under to count as proof of an
+# installed provider (review finding pc-1476): the running user's home,
+# the two Homebrew/local prefixes the well-known bins live under, or the
+# Codex app bundle. A path outside all four — even one a roster seat names
+# directly, or one a well-known bin symlinks to — proves nothing; it is
+# not a location this host trusts as an install site.
+def _trusted_executable_roots(home_dir):
+    try:
+        home_dir = home_dir.resolve()
+    except OSError:
+        pass
+    return (home_dir, Path('/opt/homebrew').resolve(), Path('/usr/local').resolve())
+
+
+def _is_trusted_path(resolved, home_dir):
+    codex_app = Path(_CODEX_APP_PATH).resolve()
+    if resolved == codex_app or resolved.is_relative_to(codex_app):
+        return True
+    return any(resolved.is_relative_to(root) for root in _trusted_executable_roots(home_dir))
+
+
+def _resolved_trusted_file(path, home_dir):
+    """``path`` accepted only when it is a file whose target — after
+    resolving any symlink — still lies under a trusted install root; a
+    symlink pointing outside those locations proves nothing (review
+    finding pc-1476)."""
+    if not path.is_file():
+        return False
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    return _is_trusted_path(resolved, home_dir)
+
+
+def _seat_proof(provider, workers, root, config_cache, home_dir):
+    """The absolute executable path a roster seat's resolved command names
+    for ``provider``, when that path resolves to a file under a trusted
+    install root — proof the provider is installed even though its own
+    binary sits outside the well-known checked locations (pc-1476). A
+    seat naming a path outside the trusted roots proves nothing."""
+    if not isinstance(workers, dict):
+        return None
+    for row in workers.values():
+        if not isinstance(row, dict):
+            continue
+        seat_provider, token = _seat_resolved_executable(row, root, config_cache)
+        if seat_provider != provider or not token:
+            continue
+        path = Path(token)
+        if path.is_absolute() and _resolved_trusted_file(path, home_dir):
+            return str(path)
+    return None
+
+
+def detect_providers(env=None, app_path_exists=None, home=None, workers=None, root=None,
+                      config_cache=None, sources=None):
     """``{display name: executable path or None}`` for the four providers.
 
-    Checks ``PATH`` (``env`` overrides ``os.environ`` for tests — a fake
-    PATH), plus the Codex app path this host ships when ``codex`` is not on
-    PATH. A provider absent from both reads ``None`` — the caller shows
-    NOT CONFIGURED with the install hint (AGENT_ADOPTION.md D15).
+    Proof is checked in order: the process ``PATH`` (``env`` overrides
+    ``os.environ`` for tests — a fake PATH); a well-known install location
+    (``~/.local/bin/<name>``, ``~/.grok/bin/grok``, ``/opt/homebrew/bin/<name>``,
+    ``/usr/local/bin/<name>``, or the Codex app path this host ships — ``home``
+    overrides ``Path.home()`` for tests); or any roster seat's resolved
+    command naming an absolute executable that exists on disk (``workers``
+    plus ``root``/``config_cache`` to resolve it). A provider absent from all
+    three reads ``None`` — the caller shows NOT CONFIGURED with the install
+    hint (AGENT_ADOPTION.md D15). When ``sources`` is a dict it is filled in
+    place with ``{display name: 'PATH'|'well-known location'|'seat command'}``
+    for each provider found, so the caller can name which proof won.
     """
     search_env = env if env is not None else os.environ
+    home_dir = home if home is not None else Path.home()
     found = {}
     for provider, command in _PROVIDER_COMMAND.items():
         path = shutil.which(command, path=search_env.get('PATH'))
+        source = 'PATH' if path else None
+        if not path:
+            for candidate in _well_known_candidates(command, home_dir):
+                if _resolved_trusted_file(candidate, home_dir):
+                    path, source = str(candidate), 'well-known location'
+                    break
         if not path and provider == 'Codex':
             app_present = (Path(_CODEX_APP_PATH).is_file() if app_path_exists is None
                            else app_path_exists)
             if app_present:
-                path = _CODEX_APP_PATH
+                path, source = _CODEX_APP_PATH, 'well-known location'
+        if not path:
+            seat_path = _seat_proof(provider, workers, root, config_cache, home_dir)
+            if seat_path:
+                path, source = seat_path, 'seat command'
         found[provider] = path
+        if sources is not None:
+            sources[provider] = source
     return found
 
 
@@ -534,20 +737,22 @@ def _provider_from_pin(pin):
     return None
 
 
-def _seat_executable_provider(row, root, config_cache):
-    """The provider display name from the seat's actually resolved
-    executable — its own roster command, or the runner config it names via
-    ``--config``/the launcher fallback — independent of what the roster's
-    ``model`` field says (review finding pc-1474: a bare pin in ``model``
-    should not block resolving the real command)."""
+def _seat_resolved_executable(row, root, config_cache):
+    """``(provider display name, first command token)`` from the seat's
+    actually resolved executable — its own roster command, or the runner
+    config it names via ``--config``/the launcher fallback — independent of
+    what the roster's ``model`` field says (review finding pc-1474: a bare
+    pin in ``model`` should not block resolving the real command). Both are
+    ``None`` when no known provider resolves."""
     command = row.get('command')
     provider = _PROVIDER_DISPLAY.get(_executable_name(command))
     if provider:
-        return provider
+        token = command[0] if isinstance(command, list) and command and isinstance(command[0], str) else None
+        return provider, token
     config_path = _config_argument(command) or _launcher_config_fallback(command)
     resolved_path = _resolved_config_path(config_path, root)
     if resolved_path is None:
-        return None
+        return None, None
     if config_cache is not None and resolved_path in config_cache:
         config = config_cache[resolved_path]
     else:
@@ -555,7 +760,49 @@ def _seat_executable_provider(row, root, config_cache):
         if config_cache is not None:
             config_cache[resolved_path] = config
     inner_command = (config or {}).get('command')
-    return _PROVIDER_DISPLAY.get(_executable_name(inner_command))
+    provider = _PROVIDER_DISPLAY.get(_executable_name(inner_command))
+    token = inner_command[0] if provider and isinstance(inner_command, list) and inner_command \
+        and isinstance(inner_command[0], str) else None
+    return provider, token
+
+
+def _seat_executable_provider(row, root, config_cache):
+    """The provider display name from the seat's actually resolved
+    executable (see ``_seat_resolved_executable``)."""
+    provider, _token = _seat_resolved_executable(row, root, config_cache)
+    return provider
+
+
+def _seat_executable_status(row, root, config_cache, home_dir=None):
+    """The trust status of the seat's resolved absolute executable —
+    ``'missing'`` when the path does not exist, ``'untrusted'`` when it
+    exists but resolves outside the trusted install roots (neither proves
+    nor stages the provider — review finding pc-1476), ``'ok'`` when it
+    exists and is trusted, or ``None`` when the seat names no absolute
+    executable at all."""
+    _provider, token = _seat_resolved_executable(row, root, config_cache)
+    if not token:
+        return None
+    path = Path(token)
+    if not path.is_absolute():
+        return None
+    if not path.is_file():
+        return 'missing'
+    home_dir = home_dir if home_dir is not None else Path.home()
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return 'missing'
+    return 'ok' if _is_trusted_path(resolved, home_dir) else 'untrusted'
+
+
+def _seat_executable_missing(row, root, config_cache):
+    """``True`` when the seat's resolved command names an absolute
+    executable that neither exists on disk nor resolves to a trusted
+    install root (pc-1476: a seat that once proved a provider present
+    should not silently keep counting once its binary is gone or is
+    proven to sit outside a trusted location)."""
+    return _seat_executable_status(row, root, config_cache) in ('missing', 'untrusted')
 
 
 def _row_is_seat_kind(kind):
@@ -606,16 +853,26 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             provider = _provider_from_pin(model_text)
         if not provider:
             continue
+        if _seat_executable_missing(row, root, config_cache):
+            continue
         result[provider] = 'held' if _row_is_held(row, row.get('kind')) else 'present'
     return result
 
 
-def provider_coverage(root, registry, workers, config_cache, host_providers=None):
+def provider_coverage(root, registry, workers, config_cache, host_providers=None, host_provider_sources=None):
     """One coverage row per registered project (AGENT_ADOPTION.md D15):
     present/held providers, missing ones (installed but no seat), and
-    providers this host does not have installed at all."""
+    providers this host does not have installed at all. Each row's
+    ``sources`` names, for every provider, which proof (PATH, well-known
+    location, or a seat's own command) established it, or 'not detected'
+    when the host has no proof for it at all — the payload always names a
+    source for all four providers, not just present/held ones (pc-1476).
+    """
     if host_providers is None:
-        host_providers = detect_providers()
+        host_provider_sources = {}
+        host_providers = detect_providers(workers=workers, root=root, config_cache=config_cache,
+                                           sources=host_provider_sources)
+    host_provider_sources = host_provider_sources or {}
     rows = []
     for slug, project in sorted(registry.items(), key=lambda kv: kv[1].get('name') or kv[0]):
         seats = _project_seat_providers(workers, slug, root, config_cache)
@@ -643,6 +900,7 @@ def provider_coverage(root, registry, workers, config_cache, host_providers=None
         rows.append({
             'project': slug, 'name': name, 'present': present, 'held': held,
             'missing': missing, 'not_configured': not_configured, 'text': text,
+            'sources': {p: host_provider_sources.get(p) or 'not detected' for p in _PROVIDER_ORDER},
             'install_hints': {p: _PROVIDER_INSTALL_HINT[p] for p in not_configured},
             'hire_commands': {p: hire_command(p, project_slug=slug, project_path=project_path,
                                                prefix=project.get('prefix') or slug, remote=remote)
@@ -671,6 +929,7 @@ def operations_snapshot(binder):
     result = {'observed_at': now.isoformat(), 'build': build, 'workspace': None,
               'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
               'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
+              'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
         result['sources'].append({'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.'})
@@ -688,7 +947,7 @@ def operations_snapshot(binder):
     paths = [p for p in paths if p.stem in registry]
     for path in paths:
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
-        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'state': 'available'}
+        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'working': 0, 'state': 'available'}
         try:
             if not path.resolve().is_relative_to(root):
                 raise OSError('external store')
@@ -739,6 +998,8 @@ def operations_snapshot(binder):
                         'parent': parent, 'blockers': declared_blockers(item.get('description')),
                         'ready_for': None})
                     summary['attention'] += int(attention)
+                    # Same fact Overview's Live metric uses: in_progress with a claim.
+                    summary['working'] += int(status == 'in_progress' and marker is not None)
         except (OSError, sqlite3.Error):
             summary['state'] = 'unavailable'
         result['projects'].append(summary)
@@ -751,7 +1012,7 @@ def operations_snapshot(binder):
     found = {p.stem for p in paths}
     for slug, project in registry.items():
         if slug not in found:
-            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'state': 'unavailable'})
+            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'working': 0, 'state': 'unavailable'})
     failed = [p['name'] for p in result['projects'] if p['state'] != 'available']
     result['sources'].append({'name': 'WorkLane', 'state': 'partial' if failed else ('available' if paths else 'unavailable'),
                              'detail': f"{sum(p['state'] == 'available' for p in result['projects'])} project stores readable" + ('. Unavailable: ' + ', '.join(failed) if failed else '')})
@@ -764,6 +1025,13 @@ def operations_snapshot(binder):
                              'detail': 'Local agent registry' if roster else 'Registry could not be read.'})
     result['sources'].append({'name': 'WorkForce heartbeat', 'state': 'fresh' if fresh else ('stale' if age is not None else 'unknown'),
                              'detail': 'Last reported activity; not a process health check.', 'last_at': tick})
+    passes_payload = supervisor_snapshot(root)
+    result['engines'] = {
+        'worklane': _engine_receipt(root, 'local/worklane/deployment.json'),
+        'workforce': _engine_receipt(root, 'local/workforce/deployment.json'),
+        'worklane_api': _worklane_reachability(root, now),
+        'supervisor': _supervisor_pass_fields(passes_payload),
+    }
     workers = (roster or {}).get('workers', {})
     runtime = (daemon or {}).get('workers', {})
     flight = (daemon or {}).get('in_flight', [])
@@ -791,6 +1059,8 @@ def operations_snapshot(binder):
                 state = 'idle'
             command = row.get('command')
             configured = _seat_command_configured(command)
+            executable_status = _seat_executable_status(row, root, runner_config_cache) if configured else None
+            if executable_status in ('missing', 'untrusted'): configured = False
             kind = row.get('kind') or 'agent'
             if not configured: state = 'not_configured'
             # Same held predicate as coverage (review finding pc-1477): a
@@ -820,7 +1090,12 @@ def operations_snapshot(binder):
                 'report': {k:report.get(k) for k in ('title','observed_at','state','summary','detail','mode')} if report else None,
                 'state': state, 'badge': BADGE_TEXT[state],
                 'badge_source': 'daemon' if (state == 'working' and not shift) else BADGE_SOURCE[state],
-                'group': group, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
+                'group': group, 'configured':configured,
+                'configuration': ('Command configured' if configured else
+                                  'provider missing on disk' if executable_status == 'missing' else
+                                  'provider outside trusted locations' if executable_status == 'untrusted' else
+                                  'Placeholder command — no operational work runs'),
+                'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
                 'model': resolve_provider_model(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'project': project_slug, 'project_name': project_name,
@@ -828,7 +1103,7 @@ def operations_snapshot(binder):
                 'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}
             if group == 'supervisor':
-                result['supervisor'] = {**agent_row, 'passes': supervisor_snapshot(root)}
+                result['supervisor'] = {**agent_row, 'passes': passes_payload}
             else:
                 result['agents'].append(agent_row)
     result['agents'].sort(key=lambda a: (STATE_ORDER.get(a['state'], 9), a['name']))

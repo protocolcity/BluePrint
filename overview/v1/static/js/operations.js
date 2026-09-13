@@ -3,7 +3,7 @@
 'use strict';
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
-const {reconcileList, syncNote} = await import('/js/dom-reconcile.mjs');
+const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -331,16 +331,48 @@ function updateTimelineFilters() {
   history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
   refreshTimeline(false);
 }
+function onDemandSeat(agent) {
+  return agent.group==='seat' && (agent.schedule==='manual' || agent.schedule==='Not scheduled');
+}
+function mergeDatedWork(items) {
+  const merged=new Map(), extras=[];
+  for(const event of items) {
+    if(event.kind!=='deadline' && event.kind!=='timer') { extras.push(event); continue; }
+    const key=event.product+':'+event.task_id;
+    const row=merged.get(key) || {product:event.product,task_id:event.task_id,summary:event.summary,attention:false,dtstart:event.dtstart,due:null,hold:null,due_all_day:false};
+    if(event.kind==='deadline') { row.due=event.dtstart; row.due_all_day=!!event.all_day; }
+    if(event.kind==='timer') row.hold=event.dtstart;
+    if(event.attention) row.attention=true;
+    if(event.summary) row.summary=event.summary;
+    if(event.dtstart < row.dtstart) row.dtstart=event.dtstart;
+    merged.set(key,row);
+  }
+  return [...merged.values(), ...extras].sort((a,b)=>String(a.dtstart).localeCompare(String(b.dtstart)));
+}
+function datedStamp(value, allDay) {
+  return allDay ? value+' · All day' : date(value);
+}
 function calendar() {
-  const datedItems=[...(snapshot.work_dates || [])].sort((a,b)=>a.dtstart.localeCompare(b.dtstart));
-  reconcileList($('dated-work'), datedItems, event=>`${event.product}:${event.task_id}`, event=>{
+  const datedItems=mergeDatedWork(snapshot.work_dates || []);
+  reconcileList($('dated-work'), datedItems, event=>event.due||event.hold ? event.product+':'+event.task_id+':dated' : event.product+':'+event.task_id+':'+event.kind+':'+event.dtstart, event=>{
     const row=link('', '/work-order?'+new URLSearchParams({project:event.product,id:event.task_id}),'bp-order');
-    const details=el('div');details.append(el('strong',event.summary),el('span',`${event.all_day?event.dtstart+' · All day':date(event.dtstart)} · ${event.product} · ${event.kind==='timer'?'Hold until':'Due'}`,'bp-order-meta'));
+    const parts=[];
+    if(event.due) parts.push(datedStamp(event.due,event.due_all_day)+' · Due');
+    if(event.hold) parts.push(date(event.hold)+' · Hold until');
+    if(!parts.length) parts.push((event.all_day?event.dtstart+' · All day':date(event.dtstart))+' · '+(event.kind==='timer'?'Hold until':'Due'));
+    const details=el('div');details.append(el('strong',event.summary),el('span',parts.join(' · ')+' · '+event.product,'bp-order-meta'));
     row.append(details,badge(event.attention?'attention':'scheduled',event.attention?'Needs you':'Dated work'));
     return row;
   }, {emptyText:'No dated work orders in the readable stores.'});
-  const scheduleItems=[...snapshot.agents].sort((a,b)=>String(a.next_fire || 'z').localeCompare(String(b.next_fire || 'z')));
+  const demand=snapshot.agents.filter(onDemandSeat);
+  const scheduled=[...snapshot.agents.filter(agent=>!onDemandSeat(agent))].sort((a,b)=>String(a.next_fire || 'z').localeCompare(String(b.next_fire || 'z')));
+  const scheduleItems=demand.length ? scheduled.concat([{id:'_on-demand-seats', on_demand:demand.length}]) : scheduled;
   reconcileList($('schedule-list'), scheduleItems, agent=>agent.id, agent=>{
+    if(agent.on_demand) {
+      const row=el('div',undefined,'bp-source');
+      row.append(el('strong','On demand seats: '+agent.on_demand));
+      return row;
+    }
     const row=el('div',undefined,'bp-source');row.append(el('strong',agent.name),badge(agent.state==='unknown'?'unknown':(agent.state==='off'?'off':(agent.next_fire?'scheduled':'not_scheduled'))));
     row.append(el('p',`${date(agent.next_fire)} · ${scheduleLabel(agent.schedule)}`,'bp-muted'));
     return row;
@@ -350,6 +382,26 @@ function calendar() {
     const row=el('details',undefined,'bp-event');const summary=el('summary');summary.append(el('strong',event.title || 'Untitled event'),el('span',`${date(event.at)} · ${event.source || 'Local calendar'} · ${event.state || 'State not specified'}`,'bp-order-meta'));row.append(summary,el('p',event.notes || 'No additional notes.','bp-note bp-muted'));
     return row;
   }, {emptyText:'No local calendar events. Agent schedules above are independent of the calendar file.'});
+}
+function engines() {
+  const rows=[['WorkLane engine',snapshot.engines && snapshot.engines.worklane],['WorkForce engine',snapshot.engines && snapshot.engines.workforce],['WorkLane API',snapshot.engines && snapshot.engines.worklane_api],['Supervisor last pass',snapshot.engines && snapshot.engines.supervisor]].filter(([,engine])=>engine);
+  reconcileList($('engine-list'), rows, ([name])=>name, ([name, engine])=>{
+    const row=el('div',undefined,'bp-source');
+    row.append(el('span',name),badge(engine.state));
+    const bits=[];
+    if(engine.detail) bits.push(engine.detail);
+    if(engine.source) bits.push('Source: '+engine.source);
+    if(engine.observed_at) bits.push('Observed '+date(engine.observed_at));
+    row.append(el('p',bits.join(' · ') || 'Unavailable.','bp-muted'));
+    return row;
+  }, {emptyText:'Engine receipts are not available in this workspace.'});
+}
+function excludedStores() {
+  const excluded=(snapshot.excluded_stores || []).map(name=>({name}));
+  reconcileList($('excluded-store-list'), excluded, store=>store.name, store=>{
+    const row=el('div',undefined,'bp-source');row.append(el('span',store.name));
+    return row;
+  }, {emptyText:'No unregistered databases in this workspace.'});
 }
 function paint() {
   const workspace=snapshot.workspace;
@@ -367,7 +419,7 @@ function paint() {
   if(page==='calendar') calendar();
   if(page==='timeline') timeline();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
-  if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; syncNote($('connection-list'),'excluded-stores',excluded.length ? 'Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.' : null,'bp-note bp-muted');$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
+  if(page==='connections') { sources($('connection-list'),true);engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 function liveIndicator() {
   if(!lastSuccess) return lastError ? 'Unable to read workspace. Retry with Refresh.' : 'Connecting…';
