@@ -80,7 +80,7 @@
     document.getElementById('title').textContent = order.title;
     document.getElementById('state').textContent = `Priority ${order.priority}`;
     paintFacts(order);
-    paintOutline(document.getElementById('description-outline'), order.description_outline);
+    paintOutline(document.getElementById('description-outline'), order.description_outline); bindHashReveal(document);
     setTrustedHtml(document.getElementById('description'), order.description_html || order.description || 'No description provided.');
     window.bpOrder = order;
     if (order.references?.length) {

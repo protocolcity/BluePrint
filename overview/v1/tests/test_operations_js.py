@@ -980,6 +980,25 @@ class ProjectsReturnAndFinishingTests(unittest.TestCase):
         self.assertIn('agent.finishing', body)
         self.assertIn("p.project===project.id", body)
 
+class ReaderNavAndOutlineTests(unittest.TestCase):
+    """pc-1491 second pass: nav scroll falls back to scrollLeft, and outline or
+    fragment navigation opens the targeted collapsed section."""
+
+    def test_nav_scroll_has_a_scroll_left_fallback(self):
+        src = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'nav-shell.mjs').read_text()
+        fn = src.split('export function ensureActiveNavVisible(')[1].split('export function')[0]
+        self.assertIn("typeof nav.scrollTo === 'function'", fn)
+        self.assertIn('catch { nav.scrollLeft = next; }', fn)
+
+    def test_hash_navigation_opens_the_collapsed_section(self):
+        src = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'nav-shell.mjs').read_text()
+        self.assertIn('export function revealHashSection(', src)
+        self.assertIn("node.tagName === 'DETAILS') node.open = true", src)
+        self.assertIn("addEventListener?.('hashchange'", src)
+        for name in ('work-order.js', 'documents.js'):
+            reader = (Path(__file__).resolve().parents[1] / 'static' / 'js' / name).read_text()
+            self.assertIn('bindHashReveal(document)', reader)
+
 
 if __name__ == '__main__':
     unittest.main()
