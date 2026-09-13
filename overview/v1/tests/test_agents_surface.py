@@ -283,9 +283,21 @@ class ProviderModelResolutionTests(unittest.TestCase):
         return next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == identity)
 
     def test_roster_model_wins_first(self):
+        """pc-1476: a bare pin still gets its provider name prefixed from the
+        seat's own resolved command — the demo row's 'Claude claude-sonnet-5'."""
         self._roster({'agent': {'display': 'Agent', 'command': ['claude'], 'identity': 'agent',
                                  'kind': 'lane', 'model': 'claude-sonnet-5'}})
-        self.assertEqual(self._agent()['model'], 'claude-sonnet-5')
+        self.assertEqual(self._agent()['model'], 'Claude claude-sonnet-5')
+
+    def test_roster_model_already_prefixed_with_provider_is_not_doubled(self):
+        self._roster({'agent': {'display': 'Agent', 'command': ['claude'], 'identity': 'agent',
+                                 'kind': 'lane', 'model': 'Claude claude-sonnet-5'}})
+        self.assertEqual(self._agent()['model'], 'Claude claude-sonnet-5')
+
+    def test_roster_model_with_unresolvable_command_stays_bare(self):
+        self._roster({'agent': {'display': 'Agent', 'command': ['mystery-tool'], 'identity': 'agent',
+                                 'kind': 'lane', 'model': 'some-pin'}})
+        self.assertEqual(self._agent()['model'], 'some-pin')
 
     def test_runner_config_provider_and_model(self):
         config = self.root / 'runner.json'

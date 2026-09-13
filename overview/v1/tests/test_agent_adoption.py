@@ -6,13 +6,19 @@ from pathlib import Path
 import shlex
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from server.operations import detect_providers, hire_command, operations_snapshot, provider_coverage
 
 
 class ProviderDetectionTests(unittest.TestCase):
+    def setUp(self):
+        self.home_temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.home_temp.cleanup)
+        self.home = Path(self.home_temp.name)
+
     def test_fake_path_with_no_providers_reads_all_none(self):
-        found = detect_providers(env={'PATH': ''}, app_path_exists=False)
+        found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home)
         self.assertEqual(found, {'Claude': None, 'Cursor': None, 'Grok': None, 'Codex': None})
 
     def test_fake_path_finds_only_the_installed_commands(self):
@@ -20,14 +26,14 @@ class ProviderDetectionTests(unittest.TestCase):
             claude = Path(bindir) / 'claude'
             claude.write_text('#!/bin/sh\n')
             claude.chmod(0o755)
-            found = detect_providers(env={'PATH': bindir}, app_path_exists=False)
+            found = detect_providers(env={'PATH': bindir}, app_path_exists=False, home=self.home)
         self.assertEqual(found['Claude'], str(claude))
         self.assertIsNone(found['Cursor'])
         self.assertIsNone(found['Grok'])
         self.assertIsNone(found['Codex'])
 
     def test_codex_falls_back_to_the_chatgpt_app_path_when_not_on_path(self):
-        found = detect_providers(env={'PATH': ''}, app_path_exists=True)
+        found = detect_providers(env={'PATH': ''}, app_path_exists=True, home=self.home)
         self.assertEqual(found['Codex'], '/Applications/ChatGPT.app/Contents/Resources/codex')
 
     def test_codex_on_path_wins_over_the_app_path(self):
@@ -35,8 +41,63 @@ class ProviderDetectionTests(unittest.TestCase):
             codex = Path(bindir) / 'codex'
             codex.write_text('#!/bin/sh\n')
             codex.chmod(0o755)
-            found = detect_providers(env={'PATH': bindir}, app_path_exists=True)
+            found = detect_providers(env={'PATH': bindir}, app_path_exists=True, home=self.home)
         self.assertEqual(found['Codex'], str(codex))
+
+    def test_well_known_local_bin_location_proves_a_provider_present(self):
+        localbin = self.home / '.local' / 'bin'
+        localbin.mkdir(parents=True)
+        claude = localbin / 'claude'
+        claude.write_text('#!/bin/sh\n')
+        claude.chmod(0o755)
+        sources = {}
+        found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home, sources=sources)
+        self.assertEqual(found['Claude'], str(claude))
+        self.assertEqual(sources['Claude'], 'well-known location')
+
+    def test_well_known_grok_bin_location_proves_grok_present(self):
+        grokbin = self.home / '.grok' / 'bin'
+        grokbin.mkdir(parents=True)
+        grok = grokbin / 'grok'
+        grok.write_text('#!/bin/sh\n')
+        grok.chmod(0o755)
+        found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home)
+        self.assertEqual(found['Grok'], str(grok))
+
+    def test_path_wins_over_well_known_location(self):
+        with tempfile.TemporaryDirectory() as bindir:
+            localbin = self.home / '.local' / 'bin'
+            localbin.mkdir(parents=True)
+            (localbin / 'claude').write_text('#!/bin/sh\n')
+            (localbin / 'claude').chmod(0o755)
+            claude = Path(bindir) / 'claude'
+            claude.write_text('#!/bin/sh\n')
+            claude.chmod(0o755)
+            sources = {}
+            found = detect_providers(env={'PATH': bindir}, app_path_exists=False, home=self.home, sources=sources)
+        self.assertEqual(found['Claude'], str(claude))
+        self.assertEqual(sources['Claude'], 'PATH')
+
+    def test_seat_absolute_executable_proves_a_provider_present(self):
+        workers = {'seat': {'display': 'Seat', 'identity': 'seat', 'kind': 'lane',
+                             'command': ['claude', '-p', 'x']}}
+        with tempfile.TemporaryDirectory() as bindir:
+            exe = Path(bindir) / 'claude'
+            exe.write_text('#!/bin/sh\n')
+            exe.chmod(0o755)
+            workers['seat']['command'] = [str(exe), '-p', 'x']
+            sources = {}
+            found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home,
+                                      workers=workers, root=Path(bindir), config_cache={}, sources=sources)
+        self.assertEqual(found['Claude'], str(exe))
+        self.assertEqual(sources['Claude'], 'seat command')
+
+    def test_seat_with_missing_executable_proves_nothing(self):
+        workers = {'seat': {'display': 'Seat', 'identity': 'seat', 'kind': 'lane',
+                             'command': ['/nowhere/claude', '-p', 'x']}}
+        found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home,
+                                  workers=workers, root=Path('/nowhere'), config_cache={})
+        self.assertIsNone(found['Claude'])
 
 
 class HireCommandTests(unittest.TestCase):
@@ -158,6 +219,26 @@ class ProviderCoverageTests(unittest.TestCase):
         snapshot = operations_snapshot(self.root)
         self.assertEqual(len(snapshot['coverage']), 1)
         self.assertEqual(snapshot['coverage'][0]['project'], 'blueprint')
+
+    def test_coverage_row_names_the_source_that_proved_each_present_provider(self):
+        workers = {'blueprint-claude': self._seat(['claude']), 'blueprint-codex': self._seat(['codex'], enabled=False)}
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': '/x/codex'}
+
+        def fake_detect(**kwargs):
+            if kwargs.get('sources') is not None:
+                kwargs['sources'].update({'Claude': 'well-known location', 'Codex': 'seat command'})
+            return host_providers
+
+        with patch('server.operations.detect_providers', side_effect=fake_detect):
+            row = provider_coverage(self.root, self._registry(), workers, {})[0]
+        self.assertEqual(row['sources'], {'Claude': 'well-known location', 'Codex': 'seat command'})
+
+    def test_seat_with_missing_on_disk_executable_does_not_count_as_present(self):
+        workers = {'blueprint-claude': self._seat(['/nowhere/claude'])}
+        host_providers = {'Claude': None, 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], [])
+        self.assertIn('Claude', row['not_configured'])
 
 
 if __name__ == '__main__':
