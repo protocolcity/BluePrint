@@ -55,5 +55,48 @@ class BlockedFilterTests(unittest.TestCase):
         self.assertIn("status==='blocked'?o.blockers&&o.blockers.length", _SRC.replace(' ', ''))
 
 
+class LiveIndicatorTests(unittest.TestCase):
+    """D2 live rendering (pc-1470): header reads Live/Reconnecting/Polling,
+    never a ticking 'Updated Xs ago' counter."""
+
+    def test_no_more_ticking_updated_ago_counter(self):
+        self.assertNotIn('Updated', _SRC)
+        self.assertNotIn('${Math.floor((Date.now()-lastSuccess)', _SRC.replace(' ', ''))
+
+    def test_open_stream_reads_live_with_last_change_age(self):
+        self.assertIn("streamState==='open'", _SRC)
+        self.assertIn('Live · last change', _SRC)
+
+    def test_dropped_stream_reads_reconnecting_then_polling(self):
+        self.assertIn("'Reconnecting'", _SRC)
+        self.assertIn("'Polling every 60 s'", _SRC)
+        self.assertIn('consecutiveErrors', _SRC)
+
+    def test_refresh_button_label_only_flips_on_a_manual_read(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn("if(manual){$('refresh').disabled=true", compact)
+        self.assertIn('refresh(true)', _SRC)
+        # The automatic call sites (stream push, fallback poll, visibility
+        # resume) must not pass `true` — only the click handler does.
+        auto_call_sites = _SRC.count('refresh();')
+        self.assertGreaterEqual(auto_call_sites, 3)
+
+
+class RowReconciliationTests(unittest.TestCase):
+    """D2 live rendering (pc-1470): lists are patched in place, never
+    wholesale rebuilt with replaceChildren."""
+
+    def test_reconcile_list_imported_from_shared_module(self):
+        self.assertIn("import('/js/dom-reconcile.mjs')", _SRC)
+
+    def test_no_wholesale_replace_children_on_the_named_lists(self):
+        for list_id in ('metrics', 'for-you-decide', 'work-list', 'project-summary', 'seat-list', 'job-list'):
+            self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
+
+    def test_reconcile_list_used_for_the_named_lists(self):
+        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list'):
+            self.assertIn(f"reconcileList($('{list_id}')", _SRC)
+
+
 if __name__ == '__main__':
     unittest.main()
