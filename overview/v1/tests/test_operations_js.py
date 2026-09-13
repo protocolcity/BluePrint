@@ -4,6 +4,9 @@ Full DOM behavior is exercised by the browser check in the ticket; these
 guard the literal source so the metric definitions, the default work
 filter, and the claim-aware status text cannot silently regress.
 """
+import json
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -161,24 +164,111 @@ class PersonaChipTests(unittest.TestCase):
 
 
 class SeatCoverageTests(unittest.TestCase):
-    """AGENT_ADOPTION.md D15 (pc-1474): a coverage line per project under
-    Seats, with a copy-only Hire action — BP never writes the roster."""
+    """AGENT_ADOPTION.md D15 (pc-1480): compact coverage panel after seats and
+    jobs, hire commands behind a disclosure, no classifier caveat."""
 
-    def test_coverage_list_is_rendered_from_the_snapshot_coverage_field(self):
-        self.assertIn("reconcileList($('coverage-list'), snapshot.coverage || [], row=>row.project, coverageCard", _SRC)
+    def test_agents_paints_seats_before_coverage(self):
+        agents_fn = _SRC.split('function agents()')[1].split('function timelineRow')[0]
+        compact = agents_fn.replace(' ', '')
+        self.assertLess(compact.index("reconcileList($('seat-list')"), compact.index('renderCoverage()'))
 
-    def test_coverage_row_shows_the_computed_text_line(self):
-        self.assertIn("card.append(el('p',row.text));", _SRC)
+    def test_coverage_uses_a_compact_line_not_the_server_text_blob(self):
+        self.assertIn('coverageCompactLine(row)', _SRC)
+        self.assertNotIn('card.append(el(\'p\',row.text));', _SRC)
+
+    def test_unstaffed_projects_collapse_into_one_disclosure(self):
+        self.assertIn('bp-coverage-collapsed', _SRC)
+        self.assertIn('unstaffed (', _SRC)
 
     def test_hire_button_copies_the_command_and_never_dispatches_it(self):
         self.assertNotIn("fetch('/api/agents/hire'", _SRC)
-        self.assertIn("navigator.clipboard.writeText(command)", _SRC)
+        self.assertIn('navigator.clipboard.writeText(command)', _SRC)
+
+    def test_hire_commands_stay_behind_a_disclosure(self):
+        self.assertIn("el('summary','Hire…')", _SRC)
+
+    def test_classifier_jargon_is_removed(self):
+        self.assertNotIn('classifier', _SRC.lower())
 
     def test_not_configured_providers_show_their_install_hint(self):
         self.assertIn('row.install_hints[p]', _SRC)
 
-    def test_coverage_container_exists_in_the_markup(self):
-        self.assertIn('id="coverage-list"', _HTML)
+    def test_coverage_panel_is_separate_from_seats(self):
+        self.assertIn('<h2>Coverage</h2>', _HTML)
+        self.assertNotIn('<h2>Seats</h2><div id="coverage-list"', _HTML)
+
+    def test_hiring_footnote_is_present(self):
+        self.assertIn('Hiring runs on this Mac through WorkForce; the desk never writes the roster.', _HTML)
+
+    def test_old_agents_subtitle_is_removed(self):
+        self.assertNotIn('Registered local agents, schedules, and reported runtime state.', _HTML)
+        self.assertNotIn('Registered local agents, schedules, and reported runtime state.', _SRC)
+
+
+class SeatCoverageReviewFixTests(unittest.TestCase):
+    """pc-1480 review fixes: reconcile coverage rows, lazy hire bodies,
+    unknown project stores stay active."""
+
+    def test_render_coverage_reconciles_rows_instead_of_replacing_children(self):
+        fn = _SRC.split('function renderCoverage()')[1].split('function agents()')[0]
+        self.assertIn('reconcileList($(\'coverage-list\')', fn)
+        self.assertNotIn('container.replaceChildren()', fn)
+
+    def test_hire_commands_populate_only_when_disclosure_opens(self):
+        self.assertIn('paintCoverageHireBody(hire, row)', _SRC)
+        self.assertIn("container.addEventListener('toggle'", _SRC)
+        self.assertNotIn('coverageHireBlock(row)', _SRC)
+
+    def test_unavailable_project_store_is_not_treated_as_zero_open(self):
+        self.assertIn('function projectStoreState(slug)', _SRC)
+        self.assertIn('function coverageIsActive(row)', _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("if(projectStoreState(row.project)!=='available')returntrue", compact)
+        self.assertIn("'Store unavailable'", _SRC)
+
+    def test_open_hire_disclosures_repaint_after_reconcile(self):
+        self.assertIn('refreshCoverageHireBodies($(\'coverage-list\'))', _SRC)
+
+
+class AgentsCoverageHarnessTests(unittest.TestCase):
+    """pc-1480: live-shaped fixture proves seat-first order, one collapsed
+    unstaffed line, and hire commands hidden until disclosure opens."""
+
+    _HARNESS = Path(__file__).resolve().parent / 'harness' / 'agents_coverage_check.mjs'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping agents coverage harness')
+        proc = subprocess.run([node, str(cls._HARNESS)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'agents coverage harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        cls.result = json.loads(proc.stdout)
+
+    def test_seat_cards_render_before_coverage(self) -> None:
+        self.assertGreater(self.result['seat_count'], 0)
+
+    def test_exactly_one_collapsed_unstaffed_line(self) -> None:
+        self.assertRegex(self.result['collapsed_summary'], r'\d+ projects unstaffed')
+
+    def test_hire_commands_hidden_until_disclosure_opens(self) -> None:
+        self.assertTrue(self.result['hire_hidden_until_open'])
+
+    def test_no_classifier_text_in_the_dom(self) -> None:
+        self.assertTrue(self.result['no_classifier'])
+
+    def test_hire_disclosure_stays_open_across_repaint(self) -> None:
+        self.assertTrue(self.result['hire_open_survives_repaint'])
+
+    def test_unavailable_store_renders_active_not_collapsed(self) -> None:
+        self.assertTrue(self.result['unavailable_store_active'])
+
+    def test_closed_rows_have_no_hire_command_nodes(self) -> None:
+        self.assertTrue(self.result['no_hire_nodes_while_closed'])
 
 
 class SeatHeaderProjectNameTests(unittest.TestCase):
