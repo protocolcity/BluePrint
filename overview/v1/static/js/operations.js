@@ -359,6 +359,15 @@ function projectLiveSeats(project) {
     seen.add(order.live_with);
     seats.push({id:order.live_with, agent:(snapshot.agents || []).find(a=>a.id===order.live_with)});
   }
+  // A seat that is still finishing an order it parked in this project (shift
+  // open, claim released) is live for this row too; Agents shows it as
+  // "Finishing · parked …" and Projects must not read Quiet (pc-1486 second pass).
+  for(const agent of (snapshot.agents || [])) {
+    if(!agent.finishing || seen.has(agent.id)) continue;
+    if(!(agent.parked || []).some(p=>p.project===project.id)) continue;
+    seen.add(agent.id);
+    seats.push({id:agent.id, agent, finishing:true});
+  }
   return seats;
 }
 function projectAgentsNowText(project) {

@@ -3,12 +3,12 @@
  * not broaden trust.
  */
 export function safeReturnTo(value) {
-  if (typeof value !== 'string' || !/^\/(?:work|map|calendar|timeline)\/?(?:[?#]|$)/.test(value) ||
+  if (typeof value !== 'string' || !/^\/(?:work|map|calendar|timeline|projects)\/?(?:[?#]|$)/.test(value) ||
       /[\\\x00-\x20\x7f]/.test(value)) return '/work';
   try {
     const url = new URL(value, 'https://navigation.invalid');
     if (url.origin !== 'https://navigation.invalid' ||
-        !['/work', '/work/', '/map', '/map/', '/calendar', '/calendar/', '/timeline', '/timeline/'].includes(url.pathname)) return '/work';
+        !['/work', '/work/', '/map', '/map/', '/calendar', '/calendar/', '/timeline', '/timeline/', '/projects', '/projects/'].includes(url.pathname)) return '/work';
     return value;
   } catch { return '/work'; }
 }
