@@ -168,7 +168,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list'):
+        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_excluded_stores_are_a_reconciled_list_not_a_joined_note(self):
@@ -222,16 +222,53 @@ class DeliveryQuietCopyTests(unittest.TestCase):
 
 
 class PersonaChipTests(unittest.TestCase):
-    """pc-1473 review fix: the chip slot must print the persona text
-    (Your todo / Reminder <date> / Your note) instead of "Needs routing"
-    on you-qualifier rows, and still print "Needs routing" when there is
-    no persona."""
+    """pc-1484: persona and needs-routing move into the expandable detail body."""
 
-    def test_persona_renders_in_the_chip_slot_before_needs_routing(self):
-        self.assertIn("if(order.persona)content.append(el('span',order.persona,'bp-order-note'));", _SRC.replace(' ', ''))
+    def test_persona_renders_in_the_detail_body_before_needs_routing(self):
+        fn = _SRC.split('function orderDetailBody(order, content)')[1].split('function orderHasDetail')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("if(order.persona)content.append(el('p',order.persona,'bp-order-note'));", compact)
+        self.assertLess(compact.index('if(order.persona)'), compact.index('elseif(order.needs_routing)'))
 
-    def test_needs_routing_only_renders_when_there_is_no_persona(self):
-        self.assertIn("elseif(order.needs_routing)content.append(el('span','Needsrouting','bp-order-note'));", _SRC.replace(' ', ''))
+    def test_needs_routing_only_renders_in_detail_when_there_is_no_persona(self):
+        fn = _SRC.split('function orderDetailBody(order, content)')[1].split('function orderHasDetail')[0]
+        self.assertIn("elseif(order.needs_routing)content.append(el('p','Needsrouting','bp-order-note'));", fn.replace(' ', ''))
+
+
+class CompactRowTests(unittest.TestCase):
+    """pc-1484: compact Overview and Work rows with progressive disclosure."""
+
+    def test_work_row_uses_one_meta_line_not_assigned_to_owner(self):
+        fn = _SRC.split('function orderRow(order)')[1].split('function gateLabel')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('compactMetaLine(order)', compact)
+        self.assertNotIn('Assignedto${order.owner}', compact)
+
+    def test_assignment_summary_never_prefixes_assigned_to(self):
+        self.assertIn('function assignmentSummary(order)', _SRC)
+        self.assertNotIn("'Assigned to'", _SRC.split('function assignmentSummary')[1].split('function lifecycleSummary')[0])
+
+    def test_boilerplate_notes_are_filtered_from_summary_and_detail_gate(self):
+        self.assertIn('function isBoilerplateNote(note)', _SRC)
+        self.assertIn('Intake:', _SRC)
+        self.assertIn('!isBoilerplateNote(order.last_note)', _SRC.replace(' ', ''))
+
+    def test_overview_starts_with_current_execution_before_metrics(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertLess(compact.index("reconcileList($('overview-executions')"), compact.index("reconcileList($('metrics')"))
+
+    def test_overview_has_recent_changes_list(self):
+        self.assertIn('id="overview-executions"', _HTML)
+        self.assertIn('id="overview-recent"', _HTML)
+        self.assertIn("reconcileList($('overview-recent')", _SRC)
+
+    def test_for_you_uses_overview_face_row_not_full_order_row(self):
+        self.assertIn('function overviewFaceRow(order)', _SRC)
+        self.assertIn('overviewFaceRow(order)', _SRC.split('function faceEntry')[1].split('function faceHeading')[0])
+
+    def test_live_metric_label_distinguishes_claims_from_shifts(self):
+        self.assertIn("'Live claims'", _SRC)
 
 
 class SeatCoverageTests(unittest.TestCase):

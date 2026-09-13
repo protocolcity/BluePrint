@@ -90,27 +90,73 @@ function statusText(order) {
   if(order.status==='in_review' && order.parked_by) return `Parked by ${order.parked_by} since ${date(order.since)}`;
   return order.status_word || order.status;
 }
+function truncateText(text, max) {
+  const value=(text || '').trim();
+  if(!value || value.length <= max) return value;
+  return value.slice(0, max - 1) + '…';
+}
+function isBoilerplateNote(note) {
+  const value=(note || '').trim();
+  if(!value) return true;
+  return /^(Intake:|Owner:|Actor:|Evidence:|Plan:|\u0055pdated fields:)/.test(value);
+}
+function assignmentSummary(order) {
+  if(order.assigned_you) return 'You';
+  const workers=(order.workers || []).filter(w=>w!=='you');
+  if(workers.length) return workers.join(', ');
+  if(order.needs_routing) return 'Needs routing';
+  return 'Unassigned';
+}
+function lifecycleSummary(order) {
+  if(order.status==='in_progress' && order.live_with) return `Live · ${order.live_with}`;
+  if(order.status==='in_review' && order.parked_by) return `Parked · ${order.parked_by}`;
+  return order.status_word || order.status;
+}
+function compactMetaLine(order) {
+  return [order.project_name, order.id, lifecycleSummary(order), gateLabel(order), assignmentSummary(order), date(order.updated_at)].filter(Boolean).join(' · ');
+}
+function nextActionText(order) {
+  if(order.attention_face==='decide' && order.gate_note) return truncateText(order.gate_note, 120);
+  if(order.attention_face==='read') return 'Read the report, then clear or snooze';
+  if(order.attention_face==='watch' && order.gate_type==='timer') return 'Review when the hold expires';
+  if(order.attention_face==='watch') return 'Check for new evidence';
+  if(order.ready_for) return `Ready for ${order.ready_for}`;
+  if(order.blockers && order.blockers.length) return `Blocked on ${order.blockers.join(', ')}`;
+  if(!isBoilerplateNote(order.last_note)) return truncateText(order.last_note, 120);
+  return '';
+}
+function orderDetailBody(order, content) {
+  if(order.parent) content.append(el('p',`Part of ${order.parent}`,'bp-order-note'));
+  if(order.blockers && order.blockers.length) content.append(el('p',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
+  if(order.ready_for) content.append(el('p',`Ready for ${order.ready_for}`,'bp-order-note'));
+  if(order.persona) content.append(el('p',order.persona,'bp-order-note'));
+  else if(order.needs_routing) content.append(el('p','Needs routing','bp-order-note'));
+  if(order.gate_note) content.append(el('p',order.gate_note,'bp-order-note'));
+  if(!isBoilerplateNote(order.last_note)) content.append(el('p',`Last note: ${order.last_note}`,'bp-order-meta'));
+  if(order.status==='in_progress' && order.live_with && order.since) content.append(el('p',`Claimed live with ${order.live_with} since ${date(order.since)}`,'bp-order-meta'));
+  if(order.status==='in_review' && order.parked_by && order.since) content.append(el('p',`Parked by ${order.parked_by} since ${date(order.since)}`,'bp-order-meta'));
+}
+function orderHasDetail(order) {
+  return Boolean(order.parent || (order.blockers && order.blockers.length) || order.ready_for || order.persona || order.needs_routing || order.gate_note || !isBoilerplateNote(order.last_note) || (order.since && (order.live_with || order.parked_by)));
+}
+function orderBadges(order) {
+  const gateWord=gateLabel(order);
+  const badges=[badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined))];
+  if(gateWord) badges.push(badge(order.gate_type+(order.gate_expired?'-expired':''),gateWord));
+  return badges;
+}
 function orderRow(order) {
-  const row=link('',workUrl(order),'bp-order');
-  const content=el('div'); content.append(el('strong',order.title));
-  content.append(el('span',`${order.project_name} · ${order.id} · ${statusText(order)} · Assigned to ${order.owner} · ${date(order.updated_at)}`,'bp-order-meta'));
-  if(order.parent) content.append(el('span',`Part of ${order.parent}`,'bp-order-meta'));
-  if(order.blockers && order.blockers.length) content.append(el('span',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
-  if(order.ready_for) content.append(el('span',`Ready for ${order.ready_for}`,'bp-order-note'));
-  if(order.persona) content.append(el('span',order.persona,'bp-order-note'));
-  else if(order.needs_routing) content.append(el('span','Needs routing','bp-order-note'));
-  if(order.attention_face && order.face_reason) { const reason=el('span',order.face_reason,'bp-order-note'); reason.title=order.face_reason; content.append(reason); }
-  if(order.gate_note) {
-    const truncated=order.gate_note.length > 160;
-    const details=el('details',undefined,'bp-order-note');
-    details.append(el('summary',truncated ? order.gate_note.slice(0,157) + '…' : order.gate_note));
-    if(truncated) details.append(el('p',order.gate_note));
+  const row=link('',workUrl(order),'bp-order bp-order-compact');
+  const content=el('div');
+  content.append(el('strong',order.title));
+  content.append(el('span',compactMetaLine(order),'bp-order-meta'));
+  if(orderHasDetail(order)) {
+    const details=el('details',undefined,'bp-order-detail');
+    details.append(el('summary','More'));
+    orderDetailBody(order, details);
     content.append(details);
   }
-  if(order.last_note) content.append(el('span',`Last note: ${order.last_note}`,'bp-order-meta'));
-  const gateWord=gateLabel(order);
-  row.append(content,badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined)));
-  if(gateWord) row.append(badge(order.gate_type+(order.gate_expired?'-expired':''),gateWord));
+  row.append(content,...orderBadges(order));
   return row;
 }
 function gateLabel(order) {
@@ -119,6 +165,40 @@ function gateLabel(order) {
   if(order.gate_type==='timer') return order.gate_expired ? 'Timer expired' : `Held until ${date(order.gate_until)}`;
   if(order.gate_type==='human') return 'Needs a decision';
   return '';
+}
+function overviewFaceRow(order) {
+  const row=link('',workUrl(order),'bp-order bp-order-compact bp-face-row');
+  const content=el('div');
+  content.append(el('strong',order.title));
+  const why=truncateText(order.face_reason || '', 140);
+  const meta=[order.project_name, order.id, why].filter(Boolean).join(' · ');
+  content.append(el('span',meta,'bp-order-meta'));
+  const action=nextActionText(order);
+  if(action && action !== why) content.append(el('span',action,'bp-order-note'));
+  if(orderHasDetail(order)) {
+    const details=el('details',undefined,'bp-order-detail');
+    details.append(el('summary','More'));
+    orderDetailBody(order, details);
+    content.append(details);
+  }
+  const faceBadge={decide:'Needs you',read:'Read',watch:'Watch',note:'Note'}[order.attention_face] || 'For You';
+  row.append(content,badge(order.attention_face==='decide' ? 'attention' : (order.attention_face || 'attention'), faceBadge));
+  return row;
+}
+function executionRow(agent) {
+  const row=el('div',undefined,'bp-execution-row');
+  const main=el('div');
+  main.append(el('strong',agent.name));
+  const bits=[agent.badge];
+  if(agent.shift) bits.push(`since ${date(agent.shift.started_at)}`);
+  if(agent.held) bits.push(agent.held.id);
+  main.append(el('span',bits.join(' · '),'bp-order-meta'));
+  row.append(main,badge(agent.state,agent.badge));
+  const actions=el('div',undefined,'bp-execution-actions');
+  actions.append(link('Inspect seat','/agents'));
+  if(agent.held && agent.project) actions.append(link('Open order',workUrl({project:agent.project,id:agent.held.id,project_name:agent.project_name})));
+  row.append(actions);
+  return row;
 }
 function sources(parent, details) {
   reconcileList(parent, snapshot.sources, s=>s.name, source=>{
@@ -138,32 +218,52 @@ function projectCard(project) {
   return card;
 }
 function faceEntry(order) {
-  const entry=el('div');entry.append(orderRow(order));
-  const mute=el('button','Mute here for 24 hours');mute.type='button';
+  const entry=el('div',undefined,'bp-face-entry');entry.append(overviewFaceRow(order));
+  const mute=el('button','Mute 24h');mute.type='button';mute.className='bp-face-mute';
   mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();overview();});
   entry.append(mute);
   return entry;
+}
+function faceHeading(label, total, visible, href) {
+  let text=`${label} · ${total}`;
+  if(total > visible) text+=` · showing ${visible}`;
+  const heading=$(`for-you-${label.toLowerCase()}-heading`) || $(`for-you-${label.toLowerCase()}-summary`);
+  if(heading) heading.textContent=text;
+  const linkWrap=heading && heading.parentElement && heading.parentElement.querySelector('a');
+  if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
+}
+function overviewExecutionEmpty() {
+  const heartbeat=(snapshot.sources || []).find(s=>s.name==='WorkForce heartbeat');
+  if(!heartbeat || heartbeat.state==='unknown') return 'WorkForce daemon not reachable — no shift evidence to show.';
+  if(heartbeat.state==='stale') return 'WorkForce heartbeat is stale; running seats may not be reported.';
+  return 'No seats report an open shift right now.';
 }
 function overview() {
   const orders=snapshot.orders, forYou=orders.filter(o=>o.attention_face);
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
-  const metrics=[['For You',forYou.length,'/work?attention=any'],['Live',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
+  const running=snapshot.agents.filter(a=>a.group==='seat' && a.state==='working');
+  reconcileList($('overview-executions'), running, a=>a.id, executionRow, {emptyText:overviewExecutionEmpty()});
+  const metrics=[['For You',forYou.length,'/work?attention=any'],['Live claims',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
+  const faceLimit={decide:6,read:6,watch:4,note:4};
   let mutedCount=0;
   for(const face of ['decide','read','watch','note']) {
     const band=forYou.filter(o=>o.attention_face===face);
-    const visible=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
-    mutedCount+=band.length-visible.length;
-    reconcileList($('for-you-'+face), visible.slice(0,6), o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
+    const unmuted=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
+    const visible=unmuted.slice(0,faceLimit[face]);
+    mutedCount+=band.length-unmuted.length;
+    reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
+    if(face==='decide' || face==='read') faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
+    else {
+      const summary=$(`for-you-${face}-summary`);
+      if(summary) summary.textContent=`${face.charAt(0).toUpperCase()+face.slice(1)} · ${band.length}${band.length>visible.length?` · showing ${visible.length}`:''}`;
+    }
   }
-  $('for-you-decide-heading').textContent=`Decide · ${forYou.filter(o=>o.attention_face==='decide').length}`;
-  $('for-you-read-heading').textContent=`Read · ${forYou.filter(o=>o.attention_face==='read').length}`;
-  $('for-you-watch-summary').textContent=`Watch · ${forYou.filter(o=>o.attention_face==='watch').length}`;
-  $('for-you-note-summary').textContent=`Note · ${forYou.filter(o=>o.attention_face==='note').length}`;
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-
+  const recent=[...orders].sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||''))).slice(0,8);
+  reconcileList($('overview-recent'), recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
   sources($('source-list'),false);
   const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
   reconcileList($('project-summary'), projects.slice(0,6), p=>p.id, projectCard, {emptyText:'No project stores found. Inspect Connections for source details.'});
