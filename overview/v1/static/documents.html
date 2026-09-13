@@ -5,13 +5,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BluePrint — Project papers</title>
   <link rel="stylesheet" href="/css/overview.css" />
-<link rel="stylesheet" href="/css/operations.css"></head>
+  <link rel="stylesheet" href="/css/operations.css" />
+</head>
 <body class="bp-operations">
-  <main id="work-order-shell" class="bp-reader-shell" aria-label="Project papers">
-<header class="bp-header"><a class="bp-brand" href="/">BluePrint <small>Project papers</small></a><a href="/projects">Back to projects</a></header><nav class="bp-nav" aria-label="Main navigation">
-<a href="/" data-page="overview">Overview</a><a href="/work" data-page="work">Work</a><a href="/projects" data-page="projects">Projects</a><a href="/agents" data-page="agents">Agents</a><a href="/activity">Activity</a><a href="/map">Map</a><a href="/calendar" data-page="calendar">Calendar</a><a href="/connections" data-page="connections">Connections</a><a href="/settings" data-page="settings">Settings</a>
-</nav>    <section class="bp-panel"><p id="document-status" role="status">Loading papers…</p><h1 id="document-project">Project papers</h1><p class="bp-muted">Existing documents grouped by purpose. Source location does not establish permission to publish.</p><label for="document-search">Find a document</label><input id="document-search" type="search" placeholder="Title or path"><div id="paper-catalog"></div></section>
-<section class="bp-panel" id="paper-reader" hidden><a href="#paper-catalog">Back to catalog</a><h2 id="paper-title" tabindex="-1"></h2><p id="paper-source" class="bp-muted"></p><pre id="paper-content" class="bp-paper-content"></pre></section>
+  <main id="documents-shell" class="bp-reader-shell" aria-label="Project papers">
+    <header class="bp-header"><a class="bp-brand" href="/">BluePrint <small>Project papers</small></a><a id="reader-back" href="/projects">Back to projects</a></header>
+    <nav class="bp-nav" aria-label="Main navigation">
+      <a href="/" data-page="overview">Overview</a><a href="/work" data-page="work">Work</a><a href="/projects" data-page="projects">Projects</a><a href="/agents" data-page="agents">Agents</a><a href="/activity">Activity</a><a href="/map">Map</a><a href="/calendar" data-page="calendar">Calendar</a><a href="/connections" data-page="connections">Connections</a><a href="/settings" data-page="settings">Settings</a>
+    </nav>
+    <section class="bp-panel" id="detail"><p id="document-status" role="status">Loading papers…</p><h1 id="document-project">Project papers</h1><p class="bp-muted">Existing documents grouped by purpose. Source location does not establish permission to publish.</p><label for="document-search">Find a document</label><input id="document-search" type="search" placeholder="Title or path"><div id="paper-catalog"></div></section>
+    <section class="bp-panel" id="paper-reader" hidden>
+      <a id="paper-back" href="#paper-catalog">Back to catalog</a>
+      <nav id="paper-outline" class="bp-outline" hidden aria-label="Document outline"></nav>
+      <h2 id="paper-title" tabindex="-1"></h2>
+      <p id="paper-source" class="bp-muted"></p>
+      <div id="paper-content" class="bp-md bp-paper-content"></div>
+    </section>
   </main>
   <script src="/js/documents.js"></script>
 </body>

@@ -5,8 +5,25 @@ import re
 import sqlite3
 from pathlib import Path
 from .local_projectors import worklane_data_dir
+from .markdown import render_reader_content
 from .operations import project_registry
 from urllib.parse import urlencode
+
+_STATUS_WORD = {
+    'backlog': 'Open',
+    'in_progress': 'Live',
+    'in_review': 'Parked',
+    'done': 'Done',
+    'canceled': 'Canceled',
+    'cancelled': 'Canceled',
+}
+
+_PROJECTION_KEYS = (
+    'status_word', 'gate_type', 'gate_expired', 'gate_note', 'gate_until',
+    'needs_routing', 'owner', 'live_with', 'parked_by', 'since', 'parent',
+    'blockers', 'blocked_on', 'blocked_note', 'ready_for', 'persona',
+    'assigned_you', 'last_note', 'attention_face',
+)
 
 
 def source_references(root, project, description):
@@ -87,6 +104,47 @@ def read_work_order(binder: Path | None, project: str, order_id: str) -> dict:
     if not matches:
         raise FileNotFoundError('Work order not found in this workspace.')
     return matches[0]
+
+
+def enrich_work_order(binder, order: dict) -> dict:
+    """Merge the operations projection so the reader shows lifecycle, gate and blockers."""
+    order['status_word'] = _STATUS_WORD.get(order.get('status') or '', order.get('status') or '')
+    if not binder:
+        return order
+    try:
+        from .operations import operations_snapshot
+        snap = operations_snapshot(binder)
+        ext_id = order.get('ext_id') or order.get('id')
+        project = order.get('project')
+        projected = next(
+            (item for item in snap.get('orders', [])
+             if item.get('id') == ext_id and item.get('project') == project),
+            None,
+        )
+        if projected:
+            for key in _PROJECTION_KEYS:
+                if key in projected:
+                    order[key] = projected[key]
+        order['observed_at'] = snap.get('observed_at')
+        order['project_name'] = next(
+            (item.get('name') for item in snap.get('projects', []) if item.get('id') == project),
+            project,
+        )
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    return order
+
+
+def prepare_work_order(binder, project: str, order_id: str) -> dict:
+    order = read_work_order(binder, project, order_id)
+    enrich_work_order(binder, order)
+    description = render_reader_content(order.get('description') or '')
+    order['description_html'] = description['html']
+    order['description_outline'] = description['outline']
+    for comment in order.get('comments') or []:
+        rendered = render_reader_content(comment.get('body') or '')
+        comment['body_html'] = rendered['html']
+    return order
 
 
 def reveal_reference(binder, project, order_id, relative):
