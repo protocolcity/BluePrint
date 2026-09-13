@@ -793,3 +793,29 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(supervisor['state'],'unavailable')
         self.assertIn('unexpected shape',supervisor['detail'].lower())
         self.assertNotIn('not reachable',supervisor['detail'].lower())
+
+class TimestampAndParkMarkerTests(unittest.TestCase):
+    """pc-1495 second-pass findings: "Parked by" must count as a park marker and
+    park times must compare as instants across the two timestamp formats."""
+
+    def test_parked_by_marker_is_recognised(self):
+        from server.operations import _PARKED_RE
+        self.assertIsNotNone(_PARKED_RE.search('Parked by bp-cursor-implementer — soft-lock'))
+        self.assertIsNotNone(_PARKED_RE.search('Parked: merged main; tests pass'))
+        self.assertIsNone(_PARKED_RE.search('Parkeded by nobody'))
+        self.assertIsNone(_PARKED_RE.search('Not parked: still live'))
+
+    def test_ts_epoch_orders_sqlite_and_iso_forms_as_instants(self):
+        from server.operations import ts_epoch
+        earlier = ts_epoch('2026-09-13 21:00:00')          # WorkLane comment form (UTC)
+        later = ts_epoch('2026-09-13T21:30:00Z')            # WorkForce shift form
+        self.assertIsNotNone(earlier)
+        self.assertIsNotNone(later)
+        self.assertLess(earlier, later)
+        self.assertEqual(ts_epoch('2026-09-13T21:30:00+00:00'), later)
+        self.assertIsNone(ts_epoch(''))
+        self.assertIsNone(ts_epoch('not a time'))
+        # As strings the SQLite form sorts before "T"; the instants must not.
+        self.assertTrue('2026-09-13 21:45:00' < '2026-09-13T21:30:00Z')
+        self.assertGreater(ts_epoch('2026-09-13 21:45:00'), later)
+
