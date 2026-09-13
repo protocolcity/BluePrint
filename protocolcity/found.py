@@ -840,6 +840,14 @@ def found(
                 ("worker-prompt.md", "prompt.md"),
             ):
                 body = _template(src_name).read_text(encoding="utf-8")
+                # Found knows identity and store even though execution remains
+                # unconfigured. Never blank these into misleading claim targets.
+                for key, value in {
+                    "WORKER_ID": "demo-worker",
+                    "STORE_SLUG": store_slug,
+                    "NEIGHBORHOOD_NAME": hood_title,
+                }.items():
+                    body = body.replace("{{" + key + "}}", value)
                 (workers_dir / dest_name).write_text(
                     _strip_html_comments(_blank_placeholders(body)),
                     encoding="utf-8",
