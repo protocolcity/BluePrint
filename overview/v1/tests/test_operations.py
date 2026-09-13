@@ -136,6 +136,11 @@ class OperationsTests(unittest.TestCase):
             (runtime/'ledger/agent.log').unlink();(runtime/'ledger/agent.log').symlink_to(outside)
             row=operations_snapshot(self.root)['agents'][0]
             self.assertEqual(row['state'],'idle');self.assertIsNone(row['shift'])
+    def test_dry_run_start_is_not_an_open_shift(self):
+        started=self._stamp(timedelta(minutes=1))
+        self._runtime_with_ledger(f'{started} START identity=agent kind=job budget_secs=2100 max_passes=1 dry_run=1 chain_len=0\n{started} DONE dry_run=1 argv_head=/usr/bin/python argv_len=6\n')
+        row=operations_snapshot(self.root)['agents'][0]
+        self.assertEqual(row['state'],'idle');self.assertIsNone(row['shift'])
     def test_workspace_isolation(self):
         self.seed()
         with tempfile.TemporaryDirectory() as other:
