@@ -27,6 +27,7 @@ from protocolcity.desk import (
     desk_reachable,
     fetch_store_prefix,
     queue_pending_join,
+    read_desk_join,
     soft_append_desk_identity,
     write_desk_join,
 )
@@ -253,6 +254,7 @@ def plant_standard_seats(
     hire: bool = False,
     held: Optional[Iterable[str]] = None,
     workforce_bin: str = "workforce",
+    dry_run: bool = False,
 ) -> Dict[str, object]:
     """The standard-seat-set ``workforce hire`` commands for one project
     (AGENT_ADOPTION.md D12): one bounded implementer per provider the host
@@ -264,6 +266,13 @@ def plant_standard_seats(
     returned (RUNNING's rule that starting BluePrint must not hire); they
     are only run against ``workforce_bin`` when ``hire=True`` — BluePrint
     never writes the roster itself, ``workforce hire`` is the only writer.
+
+    Refuses an unmanaged folder or a project with no desk-join.json — a
+    project only gets a real seat once it is BluePrint-managed and desk
+    joined (``dry_run=True`` previews the commands a later real adopt/found
+    would plant, so it skips this gate). With ``hire=True`` the loop stops
+    at the first non-zero-exit ``workforce hire`` call so a bad host state
+    never silently skips the remaining providers.
     """
     import shlex
     import subprocess
@@ -278,6 +287,28 @@ def plant_standard_seats(
         resolve_roster_path,
     )
 
+    if not dry_run:
+        if not is_managed(project_path):
+            return {
+                "ok": False,
+                "project": project_slug,
+                "error": "%s is not BluePrint-managed (.protocolcity/managed "
+                "missing) — adopt or found the project before planting "
+                "seats" % project_path,
+                "commands": [],
+                "hired": [],
+            }
+        if read_desk_join(project_path) is None:
+            return {
+                "ok": False,
+                "project": project_slug,
+                "error": "%s has no desk-join.json — join the desk (adopt "
+                "with desk, or found --project) before planting seats"
+                % project_path,
+                "commands": [],
+                "hired": [],
+            }
+
     held_set = {str(p).strip().title() for p in (held or ())}
     host_providers = detect_providers()
     roster_path = resolve_roster_path(root)
@@ -290,6 +321,7 @@ def plant_standard_seats(
 
     commands = []
     hired = []
+    ok = True
     for provider in _PROVIDER_ORDER:
         if not host_providers.get(provider) or seats.get(provider):
             continue
@@ -303,7 +335,7 @@ def plant_standard_seats(
         if provider in held_set:
             text = text + " --held"
         commands.append({"provider": provider, "command": text})
-        if hire:
+        if hire and not dry_run:
             argv = [workforce_bin] + shlex.split(text)[1:]
             proc = subprocess.run(argv, capture_output=True, text=True)
             hired.append(
@@ -315,8 +347,11 @@ def plant_standard_seats(
                     "stderr": proc.stderr,
                 }
             )
+            if proc.returncode != 0:
+                ok = False
+                break
 
-    return {"ok": True, "project": project_slug, "commands": commands, "hired": hired}
+    return {"ok": ok, "project": project_slug, "commands": commands, "hired": hired}
 
 
 def adopt_neighborhood(
@@ -334,6 +369,7 @@ def adopt_neighborhood(
     hire_seats: bool = False,
     held_providers: Optional[Iterable[str]] = None,
     workforce_bin: str = "workforce",
+    dry_run: bool = False,
 ) -> Dict[str, object]:
     """Lay out structure inside city_root/name so the office can manage it.
 
@@ -353,6 +389,10 @@ def adopt_neighborhood(
     is skipped unless ``allow_live_desk=True`` — ``--force`` alone never writes
     a product store onto the production WorkLane.
     Optionally joins WorkLane store for the folder slug.
+
+    **Dry run:** ``dry_run=True`` writes nothing — no companions, no managed
+    marker, no desk join, no roster/hire — and returns a preview (what would
+    be created, the standard-seat-set commands) instead.
     """
     root = city_root.expanduser().resolve()
     if not root.is_dir():
@@ -360,12 +400,14 @@ def adopt_neighborhood(
 
     # pc-966: ensure workspace .mcp.json exists when adopting into a city
     # (found plants it; adopt heals missing so hand-copied cities catch up).
-    try:
-        from protocolcity.vendor_config import plant_workspace_mcp
+    # Dry run writes nothing, including this workspace-level heal.
+    if not dry_run:
+        try:
+            from protocolcity.vendor_config import plant_workspace_mcp
 
-        plant_workspace_mcp(root, force=False)
-    except Exception:
-        pass
+            plant_workspace_mcp(root, force=False)
+        except Exception:
+            pass
 
     raw = (name or "").strip().strip("/").replace("\\", "/")
     if not raw or "/" in raw or raw in (".", "..") or raw.startswith("."):
@@ -445,17 +487,41 @@ def adopt_neighborhood(
         if live_pref:
             prefix = live_pref
 
-    seats_result: Optional[Dict] = None
-    if plant_seats:
-        seats_result = plant_standard_seats(
-            root,
-            store_slug,
-            project_path=cab,
-            prefix=prefix,
-            hire=hire_seats,
-            held=held_providers,
-            workforce_bin=workforce_bin,
+    if dry_run:
+        already_managed = is_managed(cab)
+        would_create = _preview_companions(
+            cab,
+            write_agents=not already_managed or force,
+            force=force,
+            with_demo_worker=with_demo_worker,
         )
+        seats_preview: Optional[Dict] = None
+        if plant_seats:
+            seats_preview = plant_standard_seats(
+                root,
+                store_slug,
+                project_path=cab,
+                prefix=prefix,
+                hire=False,
+                held=held_providers,
+                workforce_bin=workforce_bin,
+                dry_run=True,
+            )
+        return {
+            "ok": True,
+            "dry_run": True,
+            "already_managed": already_managed,
+            "name": raw,
+            "path": str(cab),
+            "store_slug": store_slug,
+            "prefix": prefix,
+            "would_create": would_create,
+            "desk": None,
+            "seats": seats_preview,
+            "doctor": "dry-run",
+        }
+
+    seats_result: Optional[Dict] = None
 
     if is_managed(cab) and not force:
         # Soft fill missing law / optional worker stubs (never clobber)
@@ -495,6 +561,16 @@ def adopt_neighborhood(
                 display=title,
                 desk_result=desk_result,
                 desk_url=desk_url,
+            )
+        if plant_seats:
+            seats_result = plant_standard_seats(
+                root,
+                store_slug,
+                project_path=cab,
+                prefix=prefix,
+                hire=hire_seats,
+                held=held_providers,
+                workforce_bin=workforce_bin,
             )
         return {
             "ok": True,
@@ -549,6 +625,17 @@ def adopt_neighborhood(
             desk_url=desk_url,
         )
 
+    if plant_seats:
+        seats_result = plant_standard_seats(
+            root,
+            store_slug,
+            project_path=cab,
+            prefix=prefix,
+            hire=hire_seats,
+            held=held_providers,
+            workforce_bin=workforce_bin,
+        )
+
     return {
         "ok": True,
         "already_managed": False,
@@ -561,6 +648,70 @@ def adopt_neighborhood(
         "seats": seats_result,
         "doctor": "adopted",
     }
+
+
+def _preview_companions(
+    cab: Path,
+    *,
+    write_agents: bool,
+    force: bool,
+    with_demo_worker: bool = False,
+) -> list:
+    """Dry-run twin of :func:`_ensure_companions` — reads, never writes.
+
+    Same "would this file plant" rules (missing, or force + still a
+    BluePrint fill-me scaffold) without touching disk.
+    """
+    would: list = []
+
+    agents = cab / "AGENTS.md"
+    if write_agents:
+        if not agents.exists():
+            would.append("AGENTS.md")
+        elif force:
+            try:
+                existing = agents.read_text(encoding="utf-8")
+            except OSError:
+                existing = ""
+            if looks_like_blueprint_scaffold(existing):
+                would.append("AGENTS.md")
+
+    arch = cab / "ARCHITECTURE.md"
+    if not arch.exists():
+        would.append("ARCHITECTURE.md")
+    elif force:
+        try:
+            existing_arch = arch.read_text(encoding="utf-8")
+        except OSError:
+            existing_arch = ""
+        if looks_like_architecture_scaffold(existing_arch):
+            would.append("ARCHITECTURE.md")
+
+    progs = cab / "PROGRAMS.md"
+    if not progs.exists():
+        would.append("PROGRAMS.md")
+    elif force:
+        try:
+            existing_progs = progs.read_text(encoding="utf-8")
+        except OSError:
+            existing_progs = ""
+        if looks_like_programs_scaffold(existing_progs):
+            would.append("PROGRAMS.md")
+
+    feats = project_features_path(cab)
+    if not feats.exists() or force:
+        would.append(str(feats.relative_to(cab)))
+
+    if not (cab / MANAGED_MARKER_REL).is_file():
+        would.append(str(MANAGED_MARKER_REL))
+
+    if with_demo_worker:
+        workers_dir = cab / "workers" / "demo-worker"
+        if not workers_dir.exists() or force:
+            would.append("workers/demo-worker/CONTRACT.md")
+            would.append("workers/demo-worker/prompt.md")
+
+    return would
 
 
 def _ensure_companions(
