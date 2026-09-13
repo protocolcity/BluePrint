@@ -158,24 +158,34 @@ export async function boot(opts = {}) {
   }
 
   // Keyboard focus survives a repaint (Rule: "Content updates preserve …
-  // keyboard focus") even though paint*() functions replaceChildren() the
-  // SVG groups they own — capture the focused hit's identity, repaint, then
-  // find and refocus its successor node.
-  function withFocusPreserved(fn) {
+  // keyboard focus") even though paint*() and renderBrowser() replaceChildren()
+  // the groups/list they own — capture the focused hit's identity, rebuild,
+  // then find and refocus its successor node. Shared by the SVG repaint and
+  // the (possibly async) browser-list rebuild so a keyboard user browsing the
+  // 400px list doesn't lose focus when badges or the dig scope change it.
+  function captureFocusKey() {
     const active = document.activeElement;
     const ds = active && active.dataset;
-    const key = ds && (ds.branch || ds.relPath) ? { ...ds } : null;
-    fn();
-    if (!key) return;
-    let selector = null;
-    if (key.itemId) selector = `[data-branch="${key.branch}"][data-item-id="${key.itemId}"]`;
-    else if (key.branch) selector = `[data-branch="${key.branch}"]`;
-    else if (key.relPath) selector = `[data-rel-path="${key.relPath}"]`;
+    if (ds && ds.itemId) return `[data-branch="${ds.branch}"][data-item-id="${ds.itemId}"]`;
+    if (ds && ds.branch) return `[data-branch="${ds.branch}"]`;
+    if (ds && ds.relPath) return `[data-rel-path="${ds.relPath}"]`;
+    if (active && active.getAttribute) {
+      const label = active.getAttribute('aria-label');
+      if (label) return `[aria-label="${label.replace(/"/g, '\\"')}"]`;
+    }
+    return null;
+  }
+  function restoreFocus(selector, root) {
     if (!selector) return;
     try {
-      const match = world.querySelector(selector);
+      const match = root.querySelector(selector);
       if (match && typeof match.focus === 'function') match.focus();
     } catch (_) { /* selector built from live data; a mismatch is a no-op */ }
+  }
+  function withFocusPreserved(fn) {
+    const key = captureFocusKey();
+    fn();
+    restoreFocus(key, world);
   }
 
   function currentBranches(snap) {
@@ -343,8 +353,15 @@ export async function boot(opts = {}) {
     if (!list) return;
     const snap = viewState.snapshot();
     document.dispatchEvent(new CustomEvent('bp:map-location', {detail:{path:snap.dig?.relPath || ''}}));
-    const key = JSON.stringify([snap.dig?.relPath || '', snap.filters, page]);
+    // Sibling badges (open/attention/working) only ever render for top-level
+    // lots (see `state` below), and refresh on every 'bp:map-operations'
+    // poll — fold nodeState into the key so a poll during focus (dig
+    // cleared, project still selected) repaints the list instead of
+    // silently going stale for the whole focus session.
+    const stateFingerprint = snap.dig ? '' : JSON.stringify(nodeState);
+    const key = JSON.stringify([snap.dig?.relPath || '', snap.filters, page, stateFingerprint]);
     if (key === browserKey) return;
+    const focusKey = captureFocusKey();
     const version = ++browseVersion;
     document.getElementById('map-browser-path').textContent = snap.dig?.relPath || tree.binder?.name || 'Workspace';
     try {
@@ -372,6 +389,7 @@ export async function boot(opts = {}) {
         }
         const button = document.createElement('button');
         button.type = 'button'; button.setAttribute('aria-label', (node.isDir ? 'Folder · ' : 'Paper · ') + node.name);
+        button.dataset.relPath = node.relPath;
         const icon = document.createElement('span'); icon.className = 'map-browser-icon'; icon.setAttribute('aria-hidden', 'true');
         icon.innerHTML = node.isDir
           ? '<svg viewBox="0 0 20 20"><path d="M2 5h6l2 2h8v10H2z"/></svg>'
@@ -389,13 +407,25 @@ export async function boot(opts = {}) {
         }
         button.addEventListener('click', async () => {
           try {
-            if (node.isDir) await digInto(node, {mode:snap.dig ? 'nest' : 'root'});
+            if (node.isDir) {
+              // A project is focused and this is a top-level lot (dig is
+              // cleared) — tapping a sibling must switch focus to it, not
+              // dig into its children behind the still-focused canvas/
+              // breadcrumb (that leaves canvas/breadcrumb on the old
+              // project while the list shows the new one's children).
+              if (snap.project && !snap.dig) {
+                selectProjectView({ relPath: node.relPath, name: node.name, hasMd: Boolean(node.hasMd) });
+                return;
+              }
+              await digInto(node, {mode:snap.dig ? 'nest' : 'root'});
+            }
             else await openPaper(node.relPath, {label:node.name});
           } catch (error) { document.getElementById('map-browser-path').textContent = 'Unable to open this folder.'; }
         });
         list.append(button);
       }
       if (!list.children.length) list.textContent = 'No folders or readable Markdown papers here.';
+      restoreFocus(focusKey, list);
     } catch (error) { if(version === browseVersion)list.textContent = 'Folder source unavailable.'; }
   }
   function scheduleRepaint() {

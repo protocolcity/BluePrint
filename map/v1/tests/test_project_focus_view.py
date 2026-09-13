@@ -133,6 +133,42 @@ class HostFocusWiringTests(unittest.TestCase):
         self.assertIn("tree.snapshot().lots.find(lot => lot.relPath === projectPath)", self.host)
         self.assertIn("hasMd: treeLot ? treeLot.hasMd : false", self.host)
 
+    def test_sibling_lot_tap_while_focused_switches_focus_not_dig(self) -> None:
+        # cursor-reviewer second pass (pc-1492 PR 115): tapping a top-level
+        # lot in the browser list while a project is focused (dig cleared)
+        # must call selectProjectView so canvas/breadcrumb/list all switch
+        # together — digInto alone would leave the canvas/breadcrumb on the
+        # old project while only the list moved to the new one's children.
+        match = re.search(r"button\.addEventListener\('click', async \(\) => \{([\s\S]*?)\n        \}\);\n        list\.append\(button\);", self.host)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("if (snap.project && !snap.dig)", body)
+        self.assertIn(
+            "selectProjectView({ relPath: node.relPath, name: node.name, hasMd: Boolean(node.hasMd) });",
+            body,
+        )
+
+    def test_browser_key_includes_a_node_state_fingerprint(self) -> None:
+        # cursor-reviewer second pass: browserKey only covered dig path,
+        # filters and page, so sibling badges went stale on operations
+        # polls for the whole focus session (dig cleared, project focused).
+        self.assertIn("const stateFingerprint = snap.dig ? '' : JSON.stringify(nodeState);", self.host)
+        self.assertIn("page, stateFingerprint", self.host)
+
+    def test_browser_list_rebuild_preserves_keyboard_focus(self) -> None:
+        # cursor-reviewer second pass: withFocusPreserved only wrapped the
+        # SVG repaint; renderBrowser's replaceChildren() (async, keyed by
+        # browserKey) could fire after that focus restore already ran and
+        # drop a keyboard user's focus at 400px. Assert the browser rebuild
+        # captures and restores focus itself, keyed by relPath/aria-label.
+        self.assertIn("function captureFocusKey", self.host)
+        self.assertIn("function restoreFocus", self.host)
+        render_browser = re.search(r"async function renderBrowser\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(render_browser)
+        body = render_browser.group(1)
+        self.assertIn("const focusKey = captureFocusKey();", body)
+        self.assertIn("restoreFocus(focusKey, list);", body)
+
 
 class HitRouterFocusRowsTests(unittest.TestCase):
     def setUp(self) -> None:
