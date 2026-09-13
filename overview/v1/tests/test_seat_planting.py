@@ -10,7 +10,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from protocolcity.adopt import plant_standard_seats
+from protocolcity.adopt import plant_standard_seats, stamp_managed
+from protocolcity.desk import DESK_JOIN_REL
 from protocolcity.doctor import diagnose_seat_drift
 
 
@@ -47,6 +48,14 @@ class PlantStandardSeatsTests(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.project = self.root / 'blueprint'
         self.project.mkdir()
+        # pc-1475 review fix: plant_standard_seats now refuses an unmanaged
+        # folder or one without a desk-join.json — stamp both so the tests
+        # below still exercise the command-computation logic, not the guard
+        # (that guard has its own tests in test_adopt_review_fixes.py).
+        stamp_managed(self.project)
+        join = self.project / DESK_JOIN_REL
+        join.parent.mkdir(parents=True, exist_ok=True)
+        join.write_text(json.dumps({'slug': 'blueprint', 'prefix': 'pc', 'display': 'BluePrint'}))
 
     def _plant(self, host_providers, **kwargs):
         with patch('overview.v1.server.operations.detect_providers', return_value=host_providers):
