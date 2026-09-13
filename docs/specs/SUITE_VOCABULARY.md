@@ -7,7 +7,9 @@ Status: current, 2026-09-13. Supersedes the dual-register paper kept in the priv
 | Founded root | **Workspace** | `workspace`, binder |
 | Folder with its own store | **Project** | store slug, `desk-join.json` |
 | Filed work | **Work order** | `task`, `wl-*` ids |
-| Registered execution seat | **Agent** (lane) · **Job** (scheduled duty) | `kind=lane`, `kind=job`, roster |
+| Everything registered in the roster (the page) | **Agents** | roster, `/agents` |
+| Roster row that claims work orders under its own identity | **Seat** | `kind=lane` (never say lane in chrome) |
+| Roster row that runs a duty on a schedule or on demand and never claims | **Job** | `kind=job` |
 | The person | **You** | `author=you`, `worker:you` |
 | Act-now attention | **For You** with faces Decide · Read · Watch · Note | `gate_type=human`, reminders, timers |
 | Parked on purpose | **Deferred** · **Tracking** (structural umbrella) | `gate_type=deferred`, `gate_type=tracking` |
