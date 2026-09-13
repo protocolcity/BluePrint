@@ -18,19 +18,23 @@ def run_job(root, job):
     root = Path(root).resolve()
     stamp = datetime.now(timezone.utc).isoformat()
     command = [sys.executable, '-m', 'protocolcity.open_work_audit', '--json', '--feeds',
-               '--process', '--url', 'http://127.0.0.1:8799/api/scene',
+               '--process', '--workspace', str(root),
                '--roster', str(root / '.protocolcity/workforce/local/roster.json')]
     if job != 'health-patrol': command.extend(['--history', '--decay'])
     env = dict(os.environ, WORKSPACE_ROOT=str(root))
     try:
         result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=90)
         audit = json.loads(result.stdout)
-        if result.returncode or not audit.get('reachable'):
+        if result.returncode or not audit.get('reachable') or not audit.get('ok'):
             raise ValueError('WorkLane audit unavailable')
         summary = '{} open work orders · {} ready · {} in progress/review'.format(
             audit['total_open'], audit['total_ready'], audit['total_in_motion'])
         state = 'completed'
-        detail = 'Read-only audit completed. Work-order status does not prove agent activity.'
+        from protocolcity.audit_coverage import coverage_text
+        staffing = audit.get('coverage')
+        detail = coverage_text(staffing) if staffing else 'Staffing coverage unknown. Work-order status does not prove agent activity.'
+        if staffing:
+            summary += ' · configured lane ready: ' + str(staffing.get('configured_lane_ready') if staffing.get('configured_lane_ready') is not None else 'unknown')
     except (OSError, ValueError, KeyError, subprocess.TimeoutExpired) as exc:
         audit = {}; state = 'failed'; summary = 'Operations check failed'; detail = str(exc)
     receipt = dict(job=job, title=JOBS[job], observed_at=stamp, state=state,

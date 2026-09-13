@@ -11,7 +11,7 @@ class OperationsJobTests(unittest.TestCase):
     def test_failed_audit_overwrites_old_success_without_claiming_health(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            with patch('protocolcity.operations_job.subprocess.run', return_value=subprocess.CompletedProcess([],0,json.dumps(dict(reachable=True,total_open=3,total_ready=2,total_in_motion=1)))):
+            with patch('protocolcity.operations_job.subprocess.run', return_value=subprocess.CompletedProcess([],0,json.dumps(dict(ok=True,reachable=True,total_open=3,total_ready=2,total_in_motion=1)))):
                 self.assertEqual(run_job(root,'health-patrol'),0)
             with patch('protocolcity.operations_job.subprocess.run', side_effect=subprocess.TimeoutExpired('audit',90)):
                 self.assertEqual(run_job(root,'health-patrol'),1)
