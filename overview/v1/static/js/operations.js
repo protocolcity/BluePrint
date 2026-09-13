@@ -121,34 +121,82 @@ function work() {
   $('page-count').textContent=`Page ${pageIndex+1} of ${pages}`;
   $('previous').disabled=pageIndex===0;$('next').disabled=pageIndex>=pages-1;
 }
-function agents() {
-  $('agent-list').replaceChildren();
-  for(const agent of snapshot.agents) {
-    const card=el('article',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');heading.append(el('h2',agent.name),badge(agent.state));card.append(heading);
-    const facts=el('dl',undefined,'bp-facts');
-    for(const [name,value] of [['Identity',agent.id],['Type',agent.kind],['Configuration',agent.configuration],['Schedule',scheduleLabel(agent.schedule)],['Next run',agent.schedule==='manual'?'On demand':date(agent.next_fire)],['Model',agent.model],['Scheduler heartbeat',date(agent.last_at)]]) facts.append(el('dt',name),el('dd',value));
-    card.append(facts,link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
-    const dispatch=el('button',agent.state==='working'?'Running':'Dispatch now');
-    dispatch.type='button';dispatch.disabled=!agent.configured || ['working','unknown','off'].includes(agent.state);
+function agentAction(agent, dispatchLabel) {
+  const nodes=[];
+  if(agent.action==='inspect') {
+    const button=el('button','Inspect');button.type='button';
     const feedback=el('p','','bp-muted');feedback.setAttribute('role','status');
-    dispatch.addEventListener('click',async()=>{
-      dispatch.disabled=true;dispatch.textContent='Dispatching…';feedback.textContent='';
-      try {
-        const response=await fetch('/api/agents/dispatch',{method:'POST',headers:{'Content-Type':'application/json','X-BluePrint-Action':'agent-dispatch'},body:JSON.stringify({identity:agent.id})});
-        const result=await response.json();
-        if(!response.ok || !result.ok) throw new Error(result.error || 'Dispatch was not confirmed. Refresh before retrying.');
-        feedback.textContent=result.message || 'Dispatch accepted. Refresh to see progress.';dispatch.textContent='Dispatched';
-      } catch(error) {feedback.textContent=error.message;dispatch.textContent='Refresh to retry';}
-    });
-    card.append(dispatch,feedback);
-    if(agent.shift) card.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · since ${date(agent.shift.started_at)} · budget ${agent.shift.budget_secs}s${agent.shift.candidates.length?' · candidates '+agent.shift.candidates.join(', '):''} · ${agent.shift.source}${agent.shift.lock_held?' · lock held':''}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
-    if(agent.last_run) card.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)} · ${agent.last_run.reason}`,'bp-note bp-muted'));
-    if(agent.report) {
-      const report=el('div',undefined,'bp-note');report.append(badge(agent.report.state),el('p',agent.report.summary),el('p',`${date(agent.report.observed_at)} · ${agent.report.mode}`,'bp-muted'),el('p',agent.report.detail,'bp-muted'));card.append(report);
-    }
-    $('agent-list').append(card);
+    button.addEventListener('click',()=>{feedback.textContent=`Shift open past its budget with no terminal row. Inspect ledger/${agent.id}.log before dispatching again.`;});
+    nodes.push(button,feedback);
+    return nodes;
   }
-  if(!snapshot.agents.length) empty($('agent-list'),'No local agents found in the readable registry.');
+  if(!agent.action) {
+    nodes.push(el('p','No action needed.','bp-muted'));
+    return nodes;
+  }
+  const button=el('button',agent.action==='recover' ? 'Recover' : (dispatchLabel || 'Dispatch now'));
+  button.type='button';button.disabled=!agent.configured;
+  const feedback=el('p','','bp-muted');feedback.setAttribute('role','status');
+  button.addEventListener('click',async()=>{
+    button.disabled=true;button.textContent=agent.action==='recover'?'Recovering…':'Dispatching…';feedback.textContent='';
+    try {
+      const response=await fetch('/api/agents/dispatch',{method:'POST',headers:{'Content-Type':'application/json','X-BluePrint-Action':'agent-dispatch'},body:JSON.stringify({identity:agent.id})});
+      const result=await response.json();
+      if(!response.ok || !result.ok) throw new Error(result.error || 'Dispatch was not confirmed. Refresh before retrying.');
+      feedback.textContent=result.message || 'Dispatch accepted. Refresh to see progress.';button.textContent='Dispatched';
+    } catch(error) {feedback.textContent=error.message;button.textContent='Refresh to retry';button.disabled=false;}
+  });
+  nodes.push(button,feedback);
+  return nodes;
+}
+function agentCard(agent) {
+  const card=el('article',undefined,'bp-panel');
+  const heading=el('div',undefined,'bp-section-head');
+  const title=el('div');title.append(el('h2',agent.name));
+  if(agent.group==='seat') title.append(el('span',`${agent.held ? agent.held.project : 'Unassigned'} · ${agent.model}`,'bp-muted'));
+  heading.append(title,badge(agent.state,agent.badge));
+  card.append(heading,el('p',`Source: ${agent.badge_source}`,'bp-muted'));
+  const facts=el('dl',undefined,'bp-facts');
+  for(const [name,value] of [['Identity',agent.id],['Type',agent.kind],['Configuration',agent.configuration],['Schedule',scheduleLabel(agent.schedule)],['Next run',agent.schedule==='manual'?'On demand':date(agent.next_fire)],['Model',agent.model],['Scheduler heartbeat',date(agent.last_at)]]) facts.append(el('dt',name),el('dd',value));
+  card.append(facts,link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
+  if(agent.group==='seat' && agent.held) card.append(el('p',`Holds ${agent.held.id}${agent.held_verified?' (owner verified)':' (not yet verified)'}${agent.shift && agent.shift.lock_held?' · lock held':''}`,'bp-note'));
+  if(agent.shift) card.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · since ${date(agent.shift.started_at)} · budget ${agent.shift.budget_secs}s${agent.shift.candidates.length?' · candidates '+agent.shift.candidates.join(', '):''} · ${agent.shift.source}${agent.shift.lock_held?' · lock held':''}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
+  if(agent.last_run) card.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)} · ${agent.last_run.reason} · ledger/${agent.id}.log`,'bp-note bp-muted'));
+  if(agent.recovery_attempts) card.append(el('p',`Recovery attempts: ${agent.recovery_attempts}`,'bp-note bp-muted'));
+  if(agent.report) {
+    const report=el('div',undefined,'bp-note');report.append(badge(agent.report.state),el('p',agent.report.summary),el('p',`${date(agent.report.observed_at)} · ${agent.report.mode}`,'bp-muted'),el('p',agent.report.detail,'bp-muted'));card.append(report);
+  }
+  card.append(...agentAction(agent));
+  return card;
+}
+function supervisorPanel() {
+  const container=$('supervisor-panel');container.replaceChildren();
+  const supervisor=snapshot.supervisor;
+  if(!supervisor) { empty(container,'No supervisor registered on this roster.'); return; }
+  const heading=el('div',undefined,'bp-section-head');heading.append(el('h2',supervisor.name),badge(supervisor.state,supervisor.badge));container.append(heading);
+  container.append(el('p',`Schedule: ${scheduleLabel(supervisor.schedule)}`,'bp-muted'));
+  const passes=supervisor.passes || {state:'unavailable',detail:'Supervisor pass record unavailable.',passes:[]};
+  if(passes.state==='available') {
+    if(!passes.passes.length) empty(container,'No supervisor passes recorded yet.');
+    for(const pass of passes.passes.slice(0,3)) {
+      const row=el('div',undefined,'bp-note');
+      row.append(el('strong',`${date(pass.generated_at)} · ${pass.mode || 'mode not reported'}`));
+      row.append(el('p',`${pass.pass_outcome || 'outcome not reported'} · proposals ${pass.proposals_valid ?? '—'}/${pass.proposals_total ?? '—'} · dispatched ${pass.dispatch_completed ?? 0}/${pass.dispatch_attempted ?? 0}`,'bp-muted'));
+      for(const item of pass.dispatched || []) row.append(el('p',`${item.worker} → ${item.project} · ${item.outcome}`,'bp-muted'));
+      container.append(row);
+    }
+  } else {
+    empty(container, passes.detail || 'Supervisor pass record unavailable.');
+  }
+  container.append(...agentAction(supervisor,'Run a pass'));
+}
+function agents() {
+  const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
+  $('seat-list').replaceChildren(...seats.map(agentCard));
+  if(!seats.length) empty($('seat-list'),'No seats registered in the readable registry.');
+  $('job-list').replaceChildren(...jobs.map(agentCard));
+  if(!jobs.length) empty($('job-list'),'No jobs registered in the readable registry.');
+  supervisorPanel();
 }
 function calendar() {
   const dated=$('dated-work');dated.replaceChildren();
