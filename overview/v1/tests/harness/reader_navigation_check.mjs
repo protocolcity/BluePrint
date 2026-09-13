@@ -35,11 +35,12 @@ async function run(name,env) {
 }
 const work='/work?project=example&assignment=worker%3Abuilder&status=in_progress&q=a%26b+%23%2F#row%20two';
 const map='/map?path=example%2Fdocs&md=example%2Fdocs%2FGuide.md#section%202';
-for(const target of [work,map,'/work/','#bad','/map?path=a%25b#hash']) {
+const calendar='/calendar?project=product&day=2026-09-13';
+for(const target of [work,map,calendar,'/work/','/calendar/','#bad','/map?path=a%25b#hash']) {
   const expected=target==='#bad'?'/work':target;
   assert.equal(navigation.safeReturnTo(target),expected);
 }
-const unsafe=[null,'','https://evil.example/work','https://desk.example/work','//evil.example','///evil.example','javascript:alert(1)','data:text/html,test','/\\evil.example','/work\\@evil.example',' /map','/map\n?path=x','/map\t','/%2f%2fevil.example','/work/../settings','/map/%2e%2e/settings','/api/work-order/action','/work-order?id=x','/mapx','/work%3f@evil.example'];
+const unsafe=[null,'','https://evil.example/work','https://desk.example/work','//evil.example','///evil.example','javascript:alert(1)','data:text/html,test','/\\evil.example','/work\\@evil.example',' /map','/map\n?path=x','/map\t','/%2f%2fevil.example','/work/../settings','/map/%2e%2e/settings','/api/work-order/action','/work-order?id=x','/mapx','/calendarx','/work%3f@evil.example'];
 for(const target of unsafe)assert.equal(navigation.safeReturnTo(target),'/work',String(target));
 for(const target of [work,map,...unsafe.filter(x=>typeof x==='string')]) {
   const env=environment('/work-order?project=example&id=ex-1&'+new URLSearchParams({return_to:target}));
@@ -70,6 +71,21 @@ for(const target of [work,map,...unsafe.filter(x=>typeof x==='string')]) {
   await env.get('search').fire('input');
   assert.equal(env.context.location.hash,'#row%20two');
   assert.equal(env.context.location.searchParams.get('q'),'new & query');
+}
+{
+  const env=environment(calendar);
+  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace("await import('/js/dom-reconcile.mjs')",'reconcile').replace('function datedHref(event)', 'window.testDatedHref = datedHref;\nfunction datedHref(event)');
+  env.context.fetch=async()=>({ok:false});
+  await vm.runInContext(source,env.context);await settle();
+  const href=env.context.window.testDatedHref({product:'product',task_id:'pc-1'});
+  assert.equal(new URL(href,'https://desk.example').searchParams.get('return_to'),calendar);
+}
+{
+  const env=environment('/work-order?project=example&id=ex-1&'+new URLSearchParams({return_to:calendar}));
+  env.context.fetch=async()=>({ok:true,json:async()=>({project:'example',ext_id:'ex-1',comments:[]})});
+  await run('work-order.js',env);
+  assert.equal(env.get('reader-back').href,calendar);
+  assert.equal(env.get('reader-back').textContent,'Back to Calendar');
 }
 {
   const env=environment(map);

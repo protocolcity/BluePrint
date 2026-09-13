@@ -103,6 +103,9 @@ class FourLensNavTests(unittest.TestCase):
         self.assertIn('id="calendar-view"', text)
         self.assertIn('id="schedule-list"', text)
         self.assertIn('id="event-list"', text)
+        self.assertIn('id="calendar-today"', text)
+        self.assertIn('id="calendar-next"', text)
+        self.assertIn('id="calendar-past"', text)
         self.assertIn('data-page="calendar"', text)
 
     def test_settings_lens_paints(self) -> None:
