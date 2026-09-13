@@ -143,6 +143,15 @@ class AgentCardBodyTests(unittest.TestCase):
         self.assertIn("if(agent.group==='seat' && agent.recovery_attempts)", _SRC)
 
 
+class DeliveryQuietCopyTests(unittest.TestCase):
+    """pc-1466 review fix: quiet copy must follow repo.quiet only."""
+
+    def test_quiet_copy_uses_repo_quiet_flag_only(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn("repo.quiet?'Quietinthelast14days.'", compact)
+        self.assertNotIn("repo.quiet||repo.state==='connected'", compact)
+
+
 class PersonaChipTests(unittest.TestCase):
     """pc-1473 review fix: the chip slot must print the persona text
     (Your todo / Reminder <date> / Your note) instead of "Needs routing"
