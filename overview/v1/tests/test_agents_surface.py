@@ -547,6 +547,119 @@ class SeatProjectFieldTests(unittest.TestCase):
         self.assertIsNone(row['project_name'])
 
 
+class SeatParkedClaimTests(unittest.TestCase):
+    """pc-1495: Agents rows surface parked handoffs and a finishing state."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.runtime = self.root / 'workforce/local'
+        self.runtime.mkdir(parents=True)
+        (self.runtime / 'ledger').mkdir()
+        manifest = self.root / 'product/.protocolcity/desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': 'product', 'prefix': 'pc', 'display': 'Product'}))
+        self.data = self.root / 'worklane/worklane/local/data'
+        self.data.mkdir(parents=True)
+
+    def _daemon(self, in_flight=None, fresh=True):
+        tick = datetime.now(timezone.utc) - (timedelta(seconds=0) if fresh else timedelta(hours=1))
+        (self.runtime / 'daemon.json').write_text(json.dumps({'last_tick': tick.isoformat(), 'in_flight': in_flight or []}))
+
+    def _roster(self, workers):
+        (self.runtime / 'roster.json').write_text(json.dumps({'workers': workers}))
+
+    @staticmethod
+    def _stamp(delta):
+        return (datetime.now(timezone.utc) - delta).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    def _ledger(self, identity, text):
+        (self.runtime / 'ledger' / (identity + '.log')).write_text(text)
+
+    def _seed_task(self, task_id, status, labels, comments=()):
+        import sqlite3
+        db = self.data / 'product.db'
+        if not db.exists():
+            with sqlite3.connect(db) as conn:
+                conn.executescript(
+                    'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+                    'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);')
+        with sqlite3.connect(db) as conn:
+            conn.execute('DELETE FROM tasks')
+            conn.execute('DELETE FROM task_comments')
+            conn.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                         (task_id, f'pc-{task_id}', f'Order {task_id}', status, 1, '2026-09-13T12:00:00Z', json.dumps(labels)))
+            for index, (body, author, created_at) in enumerate(comments, start=1):
+                conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)', (index, task_id, body, author, created_at))
+
+    def _seat(self, identity='seat'):
+        self._roster({identity: {'display': 'Seat', 'command': ['runner'], 'identity': identity, 'kind': 'lane'}})
+        return identity
+
+    def _agent(self, identity):
+        return next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == identity)
+
+    def test_open_shift_with_in_progress_claim(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=2))
+        self._ledger(identity, f'{started} START identity={identity} kind=lane budget_secs=1500\n{started} CANDIDATE ticket=pc-1\n')
+        self._daemon()
+        self._seed_task(1, 'in_progress', [f'worker:{identity}'],
+                        [('Owner: ' + identity + '\nStart: ' + started, identity, started)])
+        row = self._agent(identity)
+        self.assertEqual(row['badge'], 'WORKING')
+        self.assertIsNotNone(row['held'])
+        self.assertEqual(row['held']['id'], 'pc-1')
+        self.assertTrue(row['held_verified'])
+        self.assertFalse(row['finishing'])
+        self.assertIsNone(row['parked'])
+
+    def test_open_shift_with_parked_claim_reads_finishing(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=2))
+        parked_at = self._stamp(timedelta(minutes=1))
+        self._ledger(identity, f'{started} START identity={identity} kind=lane budget_secs=1500\n{started} CANDIDATE ticket=pc-3\n')
+        self._daemon()
+        self._seed_task(3, 'in_review', [f'worker:{identity}'],
+                        [('Owner: ' + identity + '\nStart: ' + started, identity, started),
+                         ('Parked: awaiting integration', identity, parked_at)])
+        row = self._agent(identity)
+        self.assertEqual(row['badge'], 'WORKING')
+        self.assertIsNone(row['held'])
+        self.assertEqual([p['id'] for p in row['parked']], ['pc-3'])
+        self.assertTrue(row['finishing'])
+        self.assertTrue(row['parked_verified'])
+
+    def test_closed_shift_with_parked_claims_stays_idle_and_lists_them(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=10))
+        stopped = self._stamp(timedelta(minutes=5))
+        self._ledger(identity,
+                     f'{started} START identity={identity} kind=lane budget_secs=1500\n'
+                     f'{started} CANDIDATE ticket=pc-4\n{stopped} STOP reason="single-pass complete"\n')
+        self._daemon()
+        self._seed_task(4, 'in_review', [f'worker:{identity}'],
+                        [('Owner: ' + identity + '\nStart: ' + started, identity, started),
+                         ('Parked: awaiting integration', identity, stopped)])
+        row = self._agent(identity)
+        self.assertEqual(row['badge'], 'IDLE')
+        self.assertIsNone(row['held'])
+        self.assertEqual([p['id'] for p in row['parked']], ['pc-4'])
+        self.assertFalse(row['finishing'])
+
+    def test_nothing_held_or_parked(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=2))
+        stopped = self._stamp(timedelta(minutes=1))
+        self._ledger(identity, f'{started} START identity={identity} kind=lane budget_secs=1500\n{stopped} STOP reason="single-pass complete"\n')
+        self._daemon()
+        row = self._agent(identity)
+        self.assertIsNone(row['held'])
+        self.assertIsNone(row['parked'])
+        self.assertFalse(row['finishing'])
+
+
 class _FakeResponse:
     def __init__(self, payload):
         self._payload = json.dumps(payload).encode('utf-8')
