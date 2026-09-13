@@ -34,7 +34,7 @@
       context.append(summary);
       const links=document.createElement('nav');links.setAttribute('aria-label','Project context');
       const query=project ? '?project='+encodeURIComponent(project.id) : '';
-      const entries=[['Work','/work'+query],['Needs you','/work'+(query ? query+'&' : '?')+'status=attention'],['Agents and jobs','/agents'],['Papers',project ? '/documents'+query : '/projects']];
+      const entries=[['Work','/work'+query],['Needs you','/work'+(query ? query+'&' : '?')+'attention=any'],['Agents and jobs','/agents'],['Papers',project ? '/documents'+query : '/projects']];
       if(project?.has_instructions)entries.push(['Instructions','/map?'+new URLSearchParams({path:project.folder,md:project.folder+'/AGENTS.md'})]);
       for(const [label,href] of entries){const a=document.createElement('a');a.textContent=label;a.href=href;links.append(a);}
       context.append(links);

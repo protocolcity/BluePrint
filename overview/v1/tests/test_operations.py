@@ -204,6 +204,92 @@ class OperationsTests(unittest.TestCase):
             conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type='deferred' WHERE id=1")
         order = operations_snapshot(self.root)['orders'][0]
         self.assertFalse(order['needs_routing'])
+    def test_personal_reminder_is_assigned_to_you_not_unassigned(self):
+        """STATES_AND_TERMS.md §5 fixture 1: a personal reminder assigned to
+        You reads Assigned to You, never Assigned to Unassigned."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                         ('backlog', json.dumps(['worker:you', 'you:remind'])))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['assigned_you'])
+        self.assertEqual(order['owner'], 'You')
+    def test_agent_owned_human_gate_stays_assigned_to_the_agent_in_for_you(self):
+        """STATES_AND_TERMS.md §5 fixture 2: an agent-owned human gate is
+        visible in For You (attention_face='decide') but still assigned to
+        the agent, not You."""
+        self.seed()
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['gate_type'], 'human')
+        self.assertEqual(order['attention_face'], 'decide')
+        self.assertFalse(order['assigned_you'])
+        self.assertEqual(order['owner'], 'agent')
+    def test_human_gate_with_no_worker_is_a_decision_assigned_to_you(self):
+        """An unrouted human gate is a human-owned decision: assigned to
+        You, not Unassigned, per STATES_AND_TERMS.md §5."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET labels='[]', gate_type='human', gate_note='Approve the plan' WHERE id=1")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['assigned_you'])
+        self.assertEqual(order['owner'], 'You')
+        self.assertEqual(order['attention_face'], 'decide')
+    def test_ungated_ready_agent_order_is_visible_and_ready(self):
+        """STATES_AND_TERMS.md §5 fixture 3: an ungated ready agent order."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog', labels=?, gate_type=NULL WHERE id=1",
+                         (json.dumps(['worker:agent']),))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['ready_for'], 'agent')
+    def test_deferred_and_tracking_orders_are_visible_but_never_ready(self):
+        """STATES_AND_TERMS.md §5 fixture 4: deferred/tracking records
+        remain visible under All open (every non-done/canceled order) but
+        are never reported ready."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog', labels=?, gate_type='tracking' WHERE id=1",
+                         (json.dumps(['worker:agent']),))
+        result = operations_snapshot(self.root)
+        order = next(o for o in result['orders'] if o['id'] == 'pc-1')
+        self.assertEqual(order['gate_type'], 'tracking')
+        self.assertIsNone(order['ready_for'])
+    def test_expired_timer_is_distinguished_from_an_active_embargo(self):
+        """An expired timer gate is not an active embargo (SURFACES review,
+        STATES_AND_TERMS.md §5)."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type='timer', gate_until=? WHERE id=1",
+                         ('2020-01-01T00:00:00Z',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['gate_expired'])
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET gate_until=? WHERE id=1", ('2099-01-01T00:00:00Z',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['gate_expired'])
+    def test_gate_expired_treats_timezone_naive_gate_until_as_utc(self):
+        """Review finding (pc-1482): a naive gate_until (no offset, common in
+        the stores) must be treated as UTC, not silently read as not-expired."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type='timer', gate_until=? WHERE id=1",
+                         ('2020-01-01T00:00:00',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertTrue(order['gate_expired'])
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET gate_until=? WHERE id=1", ('2099-01-01T00:00:00',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['gate_expired'])
+    def test_gate_expired_never_raises_on_unparsable_gate_until(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', labels='[]', gate_type='timer', gate_until=? WHERE id=1",
+                         ('not-a-date',))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertFalse(order['gate_expired'])
     def test_unregistered_work_labels_do_not_create_agents(self):
         self.seed()
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
