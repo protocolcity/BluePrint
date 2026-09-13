@@ -73,7 +73,7 @@ class RemoteTests(unittest.TestCase):
             remote._CACHE[key]={'checked':0,'busy':False,'data':{'state':'loading','repositories':[]}}
             values=[{'private':False},[],[],{'workflow_runs':[]},[]]
             with patch.object(remote,'_github',side_effect=values):
-                remote._refresh(key,'gh',spec)
+                remote._refresh(key,'gh',spec,root)
             self.assertIn(key,remote._CACHE)
             old_key=(str(root.resolve()),specs_json)
             self.assertNotIn(old_key,remote._CACHE)
@@ -88,3 +88,54 @@ class RemoteTests(unittest.TestCase):
             active=remote._load_repo('gh',spec)
         self.assertFalse(active['quiet'])
         self.assertEqual(active['items'][0]['project'],'example')
+
+    def test_groups_checks_under_shared_commit_and_sort_exceptions_first(self):
+        pr={'title':'Ship','html_url':'https://github.com/org/repo/pull/2','state':'open','updated_at':_RECENT,'number':2,'head':{'sha':'abc'}}
+        fail={'name':'CI','status':'completed','conclusion':'failure','head_sha':'abc','updated_at':_RECENT,'html_url':'https://github.com/org/repo/actions/runs/1'}
+        ok={'name':'CI','status':'completed','conclusion':'success','head_sha':'def','updated_at':_RECENT,'html_url':'https://github.com/org/repo/actions/runs/2'}
+        values=[{'private':False},[pr],[],{'workflow_runs':[ok,fail]},[]]
+        with patch.object(remote,'_github',side_effect=values):
+            result=remote._load_repo('gh',{'repo':'org/repo'})
+        self.assertEqual(len(result['groups']),2)
+        self.assertEqual(result['groups'][0]['priority'],0)
+        self.assertEqual(len(result['groups'][0]['items']),2)
+        kinds={item['kind'] for item in result['groups'][0]['items']}
+        self.assertEqual(kinds,{'pull_request','workflow'})
+
+    def test_installed_revision_matches_deployment_receipt_commit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            (root/'.blueprint').mkdir()
+            (root/'.blueprint/deployment.json').write_text(json.dumps({
+                'version':'1.2.3','source_head':'abc123full','activated_at':_RECENT}))
+            pr={'title':'Ship','html_url':'https://github.com/org/repo/pull/2','state':'closed','merged_at':_RECENT,'number':2,'head':{'sha':'abc123full'}}
+            run={'name':'CI','status':'completed','conclusion':'success','head_sha':'abc123full','updated_at':_RECENT,'html_url':'https://github.com/org/repo/actions/runs/1'}
+            values=[{'private':False},[],[pr],{'workflow_runs':[run]},[]]
+            spec={'repo':'org/repo','project':'protocolcity'}
+            with patch.object(remote,'_github',side_effect=values):
+                result=remote._load_repo('gh',spec,root)
+        self.assertEqual(result['deployment']['state'],'verified')
+        self.assertEqual(result['groups'][0]['deploy_state'],'deployed')
+        self.assertEqual(result['summary']['recent_merges'],1)
+
+    def test_missing_deployment_evidence_stays_unknown(self):
+        pr={'title':'Ship','html_url':'https://github.com/org/repo/pull/2','state':'closed','merged_at':_RECENT,'number':2,'head':{'sha':'zzz'}}
+        values=[{'private':False},[],[pr],{'workflow_runs':[]},[]]
+        with patch.object(remote,'_github',side_effect=values):
+            result=remote._load_repo('gh',{'repo':'org/repo'})
+        self.assertIsNone(result['deployment'])
+        self.assertEqual(result['groups'][0]['deploy_state'],'unknown')
+        self.assertEqual(result['groups'][0]['badge'],'merged')
+
+    def test_remote_snapshot_reports_cache_age(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            (root/'.blueprint').mkdir()
+            (root/'.blueprint/connections.json').write_text(json.dumps({'github':{'repositories':[{'repo':'org/repo'}]}}))
+            remote._CACHE.clear()
+            with patch.object(remote,'shutil') as shutil_mod, patch.object(remote,'_github',side_effect=[{'private':False},[],[],{'workflow_runs':[]},[]]):
+                shutil_mod.which.return_value='gh'
+                first=remote.remote_snapshot(root)
+                second=remote.remote_snapshot(root)
+        self.assertIn('cache_age_seconds', second)
+        self.assertGreaterEqual(second['cache_age_seconds'], 0)

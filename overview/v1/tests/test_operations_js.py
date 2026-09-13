@@ -265,11 +265,12 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
-        """pc-1483: refreshRemote() must reconcile repository sections by
-        key instead of tearing the whole list down on every poll."""
-        fn = _SRC.split('async function refreshRemote()')[1].split('async function refresh(')[0]
+        """pc-1483/pc-1487: delivery painting must reconcile repository and
+        group sections by key instead of tearing the whole list down."""
+        fn = _SRC.split('function paintDelivery(')[1].split('function remoteStatusText')[0]
         self.assertNotIn("container.replaceChildren()", fn)
         self.assertIn("reconcileList($('remote-repositories')", fn)
+        self.assertIn('.bp-delivery-groups', fn)
 
     def test_excluded_stores_are_a_reconciled_list_not_a_joined_note(self):
         self.assertIn("reconcileList($('excluded-store-list')", _SRC)
@@ -855,6 +856,41 @@ class TimelineClearResetsPeriodTests(unittest.TestCase):
         body = source[start:source.index('\n}\n', start)]
         self.assertIn("timelinePeriod = ''", body)
         self.assertLess(body.index("timelinePeriod = ''"), body.index('updateTimelineFilters()'))
+
+
+class DeliverySurfaceTests(unittest.TestCase):
+    """pc-1487: exception-first delivery rollups with filters and honest badges."""
+
+    def test_delivery_filters_and_boundary_controls_exist(self):
+        self.assertIn('id="delivery-filters"', _HTML)
+        self.assertIn('id="delivery-boundary"', _HTML)
+        self.assertIn('id="delivery-repo"', _HTML)
+        self.assertIn('id="delivery-type"', _HTML)
+        self.assertIn('id="delivery-period"', _HTML)
+
+    def test_delivery_uses_one_collapsible_source_label(self):
+        self.assertIn('bp-delivery-note', _HTML)
+        self.assertNotIn('These records do not prove an agent is currently running.', _HTML)
+
+    def test_merged_pull_requests_badge_event_not_closed_state(self):
+        fn = _SRC.split('function deliveryEvidenceRow(')[1].split('function deliveryGroupRow')[0]
+        self.assertIn("item.pr_event", fn)
+        self.assertNotIn('badge(item.state)', fn)
+
+    def test_delivery_status_reports_cache_age_separately(self):
+        fn = _SRC.split('function remoteStatusText(')[1].split('async function refreshRemote')[0]
+        self.assertIn('cache_age_seconds', fn)
+        self.assertIn('fetched_at', fn)
+
+    def test_delivery_groups_expand_with_event_time_labels(self):
+        self.assertIn('bp-delivery-group', _SRC)
+        self.assertIn('Event ${date', _SRC)
+        self.assertIn('Fetched ${date', _SRC)
+
+    def test_clear_delivery_filters_resets_period_from_url(self):
+        body = _SRC.split('function clearDeliveryFilters()')[1].split('function paintDelivery')[0]
+        self.assertIn("deliveryPeriod=''", body)
+        self.assertIn("deliveryRepo=''", body)
 
 
 if __name__ == '__main__':

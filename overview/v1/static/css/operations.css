@@ -64,7 +64,8 @@
 .bp-badge[data-state="attention"],.bp-badge[data-state="stale"],.bp-badge[data-state="partial"],.bp-badge[data-state="reachable"],.bp-badge[data-state="unknown"] { color: var(--ov-focus); }
 .bp-badge[data-state="in_progress"],.bp-badge[data-state="fresh"],.bp-badge[data-state="available"],.bp-badge[data-state="working"] { color: var(--ov-state-working); }
 .bp-badge[data-state="blocked"],.bp-badge[data-state="unavailable"],.bp-badge[data-state="failed"] { color: var(--ov-state-error); }
-.bp-badge[data-state="installed"],.bp-badge[data-state="empty"],.bp-badge[data-state="not_configured"] { color: #b4bbc6; }
+.bp-badge[data-state="installed"],.bp-badge[data-state="deployed"],.bp-badge[data-state="merged"],.bp-badge[data-state="opened"],.bp-badge[data-state="empty"],.bp-badge[data-state="not_configured"] { color: #b4bbc6; }
+.bp-badge[data-state="deployed"],.bp-badge[data-state="merged"] { color: var(--ov-state-working); }
 .bp-source { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 13px 0; border-bottom: 1px solid var(--ov-tile-border); }.bp-source p { grid-column: 1/-1; overflow-wrap: anywhere; }.bp-source:last-child { border: 0; }
 .bp-source-compact { padding: 8px 0; }
 .bp-source-next { color: var(--ov-focus); font-size: 13px; margin: 4px 0 0; }
@@ -167,3 +168,14 @@
 .bp-timeline-detail { margin-top: 6px; font-size: 12px; grid-column: 1 / -1; }
 .bp-timeline-detail summary { cursor: pointer; color: var(--ov-link); }
 .bp-timeline-detail p { margin: 6px 0 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Delivery: exception-first repository summary with grouped evidence (pc-1487). */
+.bp-delivery-summary { font-size: 14px; font-weight: 500; margin: 0 0 6px !important; }
+.bp-delivery-repo .bp-delivery-groups { margin-top: 8px; }
+.bp-delivery-group { border-top: 1px solid var(--ov-tile-border); padding: 9px 0; }
+.bp-delivery-group:first-child { border-top: 0; }
+.bp-delivery-group > summary { cursor: pointer; list-style: none; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: start; }
+.bp-delivery-group > summary::-webkit-details-marker { display: none; }
+.bp-delivery-group .bp-order { border-top: 0; padding: 6px 0 0; }
+.bp-delivery-group .bp-order:first-of-type { padding-top: 10px; }
+.bp-delivery-note { margin-bottom: 14px; }
