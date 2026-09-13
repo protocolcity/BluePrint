@@ -1761,19 +1761,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         ),
     )
     p_adopt.add_argument(
-        "city",
-        metavar="WORKSPACE",
-        help="workspace root (the folder you founded)",
-    )
-    p_adopt.add_argument(
-        "neighborhood",
-        metavar="PROJECT",
-        nargs="?",
-        default=None,
+        "targets",
+        metavar="[WORKSPACE] PROJECT",
+        nargs="*",
+        default=[],
         help=(
             "existing top-level folder name to adopt as a project "
             "(your name, not ProtocolCity's — e.g. tradeOS, recipes, client-acme). "
-            "Omit when using --all-unmanaged."
+            "One positional (PROJECT) resolves the workspace from cwd/--root "
+            "the same way other commands do; two positionals are the explicit "
+            "WORKSPACE PROJECT back-compat form. Omit when using --all-unmanaged."
         ),
     )
     p_adopt.add_argument(
@@ -2447,6 +2444,37 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.cmd == "adopt":
         with_demo = bool(getattr(args, "with_demo_worker", False))
+        targets = list(getattr(args, "targets", None) or [])
+        # Positionals: `adopt PROJECT` resolves WORKSPACE from cwd/--root like
+        # every other command; `adopt WORKSPACE PROJECT` is the explicit
+        # back-compat form. `--all-unmanaged` takes no PROJECT, so its sole
+        # optional positional (if given) is WORKSPACE.
+        if args.all_unmanaged:
+            if len(targets) > 1:
+                print(
+                    "error: adopt --all-unmanaged takes at most WORKSPACE "
+                    "(got %d positional arguments)" % len(targets),
+                    file=sys.stderr,
+                )
+                return 2
+            args.neighborhood = None
+            args.city = targets[0] if targets else None
+        elif len(targets) == 2:
+            args.city, args.neighborhood = targets
+        elif len(targets) == 1:
+            args.city, args.neighborhood = None, targets[0]
+        elif len(targets) == 0:
+            args.city, args.neighborhood = None, None
+        else:
+            print(
+                "error: adopt takes at most WORKSPACE PROJECT "
+                "(got %d positional arguments)" % len(targets),
+                file=sys.stderr,
+            )
+            return 2
+        if args.city is None:
+            resolved = _resolve_city_root(None)
+            args.city = str(resolved) if resolved is not None else "."
         if args.all_unmanaged:
             result = adopt_all_unmanaged(
                 Path(args.city),

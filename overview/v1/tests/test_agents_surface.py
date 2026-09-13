@@ -65,6 +65,30 @@ class AgentsSurfaceTests(unittest.TestCase):
         self.assertEqual(by_id['placeholder']['badge'], 'NOT CONFIGURED')
         self.assertEqual(by_id['off']['badge'], 'OFF')
 
+    def test_lane_seat_with_empty_schedule_reads_off(self):
+        """pc-1477 scope addition (4): wf-259's generator held state — a
+        lane seat with schedule=='' is armed but held, off in the Agents
+        surface, same as enabled=False."""
+        self._daemon(fresh=True)
+        self._roster({
+            'held': {'display': 'Held seat', 'command': ['runner'], 'identity': 'held', 'kind': 'lane',
+                     'schedule': ''},
+        })
+        by_id = {a['id']: a for a in operations_snapshot(self.root)['agents']}
+        self.assertEqual(by_id['held']['badge'], 'OFF')
+
+    def test_no_kind_seat_with_empty_schedule_reads_off(self):
+        """review finding pc-1477: coverage and the Agents snapshot share one
+        held predicate — a row with no ``kind`` (a seat, per the Seats group)
+        carrying an empty schedule reads OFF here too, not just explicit
+        ``kind: lane`` rows."""
+        self._daemon(fresh=True)
+        self._roster({
+            'held': {'display': 'Held seat', 'command': ['runner'], 'identity': 'held', 'schedule': ''},
+        })
+        by_id = {a['id']: a for a in operations_snapshot(self.root)['agents']}
+        self.assertEqual(by_id['held']['badge'], 'OFF')
+
     def test_unknown_badge_from_stale_heartbeat(self):
         self._roster({'agent': {'display': 'Agent', 'command': ['runner'], 'identity': 'agent', 'kind': 'lane'}})
         self._daemon(fresh=False)
@@ -426,6 +450,17 @@ class ProviderModelResolutionTests(unittest.TestCase):
         self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
                                  'command': ['python', str(launcher_dir / 'launch.py')]}})
         self.assertEqual(self._agent()['model'], 'Local job')
+
+    def test_template_shaped_command_combines_bare_token_with_roster_model(self):
+        """pc-1477 scope addition (3): a legacy template command like
+        ``claude --model {model} -p {prompt_text}`` names its provider on
+        the bare first token; the unfilled placeholders must not send it to
+        'Local job' or 'Provider unknown' — it resolves with the roster's
+        own model."""
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['claude', '--model', '{model}', '-p', '{prompt_text}'],
+                                 'model': 'claude-sonnet-5'}})
+        self.assertEqual(self._agent()['model'], 'Claude claude-sonnet-5')
 
 
 class SeatProjectFieldTests(unittest.TestCase):
