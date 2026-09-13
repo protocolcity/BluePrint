@@ -156,5 +156,38 @@ class PersonaChipTests(unittest.TestCase):
         self.assertIn("elseif(order.needs_routing)content.append(el('span','Needsrouting','bp-order-note'));", _SRC.replace(' ', ''))
 
 
+class SeatCoverageTests(unittest.TestCase):
+    """AGENT_ADOPTION.md D15 (pc-1474): a coverage line per project under
+    Seats, with a copy-only Hire action — BP never writes the roster."""
+
+    def test_coverage_list_is_rendered_from_the_snapshot_coverage_field(self):
+        self.assertIn("reconcileList($('coverage-list'), snapshot.coverage || [], row=>row.project, coverageCard", _SRC)
+
+    def test_coverage_row_shows_the_computed_text_line(self):
+        self.assertIn("card.append(el('p',row.text));", _SRC)
+
+    def test_hire_button_copies_the_command_and_never_dispatches_it(self):
+        self.assertNotIn("fetch('/api/agents/hire'", _SRC)
+        self.assertIn("navigator.clipboard.writeText(command)", _SRC)
+
+    def test_not_configured_providers_show_their_install_hint(self):
+        self.assertIn('row.install_hints[p]', _SRC)
+
+    def test_coverage_container_exists_in_the_markup(self):
+        self.assertIn('id="coverage-list"', _HTML)
+
+
+class SeatHeaderProjectNameTests(unittest.TestCase):
+    """pc-1474 scope addition: seat headers always name their project from
+    the queue, not just held seats — 'No project queue' replaces the old
+    always-'Unassigned' text."""
+
+    def test_seat_header_uses_project_name_not_held_only(self):
+        self.assertIn("agent.project_name || 'No project queue'", _SRC)
+
+    def test_unassigned_literal_is_gone_from_the_seat_header(self):
+        self.assertNotIn("agent.held ? agent.held.project : 'Unassigned'", _SRC)
+
+
 if __name__ == '__main__':
     unittest.main()

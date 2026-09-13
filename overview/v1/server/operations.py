@@ -3,12 +3,14 @@ from contextlib import closing
 from datetime import datetime, timezone
 from importlib.metadata import version, PackageNotFoundError
 import json
+import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import shlex
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
@@ -171,7 +173,7 @@ def _config_argument(command):
 
 # Executable basenames this surface recognizes as an AI provider, mapped to
 # their display name (AGENTS_INTENT.md provider/model resolution).
-_PROVIDER_DISPLAY = {'claude': 'Claude', 'cursor-agent': 'Cursor', 'grok': 'Grok'}
+_PROVIDER_DISPLAY = {'claude': 'Claude', 'cursor-agent': 'Cursor', 'grok': 'Grok', 'codex': 'Codex'}
 
 
 def _executable_name(command):
@@ -218,13 +220,62 @@ def _resolved_config_path(config_path, root):
     return resolved if resolved.is_relative_to(root) else None
 
 
+def _launcher_config_fallback(command):
+    """``<launcher dir>/runner.json`` when a thin launcher names no ``--config``
+    (pc-1474 scope addition: pos-cursor-implementer's ``launch.py`` carries no
+    ``--config`` argument — the roster command still names the launcher script,
+    so the sibling runner file is the seat's own config)."""
+    if not isinstance(command, list):
+        return None
+    for item in command:
+        if isinstance(item, str) and Path(item).name == 'launch.py':
+            return str(Path(item).parent / 'runner.json')
+    return None
+
+
+def _codex_model_value(item):
+    if not isinstance(item, str):
+        return None
+    match = re.match(r'^model=(.*)$', item)
+    if not match:
+        return None
+    value = match.group(1)
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        value = value[1:-1]
+    return value or None
+
+
+def _codex_model_flag(command):
+    """The value of a Codex ``-c model="..."`` argument (pc-1474 scope
+    addition: Codex names its pin through ``-c``, not ``--model``/``-m``)."""
+    if not isinstance(command, list):
+        return None
+    for index, item in enumerate(command):
+        if item == '-c' and index + 1 < len(command):
+            value = _codex_model_value(command[index + 1])
+            if value:
+                return value
+    return None
+
+
+def _provider_model_flag(provider, command):
+    model = _model_flag(command)
+    if model:
+        return model
+    if provider == 'Codex':
+        return _codex_model_flag(command)
+    return None
+
+
 def resolve_provider_model(row, root, config_cache=None):
     """Provider/model display text, in the order AGENTS_INTENT.md fixes:
 
     the roster's own ``model``; else the seat's runner config (the actual
     provider command it names, read via the roster command's ``--config``
-    path); else the roster command's own executable, with the model left
-    blank at that tier. Never returns the literal "Not specified".
+    path, or the sibling ``runner.json`` next to a thin launcher script when
+    no ``--config`` is named); else the roster command's own executable, with
+    the model left blank at that tier. Never returns the literal "Not
+    specified".
 
     ``config_cache`` is an optional dict shared across one snapshot's rows,
     keyed by resolved config path, so a runner file shared by several seats
@@ -234,7 +285,8 @@ def resolve_provider_model(row, root, config_cache=None):
     roster_model = row.get('model')
     if isinstance(roster_model, str) and roster_model.strip():
         return roster_model.strip()
-    resolved_path = _resolved_config_path(_config_argument(command), root)
+    config_path = _config_argument(command) or _launcher_config_fallback(command)
+    resolved_path = _resolved_config_path(config_path, root)
     if resolved_path is not None:
         if config_cache is not None and resolved_path in config_cache:
             config = config_cache[resolved_path]
@@ -245,7 +297,7 @@ def resolve_provider_model(row, root, config_cache=None):
         inner_command = (config or {}).get('command')
         provider = _PROVIDER_DISPLAY.get(_executable_name(inner_command))
         if provider:
-            model = _model_flag(inner_command)
+            model = _provider_model_flag(provider, inner_command)
             return f'{provider} {model}' if model else provider
     executable = _executable_name(command)
     if _is_python_executable(executable):
@@ -342,6 +394,204 @@ def project_registry(root):
     return result
 
 
+# Standard seat set (AGENT_ADOPTION.md D12) — the four providers, in the
+# order the desk lists them, with the host command each is detected by, the
+# pin the desk offers on Hire, and a one-line install hint for NOT CONFIGURED.
+_PROVIDER_ORDER = ('Claude', 'Cursor', 'Grok', 'Codex')
+_PROVIDER_COMMAND = {'Claude': 'claude', 'Cursor': 'cursor-agent', 'Grok': 'grok', 'Codex': 'codex'}
+_PROVIDER_PIN = {'Claude': 'claude-sonnet-5', 'Cursor': 'composer-2.5', 'Grok': 'grok-4.6', 'Codex': 'gpt-6-astra'}
+_PROVIDER_INSTALL_HINT = {
+    'Claude': 'not on PATH — install: https://docs.claude.com/en/docs/claude-code',
+    'Cursor': 'not on PATH — install: https://cursor.com/cli',
+    'Grok': 'not on PATH — install the Grok CLI (`grok`) from your xAI account',
+    'Codex': 'not on PATH — install the ChatGPT desktop app (ships '
+             '/Applications/ChatGPT.app/Contents/Resources/codex) or the codex CLI',
+}
+# Codex on this host ships inside the ChatGPT app rather than on PATH
+# (AGENT_ADOPTION.md scope addition, pc-1474).
+_CODEX_APP_PATH = '/Applications/ChatGPT.app/Contents/Resources/codex'
+
+
+def detect_providers(env=None, app_path_exists=None):
+    """``{display name: executable path or None}`` for the four providers.
+
+    Checks ``PATH`` (``env`` overrides ``os.environ`` for tests — a fake
+    PATH), plus the Codex app path this host ships when ``codex`` is not on
+    PATH. A provider absent from both reads ``None`` — the caller shows
+    NOT CONFIGURED with the install hint (AGENT_ADOPTION.md D15).
+    """
+    search_env = env if env is not None else os.environ
+    found = {}
+    for provider, command in _PROVIDER_COMMAND.items():
+        path = shutil.which(command, path=search_env.get('PATH'))
+        if not path and provider == 'Codex':
+            app_present = (Path(_CODEX_APP_PATH).is_file() if app_path_exists is None
+                           else app_path_exists)
+            if app_present:
+                path = _CODEX_APP_PATH
+        found[provider] = path
+    return found
+
+
+def hire_command(provider, *, project_slug, project_path, prefix, remote=None):
+    """The exact ``workforce hire`` command text for one missing seat
+    (AGENT_ADOPTION.md D13/D15) — host-run only; BP never writes the roster.
+
+    Canonical shape on this host (WorkForce 0.1.9+consolidation.9, review
+    finding pc-1474): ``workforce hire <name> --provider <p> --project <slug>
+    --repository <path> --remote <url> --schedule manual --model <pin>``, with
+    ``--remote`` only when the project's registration names one. Every
+    argument is shell-quoted — a project path or remote can carry spaces or
+    shell metacharacters.
+    """
+    name = f'{(prefix or project_slug).rstrip("-")}-{provider.lower()}-implementer'
+    parts = ['workforce', 'hire', name, '--provider', provider, '--project', project_slug,
+             '--repository', project_path]
+    if remote:
+        parts += ['--remote', remote]
+    parts += ['--schedule', 'manual', '--model', _PROVIDER_PIN[provider]]
+    return shlex.join(parts)
+
+
+def _project_remote(root, slug):
+    """The project's git remote URL from ``.blueprint/connections.json``
+    (review finding pc-1474: the Hire command should name the repository the
+    hired seat pushes to, when the workspace's registration knows it), or
+    ``None`` when the project carries no registered repository."""
+    config = read_json(root / '.blueprint/connections.json', root) or {}
+    specs = (config.get('github') or {}).get('repositories')
+    if not isinstance(specs, list):
+        return None
+    for spec in specs:
+        if isinstance(spec, dict) and spec.get('project') == slug and isinstance(spec.get('repo'), str) \
+                and re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', spec['repo']):
+            return f'https://github.com/{spec["repo"]}'
+    return None
+
+
+def _row_project_slug(row):
+    """The project slug a seat's queue is bound to, from its ``queue_url``
+    ``product`` parameter, or ``None`` when the queue carries no product
+    (AGENT_ADOPTION.md scope addition, pc-1474: every seat's header should
+    name its project, not just held seats)."""
+    scope = parse_qs(urlparse(str(row.get('queue_url', ''))).query).get('product')
+    return scope[0] if scope else None
+
+
+_PIN_PROVIDER_PREFIXES = (('claude', 'Claude'), ('composer', 'Cursor'), ('cursor', 'Cursor'),
+                          ('grok', 'Grok'), ('gpt', 'Codex'), ('codex', 'Codex'))
+
+
+def _provider_from_pin(pin):
+    """The provider family a bare model pin belongs to — ``claude-*`` ->
+    Claude, ``composer-*``/``cursor-*`` -> Cursor, ``grok-*`` -> Grok,
+    ``gpt-*``/``codex`` -> Codex (review finding pc-1474: a roster ``model``
+    of a bare pin like ``claude-sonnet-5`` names no display text, only the
+    pin family), or ``None`` when the pin matches no known family."""
+    if not isinstance(pin, str):
+        return None
+    lowered = pin.strip().lower()
+    for prefix, provider in _PIN_PROVIDER_PREFIXES:
+        if lowered == prefix or lowered.startswith(prefix + '-'):
+            return provider
+    return None
+
+
+def _seat_executable_provider(row, root, config_cache):
+    """The provider display name from the seat's actually resolved
+    executable — its own roster command, or the runner config it names via
+    ``--config``/the launcher fallback — independent of what the roster's
+    ``model`` field says (review finding pc-1474: a bare pin in ``model``
+    should not block resolving the real command)."""
+    command = row.get('command')
+    provider = _PROVIDER_DISPLAY.get(_executable_name(command))
+    if provider:
+        return provider
+    config_path = _config_argument(command) or _launcher_config_fallback(command)
+    resolved_path = _resolved_config_path(config_path, root)
+    if resolved_path is None:
+        return None
+    if config_cache is not None and resolved_path in config_cache:
+        config = config_cache[resolved_path]
+    else:
+        config = read_json(resolved_path, root)
+        if config_cache is not None:
+            config_cache[resolved_path] = config
+    inner_command = (config or {}).get('command')
+    return _PROVIDER_DISPLAY.get(_executable_name(inner_command))
+
+
+def _project_seat_providers(workers, project_slug, root, config_cache):
+    """``{provider display: 'present'|'held'}`` for one project's implementer
+    seats — a seat's ``queue_url`` names its project (AGENT_ADOPTION.md D12:
+    one bounded implementation seat per project x provider). A seat with no
+    ``kind`` still counts as a seat here, consistent with the Seats group
+    (review finding pc-1474); only an explicit non-``lane`` kind excludes it.
+    """
+    result = {}
+    if not isinstance(workers, dict):
+        return result
+    for identity, row in workers.items():
+        if not isinstance(row, dict) or identity == 'demo-worker':
+            continue
+        if row.get('kind') not in (None, 'lane'):
+            continue
+        if _row_project_slug(row) != project_slug:
+            continue
+        model_text = resolve_provider_model(row, root, config_cache)
+        provider = next((p for p in _PROVIDER_ORDER
+                          if model_text == p or model_text.startswith(p + ' ')), None)
+        if not provider:
+            provider = _seat_executable_provider(row, root, config_cache)
+        if not provider:
+            provider = _provider_from_pin(model_text)
+        if not provider:
+            continue
+        result[provider] = 'held' if row.get('enabled') is False else 'present'
+    return result
+
+
+def provider_coverage(root, registry, workers, config_cache, host_providers=None):
+    """One coverage row per registered project (AGENT_ADOPTION.md D15):
+    present/held providers, missing ones (installed but no seat), and
+    providers this host does not have installed at all."""
+    if host_providers is None:
+        host_providers = detect_providers()
+    rows = []
+    for slug, project in sorted(registry.items(), key=lambda kv: kv[1].get('name') or kv[0]):
+        seats = _project_seat_providers(workers, slug, root, config_cache)
+        present, held, missing, not_configured = [], [], [], []
+        for provider in _PROVIDER_ORDER:
+            if not host_providers.get(provider):
+                not_configured.append(provider)
+                continue
+            state = seats.get(provider)
+            if state == 'present':
+                present.append(provider)
+            elif state == 'held':
+                held.append(provider)
+            else:
+                missing.append(provider)
+        name = project.get('name') or slug
+        staffed = present + [f'{p} OFF' for p in held]
+        text = f'{name}: ' + (', '.join(staffed) if staffed else 'none staffed')
+        if missing:
+            text += f' · missing {", ".join(missing)}'
+        if not_configured:
+            text += f' · not configured: {", ".join(not_configured)}'
+        project_path = str(root / project['folder']) if project.get('folder') else slug
+        remote = _project_remote(root, slug)
+        rows.append({
+            'project': slug, 'name': name, 'present': present, 'held': held,
+            'missing': missing, 'not_configured': not_configured, 'text': text,
+            'install_hints': {p: _PROVIDER_INSTALL_HINT[p] for p in not_configured},
+            'hire_commands': {p: hire_command(p, project_slug=slug, project_path=project_path,
+                                               prefix=project.get('prefix') or slug, remote=remote)
+                               for p in missing},
+        })
+    return rows
+
+
 def age_seconds(value, now):
     try:
         stamp = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
@@ -361,7 +611,8 @@ def operations_snapshot(binder):
         build = 'Source checkout'
     result = {'observed_at': now.isoformat(), 'build': build, 'workspace': None,
               'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
-              'events': [], 'work_dates': [], 'excluded_stores': [], 'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
+              'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
+              'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
         result['sources'].append({'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.'})
         return result
@@ -461,6 +712,7 @@ def operations_snapshot(binder):
     if not isinstance(flight, list): flight = []
     daemon_path = resolve_daemon_path(root)
     runner_config_cache = {}
+    result['coverage'] = provider_coverage(root, registry, workers, runner_config_cache)
     if isinstance(workers, dict):
         for identity, row in workers.items():
             if not isinstance(row, dict) or identity == 'demo-worker': continue
@@ -488,6 +740,8 @@ def operations_snapshot(binder):
             held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
             verified = bool(held and held['id'] in last_shift_candidates(daemon_path, root, identity))
             reservation = bool(held and state == 'last_run_failed' and preserved_reservation(root, command, held['id']))
+            project_slug = _row_project_slug(row)
+            project_name = registry.get(project_slug, {}).get('name') if project_slug else None
             if state == 'idle':
                 action = 'dispatch'
             elif state == 'stale_shift':
@@ -504,6 +758,7 @@ def operations_snapshot(binder):
                 'group': group, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
                 'model': resolve_provider_model(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
+                'project': project_slug, 'project_name': project_name,
                 'held': {'id': held['id'], 'project': held['project_name']} if held else None,
                 'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}
