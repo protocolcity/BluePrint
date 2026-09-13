@@ -25,6 +25,13 @@
           <p id="map-browser-path" aria-live="polite">Workspace</p>
           <div id="map-browser-list" aria-label="Folders and documents"></div>
         </details>
+        <section id="map-project-panel" class="map-chrome-hit map-chrome-panel map-project-panel" hidden aria-label="Project focus">
+          <button type="button" id="map-project-back" class="map-project-back">&larr; Workspace</button>
+          <h2 id="map-project-name"></h2>
+          <div id="map-branch-buttons" role="group" aria-label="Project sections"></div>
+          <div id="map-branch-items" aria-live="polite"></div>
+          <div id="map-item-detail" hidden aria-live="polite"></div>
+        </section>
         <details id="map-view-options" class="map-chrome-hit map-chrome-panel">
           <summary>View</summary>
           <label><input type="checkbox" id="flt-managed" checked /> Projects</label>

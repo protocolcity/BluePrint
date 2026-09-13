@@ -2,11 +2,14 @@
 
 The router lives in JavaScript (map-hit-router.js), so we can't easily run
 the DOM classifier under Python. This test pins the *table order* by
-parsing the JS module and asserting the row order the Glass spec locks:
+parsing the JS module and asserting the row order the current spec locks:
 
-    md-viewer → chrome → dig-in → hub → lots → empty
+    md-viewer → chrome → dig-in → branch-item → branch → hub → lots → empty
 
-If someone re-orders those rows (or invents a seventh) this test fails.
+FOCUSED_PROJECT (docs/specs/MAP_FOCUSED_PROJECT.md, pc-1492) added the
+branch-item and branch rows for the project-focus canvas; the original six
+V1 Glass rows keep their relative order. If someone re-orders any row (or
+invents an unplanned one) this test fails.
 """
 from __future__ import annotations
 
@@ -17,7 +20,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 _ROUTER = _HERE.parent / "static" / "js" / "map-hit-router.js"
 
-EXPECTED_LAYERS = ("md-viewer", "chrome", "dig-in", "hub", "lots", "empty")
+EXPECTED_LAYERS = ("md-viewer", "chrome", "dig-in", "branch-item", "branch", "hub", "lots", "empty")
 
 # Line comments in JS use `//` — we skip them so a comment string cannot
 # accidentally satisfy the assertions.
@@ -53,6 +56,8 @@ class HitRouterTableTests(unittest.TestCase):
             "mdViewerOpen",
             "overChrome",
             "overDigIn",
+            "overBranchItem",
+            "overBranch",
             "overHub",
             "overLot",
         ]

@@ -14,7 +14,7 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const LAYER_IDS = Object.freeze([
-  'lots', 'hub', 'dig-in-layer', 'md-viewer-layer', 'chrome-layer',
+  'lots', 'hub', 'dig-in-layer', 'project-focus-layer', 'md-viewer-layer', 'chrome-layer',
 ]);
 
 export function ensureLayers(world) {
@@ -334,6 +334,92 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
 
 export function clearDigIn(world) {
   const layer = world.querySelector('#dig-in-layer');
+  if (layer) layer.replaceChildren();
+}
+
+// paintProjectFocus — the approved direction (FOCUSED_PROJECT, pc-1492):
+// one project centered, its four virtual branches (Work, Agents, Papers,
+// Delivery) around it, and — for exactly one expanded branch — its items
+// fanned out from that branch's own position (Rule: "a short expansion
+// from the parent node, stable positions for everything else"). Branch
+// order never changes so the other three chips stay put when one expands.
+const BRANCH_RADIUS = 150;
+const BRANCH_ITEM_RADIUS = 130;
+const BRANCH_ITEM_MAX_SHOWN = 8;
+const BRANCH_ANGLE_SPAN = Math.PI / 2.4; // items fan within this arc of the chip
+
+export function paintProjectFocus(world, { project, branches = [], expandedBranch = null } = {}) {
+  const layer = world.querySelector('#project-focus-layer');
+  if (!layer) return;
+  layer.replaceChildren();
+  if (!project) return;
+
+  const center = el('g', { id: 'project-focus-node', class: 'map-hit map-project-node', 'data-hit-layer': 'hub', 'data-rel-path': project.relPath });
+  center.appendChild(el('circle', { cx: 0, cy: 0, r: 50, class: 'map-hub-disc' }));
+  center.appendChild(el('text', { x: 0, y: 6, class: 'map-hub-label', 'text-anchor': 'middle' }, truncateLotLabel(project.name || project.relPath, 18)));
+  layer.appendChild(center);
+
+  const positions = ringPositions(branches.length, BRANCH_RADIUS);
+  branches.forEach((branch, i) => {
+    const { x, y } = positions[i];
+    const angle = Math.atan2(y, x);
+    const isExpanded = expandedBranch === branch.key;
+    const chip = el('g', {
+      class: `map-hit map-branch-chip map-branch-${branch.key}${isExpanded ? ' is-expanded' : ''} is-${branch.state}`,
+      transform: `translate(${x.toFixed(2)},${y.toFixed(2)})`,
+      tabindex: '0', role: 'button',
+      'aria-label': `${branch.label}, ${branch.summary}${isExpanded ? ', expanded' : ''}`,
+      'aria-expanded': isExpanded ? 'true' : 'false',
+      'data-hit-layer': 'branch', 'data-branch': branch.key,
+      id: `map-branch-${branch.key}`,
+    });
+    chip.appendChild(el('rect', { x: -60, y: -22, width: 120, height: 44, rx: 8, class: 'map-branch-plate' }));
+    chip.appendChild(el('text', { x: 0, y: -3, class: 'map-branch-label', 'text-anchor': 'middle' }, branch.label));
+    chip.appendChild(el('text', { x: 0, y: 14, class: 'map-branch-summary', 'text-anchor': 'middle' }, truncateLotLabel(branch.summary, 22)));
+    layer.appendChild(chip);
+
+    if (isExpanded && branch.items && branch.items.length > 0) {
+      const shown = branch.items.slice(0, BRANCH_ITEM_MAX_SHOWN);
+      const extra = branch.items.length - shown.length;
+      const count = shown.length + (extra > 0 ? 1 : 0);
+      const start = angle - BRANCH_ANGLE_SPAN / 2;
+      const step = count > 1 ? BRANCH_ANGLE_SPAN / (count - 1) : 0;
+      shown.forEach((item, idx) => {
+        const a = count > 1 ? start + step * idx : angle;
+        const ix = Math.cos(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
+        const iy = Math.sin(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
+        const node = el('g', {
+          class: 'map-hit map-branch-item map-branch-item-enter',
+          transform: `translate(${ix.toFixed(2)},${iy.toFixed(2)})`,
+          tabindex: '0', role: 'button',
+          'aria-label': `${item.label}${item.detail ? ', ' + item.detail : ''}`,
+          'data-hit-layer': 'branch-item', 'data-branch': branch.key, 'data-item-id': String(item.id),
+        });
+        node.appendChild(el('rect', { x: -50, y: -16, width: 100, height: 32, rx: 6, class: 'map-branch-item-plate' }));
+        node.appendChild(el('text', { x: 0, y: 4, class: 'map-branch-item-label', 'text-anchor': 'middle' }, truncateLotLabel(item.label, 16)));
+        layer.appendChild(node);
+      });
+      if (extra > 0) {
+        const a = count > 1 ? start + step * (count - 1) : angle;
+        const ix = Math.cos(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
+        const iy = Math.sin(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
+        const node = el('g', {
+          class: 'map-hit map-branch-item map-branch-item-more map-branch-item-enter',
+          transform: `translate(${ix.toFixed(2)},${iy.toFixed(2)})`,
+          tabindex: '0', role: 'button',
+          'aria-label': `${extra} more in ${branch.label} — see the sidebar list`,
+          'data-hit-layer': 'branch-more', 'data-branch': branch.key,
+        });
+        node.appendChild(el('rect', { x: -50, y: -16, width: 100, height: 32, rx: 6, class: 'map-branch-item-plate' }));
+        node.appendChild(el('text', { x: 0, y: 4, class: 'map-branch-item-label', 'text-anchor': 'middle' }, `+${extra} more`));
+        layer.appendChild(node);
+      }
+    }
+  });
+}
+
+export function clearProjectFocus(world) {
+  const layer = world.querySelector('#project-focus-layer');
   if (layer) layer.replaceChildren();
 }
 
