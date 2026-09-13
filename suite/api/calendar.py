@@ -315,31 +315,31 @@ def _ics_escape(text: Any) -> str:
 def _fold_line(line: str) -> str:
     """RFC 5545 line folding at 75 octets — never split inside a UTF-8 codepoint.
 
-    pc-1212: the byte-slice fold cut multi-byte chars (· — …) in half at the
-    75-octet boundary → UnicodeDecodeError → whole /calendar.ics 500'd whenever
-    any gate note put a non-ASCII char at the fold point.
+    pc-1212 folded by byte slicing and backed off continuation bytes; pc-1462
+    found it still emitted a lone lead byte when the remaining tail was
+    exactly one multi-byte character (the back-off reached 0 and the
+    ``max(cut, 1)`` floor forced a mid-character cut), which 500'd
+    /calendar.ics for any description ending in "…" or "—". Folding by
+    codepoints makes an invalid cut impossible: a character is placed whole
+    or moved to the next physical line.
     """
-    raw = line.encode("utf-8")
-    if len(raw) <= 75:
+    if len(line.encode("utf-8")) <= 75:
         return line
-
-    def _safe_cut(buf: bytes, limit: int) -> int:
-        cut = min(limit, len(buf))
-        # Back up while the cut lands on a UTF-8 continuation byte (10xxxxxx)
-        while cut > 0 and (buf[cut - 1] & 0xC0) == 0x80:
-            cut -= 1
-        # cut-1 may now be a lead byte whose sequence we just truncated
-        if cut > 0 and (buf[cut - 1] & 0xC0) == 0xC0:
-            cut -= 1
-        return max(cut, 1)
-
-    parts: List[bytes] = []
-    while raw:
-        limit = 75 if not parts else 74
-        cut = _safe_cut(raw, limit)
-        chunk, raw = raw[:cut], raw[cut:]
-        parts.append(chunk if not parts else b" " + chunk)
-    return b"\r\n".join(parts).decode("utf-8")
+    physical: List[str] = []
+    current: List[str] = []
+    used = 0
+    limit = 75
+    for ch in line:
+        size = len(ch.encode("utf-8"))
+        if used + size > limit and current:
+            physical.append("".join(current))
+            current, used, limit = [ch], size, 74  # continuation lines start with one space
+        else:
+            current.append(ch)
+            used += size
+    if current:
+        physical.append("".join(current))
+    return "\r\n ".join(physical)
 
 
 def _fmt_dt_utc(dt: datetime) -> str:
