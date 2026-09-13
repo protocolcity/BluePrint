@@ -15,7 +15,7 @@ function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.p
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
-let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false;
+let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false, timelineFingerprint = '', timelineExpanded = false;
 let timelineProject = '', timelineSource = '', timelineActor = '';
 let streamState = 'connecting', everOpened = false, consecutiveErrors = 0, lastChangeAt = null;
 let interval = 15, motion = 'system';
@@ -144,9 +144,14 @@ function faceEntry(order) {
 }
 function overview() {
   const orders=snapshot.orders, forYou=orders.filter(o=>o.attention_face);
+  // Two independent facts, never merged into one 'Live': Claimed is a
+  // WorkLane claim (a days-old human claim counts here); Running is
+  // agent-evidence-only (fresh heartbeat plus an open shift or in-flight
+  // ticket) and cannot be inflated by claim age (pc-1483).
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
+  const running=snapshot.agents.filter(a=>a.group==='seat' && a.state==='working');
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
-  const metrics=[['For You',forYou.length,'/work?attention=any'],['Live',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
+  const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
   let mutedCount=0;
   for(const face of ['decide','read','watch','note']) {
@@ -251,6 +256,13 @@ function agentAction(agent, dispatchLabel) {
   nodes.push(button,feedback);
   return nodes;
 }
+function elapsedText(startedAt) {
+  const started=new Date(startedAt).getTime();
+  if(Number.isNaN(started)) return '';
+  const secs=Math.max(0,Math.floor((Date.now()-started)/1000));
+  const mins=Math.floor(secs/60), rem=secs%60;
+  return mins ? `${mins}m ${rem}s` : `${rem}s`;
+}
 function agentCard(agent) {
   const card=el('article',undefined,'bp-panel');
   const heading=el('div',undefined,'bp-section-head');
@@ -266,7 +278,18 @@ function agentCard(agent) {
     card.append(facts);
   }
   if(agent.group==='seat' && agent.held) card.append(el('p',`Holds ${agent.held.id}${agent.held_verified?' (owner verified)':' (not yet verified)'}${agent.shift && agent.shift.lock_held?' · lock held':''}`,'bp-note'));
-  if(agent.shift) card.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · since ${date(agent.shift.started_at)} · budget ${agent.shift.budget_secs}s${agent.shift.candidates.length?' · candidates '+agent.shift.candidates.join(', '):''} · ${agent.shift.source}${agent.shift.lock_held?' · lock held':''}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
+  if(agent.shift) {
+    // The activity cue and elapsed clock only ever show while the shift's
+    // own evidence is fresh (state === 'working', never a stale/terminal/off
+    // read). Elapsed advances with each real data refresh, not a local
+    // per-second timer — a genuine change, never a fake ticking animation.
+    const active=agent.state==='working' && !agent.shift.stale;
+    const line=el('p',undefined,agent.shift.stale?'bp-note':'bp-note bp-muted');
+    if(active) { const cue=el('span','','bp-shift-cue'); cue.setAttribute('aria-hidden','true'); line.append(cue); }
+    line.append(document.createTextNode(`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · since ${date(agent.shift.started_at)} · budget ${agent.shift.budget_secs}s${agent.shift.candidates.length?' · candidates '+agent.shift.candidates.join(', '):''} · ${agent.shift.source}${agent.shift.lock_held?' · lock held':''}`));
+    if(active) { const elapsed=el('span',` · elapsed ${elapsedText(agent.shift.started_at)}`,'bp-elapsed'); elapsed.dataset.started=agent.shift.started_at; line.append(elapsed); }
+    card.append(line);
+  }
   if(agent.report) {
     const report=el('div',undefined,'bp-note');report.append(badge(agent.report.state),el('p',agent.report.summary),el('p',`${date(agent.report.observed_at)} · ${agent.report.mode}`,'bp-muted'),el('p',agent.report.detail,'bp-muted'));card.append(report);
   }
@@ -440,12 +463,13 @@ function updateTimelineFilters() {
   timelineSource = $('timeline-source').value;
   timelineActor = $('timeline-actor').value.trim();
   timelineCursor = '';
+  timelineExpanded = false;
   const params = new URLSearchParams();
   if (timelineProject) params.set('project', timelineProject);
   if (timelineSource) params.set('source', timelineSource);
   if (timelineActor) params.set('actor', timelineActor);
   history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
-  refreshTimeline(false);
+  refreshTimeline(false, {force: true});
 }
 function onDemandSeat(agent) {
   return agent.group==='seat' && (agent.schedule==='manual' || agent.schedule==='Not scheduled');
@@ -537,12 +561,21 @@ function paint() {
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
   if(page==='connections') { sources($('connection-list'),true);engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
+// Three independent clocks, never collapsed into one ambiguous word
+// (STATES_AND_TERMS.md, pc-1483): the transport (is the push connection
+// up), the last successful read (a fetch returned, whether or not its
+// content changed), and the last meaningful content change (only moves
+// when refresh()/refreshTimeline() see their content fingerprint differ —
+// never on a bare read-time or heartbeat-tick churn).
 function liveIndicator() {
   if(!lastSuccess) return lastError ? 'Unable to read workspace. Retry with Refresh.' : 'Connecting…';
-  if(document.hidden) return 'Paused';
-  if(streamState==='open') return lastChangeAt ? `Live · last change ${Math.floor((Date.now()-lastChangeAt)/1000)}s ago` : 'Live';
-  if(!everOpened) return 'Connecting…';
-  return consecutiveErrors>=3 ? 'Polling every 60 s' : 'Reconnecting';
+  const transport = document.hidden ? 'Updates paused'
+    : streamState==='open' ? 'Updates connected'
+    : !everOpened ? 'Updates connecting…'
+    : consecutiveErrors>=3 ? 'Updates polling every 60 s' : 'Updates reconnecting';
+  const readAge=Math.floor((Date.now()-lastSuccess)/1000);
+  const changeText=lastChangeAt ? `last change ${Math.floor((Date.now()-lastChangeAt)/1000)}s ago` : 'no change observed yet';
+  return `${transport} · last read ${readAge}s ago · ${changeText}`;
 }
 function freshness() {
   const status=$('freshness');
@@ -550,8 +583,15 @@ function freshness() {
   const indicator=liveIndicator();
   status.textContent=lastError && lastSuccess ? `Refresh failed · showing last read · ${indicator}` : indicator;
 }
-async function refreshTimeline(append) {
+async function refreshTimeline(append, opts = {}) {
   if (timelinePending || page !== 'timeline') return;
+  // Once the reader has loaded older pages (timelineExpanded), a quiet
+  // background poll (a change-feed push, not the reader's own Load more or
+  // the explicit Refresh button) must not move their reading position —
+  // it surfaces an affordance instead (pc-1483: "While reading older
+  // events show a new-events affordance instead of moving the reading
+  // position").
+  const background = !append && timelineExpanded && !opts.force;
   timelinePending = true;
   try {
     const params = new URLSearchParams();
@@ -562,18 +602,31 @@ async function refreshTimeline(append) {
     const response = await fetch('/api/timeline?' + params.toString(), {cache: 'no-store', signal: AbortSignal.timeout(10000)});
     if (!response.ok) throw new Error('Unavailable');
     const data = await response.json();
+    if (background) {
+      const currentTop = timelineData?.rows?.[0]?.id;
+      $('timeline-new-events').hidden = !(data.rows.length && data.rows[0].id !== currentTop);
+      lastSuccess = Date.now();
+      lastError = false;
+      return;
+    }
     if (append && timelineData) {
       const seen = new Set(timelineData.rows.map(row => row.id));
       timelineData = {...data, rows: [...timelineData.rows, ...data.rows.filter(row => !seen.has(row.id))]};
     } else {
       timelineData = data;
+      timelineExpanded = false;
+      $('timeline-new-events').hidden = true;
     }
     timelineCursor = data.next_cursor || '';
     timelineMore = Boolean(data.next_cursor);
     timeline();
     lastSuccess = Date.now();
     lastError = false;
-    lastChangeAt = Date.now();
+    // A successful read that returns the same rows is not a meaningful
+    // change (pc-1483): only row ids and their event content move this
+    // clock, never a bare identical read.
+    const timelineKey = JSON.stringify((timelineData.rows || []).map(row => [row.id, row.event, row.title]));
+    if (timelineKey !== timelineFingerprint) { timelineFingerprint = timelineKey; lastChangeAt = Date.now(); }
   } catch (error) {
     lastError = true;
     if (!timelineData) empty($('timeline-list'), 'Timeline is unavailable right now.');
@@ -581,6 +634,24 @@ async function refreshTimeline(append) {
     timelinePending = false;
     freshness();
   }
+}
+function deliveryItemRow(item) {
+  const url=new URL(item.url);
+  const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';const text=el('div');
+  text.append(el('strong',deliveryRow(item)),el('span',`Observed ${date(item.updated_at)}`,'bp-order-meta'));
+  row.append(text,badge(item.state));
+  return row;
+}
+function repoSection(repo) {
+  const section=el('section',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');
+  heading.append(el('h2',repo.repo),badge(repo.state));section.append(heading);
+  section.append(el('p',`${repo.role || 'Repository'} · ${repo.private===true?'Private':repo.private===false?'Public':'Visibility unknown'} · Observed ${date(repo.observed_at)}`,'bp-muted'));
+  if(repo.error)section.append(el('p',repo.error,'bp-warning'));
+  if(repo.missing?.length)section.append(el('p','Unavailable evidence: '+repo.missing.join(', '),'bp-warning'));
+  const items=(repo.items || []).filter(item=>{try{const url=new URL(item.url);return url.protocol==='https:' && url.hostname==='github.com';}catch(error){return false;}});
+  if(!items.length) empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
+  else for(const item of items) section.append(deliveryItemRow(item));
+  return section;
 }
 async function refreshRemote() {
   if(remotePending || !['delivery','connections'].includes(page)) return;
@@ -592,27 +663,29 @@ async function refreshRemote() {
     const status=data.refreshing ? 'Refreshing GitHub evidence…' : `GitHub: ${data.state.replaceAll('_',' ')}`;
     $('github-connection-status').textContent=status;
     $('remote-status').textContent=status + (data.error ? ' · '+data.error : '');
-    const container=$('remote-repositories');
-    container.replaceChildren();
-    for(const repo of data.repositories || []) {
-      const section=el('section',undefined,'bp-panel');const heading=el('div',undefined,'bp-section-head');
-      heading.append(el('h2',repo.repo),badge(repo.state));section.append(heading);
-      section.append(el('p',`${repo.role || 'Repository'} · ${repo.private===true?'Private':repo.private===false?'Public':'Visibility unknown'} · Observed ${date(repo.observed_at)}`,'bp-muted'));
-      if(repo.error)section.append(el('p',repo.error,'bp-warning'));
-      if(repo.missing?.length)section.append(el('p','Unavailable evidence: '+repo.missing.join(', '),'bp-warning'));
-      for(const item of repo.items || []) {
-        let url;try{url=new URL(item.url);}catch(error){continue;}
-        if(url.protocol!=='https:' || url.hostname!=='github.com')continue;
-        const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';const text=el('div');
-        text.append(el('strong',deliveryRow(item)),el('span',`Observed ${date(item.updated_at)}`,'bp-order-meta'));
-        row.append(text,badge(item.state));section.append(row);
-      }
-      if(!(repo.items || []).length)empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
-      container.append(section);
-    }
-    if(!data.repositories?.length && !data.refreshing)empty(container,'No repository delivery available. Check connection configuration or GitHub access.');
+    // Reconciled, not a wholesale replaceChildren: an unchanged repository
+    // section keeps its node identity and does not flash (pc-1483).
+    reconcileList($('remote-repositories'), data.repositories || [], repo=>repo.repo, repoSection,
+      {emptyText: data.refreshing ? '' : 'No repository delivery available. Check connection configuration or GitHub access.'});
   } catch(error) { $('remote-status').textContent='GitHub refresh failed. Previously displayed evidence may be stale.';$('github-connection-status').textContent='GitHub unavailable'; }
   finally { remotePending=false; }
+}
+// The content-change fingerprint ignores read-time and heartbeat-tick
+// churn: 'observed_at' is stamped fresh on every read, 'sources[].last_at'
+// and 'agents[].last_at' mirror the same daemon heartbeat tick on every
+// entry, and the WorkLane API health probe's 'observed_at' is a bare
+// probe-time stamp — none of those are application content, so a snapshot
+// that only differs in these fields must not read as a meaningful change
+// (pc-1483: "Content-change fingerprints ignore read times/heartbeat tick
+// churn").
+function contentKey(next) {
+  if(page==='work') return JSON.stringify({orders:next.orders,projects:next.projects,workspace:next.workspace,sources:next.sources.map(s=>({name:s.name,state:s.state})),truncated:next.truncated});
+  const sources=(next.sources || []).map(({last_at, ...rest})=>rest);
+  const agents=(next.agents || []).map(({last_at, ...rest})=>rest);
+  const supervisor=next.supervisor ? (({last_at, ...rest})=>rest)(next.supervisor) : next.supervisor;
+  const worklaneApi=next.engines?.worklane_api ? {...next.engines.worklane_api,observed_at:null} : next.engines?.worklane_api;
+  const engines=next.engines ? {...next.engines,worklane_api:worklaneApi} : next.engines;
+  return JSON.stringify({...next,observed_at:null,sources,agents,supervisor,engines});
 }
 async function refresh(manual) {
   if(pending) return;
@@ -622,7 +695,7 @@ async function refresh(manual) {
     const response=await fetch('/api/operations',{cache:'no-store',signal:AbortSignal.timeout(10000)});
     if(!response.ok) throw new Error('Source request failed');
     const next=await response.json();
-    const key=JSON.stringify(page==='work' ? {orders:next.orders,projects:next.projects,workspace:next.workspace,sources:next.sources.map(s=>({name:s.name,state:s.state})),truncated:next.truncated} : {...next,observed_at:null});
+    const key=contentKey(next);
     snapshot=next;lastSuccess=Date.now();lastError=false;
     if(key!==fingerprint) { paint();fingerprint=key;lastChangeAt=Date.now(); }
   } catch(error) { lastError=true; }
@@ -645,7 +718,8 @@ $('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addE
   $('timeline-source').addEventListener('change', updateTimelineFilters);
   $('timeline-actor').addEventListener('change', updateTimelineFilters);
   $('timeline-actor').addEventListener('input', updateTimelineFilters);
-  $('timeline-more').addEventListener('click', () => refreshTimeline(true));
+  $('timeline-more').addEventListener('click', () => { timelineExpanded = true; refreshTimeline(true); });
+  $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; refreshTimeline(false, {force: true}); });
 }
 $('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false);});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
