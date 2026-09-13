@@ -181,7 +181,7 @@ class ContentFingerprintTests(unittest.TestCase):
         """refreshTimeline() must not stamp lastChangeAt on every successful
         read (STATES_AND_TERMS.md/pc-1483: 'Timeline successful identical
         reads must not reset last meaningful change')."""
-        fn = _SRC.split('async function refreshTimeline(append)')[1].split('async function refreshRemote(')[0]
+        fn = _SRC.split('async function refreshTimeline(')[1].split('async function refreshRemote(')[0]
         self.assertNotIn('lastChangeAt = Date.now();\n  } catch (error) {', fn)
         self.assertIn('timelineFingerprint', fn)
         self.assertIn('timelineKey!==timelineFingerprint', fn.replace(' ', ''))
@@ -465,7 +465,10 @@ class ActivityCueTests(unittest.TestCase):
 
     def test_elapsed_text_is_a_real_duration_not_a_fake_progress_value(self):
         self.assertIn('function elapsedText(startedAt)', _SRC)
-        self.assertNotIn('%', _SRC.split('function elapsedText(startedAt)')[1].split('}')[0])
+        fn = _SRC.split('function elapsedText(startedAt)')[1].split('\n}')[0]
+        ret = [line for line in fn.splitlines() if 'return' in line]
+        self.assertTrue(ret)
+        self.assertFalse(any('%' in line for line in ret))
 
 
 class NewEventsAffordanceTests(unittest.TestCase):
@@ -477,7 +480,7 @@ class NewEventsAffordanceTests(unittest.TestCase):
         self.assertIn('id="timeline-new-events"', _HTML)
 
     def test_background_refresh_does_not_replace_an_expanded_reading_position(self):
-        fn = _SRC.split('async function refreshTimeline(append)')[1].split('async function refreshRemote(')[0]
+        fn = _SRC.split('async function refreshTimeline(')[1].split('async function refreshRemote(')[0]
         self.assertIn('timelineExpanded', fn)
 
     def test_loading_more_marks_the_reader_as_expanded(self):
