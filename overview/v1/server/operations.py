@@ -289,7 +289,11 @@ def resolve_provider_model(row, root, config_cache=None):
     if isinstance(roster_model, str) and roster_model.strip():
         pin = roster_model.strip()
         provider = _seat_executable_provider(row, root, config_cache)
-        if provider and pin != provider and not pin.startswith(provider + ' '):
+        if provider:
+            first_token, _, rest = pin.partition(' ')
+            if first_token.lower() == provider.lower():
+                pin = rest.strip()
+                return f'{provider} {pin}' if pin else provider
             return f'{provider} {pin}'
         return pin
     config_path = _config_argument(command) or _launcher_config_fallback(command)
@@ -428,11 +432,47 @@ def _well_known_candidates(command, home):
     return candidates
 
 
-def _seat_proof(provider, workers, root, config_cache):
+# Roots an executable path must resolve under to count as proof of an
+# installed provider (review finding pc-1476): the running user's home,
+# the two Homebrew/local prefixes the well-known bins live under, or the
+# Codex app bundle. A path outside all four — even one a roster seat names
+# directly, or one a well-known bin symlinks to — proves nothing; it is
+# not a location this host trusts as an install site.
+def _trusted_executable_roots(home_dir):
+    try:
+        home_dir = home_dir.resolve()
+    except OSError:
+        pass
+    return (home_dir, Path('/opt/homebrew').resolve(), Path('/usr/local').resolve())
+
+
+def _is_trusted_path(resolved, home_dir):
+    codex_app = Path(_CODEX_APP_PATH).resolve()
+    if resolved == codex_app or resolved.is_relative_to(codex_app):
+        return True
+    return any(resolved.is_relative_to(root) for root in _trusted_executable_roots(home_dir))
+
+
+def _resolved_trusted_file(path, home_dir):
+    """``path`` accepted only when it is a file whose target — after
+    resolving any symlink — still lies under a trusted install root; a
+    symlink pointing outside those locations proves nothing (review
+    finding pc-1476)."""
+    if not path.is_file():
+        return False
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    return _is_trusted_path(resolved, home_dir)
+
+
+def _seat_proof(provider, workers, root, config_cache, home_dir):
     """The absolute executable path a roster seat's resolved command names
-    for ``provider``, when that path exists on disk — proof the provider is
-    installed even though its own binary sits outside the checked
-    locations (pc-1476)."""
+    for ``provider``, when that path resolves to a file under a trusted
+    install root — proof the provider is installed even though its own
+    binary sits outside the well-known checked locations (pc-1476). A
+    seat naming a path outside the trusted roots proves nothing."""
     if not isinstance(workers, dict):
         return None
     for row in workers.values():
@@ -442,7 +482,7 @@ def _seat_proof(provider, workers, root, config_cache):
         if seat_provider != provider or not token:
             continue
         path = Path(token)
-        if path.is_absolute() and path.is_file():
+        if path.is_absolute() and _resolved_trusted_file(path, home_dir):
             return str(path)
     return None
 
@@ -471,7 +511,7 @@ def detect_providers(env=None, app_path_exists=None, home=None, workers=None, ro
         source = 'PATH' if path else None
         if not path:
             for candidate in _well_known_candidates(command, home_dir):
-                if candidate.is_file():
+                if _resolved_trusted_file(candidate, home_dir):
                     path, source = str(candidate), 'well-known location'
                     break
         if not path and provider == 'Codex':
@@ -480,7 +520,7 @@ def detect_providers(env=None, app_path_exists=None, home=None, workers=None, ro
             if app_present:
                 path, source = _CODEX_APP_PATH, 'well-known location'
         if not path:
-            seat_path = _seat_proof(provider, workers, root, config_cache)
+            seat_path = _seat_proof(provider, workers, root, config_cache, home_dir)
             if seat_path:
                 path, source = seat_path, 'seat command'
         found[provider] = path
@@ -589,16 +629,36 @@ def _seat_executable_provider(row, root, config_cache):
     return provider
 
 
-def _seat_executable_missing(row, root, config_cache):
-    """``True`` when the seat's resolved command names an absolute
-    executable that does not exist on disk (pc-1476: a seat that once
-    proved a provider present should not silently keep counting once its
-    binary is gone)."""
+def _seat_executable_status(row, root, config_cache, home_dir=None):
+    """The trust status of the seat's resolved absolute executable —
+    ``'missing'`` when the path does not exist, ``'untrusted'`` when it
+    exists but resolves outside the trusted install roots (neither proves
+    nor stages the provider — review finding pc-1476), ``'ok'`` when it
+    exists and is trusted, or ``None`` when the seat names no absolute
+    executable at all."""
     _provider, token = _seat_resolved_executable(row, root, config_cache)
     if not token:
-        return False
+        return None
     path = Path(token)
-    return path.is_absolute() and not path.is_file()
+    if not path.is_absolute():
+        return None
+    if not path.is_file():
+        return 'missing'
+    home_dir = home_dir if home_dir is not None else Path.home()
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return 'missing'
+    return 'ok' if _is_trusted_path(resolved, home_dir) else 'untrusted'
+
+
+def _seat_executable_missing(row, root, config_cache):
+    """``True`` when the seat's resolved command names an absolute
+    executable that neither exists on disk nor resolves to a trusted
+    install root (pc-1476: a seat that once proved a provider present
+    should not silently keep counting once its binary is gone or is
+    proven to sit outside a trusted location)."""
+    return _seat_executable_status(row, root, config_cache) in ('missing', 'untrusted')
 
 
 def _project_seat_providers(workers, project_slug, root, config_cache):
@@ -637,8 +697,10 @@ def provider_coverage(root, registry, workers, config_cache, host_providers=None
     """One coverage row per registered project (AGENT_ADOPTION.md D15):
     present/held providers, missing ones (installed but no seat), and
     providers this host does not have installed at all. Each row's
-    ``sources`` names which proof (PATH, well-known location, or a seat's
-    own command) established a present/held/missing provider (pc-1476).
+    ``sources`` names, for every provider, which proof (PATH, well-known
+    location, or a seat's own command) established it, or 'not detected'
+    when the host has no proof for it at all — the payload always names a
+    source for all four providers, not just present/held ones (pc-1476).
     """
     if host_providers is None:
         host_provider_sources = {}
@@ -672,7 +734,7 @@ def provider_coverage(root, registry, workers, config_cache, host_providers=None
         rows.append({
             'project': slug, 'name': name, 'present': present, 'held': held,
             'missing': missing, 'not_configured': not_configured, 'text': text,
-            'sources': {p: host_provider_sources.get(p) for p in present + held},
+            'sources': {p: host_provider_sources.get(p) or 'not detected' for p in _PROVIDER_ORDER},
             'install_hints': {p: _PROVIDER_INSTALL_HINT[p] for p in not_configured},
             'hire_commands': {p: hire_command(p, project_slug=slug, project_path=project_path,
                                                prefix=project.get('prefix') or slug, remote=remote)
@@ -820,8 +882,8 @@ def operations_snapshot(binder):
                 state = 'idle'
             command = row.get('command')
             configured = isinstance(command, list) and bool(command) and command not in (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh','-c','true'], ['bash','-c','true'])
-            missing_on_disk = configured and _seat_executable_missing(row, root, runner_config_cache)
-            if missing_on_disk: configured = False
+            executable_status = _seat_executable_status(row, root, runner_config_cache) if configured else None
+            if executable_status in ('missing', 'untrusted'): configured = False
             if not configured: state = 'not_configured'
             if row.get('enabled') is False: state = 'off'
             live = runtime.get(identity, {})
@@ -848,7 +910,8 @@ def operations_snapshot(binder):
                 'badge_source': 'daemon' if (state == 'working' and not shift) else BADGE_SOURCE[state],
                 'group': group, 'configured':configured,
                 'configuration': ('Command configured' if configured else
-                                  'provider missing on disk' if missing_on_disk else
+                                  'provider missing on disk' if executable_status == 'missing' else
+                                  'provider outside trusted locations' if executable_status == 'untrusted' else
                                   'Placeholder command — no operational work runs'),
                 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,

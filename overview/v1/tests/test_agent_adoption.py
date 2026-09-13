@@ -79,16 +79,16 @@ class ProviderDetectionTests(unittest.TestCase):
         self.assertEqual(sources['Claude'], 'PATH')
 
     def test_seat_absolute_executable_proves_a_provider_present(self):
+        bindir = self.home / 'bin'
+        bindir.mkdir()
+        exe = bindir / 'claude'
+        exe.write_text('#!/bin/sh\n')
+        exe.chmod(0o755)
         workers = {'seat': {'display': 'Seat', 'identity': 'seat', 'kind': 'lane',
-                             'command': ['claude', '-p', 'x']}}
-        with tempfile.TemporaryDirectory() as bindir:
-            exe = Path(bindir) / 'claude'
-            exe.write_text('#!/bin/sh\n')
-            exe.chmod(0o755)
-            workers['seat']['command'] = [str(exe), '-p', 'x']
-            sources = {}
-            found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home,
-                                      workers=workers, root=Path(bindir), config_cache={}, sources=sources)
+                             'command': [str(exe), '-p', 'x']}}
+        sources = {}
+        found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home,
+                                  workers=workers, root=bindir, config_cache={}, sources=sources)
         self.assertEqual(found['Claude'], str(exe))
         self.assertEqual(sources['Claude'], 'seat command')
 
@@ -98,6 +98,46 @@ class ProviderDetectionTests(unittest.TestCase):
         found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home,
                                   workers=workers, root=Path('/nowhere'), config_cache={})
         self.assertIsNone(found['Claude'])
+
+    def test_seat_executable_outside_trusted_locations_proves_nothing(self):
+        # A seat naming an executable under /tmp — outside the trusted
+        # home/homebrew/usr-local/Codex-app roots — proves no provider,
+        # even though the file genuinely exists (review finding pc-1476).
+        with tempfile.TemporaryDirectory(dir='/tmp') as bindir:
+            exe = Path(bindir) / 'claude'
+            exe.write_text('#!/bin/sh\n')
+            exe.chmod(0o755)
+            workers = {'seat': {'display': 'Seat', 'identity': 'seat', 'kind': 'lane',
+                                 'command': [str(exe), '-p', 'x']}}
+            found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home,
+                                      workers=workers, root=Path(bindir), config_cache={})
+        self.assertIsNone(found['Claude'])
+
+    def test_well_known_bin_symlink_to_untrusted_target_proves_nothing(self):
+        # A well-known bin location that is a symlink pointing outside the
+        # trusted roots proves nothing — Path.is_file() alone would follow
+        # the symlink and wrongly accept it (review finding pc-1476).
+        localbin = self.home / '.local' / 'bin'
+        localbin.mkdir(parents=True)
+        with tempfile.TemporaryDirectory(dir='/tmp') as outside:
+            target = Path(outside) / 'claude'
+            target.write_text('#!/bin/sh\n')
+            target.chmod(0o755)
+            (localbin / 'claude').symlink_to(target)
+            found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home)
+        self.assertIsNone(found['Claude'])
+
+    def test_well_known_bin_symlink_to_trusted_target_still_proves_present(self):
+        localbin = self.home / '.local' / 'bin'
+        localbin.mkdir(parents=True)
+        real_dir = self.home / 'real'
+        real_dir.mkdir()
+        target = real_dir / 'claude'
+        target.write_text('#!/bin/sh\n')
+        target.chmod(0o755)
+        (localbin / 'claude').symlink_to(target)
+        found = detect_providers(env={'PATH': ''}, app_path_exists=False, home=self.home)
+        self.assertEqual(found['Claude'], str(localbin / 'claude'))
 
 
 class HireCommandTests(unittest.TestCase):
@@ -231,12 +271,31 @@ class ProviderCoverageTests(unittest.TestCase):
 
         with patch('server.operations.detect_providers', side_effect=fake_detect):
             row = provider_coverage(self.root, self._registry(), workers, {})[0]
-        self.assertEqual(row['sources'], {'Claude': 'well-known location', 'Codex': 'seat command'})
+        self.assertEqual(row['sources'], {'Claude': 'well-known location', 'Cursor': 'not detected',
+                                           'Grok': 'not detected', 'Codex': 'seat command'})
 
     def test_seat_with_missing_on_disk_executable_does_not_count_as_present(self):
         workers = {'blueprint-claude': self._seat(['/nowhere/claude'])}
         host_providers = {'Claude': None, 'Cursor': None, 'Grok': None, 'Codex': None}
         row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], [])
+        self.assertIn('Claude', row['not_configured'])
+
+    def test_not_configured_providers_get_a_not_detected_source_label(self):
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), {}, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['sources']['Cursor'], 'not detected')
+        self.assertEqual(row['sources']['Grok'], 'not detected')
+        self.assertEqual(row['sources']['Codex'], 'not detected')
+
+    def test_seat_executable_outside_trusted_locations_does_not_count_as_present(self):
+        with tempfile.TemporaryDirectory(dir='/tmp') as outside:
+            exe = Path(outside) / 'claude'
+            exe.write_text('#!/bin/sh\n')
+            exe.chmod(0o755)
+            workers = {'blueprint-claude': self._seat([str(exe)])}
+            host_providers = {'Claude': None, 'Cursor': None, 'Grok': None, 'Codex': None}
+            row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
         self.assertEqual(row['present'], [])
         self.assertIn('Claude', row['not_configured'])
 
