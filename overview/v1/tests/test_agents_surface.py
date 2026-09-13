@@ -263,6 +263,105 @@ class AgentsSurfaceTests(unittest.TestCase):
         self.assertEqual(supervisor['passes']['state'], 'not_configured')
 
 
+class ProviderModelResolutionTests(unittest.TestCase):
+    """pc-1472: provider/model resolution order and the trimmed card fields."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.runtime = self.root / 'workforce/local'
+        self.runtime.mkdir(parents=True)
+        (self.runtime / 'ledger').mkdir()
+        tick = datetime.now(timezone.utc)
+        (self.runtime / 'daemon.json').write_text(json.dumps({'last_tick': tick.isoformat(), 'in_flight': []}))
+
+    def _roster(self, workers):
+        (self.runtime / 'roster.json').write_text(json.dumps({'workers': workers}))
+
+    def _agent(self, identity='agent'):
+        return next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == identity)
+
+    def test_roster_model_wins_first(self):
+        self._roster({'agent': {'display': 'Agent', 'command': ['claude'], 'identity': 'agent',
+                                 'kind': 'lane', 'model': 'claude-sonnet-5'}})
+        self.assertEqual(self._agent()['model'], 'claude-sonnet-5')
+
+    def test_runner_config_provider_and_model(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model', 'sonnet', '-p', 'x']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Claude sonnet')
+
+    def test_runner_config_provider_without_model_flag(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/cursor-agent', '--print']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Cursor')
+
+    def test_executable_inference_when_no_config(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['/usr/local/bin/grok', '-p', 'x']}})
+        self.assertEqual(self._agent()['model'], 'Grok')
+
+    def test_python_module_reads_local_job(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['/usr/bin/python3', '-m', 'protocolcity.operations_job']}})
+        self.assertEqual(self._agent()['model'], 'Local job')
+
+    def test_unrecognized_command_is_never_not_specified(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['/usr/local/bin/mystery-tool']}})
+        model = self._agent()['model']
+        self.assertNotEqual(model, 'Not specified')
+        self.assertEqual(model, 'Provider unknown')
+
+    def test_inline_equals_model_flag_resolves(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model=sonnet', '-p', 'x']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Claude sonnet')
+
+    def test_grok_short_model_flag_resolves(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/grok', '-m', 'grok-4', '-p', 'x']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Grok grok-4')
+
+    def test_relative_config_path_resolves_against_workspace_root(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model', 'sonnet']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', 'runner.json']}})
+        self.assertEqual(self._agent()['model'], 'Claude sonnet')
+
+    def test_relative_config_path_outside_workspace_falls_through(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['/usr/local/bin/claude', '--config', '../../etc/runner.json']}})
+        self.assertEqual(self._agent()['model'], 'Claude')
+
+    def test_shared_runner_config_read_once_per_snapshot(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model', 'sonnet']}))
+        self._roster({
+            'agent-one': {'display': 'Agent One', 'identity': 'agent-one', 'kind': 'lane',
+                          'command': ['python', 'launch.py', '--config', str(config)]},
+            'agent-two': {'display': 'Agent Two', 'identity': 'agent-two', 'kind': 'lane',
+                          'command': ['python', 'launch.py', '--config', str(config)]},
+        })
+        from server import operations
+        with patch.object(operations, 'read_json', wraps=operations.read_json) as read_json:
+            snapshot = operations_snapshot(self.root)
+        config_reads = [c for c in read_json.call_args_list if c.args and c.args[0] == config.resolve()]
+        self.assertEqual(len(config_reads), 1)
+        self.assertEqual(next(a for a in snapshot['agents'] if a['id'] == 'agent-one')['model'], 'Claude sonnet')
+        self.assertEqual(next(a for a in snapshot['agents'] if a['id'] == 'agent-two')['model'], 'Claude sonnet')
+
+
 class _FakeResponse:
     def __init__(self, payload):
         self._payload = json.dumps(payload).encode('utf-8')
