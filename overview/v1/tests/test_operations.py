@@ -477,6 +477,27 @@ class OperationsTests(unittest.TestCase):
         result=operations_snapshot(self.root)
         self.assertEqual(result['agents'][0]['state'],'working')
         self.assertEqual(result['projects'][0]['running'],1)
+    def test_project_running_count_is_seats_only_a_working_job_does_not_count(self):
+        # Review finding (pc-1483 recovery 2): overview() and the project
+        # rollup here must apply one shared Running rule (seats only,
+        # STATES_AND_TERMS §2); a working job (kind='job') shows 'working'
+        # on Agents but must not move project.running.
+        self.seed()
+        runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
+        (runtime/'roster.json').write_text(json.dumps({'workers':{
+            'agent':{'display':'Agent','command':['example-agent'],'identity':'agent','kind':'lane',
+                     'queue_url':'https://example.invalid/queue?product=product'},
+            'health-patrol':{'display':'Health patrol','command':['example-job'],'identity':'health-patrol','kind':'job',
+                     'queue_url':'https://example.invalid/queue?product=product'}}}))
+        (runtime/'daemon.json').write_text(json.dumps({'last_tick':datetime.now(timezone.utc).isoformat(),'in_flight':['health-patrol']}))
+        result=operations_snapshot(self.root)
+        job=next(a for a in result['agents'] if a['id']=='health-patrol')
+        self.assertEqual(job['group'],'job')
+        self.assertEqual(job['state'],'working')
+        self.assertEqual(result['projects'][0]['running'],0)
+        seat=next(a for a in result['agents'] if a['id']=='agent')
+        self.assertEqual(seat['group'],'seat')
+        self.assertEqual(seat['state'],'idle')
     def test_date_only_gate_until_projects_as_all_day(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:

@@ -783,16 +783,22 @@ async function refreshRemote() {
 // The content-change fingerprint ignores read-time and heartbeat-tick
 // churn: 'observed_at' is stamped fresh on every read, 'sources[].last_at'
 // and 'agents[].last_at' mirror the same daemon heartbeat tick on every
-// entry, and the WorkLane API health probe's 'observed_at' is a bare
-// probe-time stamp — none of those are application content, so a snapshot
-// that only differs in these fields must not read as a meaningful change
-// (pc-1483: "Content-change fingerprints ignore read times/heartbeat tick
-// churn").
+// entry, 'agents[].shift.age_seconds' is recomputed from the wall clock on
+// every read of an otherwise-unchanged open shift, and the WorkLane API
+// health probe's 'observed_at' is a bare probe-time stamp — none of those
+// are application content, so a snapshot that only differs in these fields
+// must not read as a meaningful change (pc-1483: "Content-change
+// fingerprints ignore read times/heartbeat tick churn").
+function stripShiftAge(shift) {
+  if(!shift) return shift;
+  const {age_seconds, ...rest}=shift;
+  return rest;
+}
 function contentKey(next) {
   if(page==='work') return JSON.stringify({orders:next.orders,projects:next.projects,workspace:next.workspace,sources:next.sources.map(s=>({name:s.name,state:s.state})),truncated:next.truncated});
   const sources=(next.sources || []).map(({last_at, ...rest})=>rest);
-  const agents=(next.agents || []).map(({last_at, ...rest})=>rest);
-  const supervisor=next.supervisor ? (({last_at, ...rest})=>rest)(next.supervisor) : next.supervisor;
+  const agents=(next.agents || []).map(({last_at, shift, ...rest})=>({...rest,shift:stripShiftAge(shift)}));
+  const supervisor=next.supervisor ? (({last_at, shift, ...rest})=>({...rest,shift:stripShiftAge(shift)}))(next.supervisor) : next.supervisor;
   const worklaneApi=next.engines?.worklane_api ? {...next.engines.worklane_api,observed_at:null} : next.engines?.worklane_api;
   const engines=next.engines ? {...next.engines,worklane_api:worklaneApi} : next.engines;
   return JSON.stringify({...next,observed_at:null,sources,agents,supervisor,engines});
@@ -839,7 +845,7 @@ if ($('timeline-filters')) {
   $('timeline-more').addEventListener('click', () => { timelineExpanded = true; refreshTimeline(true); });
   $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; refreshTimeline(false, {force: true}); });
 }
-$('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false);});
+$('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false, {force: true});});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();freshness();});
