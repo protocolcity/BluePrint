@@ -81,6 +81,15 @@
 @media(max-width:560px) { .bp-header,.bp-nav,.bp-main,.bp-footer { padding-inline: 16px; }.bp-header { gap: 12px; }.bp-brand small { display: none; }.bp-header-actions { gap: 6px; }.bp-header { flex-wrap: wrap; }.bp-header-actions { width: 100%; justify-content: space-between; }.bp-heading { display: block; }.bp-metrics { grid-template-columns: repeat(2,1fr); }.bp-metric { border-bottom: 1px solid var(--ov-tile-border); }.bp-project-grid { grid-template-columns: 1fr; }.bp-order { grid-template-columns: 1fr; gap: 8px; }.bp-badge { justify-self: start; }.bp-filters label { flex: 1; min-width: 130px; }.bp-section-head { align-items: start; }.bp-footer { flex-direction: column; }.bp-facts { grid-template-columns: 1fr; gap: 6px; }.bp-facts dd { margin-bottom: 8px; } }
 .bp-reduce-motion * { animation: none !important; transition: none !important; }
 .bp-event { padding: 16px 0; border-bottom: 1px solid var(--ov-tile-border); }.bp-event summary { cursor: pointer; }.bp-event p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.bp-cal-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 8px; }
+.bp-cal-nav button { min-height: 40px; }
+#calendar-today-heading, #calendar-next-heading { margin: 12px 0 4px; color: var(--ov-muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+#calendar-past-wrap { margin-top: 12px; }
+#calendar-past-wrap > summary { cursor: pointer; color: var(--ov-muted); font-size: 13px; }
+#calendar-filters { align-items: end; }
+.bp-badge[data-state="expired"] { color: var(--ov-muted); }
+.bp-badge[data-state="manual"] { color: var(--ov-muted); }
+.bp-badge[data-state="all_day"] { color: var(--ov-fg); }
 .bp-reader-shell { max-width: 1440px; margin: auto; }.bp-reader { margin: 28px 32px; max-width: 1000px; }.bp-reader h2 { margin-top: 28px; margin-bottom: 14px; }.bp-reader #identity,.bp-reader #state { color: var(--ov-muted); }.bp-reader #comments section { padding: 14px 0; border-top: 1px solid var(--ov-tile-border); }.bp-reader #comments h3 { color: var(--ov-muted); font-weight: 400; font-size: 12px; }.bp-reader #comments p { line-height: 1.65; }.bp-map-page { display: flex; flex-direction: column; height: 100dvh; }.bp-map-page .bp-nav { width: 100%; flex-shrink: 0; }.bp-map-page .map-shell { flex: 1; height: auto; min-height: 0; }
 @media(max-width:560px) { .bp-reader { margin: 20px 16px; } }
 .bp-note-form { display: grid; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--ov-tile-border); }.bp-note-form textarea { resize: vertical; width: 100%; color: var(--ov-fg); background: var(--ov-bg); border: 1px solid var(--ov-tile-border-strong); border-radius: 6px; padding: 12px; font: inherit; }.bp-note-form button { justify-self: start; }.bp-note-form [data-error="true"] { color: var(--ov-state-error); }

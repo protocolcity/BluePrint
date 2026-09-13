@@ -199,7 +199,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'remote-repositories'):
+        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'remote-repositories'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
@@ -404,15 +404,50 @@ class CalendarRowTests(unittest.TestCase):
         self.assertIn("agent.group==='seat'", compact)
         self.assertIn("agent.schedule==='manual'", compact)
         self.assertIn("agent.schedule==='Notscheduled'", compact)
+        self.assertIn("'No next run'", _SRC)
+        self.assertIn("Last run: ", _SRC)
 
-    def test_due_and_hold_until_merge_on_the_same_row(self):
+    def test_due_hold_reminder_and_mentioned_merge_on_the_same_row(self):
         self.assertIn("function mergeDatedWork(items)", _SRC)
         compact = _SRC.replace(' ', '')
-        self.assertIn("event.kind!=='deadline'&&event.kind!=='timer'", compact)
+        self.assertIn("event.kind!=='deadline'&&event.kind!=='timer'&&event.kind!=='reminder'&&event.kind!=='mentioned'", compact)
         self.assertIn("row.due=", compact)
         self.assertIn("row.hold=", compact)
-        self.assertIn("' · Due'", _SRC)
-        self.assertIn("' · Hold until'", _SRC)
+        self.assertIn("row.reminder=", compact)
+        self.assertIn("row.mentioned=", compact)
+        self.assertIn("'Due'", _SRC)
+        self.assertIn("'Hold until'", _SRC)
+        self.assertIn("'Expired hold'", _SRC)
+        self.assertIn("'Mentioned date'", _SRC)
+        self.assertIn("'Reminder'", _SRC)
+
+    def test_agenda_centres_today_and_collapses_past(self):
+        self.assertIn("function agendaGroup(row, origin)", _SRC)
+        self.assertIn("id=\"calendar-today\"", _HTML)
+        self.assertIn("id=\"calendar-next\"", _HTML)
+        self.assertIn("id=\"calendar-past\"", _HTML)
+        self.assertIn("Past and overdue", _SRC)
+        self.assertIn("id=\"calendar-prev-week\"", _HTML)
+        self.assertIn("id=\"calendar-today-btn\"", _HTML)
+
+    def test_agenda_group_buckets_per_clock_so_overdue_beats_a_later_reminder(self):
+        fn = _SRC.split('function agendaGroup(row, origin)')[1].split('function ')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('days.some(day=>day===origin)', compact)
+        self.assertIn('days.some(day=>day<origin)', compact)
+        self.assertNotIn('days.some(day=>day>origin)', compact)
+
+    def test_needs_you_on_calendar_is_decide_only(self):
+        self.assertIn("event.attention_face==='decide'", _SRC)
+        self.assertIn("decide?'Needs you'", _SRC)
+
+    def test_calendar_links_go_through_the_reader_return(self):
+        self.assertIn("function datedHref(event)", _SRC)
+        self.assertIn("readerHref('/work-order?'", _SRC)
+
+    def test_missing_calendar_file_is_not_configured(self):
+        self.assertIn("No local calendar file. Agent schedules above are independent of a calendar file.", _SRC)
+        self.assertIn("No next run reported", _SRC)
 
 
 class ActivityCueTests(unittest.TestCase):
