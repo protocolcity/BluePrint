@@ -294,6 +294,20 @@ class ProviderModelResolutionTests(unittest.TestCase):
                                  'kind': 'lane', 'model': 'Claude claude-sonnet-5'}})
         self.assertEqual(self._agent()['model'], 'Claude claude-sonnet-5')
 
+    def test_roster_model_already_prefixed_case_insensitively_is_not_doubled(self):
+        # review finding pc-1476: a pin whose leading word already names the
+        # provider (regardless of case) must not be prefixed again.
+        self._roster({'agent': {'display': 'Agent', 'command': ['claude'], 'identity': 'agent',
+                                 'kind': 'lane', 'model': 'claude sonnet'}})
+        self.assertEqual(self._agent()['model'], 'Claude sonnet')
+
+    def test_bare_provider_name_pin_is_not_doubled(self):
+        # review finding pc-1476: a pin that is exactly the bare provider
+        # token (lowercase) reads as the provider name alone, not doubled.
+        self._roster({'agent': {'display': 'Agent', 'command': ['claude'], 'identity': 'agent',
+                                 'kind': 'lane', 'model': 'claude'}})
+        self.assertEqual(self._agent()['model'], 'Claude')
+
     def test_roster_model_with_unresolvable_command_stays_bare(self):
         self._roster({'agent': {'display': 'Agent', 'command': ['mystery-tool'], 'identity': 'agent',
                                  'kind': 'lane', 'model': 'some-pin'}})
