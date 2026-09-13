@@ -4,10 +4,25 @@ from datetime import datetime, timezone
 from importlib.metadata import version, PackageNotFoundError
 import json
 from pathlib import Path
+import re
 import sqlite3
 import shlex
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
+from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
+
+# Fixed badge vocabulary (STATES_AND_TERMS.md §2, AGENTS_INTENT.md). Never
+# invent a badge word outside this map.
+BADGE_TEXT = {'working': 'WORKING', 'idle': 'IDLE', 'stale_shift': 'STALE SHIFT',
+              'last_run_failed': 'LAST RUN FAILED', 'unknown': 'UNKNOWN',
+              'not_configured': 'NOT CONFIGURED', 'off': 'OFF'}
+BADGE_SOURCE = {'working': 'engine ledger', 'idle': 'engine ledger', 'stale_shift': 'engine ledger',
+                'last_run_failed': 'engine ledger', 'unknown': 'daemon',
+                'not_configured': 'roster', 'off': 'roster'}
+STATE_ORDER = {'working': 0, 'last_run_failed': 1, 'stale_shift': 2, 'idle': 3,
+               'unknown': 4, 'not_configured': 5, 'off': 6}
 
 
 def last_run(daemon_path, root, identity):
@@ -30,6 +45,151 @@ def last_run(daemon_path, root, identity):
     except (OSError, ValueError):
         pass
     return None
+
+
+def last_shift_candidates(daemon_path, root, identity):
+    """Candidate tickets from the most recent START block, open or closed.
+
+    Unlike ``engine_open_shift`` (which only speaks about an open shift),
+    this also answers for a shift that already closed — the candidates a
+    just-failed run held are still the ones a "verified" mark checks.
+    """
+    if daemon_path is None or not identity or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in identity):
+        return []
+    path = daemon_path.resolve().parent / 'ledger' / (identity + '.log')
+    try:
+        if not path.resolve().is_relative_to(root):
+            return []
+    except OSError:
+        return []
+    try:
+        with path.open('rb') as stream:
+            stream.seek(0, 2)
+            stream.seek(max(0, stream.tell() - 16384))
+            lines = stream.read().decode('utf-8', errors='replace').splitlines()
+    except OSError:
+        return []
+    start_index = None
+    for index in range(len(lines) - 1, -1, -1):
+        parts = shlex.split(lines[index]) if lines[index].strip() else []
+        if len(parts) >= 2 and parts[1] == 'START':
+            start_index = index
+            break
+    if start_index is None:
+        return []
+    candidates = []
+    for line in lines[start_index + 1:]:
+        parts = shlex.split(line) if line.strip() else []
+        if len(parts) < 2 or parts[1] not in ('CANDIDATE',):
+            continue
+        fields = dict(item.split('=', 1) for item in parts[2:] if '=' in item)
+        ticket = fields.get('ticket', '')
+        if ticket and ticket not in candidates:
+            candidates.append(ticket)
+    return candidates
+
+
+def recovery_attempts(daemon_path, root, identity):
+    """Count START rows tagged recovery=1 in this identity's ledger tail."""
+    if daemon_path is None or not identity or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in identity):
+        return 0
+    path = daemon_path.resolve().parent / 'ledger' / (identity + '.log')
+    try:
+        if not path.resolve().is_relative_to(root):
+            return 0
+    except OSError:
+        return 0
+    try:
+        with path.open('rb') as stream:
+            stream.seek(0, 2)
+            stream.seek(max(0, stream.tell() - 16384))
+            lines = stream.read().decode('utf-8', errors='replace').splitlines()
+    except OSError:
+        return 0
+    count = 0
+    for line in lines:
+        parts = shlex.split(line) if line.strip() else []
+        if len(parts) < 2 or parts[1] != 'START':
+            continue
+        fields = dict(item.split('=', 1) for item in parts[2:] if '=' in item)
+        if fields.get('recovery') == '1':
+            count += 1
+    return count
+
+
+def _config_argument(command):
+    if not isinstance(command, list):
+        return None
+    for index, item in enumerate(command):
+        if item == '--config' and index + 1 < len(command):
+            return command[index + 1]
+    return None
+
+
+def preserved_reservation(root, command, order_id):
+    """A task_runner preparation receipt still exists for the held order.
+
+    Read only the worker's own recovery-config JSON (the ``--config`` path
+    already on its roster command) and the reservation directory it names;
+    never invents a state_dir or worker name.
+    """
+    config_path = _config_argument(command)
+    if not config_path or not order_id:
+        return False
+    path = Path(config_path)
+    if not path.is_absolute():
+        return False
+    config = read_json(path, root)
+    if not isinstance(config, dict):
+        return False
+    state_dir = config.get('state_dir')
+    worker = config.get('worker')
+    if not isinstance(state_dir, str) or not state_dir or not isinstance(worker, str) or not worker:
+        return False
+    slug = str(order_id)
+    if not re.fullmatch(r'[A-Za-z0-9._-]+', slug):
+        return False
+    receipt = Path(state_dir) / worker / slug / 'preparation.json'
+    return read_json(receipt, root) is not None
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    """Refuse to leave the verified origin; a 3xx becomes an HTTPError."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise HTTPError(newurl, code, msg, headers, fp)
+
+
+def supervisor_snapshot(root):
+    """Read GET /api/supervisor on the verified local WorkForce origin.
+
+    Same origin-verification shape as agent_actions.dispatch_agent, but a
+    plain read with a 3 s timeout — the one upstream call this surface adds.
+    """
+    receipt = read_json(root / 'local/workforce/deployment.json', root) or {}
+    origin = receipt.get('api_origin', '')
+    parsed = urlparse(origin)
+    if (parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1')
+            or parsed.username or parsed.password or parsed.path not in ('', '/')
+            or parsed.query or parsed.fragment):
+        return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.', 'passes': []}
+    request = Request(origin.rstrip('/') + '/api/supervisor?limit=3')
+    opener = build_opener(_NoRedirect())
+    try:
+        with opener.open(request, timeout=3) as response:
+            payload = json.load(response)
+    except HTTPError as exc:
+        if 300 <= exc.code < 400:
+            return {'state': 'unavailable', 'detail': 'WorkForce redirected the supervisor read; refusing to leave the verified origin.', 'passes': []}
+        if exc.code == 404:
+            return {'state': 'not_configured', 'detail': 'This WorkForce engine does not report supervisor passes.', 'passes': []}
+        return {'state': 'unavailable', 'detail': 'WorkForce declined the supervisor read.', 'passes': []}
+    except (URLError, TimeoutError, ValueError, OSError):
+        return {'state': 'unavailable', 'detail': 'WorkForce is not reachable.', 'passes': []}
+    passes = payload.get('passes') if isinstance(payload, dict) else None
+    if not isinstance(passes, list):
+        return {'state': 'unavailable', 'detail': 'Supervisor endpoint returned an unexpected shape.', 'passes': []}
+    return {'state': 'available', 'detail': '', 'passes': passes[:3]}
 
 
 def read_json(path, root):
@@ -72,7 +232,7 @@ def operations_snapshot(binder):
     except PackageNotFoundError:
         build = 'Source checkout'
     result = {'observed_at': now.isoformat(), 'build': build, 'workspace': None,
-              'orders': [], 'projects': [], 'agents': [], 'sources': [], 'truncated': False,
+              'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
               'events': [], 'work_dates': [], 'excluded_stores': [], 'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
         result['sources'].append({'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.'})
@@ -148,24 +308,58 @@ def operations_snapshot(binder):
     flight = (daemon or {}).get('in_flight', [])
     if not isinstance(runtime, dict): runtime = {}
     if not isinstance(flight, list): flight = []
+    daemon_path = resolve_daemon_path(root)
     if isinstance(workers, dict):
         for identity, row in workers.items():
             if not isinstance(row, dict) or identity == 'demo-worker': continue
-            shift = engine_open_shift(resolve_daemon_path(root), root, identity, now)
+            shift = engine_open_shift(daemon_path, root, identity, now)
             open_shift = shift is not None and not shift['stale']
-            state = 'unknown' if not fresh else ('working' if (identity in flight or open_shift) else ('stale_shift' if shift else 'idle'))
+            run = last_run(daemon_path, root, identity)
+            if not fresh:
+                state = 'unknown'
+            elif identity in flight or open_shift:
+                state = 'working'
+            elif shift:
+                state = 'stale_shift'
+            elif run and run['outcome'] == 'error':
+                state = 'last_run_failed'
+            else:
+                state = 'idle'
             command = row.get('command')
             configured = isinstance(command, list) and bool(command) and command not in (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh','-c','true'], ['bash','-c','true'])
             if not configured: state = 'not_configured'
             if row.get('enabled') is False: state = 'off'
             live = runtime.get(identity, {})
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
-            result['agents'].append({'id': identity, 'name': row.get('display') or identity,
-                'last_run': last_run(resolve_daemon_path(root), root, identity), 'shift': shift,
+            kind = row.get('kind') or 'agent'
+            group = 'supervisor' if identity == 'bp-supervisor' else ('seat' if kind == 'lane' else 'job')
+            held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
+            verified = bool(held and held['id'] in last_shift_candidates(daemon_path, root, identity))
+            reservation = bool(held and state == 'last_run_failed' and preserved_reservation(root, command, held['id']))
+            if state == 'idle':
+                action = 'dispatch'
+            elif state == 'stale_shift':
+                action = 'inspect'
+            elif state == 'last_run_failed':
+                action = 'recover' if reservation else 'dispatch'
+            else:
+                action = None
+            agent_row = {'id': identity, 'name': row.get('display') or identity,
+                'last_run': run, 'shift': shift,
                 'report': {k:report.get(k) for k in ('title','observed_at','state','summary','detail','mode')} if report else None,
-                'state': state, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': row.get('kind') or 'agent', 'schedule': row.get('schedule') or 'Not scheduled',
+                'state': state, 'badge': BADGE_TEXT[state],
+                'badge_source': 'daemon' if (state == 'working' and not shift) else BADGE_SOURCE[state],
+                'group': group, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
-                'model': row.get('model') or 'Not specified', 'last_at': tick, 'source': 'Local WorkForce'})
+                'model': row.get('model') or 'Not specified', 'last_at': tick, 'source': 'Local WorkForce',
+                'held': {'id': held['id'], 'project': held['project_name']} if held else None,
+                'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
+                'preserved_reservation': reservation, 'action': action}
+            if group == 'supervisor':
+                result['supervisor'] = {**agent_row, 'passes': supervisor_snapshot(root)}
+            else:
+                result['agents'].append(agent_row)
+    result['agents'].sort(key=lambda a: (STATE_ORDER.get(a['state'], 9), a['name']))
     placeholders = [a['name'] for a in result['agents'] if not a['configured']]
     if placeholders:
         result['sources'].append({'name':'Agent/job configuration','state':'partial','detail':'Placeholder commands: ' + ', '.join(placeholders) + '. These jobs do not execute operational work.'})
