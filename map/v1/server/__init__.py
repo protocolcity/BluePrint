@@ -7,6 +7,7 @@ and dogfoodable on a laptop.
 """
 
 from .map_tree import (
+    attach_project_state,
     build_tree,
     children_at,
     load_binder,
@@ -14,6 +15,7 @@ from .map_tree import (
 )
 
 __all__ = [
+    "attach_project_state",
     "build_tree",
     "children_at",
     "load_binder",
