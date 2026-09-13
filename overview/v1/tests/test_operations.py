@@ -110,7 +110,7 @@ class OperationsTests(unittest.TestCase):
         started=self._stamp(timedelta(minutes=5));errored=self._stamp(timedelta(minutes=1))
         self._runtime_with_ledger(f'{started} START identity=agent kind=lane budget_secs=1500\n{errored} ERROR reason="agent exit" rc=143 on_pass=1\n')
         row=operations_snapshot(self.root)['agents'][0]
-        self.assertEqual(row['state'],'idle');self.assertIsNone(row['shift']);self.assertEqual(row['last_run']['outcome'],'error')
+        self.assertEqual(row['state'],'last_run_failed');self.assertIsNone(row['shift']);self.assertEqual(row['last_run']['outcome'],'error')
     def test_stale_open_shift_is_never_working(self):
         started=self._stamp(timedelta(hours=3))
         self._runtime_with_ledger(f'{started} START identity=agent kind=lane budget_secs=1500\n{started} CANDIDATE ticket=wf-9\n')
