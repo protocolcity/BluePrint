@@ -12,19 +12,29 @@ from server.timeline import (
     _decode_cursor,
     _encode_cursor,
     _event_word,
+    _github_event_word,
+    _ledger_event_word,
+    _normalize_at,
+    _supervisor_event_word,
     timeline_snapshot,
 )
 
 _RECENT = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+_RECENT_MICRO = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
 _OLD = (datetime.now(timezone.utc) - timedelta(days=20)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 class TimelineMappingTests(unittest.TestCase):
     def test_event_word_mapping(self):
-        self.assertEqual(_event_word('created', None), 'filed')
-        self.assertEqual(_event_word('status_change', 'in_progress'), 'claimed')
-        self.assertEqual(_event_word('status_change', 'in_review'), 'parked')
-        self.assertEqual(_event_word('status_change', 'done'), 'closed')
+        self.assertEqual(_event_word('created', None), {'event': 'filed'})
+        self.assertEqual(_event_word('status_change', 'in_progress'), {'event': 'claimed'})
+        self.assertEqual(_event_word('status_change', 'in_review'), {'event': 'parked'})
+        self.assertEqual(_event_word('status_change', 'done'), {'event': 'closed'})
+
+    def test_unmapped_event_word_falls_back_to_event_with_title(self):
+        mapped = _event_word('label_change', 'urgent')
+        self.assertEqual(mapped['event'], 'event')
+        self.assertEqual(mapped['event_title'], 'label_change/urgent')
 
     def test_comment_word_mapping(self):
         self.assertEqual(_comment_event_word('Intake: filed by you'), 'filed')
@@ -34,6 +44,28 @@ class TimelineMappingTests(unittest.TestCase):
         self.assertEqual(_comment_event_word('Completed: done'), 'closed')
         self.assertEqual(_comment_event_word('Blocked: needs credentials'), 'gated')
         self.assertEqual(_comment_event_word('A regular note'), 'note')
+
+    def test_ledger_event_word_mapping(self):
+        self.assertEqual(_ledger_event_word('START', {}), {'event': 'started'})
+        self.assertEqual(_ledger_event_word('START', {'recovery': '1'}), {'event': 'recovered'})
+        self.assertEqual(_ledger_event_word('CANDIDATE', {}), {'event': 'dispatched'})
+        self.assertEqual(_ledger_event_word('ERROR', {}), {'event': 'failed'})
+        self.assertEqual(_ledger_event_word('SKIP', {}), {'event': 'skipped'})
+
+    def test_supervisor_event_word_mapping(self):
+        self.assertEqual(_supervisor_event_word('dispatched'), {'event': 'dispatched'})
+        self.assertEqual(_supervisor_event_word('provider_failed'), {'event': 'failed'})
+        self.assertEqual(_supervisor_event_word('stopped_by_operator'), {'event': 'released'})
+
+    def test_github_event_word_mapping(self):
+        self.assertEqual(_github_event_word({'kind': 'pull_request', 'pr_event': 'merged'}), {'event': 'merged'})
+        self.assertEqual(_github_event_word({'kind': 'workflow', 'state': 'failure'}), {'event': 'failed'})
+        self.assertEqual(_github_event_word({'kind': 'workflow', 'state': 'success'}), {'event': 'passed'})
+        self.assertEqual(_github_event_word({'kind': 'release'}), {'event': 'released'})
+
+    def test_normalize_at_canonical_utc(self):
+        self.assertEqual(_normalize_at(_RECENT_MICRO), _RECENT)
+        self.assertEqual(_normalize_at('2026-09-13T12:34:56.789Z'), '2026-09-13T12:34:56Z')
 
     def test_cursor_round_trip(self):
         row = {'at': _RECENT, 'id': 'worklane:product:evt:1'}
@@ -74,6 +106,7 @@ class TimelineProjectionTests(unittest.TestCase):
         worklane = [r for r in result['rows'] if r['source'] == 'worklane']
         self.assertEqual(len(worklane), 2)
         self.assertEqual(worklane[0]['event'], 'claimed')
+        self.assertEqual(worklane[0]['at'], _RECENT)
         self.assertEqual(worklane[1]['event'], 'note')
         self.assertEqual(result['sources'][0]['name'], 'worklane')
         self.assertEqual(result['sources'][0]['state'], 'available')
@@ -89,8 +122,39 @@ class TimelineProjectionTests(unittest.TestCase):
         )
         result = timeline_snapshot(self.root)
         workforce = [r for r in result['rows'] if r['source'] == 'workforce']
-        self.assertEqual({r['event'] for r in workforce}, {'start', 'candidate'})
+        self.assertEqual({r['event'] for r in workforce}, {'started', 'dispatched'})
         self.assertEqual(workforce[0]['actor'], 'seat')
+        self.assertEqual(workforce[0]['at'], _RECENT)
+
+    def test_workforce_ledger_reads_bounded_tail_only(self):
+        runtime = self.root / 'workforce/local'
+        (runtime / 'ledger').mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {}}))
+        (runtime / 'daemon.json').write_text(json.dumps({'last_tick': _RECENT, 'in_flight': []}))
+        ledger = runtime / 'ledger/seat.log'
+        padding = 'x' * 20000
+        ledger.write_text(
+            f'{_OLD} START identity=seat kind=lane budget_secs=1500\n'
+            f'{padding}\n'
+            f'{_RECENT} ERROR identity=seat reason=tail-only\n'
+        )
+        result = timeline_snapshot(self.root)
+        workforce = [r for r in result['rows'] if r['source'] == 'workforce']
+        self.assertEqual(len(workforce), 1)
+        self.assertEqual(workforce[0]['event'], 'failed')
+
+    def test_workforce_rows_capped_per_source(self):
+        runtime = self.root / 'workforce/local'
+        (runtime / 'ledger').mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {}}))
+        (runtime / 'daemon.json').write_text(json.dumps({'last_tick': _RECENT, 'in_flight': []}))
+        lines = [f'{_RECENT} START identity=seat kind=lane budget_secs=1500 ticket=pc-{index}\n'
+                 for index in range(12)]
+        (runtime / 'ledger/seat.log').write_text(''.join(lines))
+        with patch('server.timeline.SOURCE_ROW_CAP', 5):
+            result = timeline_snapshot(self.root)
+        workforce = [r for r in result['rows'] if r['source'] == 'workforce']
+        self.assertEqual(len(workforce), 5)
 
     def test_supervisor_unavailable_is_labelled(self):
         runtime = self.root / 'workforce/local'
@@ -117,6 +181,7 @@ class TimelineProjectionTests(unittest.TestCase):
         supervisor_rows = [r for r in result['rows'] if r['source'] == 'supervisor']
         self.assertEqual(len(supervisor_rows), 1)
         self.assertEqual(supervisor_rows[0]['event'], 'dispatched')
+        self.assertEqual(supervisor_rows[0]['at'], _RECENT)
 
     def test_github_source_unavailable_when_not_configured(self):
         result = timeline_snapshot(self.root)
@@ -157,3 +222,23 @@ class TimelineProjectionTests(unittest.TestCase):
         page2 = timeline_snapshot(self.root, project='alpha', cursor=page1['next_cursor'])
         self.assertEqual(len(page2['rows']), 5)
         self.assertIsNone(page2['next_cursor'])
+
+    def test_cursor_paging_with_mixed_iso_timestamps(self):
+        self._register('alpha', 'aa')
+        with sqlite3.connect(self._db('alpha')) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, NULL, "First")')
+            conn.execute('INSERT INTO tasks VALUES(2, NULL, "Second")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"created",NULL,"you",?)', (_RECENT_MICRO,))
+            conn.execute('INSERT INTO task_events VALUES(2,2,"created",NULL,"you",?)', (_RECENT,))
+        page1 = timeline_snapshot(self.root, project='alpha')
+        self.assertEqual(len(page1['rows']), 2)
+        self.assertEqual(page1['rows'][0]['at'], _RECENT)
+        self.assertEqual(page1['rows'][1]['at'], _RECENT)
+        cursor = _encode_cursor(page1['rows'][0])
+        page2 = timeline_snapshot(self.root, project='alpha', cursor=cursor)
+        self.assertEqual(len(page2['rows']), 1)
+        self.assertEqual(page2['rows'][0]['title'], 'First')

@@ -17,7 +17,7 @@ from urllib.parse import urlencode, urlparse
 from urllib.request import Request, build_opener
 
 from .local_projectors import resolve_daemon_path, worklane_data_dir
-from .operations import _NoRedirect, project_registry, read_json, supervisor_snapshot
+from .operations import _NoRedirect, _ledger_tail_lines, project_registry, read_json, supervisor_snapshot
 from .remote_activity import remote_snapshot
 
 PAGE_SIZE = 200
@@ -36,10 +36,39 @@ _STATUS_WORD = {
     ('status_change', 'backlog'): 'released',
 }
 _LEDGER_EVENTS = frozenset({'START', 'CANDIDATE', 'DONE', 'STOP', 'ERROR', 'SKIP'})
-_GITHUB_EVENT = {
-    'pull_request': {'opened': 'opened', 'merged': 'merged', 'closed': 'closed'},
-    'workflow': 'CI',
-    'release': 'release',
+_LEDGER_WORD = {
+    'START': 'started',
+    'CANDIDATE': 'dispatched',
+    'DONE': 'stopped',
+    'STOP': 'stopped',
+    'ERROR': 'failed',
+    'SKIP': 'skipped',
+}
+_SUPERVISOR_WORD = {
+    'dispatched': 'dispatched',
+    'pass': 'passed',
+    'passed': 'passed',
+    'provider_failed': 'failed',
+    'failed': 'failed',
+    'stopped_by_operator': 'released',
+    'no_eligible_ready_work': 'skipped',
+    'escalated': 'failed',
+    'proposed': 'passed',
+}
+_WORKFLOW_WORD = {
+    'success': 'passed',
+    'failure': 'failed',
+    'cancelled': 'released',
+    'canceled': 'released',
+    'skipped': 'skipped',
+    'timed_out': 'failed',
+    'action_required': 'failed',
+    'stale': 'failed',
+    'neutral': 'passed',
+    'completed': 'passed',
+    'in_progress': 'started',
+    'queued': 'started',
+    'pending': 'started',
 }
 
 
@@ -55,6 +84,20 @@ def _parse_time(value) -> datetime | None:
     except (ValueError, TypeError):
         return None
     return stamp if stamp.tzinfo is not None else stamp.replace(tzinfo=timezone.utc)
+
+
+def _normalize_at(value) -> str:
+    """Canonical UTC timestamp for sort keys and cursor paging (second precision, Z)."""
+    stamp = _parse_time(value)
+    if stamp is None:
+        return str(value or '')
+    return stamp.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _event_fields(word: str | None, raw: str) -> dict:
+    if word:
+        return {'event': word}
+    return {'event': 'event', 'event_title': raw}
 
 
 def _in_window(value) -> bool:
@@ -110,9 +153,42 @@ def _comment_event_word(body: str) -> str:
     return 'note'
 
 
-def _event_word(event_type: str, status: str | None) -> str:
+def _event_word(event_type: str, status: str | None) -> dict:
     key = (event_type, (status or '').strip().lower() or None)
-    return _STATUS_WORD.get(key, event_type.replace('_', ' '))
+    mapped = _STATUS_WORD.get(key)
+    if mapped:
+        return _event_fields(mapped, '')
+    raw = event_type if not status else f'{event_type}/{status}'
+    return _event_fields(None, raw)
+
+
+def _ledger_event_word(event_type: str, fields: dict[str, str]) -> dict:
+    if event_type == 'START' and fields.get('recovery') == '1':
+        return _event_fields('recovered', '')
+    mapped = _LEDGER_WORD.get(event_type)
+    return _event_fields(mapped, event_type)
+
+
+def _supervisor_event_word(outcome: str) -> dict:
+    normalized = (outcome or '').strip().lower().replace(' ', '_')
+    mapped = _SUPERVISOR_WORD.get(normalized)
+    return _event_fields(mapped, outcome or 'unknown')
+
+
+def _github_event_word(item: dict) -> dict:
+    kind = item.get('kind')
+    if kind == 'pull_request':
+        pr_event = str(item.get('pr_event') or item.get('state') or '').lower()
+        mapped = {'opened': 'opened', 'merged': 'merged', 'closed': 'closed'}.get(pr_event)
+        return _event_fields(mapped, pr_event or 'pull_request')
+    if kind == 'workflow':
+        state = str(item.get('state') or '').lower()
+        mapped = _WORKFLOW_WORD.get(state)
+        return _event_fields(mapped, state or 'workflow')
+    if kind == 'release':
+        return _event_fields('released', '')
+    raw = str(kind or 'delivery')
+    return _event_fields(None, raw)
 
 
 def _registered_dbs(root: Path) -> list[tuple[str, str, Path]]:
@@ -184,11 +260,11 @@ def _worklane_rows(root: Path) -> tuple[list[dict], dict]:
                 task_id = _task_public_id(prefix, row['ext_id'], row['task_id'])
                 rows.append({
                     'id': f'worklane:{project}:evt:{row["id"]}',
-                    'at': row['created_at'],
+                    'at': _normalize_at(row['created_at']),
                     'source': 'worklane',
                     'project': project,
                     'actor': _display_actor(row['actor'] or ''),
-                    'event': _event_word(row['event_type'], row['status']),
+                    **_event_word(row['event_type'], row['status']),
                     'title': str(row['title'] or task_id),
                     'link': _work_order_link(project, task_id),
                 })
@@ -198,11 +274,11 @@ def _worklane_rows(root: Path) -> tuple[list[dict], dict]:
                 task_id = _task_public_id(prefix, row['ext_id'], row['task_id'])
                 rows.append({
                     'id': f'worklane:{project}:cmt:{row["id"]}',
-                    'at': row['created_at'],
+                    'at': _normalize_at(row['created_at']),
                     'source': 'worklane',
                     'project': project,
                     'actor': _display_actor(row['author'] or ''),
-                    'event': _comment_event_word(row['body'] or ''),
+                    **_event_fields(_comment_event_word(row['body'] or ''), ''),
                     'title': str(row['title'] or task_id),
                     'link': _work_order_link(project, task_id),
                 })
@@ -252,21 +328,25 @@ def _workforce_rows(root: Path) -> tuple[list[dict], dict]:
     for path in sorted(ledger_dir.iterdir()):
         if not path.is_file() or path.suffix != '.log':
             continue
+        if len(rows) >= SOURCE_ROW_CAP:
+            break
         identity = path.stem
-        try:
-            lines = path.read_text(encoding='utf-8', errors='replace').splitlines()
-        except OSError:
+        lines = _ledger_tail_lines(daemon, root, identity)
+        if not lines:
             continue
-        for index, line in enumerate(lines):
+        for index in range(len(lines) - 1, -1, -1):
+            if len(rows) >= SOURCE_ROW_CAP:
+                break
+            line = lines[index]
             parts = _split_ledger(line)
             if len(parts) < 2 or parts[1] not in _LEDGER_EVENTS:
                 continue
             if not _in_window(parts[0]):
                 continue
             fields = _ledger_fields(parts)
-            event = parts[1].lower()
+            event_key = parts[1].lower()
             if parts[1] == 'START' and fields.get('recovery') == '1':
-                event = 'recovery'
+                event_key = 'recovery'
             ticket = fields.get('ticket', '')
             title = {
                 'start': f'Shift started · {identity}',
@@ -276,15 +356,15 @@ def _workforce_rows(root: Path) -> tuple[list[dict], dict]:
                 'stop': f'Shift stopped · {fields.get("reason", identity)}',
                 'error': f'Shift failed · {fields.get("reason", identity)}',
                 'skip': f'Shift skipped · {fields.get("reason", identity)}',
-            }.get(event, f'{parts[1]} · {identity}')
+            }.get(event_key, f'{parts[1]} · {identity}')
             link = _work_order_link(fields.get('project', ''), ticket) if ticket else {'href': '/agents', 'label': identity}
             rows.append({
-                'id': f'workforce:{identity}:{index}:{parts[0]}',
-                'at': parts[0],
+                'id': f'workforce:{identity}:{index}:{_normalize_at(parts[0])}',
+                'at': _normalize_at(parts[0]),
                 'source': 'workforce',
                 'project': fields.get('project', ''),
                 'actor': identity,
-                'event': event,
+                **_ledger_event_word(parts[1], fields),
                 'title': title,
                 'link': link,
             })
@@ -330,28 +410,18 @@ def _supervisor_rows(root: Path) -> tuple[list[dict], dict]:
             continue
         outcome = str(pass_row.get('pass_outcome') or 'pass')
         evidence = str(pass_row.get('evidence_file') or 'supervisor pass')
+        event = _supervisor_event_word(outcome)
         rows.append({
             'id': f'supervisor:{evidence}:{index}',
-            'at': at,
+            'at': _normalize_at(at),
             'source': 'supervisor',
             'project': '',
             'actor': 'bp-supervisor',
-            'event': outcome.replace('_', ' '),
-            'title': f'Supervisor pass · {outcome.replace("_", " ")}',
+            **event,
+            'title': f'Supervisor pass · {event["event"]}',
             'link': {'href': '/agents', 'label': evidence},
         })
     return rows, {'name': 'supervisor', 'state': 'available', 'observed_at': observed, 'detail': ''}
-
-
-def _github_event_word(item: dict) -> str:
-    kind = item.get('kind')
-    if kind == 'pull_request':
-        return _GITHUB_EVENT['pull_request'].get(item.get('pr_event') or item.get('state'), 'pull request')
-    if kind == 'workflow':
-        return str(item.get('state') or 'CI')
-    if kind == 'release':
-        return 'release'
-    return str(kind or 'delivery')
 
 
 def _github_kind_key(item: dict) -> str:
@@ -381,12 +451,12 @@ def _github_rows(root: Path) -> tuple[list[dict], dict]:
                 continue
             url = str(item.get('url') or '')
             rows.append({
-                'id': f'github:{repo.get("repo")}:{_github_kind_key(item)}:{at}',
-                'at': at,
+                'id': f'github:{repo.get("repo")}:{_github_kind_key(item)}:{_normalize_at(at)}',
+                'at': _normalize_at(at),
                 'source': 'github',
                 'project': project,
                 'actor': 'GitHub',
-                'event': _github_event_word(item),
+                **_github_event_word(item),
                 'title': str(item.get('title') or repo.get('repo') or 'Repository event'),
                 'link': {'href': url, 'label': str(item.get('repo') or repo.get('repo') or 'PR'), 'external': True},
             })

@@ -294,7 +294,9 @@ function timelineRow(row) {
   content.append(el('strong', row.title));
   const local = date(row.at);
   content.append(el('span', `${row.source} · ${row.project || 'desk'} · ${row.actor} · ${row.event} · ${local}`, 'bp-order-meta'));
-  node.append(content, badge(row.source, row.event));
+  const eventBadge = badge(row.source, row.event);
+  if (row.event_title) eventBadge.title = row.event_title;
+  node.append(content, eventBadge);
   if (row.link?.href) {
     const href = row.link.href;
     const linkNode = row.link.external ? link(row.link.label || 'Open', href, 'bp-order-link') : link(row.link.label || 'Open', href, 'bp-order-link');
