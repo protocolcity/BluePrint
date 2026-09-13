@@ -151,6 +151,31 @@ class ProviderCoverageTests(unittest.TestCase):
         self.assertEqual(row['present'], [])
         self.assertIn('Claude', row['missing'])
 
+    def test_unarmed_demo_worker_never_counts_as_a_seat(self):
+        workers = {'demo-worker': self._seat(['true'])}
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], [])
+
+    def test_demo_worker_armed_with_a_real_command_counts_as_a_seat(self):
+        """pc-1477 scope addition (3): once demo-worker carries a real
+        command (not the placeholder stub) it is a seat like any other."""
+        workers = {'demo-worker': self._seat(['claude'])}
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], ['Claude'])
+
+    def test_lane_seat_with_empty_schedule_is_held_not_present(self):
+        """pc-1477 scope addition (4): wf-259's generator marks a held seat
+        with schedule=='' — that must read as held, not present."""
+        seat = self._seat(['claude'])
+        seat['schedule'] = ''
+        workers = {'blueprint-claude': seat}
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], [])
+        self.assertEqual(row['held'], ['Claude'])
+
     def test_operations_snapshot_carries_a_coverage_row_per_registered_project(self):
         manifest = self.root / 'blueprint/.protocolcity/desk-join.json'
         manifest.parent.mkdir(parents=True)

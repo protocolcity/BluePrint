@@ -186,6 +186,25 @@ def _is_python_executable(name):
     return name in ('python', 'python3') or (name or '').startswith('python3.')
 
 
+_PLACEHOLDER_COMMANDS = (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh', '-c', 'true'], ['bash', '-c', 'true'])
+
+
+def _seat_command_configured(command):
+    """A seat's command names real work, not a no-op placeholder stub."""
+    return isinstance(command, list) and bool(command) and command not in _PLACEHOLDER_COMMANDS
+
+
+def _command_is_template(command):
+    """True when a roster command still carries an unfilled ``{placeholder}``
+    token (pc-1477 scope addition: a legacy template-shaped seat command like
+    ``claude --model {model} -p {prompt_text} ...`` names its provider on the
+    bare first token and expects the roster's own fields substituted in at
+    dispatch time — it is not yet a resolved, literal invocation)."""
+    if not isinstance(command, list):
+        return False
+    return any(isinstance(item, str) and '{' in item and '}' in item for item in command)
+
+
 def _model_flag_value(value):
     return value if isinstance(value, str) and value and '{' not in value else None
 
@@ -280,11 +299,18 @@ def resolve_provider_model(row, root, config_cache=None):
     ``config_cache`` is an optional dict shared across one snapshot's rows,
     keyed by resolved config path, so a runner file shared by several seats
     is only read once.
+
+    A template-shaped command (pc-1477 scope addition: unfilled
+    ``{placeholder}`` tokens like ``claude --model {model} -p
+    {prompt_text}``) skips the bare-model short-circuit so the provider still
+    resolves from the command's own bare first token and combines with the
+    roster's model.
     """
     command = row.get('command')
     roster_model = row.get('model')
-    if isinstance(roster_model, str) and roster_model.strip():
-        return roster_model.strip()
+    model = roster_model.strip() if isinstance(roster_model, str) and roster_model.strip() else None
+    if model and not _command_is_template(command):
+        return model
     config_path = _config_argument(command) or _launcher_config_fallback(command)
     resolved_path = _resolved_config_path(config_path, root)
     if resolved_path is not None:
@@ -297,13 +323,18 @@ def resolve_provider_model(row, root, config_cache=None):
         inner_command = (config or {}).get('command')
         provider = _PROVIDER_DISPLAY.get(_executable_name(inner_command))
         if provider:
-            model = _provider_model_flag(provider, inner_command)
-            return f'{provider} {model}' if model else provider
+            resolved_model = model or _provider_model_flag(provider, inner_command)
+            return f'{provider} {resolved_model}' if resolved_model else provider
     executable = _executable_name(command)
+    provider = _PROVIDER_DISPLAY.get(executable)
+    if provider:
+        resolved_model = model or _provider_model_flag(provider, command)
+        return f'{provider} {resolved_model}' if resolved_model else provider
+    if model:
+        return model
     if _is_python_executable(executable):
         return 'Local job'
-    provider = _PROVIDER_DISPLAY.get(executable)
-    return provider or 'Provider unknown'
+    return 'Provider unknown'
 
 
 def preserved_reservation(root, command, order_id):
@@ -527,12 +558,18 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
     one bounded implementation seat per project x provider). A seat with no
     ``kind`` still counts as a seat here, consistent with the Seats group
     (review finding pc-1474); only an explicit non-``lane`` kind excludes it.
+    An unarmed ``demo-worker`` paper stub (found.py: planted with no real
+    command) still never counts as staffing (OVERVIEW_INTENT.md: demo-worker
+    alone is not employment) — but once armed with a real command (pc-1477
+    scope addition), it is a seat like any other.
     """
     result = {}
     if not isinstance(workers, dict):
         return result
     for identity, row in workers.items():
-        if not isinstance(row, dict) or identity == 'demo-worker':
+        if not isinstance(row, dict):
+            continue
+        if identity == 'demo-worker' and not _seat_command_configured(row.get('command')):
             continue
         if row.get('kind') not in (None, 'lane'):
             continue
@@ -547,7 +584,10 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             provider = _provider_from_pin(model_text)
         if not provider:
             continue
-        result[provider] = 'held' if row.get('enabled') is False else 'present'
+        # wf-259 generator's held state: a lane seat with schedule=='' is
+        # armed but held, not present (pc-1477 scope addition).
+        held = row.get('enabled') is False or row.get('schedule') == ''
+        result[provider] = 'held' if held else 'present'
     return result
 
 
@@ -715,7 +755,8 @@ def operations_snapshot(binder):
     result['coverage'] = provider_coverage(root, registry, workers, runner_config_cache)
     if isinstance(workers, dict):
         for identity, row in workers.items():
-            if not isinstance(row, dict) or identity == 'demo-worker': continue
+            if not isinstance(row, dict): continue
+            if identity == 'demo-worker' and not _seat_command_configured(row.get('command')): continue
             shift = engine_open_shift(daemon_path, root, identity, now)
             open_shift = shift is not None and not shift['stale']
             run = last_run(daemon_path, root, identity)
@@ -730,12 +771,15 @@ def operations_snapshot(binder):
             else:
                 state = 'idle'
             command = row.get('command')
-            configured = isinstance(command, list) and bool(command) and command not in (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh','-c','true'], ['bash','-c','true'])
+            configured = _seat_command_configured(command)
+            kind = row.get('kind') or 'agent'
             if not configured: state = 'not_configured'
-            if row.get('enabled') is False: state = 'off'
+            # wf-259 generator's held state: a lane seat with schedule=='' is
+            # armed but held, off in the Agents surface (pc-1477 scope addition).
+            if row.get('enabled') is False or (kind == 'lane' and row.get('schedule') == ''):
+                state = 'off'
             live = runtime.get(identity, {})
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
-            kind = row.get('kind') or 'agent'
             group = 'supervisor' if identity == 'bp-supervisor' else ('seat' if kind == 'lane' else 'job')
             held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
             verified = bool(held and held['id'] in last_shift_candidates(daemon_path, root, identity))
