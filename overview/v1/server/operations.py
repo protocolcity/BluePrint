@@ -186,6 +186,25 @@ def _is_python_executable(name):
     return name in ('python', 'python3') or (name or '').startswith('python3.')
 
 
+_PLACEHOLDER_COMMANDS = (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh', '-c', 'true'], ['bash', '-c', 'true'])
+
+
+def _seat_command_configured(command):
+    """A seat's command names real work, not a no-op placeholder stub."""
+    return isinstance(command, list) and bool(command) and command not in _PLACEHOLDER_COMMANDS
+
+
+def _command_is_template(command):
+    """True when a roster command still carries an unfilled ``{placeholder}``
+    token (pc-1477 scope addition: a legacy template-shaped seat command like
+    ``claude --model {model} -p {prompt_text} ...`` names its provider on the
+    bare first token and expects the roster's own fields substituted in at
+    dispatch time — it is not yet a resolved, literal invocation)."""
+    if not isinstance(command, list):
+        return False
+    return any(isinstance(item, str) and '{' in item and '}' in item for item in command)
+
+
 def _model_flag_value(value):
     return value if isinstance(value, str) and value and '{' not in value else None
 
@@ -283,19 +302,25 @@ def resolve_provider_model(row, root, config_cache=None):
     ``config_cache`` is an optional dict shared across one snapshot's rows,
     keyed by resolved config path, so a runner file shared by several seats
     is only read once.
+
+    A template-shaped command (pc-1477 scope addition: unfilled
+    ``{placeholder}`` tokens like ``claude --model {model} -p
+    {prompt_text}``) skips the bare-model short-circuit so the provider still
+    resolves from the command's own bare first token and combines with the
+    roster's model.
     """
     command = row.get('command')
     roster_model = row.get('model')
-    if isinstance(roster_model, str) and roster_model.strip():
-        pin = roster_model.strip()
+    model = roster_model.strip() if isinstance(roster_model, str) and roster_model.strip() else None
+    if model and not _command_is_template(command):
         provider = _seat_executable_provider(row, root, config_cache)
         if provider:
-            first_token, _, rest = pin.partition(' ')
+            first_token, _, rest = model.partition(' ')
             if first_token.lower() == provider.lower():
-                pin = rest.strip()
-                return f'{provider} {pin}' if pin else provider
-            return f'{provider} {pin}'
-        return pin
+                rest = rest.strip()
+                return f'{provider} {rest}' if rest else provider
+            return f'{provider} {model}'
+        return model
     config_path = _config_argument(command) or _launcher_config_fallback(command)
     resolved_path = _resolved_config_path(config_path, root)
     if resolved_path is not None:
@@ -308,13 +333,18 @@ def resolve_provider_model(row, root, config_cache=None):
         inner_command = (config or {}).get('command')
         provider = _PROVIDER_DISPLAY.get(_executable_name(inner_command))
         if provider:
-            model = _provider_model_flag(provider, inner_command)
-            return f'{provider} {model}' if model else provider
+            resolved_model = model or _provider_model_flag(provider, inner_command)
+            return f'{provider} {resolved_model}' if resolved_model else provider
     executable = _executable_name(command)
+    provider = _PROVIDER_DISPLAY.get(executable)
+    if provider:
+        resolved_model = model or _provider_model_flag(provider, command)
+        return f'{provider} {resolved_model}' if resolved_model else provider
+    if model:
+        return model
     if _is_python_executable(executable):
         return 'Local job'
-    provider = _PROVIDER_DISPLAY.get(executable)
-    return provider or 'Provider unknown'
+    return 'Provider unknown'
 
 
 def preserved_reservation(root, command, order_id):
@@ -519,6 +549,10 @@ def project_registry(root):
 _PROVIDER_ORDER = ('Claude', 'Cursor', 'Grok', 'Codex')
 _PROVIDER_COMMAND = {'Claude': 'claude', 'Cursor': 'cursor-agent', 'Grok': 'grok', 'Codex': 'codex'}
 _PROVIDER_PIN = {'Claude': 'claude-sonnet-5', 'Cursor': 'composer-2.5', 'Grok': 'grok-4.6', 'Codex': 'gpt-6-astra'}
+# workforce hire's --provider choices (workforce/cli.py) — lowercase adapter
+# keys, distinct from the desk's display names above (review finding
+# pc-1477: the printed hire command must use these, not "Cursor"/"Codex").
+_PROVIDER_ADAPTER_KEY = {'Claude': 'claude', 'Cursor': 'cursor', 'Grok': 'grok', 'Codex': 'codex'}
 _PROVIDER_INSTALL_HINT = {
     'Claude': 'not on PATH — install: https://docs.claude.com/en/docs/claude-code',
     'Cursor': 'not on PATH — install: https://cursor.com/cli',
@@ -646,11 +680,13 @@ def hire_command(provider, *, project_slug, project_path, prefix, remote=None):
     --repository <path> --remote <url> --schedule manual --model <pin>``, with
     ``--remote`` only when the project's registration names one. Every
     argument is shell-quoted — a project path or remote can carry spaces or
-    shell metacharacters.
+    shell metacharacters. ``--provider`` prints the hire CLI's lowercase
+    adapter key (review finding pc-1477: the display name printed here fails
+    the hire CLI's ``choices=("claude", "cursor", "grok", "codex")``).
     """
     name = f'{(prefix or project_slug).rstrip("-")}-{provider.lower()}-implementer'
-    parts = ['workforce', 'hire', name, '--provider', provider, '--project', project_slug,
-             '--repository', project_path]
+    parts = ['workforce', 'hire', name, '--provider', _PROVIDER_ADAPTER_KEY[provider],
+             '--project', project_slug, '--repository', project_path]
     if remote:
         parts += ['--remote', remote]
     parts += ['--schedule', 'manual', '--model', _PROVIDER_PIN[provider]]
@@ -769,20 +805,42 @@ def _seat_executable_missing(row, root, config_cache):
     return _seat_executable_status(row, root, config_cache) in ('missing', 'untrusted')
 
 
+def _row_is_seat_kind(kind):
+    """A lane, or a row with no ``kind`` — the Seats group counts both as a
+    seat (review finding pc-1474), only an explicit non-``lane`` kind
+    (e.g. ``job``) excludes it."""
+    return kind in (None, 'lane')
+
+
+def _row_is_held(row, kind):
+    """Shared held predicate for coverage and the Agents snapshot (review
+    finding pc-1477): disabled outright, or a seat-kind row carrying the
+    wf-259 generator's held state — an empty ``schedule``. Coverage and the
+    Agents snapshot must agree on this so a held seat never reads present in
+    one and OFF in the other."""
+    return row.get('enabled') is False or (_row_is_seat_kind(kind) and row.get('schedule') == '')
+
+
 def _project_seat_providers(workers, project_slug, root, config_cache):
     """``{provider display: 'present'|'held'}`` for one project's implementer
     seats — a seat's ``queue_url`` names its project (AGENT_ADOPTION.md D12:
     one bounded implementation seat per project x provider). A seat with no
     ``kind`` still counts as a seat here, consistent with the Seats group
     (review finding pc-1474); only an explicit non-``lane`` kind excludes it.
+    An unarmed ``demo-worker`` paper stub (found.py: planted with no real
+    command) still never counts as staffing (OVERVIEW_INTENT.md: demo-worker
+    alone is not employment) — but once armed with a real command (pc-1477
+    scope addition), it is a seat like any other.
     """
     result = {}
     if not isinstance(workers, dict):
         return result
     for identity, row in workers.items():
-        if not isinstance(row, dict) or identity == 'demo-worker':
+        if not isinstance(row, dict):
             continue
-        if row.get('kind') not in (None, 'lane'):
+        if identity == 'demo-worker' and not _seat_command_configured(row.get('command')):
+            continue
+        if not _row_is_seat_kind(row.get('kind')):
             continue
         if _row_project_slug(row) != project_slug:
             continue
@@ -797,7 +855,7 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             continue
         if _seat_executable_missing(row, root, config_cache):
             continue
-        result[provider] = 'held' if row.get('enabled') is False else 'present'
+        result[provider] = 'held' if _row_is_held(row, row.get('kind')) else 'present'
     return result
 
 
@@ -984,7 +1042,8 @@ def operations_snapshot(binder):
     result['coverage'] = provider_coverage(root, registry, workers, runner_config_cache)
     if isinstance(workers, dict):
         for identity, row in workers.items():
-            if not isinstance(row, dict) or identity == 'demo-worker': continue
+            if not isinstance(row, dict): continue
+            if identity == 'demo-worker' and not _seat_command_configured(row.get('command')): continue
             shift = engine_open_shift(daemon_path, root, identity, now)
             open_shift = shift is not None and not shift['stale']
             run = last_run(daemon_path, root, identity)
@@ -999,14 +1058,19 @@ def operations_snapshot(binder):
             else:
                 state = 'idle'
             command = row.get('command')
-            configured = isinstance(command, list) and bool(command) and command not in (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh','-c','true'], ['bash','-c','true'])
+            configured = _seat_command_configured(command)
             executable_status = _seat_executable_status(row, root, runner_config_cache) if configured else None
             if executable_status in ('missing', 'untrusted'): configured = False
+            kind = row.get('kind') or 'agent'
             if not configured: state = 'not_configured'
-            if row.get('enabled') is False: state = 'off'
+            # Same held predicate as coverage (review finding pc-1477): a
+            # seat-kind row (lane, or no kind — _row_is_seat_kind) carrying
+            # the wf-259 generator's held state reads OFF here too, not just
+            # explicit lane rows.
+            if _row_is_held(row, row.get('kind')):
+                state = 'off'
             live = runtime.get(identity, {})
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
-            kind = row.get('kind') or 'agent'
             group = 'supervisor' if identity == 'bp-supervisor' else ('seat' if kind == 'lane' else 'job')
             held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
             verified = bool(held and held['id'] in last_shift_candidates(daemon_path, root, identity))

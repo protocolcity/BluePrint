@@ -272,5 +272,52 @@ class CliAdoptDryRunNeverCallsFixTests(unittest.TestCase):
         adopt_mock.assert_not_called()
 
 
+class CliAdoptSinglePositionalReachesTheHandlerTests(unittest.TestCase):
+    """pc-1477: the handler tested ``args.neighborhood`` while the parser's
+    positional was named ``PROJECT`` (dest ``targets``) — the name never
+    reached the handler, so ``adopt PROJECT --dry-run`` answered "adopt needs
+    a project folder name" even though the functions work when called
+    directly. One positional (PROJECT) must resolve WORKSPACE from cwd/--root
+    like every other command; two positionals stay the explicit back-compat
+    WORKSPACE PROJECT form."""
+
+    def test_one_positional_resolves_workspace_from_cwd_and_prints_the_plan(self):
+        from protocolcity import cli
+
+        with tempfile.TemporaryDirectory() as ws:
+            ws_path = Path(ws)
+            (ws_path / 'recipes').mkdir()
+            before = _walk_snapshot(ws_path)
+            with patch('overview.v1.server.operations.detect_providers', return_value=HOST_ALL), \
+                 patch.object(cli, '_resolve_city_root', return_value=ws_path), \
+                 patch.object(cli, 'fix') as fix_mock:
+                rc = cli.main(['adopt', 'recipes', '--dry-run', '--no-desk'])
+            after = _walk_snapshot(ws_path)
+        self.assertEqual(rc, 0)
+        self.assertEqual(before, after)
+        fix_mock.assert_not_called()
+
+    def test_two_positionals_still_take_the_explicit_workspace_project_form(self):
+        from protocolcity import cli
+
+        preview = {
+            'ok': True, 'dry_run': True, 'name': 'recipes', 'path': '/tmp/ws/recipes',
+            'store_slug': 'recipes', 'prefix': 'rc', 'would_create': [],
+            'seats': {'ok': True, 'commands': []},
+        }
+        with patch('protocolcity.adopt.adopt_neighborhood', return_value=preview) as adopt_mock:
+            rc = cli.main(['adopt', '/tmp/ws', 'recipes', '--dry-run', '--no-desk'])
+        self.assertEqual(rc, 0)
+        adopt_mock.assert_called_once()
+        self.assertEqual(str(adopt_mock.call_args.args[0]), '/tmp/ws')
+        self.assertEqual(adopt_mock.call_args.args[1], 'recipes')
+
+    def test_too_many_positionals_is_an_error(self):
+        from protocolcity import cli
+
+        rc = cli.main(['adopt', 'a', 'b', 'c', '--dry-run'])
+        self.assertEqual(rc, 2)
+
+
 if __name__ == '__main__':
     unittest.main()
