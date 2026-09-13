@@ -100,9 +100,9 @@ def collapse_sections(html_text: str) -> str:
         if not title_match:
             wrapped.append(section)
             continue
-        _section_id, title = title_match.groups()
+        section_id, title = title_match.groups()
         body = section[title_match.end():]
         wrapped.append(
-            f"<details class=\"bp-md-section\"><summary>{html.escape(title)}</summary><div>{body}</div></details>"
+            f"<details class=\"bp-md-section\" id=\"{section_id}\"><summary>{html.escape(title)}</summary><div>{body}</div></details>"
         )
     return "".join(wrapped)

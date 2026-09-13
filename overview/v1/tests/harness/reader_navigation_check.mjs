@@ -6,25 +6,42 @@ import * as navShell from '../../static/js/nav-shell.mjs';
 import * as reconcile from '../../static/js/dom-reconcile.mjs';
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 class Element {
-  constructor() { this.children=[];this.listeners={};this.value='';this.options=[];this.style={};this.dataset={};this.textContent='';this.innerHTML='';this.hidden=false;this.classList={add(){},remove(){},toggle(){}}; }
+  constructor() { this.children=[];this.listeners={};this.value='';this.options=[];this.style={};this.dataset={};this.hidden=false;this.classList={add(){},remove(){},toggle(){}};this.textContent='';this.innerHTML='';this.scrollLeft=0;this.scrollWidth=0;this.clientWidth=0; }
   append(...nodes){this.children.push(...nodes);}
   appendChild(node){this.append(node);}
   replaceChildren(...nodes){this.children=nodes.length?nodes:[];}
   add(node){this.options.push(node);}
   addEventListener(type,fn){(this.listeners[type] ||= []).push(fn);}
   async fire(type,event={}){for(const fn of this.listeners[type] || [])await fn({preventDefault(){},...event});await settle();}
-  setAttribute(){}
-  querySelector(){return new Element();}
-  getBoundingClientRect(){return {width:1000,height:800};}
+  setAttribute(name,value){this[name]=value;}
+  getAttribute(name){return this[name];}
+  querySelector(selector){
+    if(selector==='.bp-nav') return this._nav || null;
+    if(selector==='.bp-nav a[aria-current="page"]') return this._current || null;
+    return new Element();
+  }
+  getBoundingClientRect(){return {left:0,top:0,width:this.clientWidth || 100,height:20};}
   focus(){}
-  scrollIntoView(){}
+  scrollIntoView(){this._scrolledIntoView=true;}
+  scrollTo({left}){this.scrollLeft=left;}
 }
 class TemplateElement extends Element {
-  set innerHTML(value) { this._html = value || ''; }
+  set innerHTML(value) { this._html = value || ''; this._parsed=[]; for(const match of (value||'').matchAll(/<img\b[^>]*>/gi)) this._parsed.push(match[0]); }
   get content() {
+    const frag = new Element();
+    if(!this._html) return frag;
+    if(this._parsed?.length) {
+      for(const tag of this._parsed) {
+        const node = new Element();
+        node.outerHTML = tag;
+        frag.children.push(node);
+      }
+      return frag;
+    }
     const node = new Element();
     node.textContent = this._html || '';
-    return node;
+    frag.children.push(node);
+    return frag;
   }
 }
 const settle = async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
@@ -34,7 +51,7 @@ function environment(path) {
   context.navigation={...navigation,readerHref:href=>navigation.readerHref(href,context.location)};
   context.navShell=navShell;
   context.document={getElementById:get,createElement:tag=>tag==='template'?new TemplateElement():new Element(),querySelector:get,body:new Element(),scrollingElement:new Element(),addEventListener(){},dispatchEvent(){}};
-  context.window={addEventListener(){},dispatchEvent(){},scrollTo(){},__MAP_V1_AUTOBOOT__:false};
+  context.window={addEventListener(){},dispatchEvent(){},scrollTo(calls){context.window._scrollCalls=(context.window._scrollCalls||[]).concat([calls]);},__MAP_V1_AUTOBOOT__:false,_scrollY:0,get scrollY(){return this._scrollY;}};
   context.sessionStorage={store:{},getItem(key){return this.store[key]||null;},setItem(key,value){this.store[key]=value;},removeItem(key){delete this.store[key];}};
   context.history={state:null,replaceState(state,unused,url){context.location=new URL(url,context.location);}};
   context.CustomEvent=class {};
@@ -158,4 +175,34 @@ for(const target of [work,map,timeline,...unsafe.filter(x=>typeof x==='string')]
   assert.equal(env.context.location.searchParams.has('path'),false);
   assert.equal(env.context.location.searchParams.has('md'),false);
 }
-console.log('Reader navigation: security, query/hash round trips, reader request count, Work filters, search activation, and Map state passed.');
+{
+  const nav=new Element(); nav.clientWidth=200; nav.scrollWidth=600; nav.scrollLeft=0;
+  const current=new Element(); current.clientWidth=80; current.setAttribute('aria-current','page');
+  current.getBoundingClientRect=()=>({left:300,top:0,width:80,height:20});
+  nav.getBoundingClientRect=()=>({left:0,top:0,width:200,height:20});
+  const root={
+    querySelector(sel){
+      if(sel==='.bp-nav') return nav;
+      if(sel==='.bp-nav a[aria-current="page"]') return current;
+      return null;
+    },
+    body:{classList:{contains(){return false;}}}
+  };
+  navShell.ensureActiveNavVisible(root);
+  assert.ok(nav.scrollLeft>0,'nav scrollLeft should move active tab into view');
+  assert.equal(current._scrolledIntoView,undefined,'active tab must not scrollIntoView the document');
+}
+{
+  const payload='<img src=x onerror=alert(1)>';
+  const env=environment('/work-order?project=example&id=ex-1');
+  env.context.fetch=async()=>({ok:true,json:async()=>({
+    project:'example',ext_id:'ex-1',title:'Test',priority:3,status:'in_progress',
+    description_html:'<p>safe</p>',comments:[{author:'you',created_at:'2026-09-13',body:payload}]
+  })});
+  await run('work-order.js',env);
+  const painted=env.context.window.paintComment({author:'you',created_at:'2026-09-13',body:payload});
+  const body=painted.children[1];
+  assert.equal(body.textContent,payload);
+  assert.equal(body.children.length,0);
+}
+console.log('Reader navigation: security, query/hash round trips, reader request count, Work filters, search activation, Map state, nav scroll, and untrusted comment paint passed.');

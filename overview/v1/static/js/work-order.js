@@ -60,7 +60,8 @@
     heading.textContent = `${comment.author || 'Unknown author'} · ${date(comment.created_at)}`;
     const body = document.createElement('div');
     body.className = 'bp-md';
-    setTrustedHtml(body, comment.body_html || comment.body || '');
+    if (comment.body_html) setTrustedHtml(body, comment.body_html);
+    else body.textContent = comment.body || '';
     item.append(heading, body);
     return item;
   };
@@ -169,7 +170,7 @@
       if (window.bpOrder) window.bpOrder.updated_at = result.task?.updated_at || comment.created_at;
       const comments = document.getElementById('comments');
       if (comments.textContent === 'No comments yet.') comments.replaceChildren();
-      comments.append(window.paintComment({...comment, body_html: comment.body_html || comment.body}));
+      comments.append(window.paintComment(comment));
       body.value = '';
       try { sessionStorage.removeItem(draftKey); } catch (_) { /* ignore */ }
       status.textContent = 'Note saved to WorkLane.';
