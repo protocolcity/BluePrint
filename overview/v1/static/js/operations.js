@@ -3,6 +3,7 @@
 'use strict';
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
+const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/activity':'activity','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -14,7 +15,7 @@ function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.p
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
-let streamState = 'connecting';
+let streamState = 'connecting', everOpened = false, consecutiveErrors = 0, lastChangeAt = null;
 let interval = 15, motion = 'system';
 try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,15,30].includes(saved.interval))interval=saved.interval;if(saved.motion==='off')motion='off'; } catch(error) { /* Unavailable storage uses defaults. */ }
 $('refresh-preference').value=String(interval);$('motion-preference').value=motion;
@@ -72,12 +73,11 @@ function orderRow(order) {
   return row;
 }
 function sources(parent, details) {
-  parent.replaceChildren();
-  for(const source of snapshot.sources) {
+  reconcileList(parent, snapshot.sources, s=>s.name, source=>{
     const row=el('div',undefined,'bp-source'); row.append(el('span',source.name),badge(source.state));
     if(details) row.append(el('p',source.detail + (source.last_at ? ` Last tick: ${date(source.last_at)}` : ''),'bp-muted'));
-    parent.append(row);
-  }
+    return row;
+  });
 }
 function projectCard(project) {
   const card=el('article',undefined,'bp-project');
@@ -101,15 +101,13 @@ function overview() {
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
   const metrics=[['For You',forYou.length,'/work?status=attention'],['Live',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
-  $('metrics').replaceChildren(...metrics.map(([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;}));
+  reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
   let mutedCount=0;
   for(const face of ['decide','read','watch','note']) {
     const band=forYou.filter(o=>o.attention_face===face);
     const visible=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
     mutedCount+=band.length-visible.length;
-    const list=$('for-you-'+face);list.replaceChildren();
-    for(const order of visible.slice(0,6)) list.append(faceEntry(order));
-    if(!visible.length) empty(list,'No '+face+' items visible in the readable stores.');
+    reconcileList($('for-you-'+face), visible.slice(0,6), o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
   }
   $('for-you-decide-heading').textContent=`Decide · ${forYou.filter(o=>o.attention_face==='decide').length}`;
   $('for-you-read-heading').textContent=`Read · ${forYou.filter(o=>o.attention_face==='read').length}`;
@@ -120,8 +118,7 @@ function overview() {
 
   sources($('source-list'),false);
   const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
-  $('project-summary').replaceChildren(...projects.slice(0,6).map(projectCard));
-  if(!projects.length) empty($('project-summary'),'No project stores found. Inspect Connections for source details.');
+  reconcileList($('project-summary'), projects.slice(0,6), p=>p.id, projectCard, {emptyText:'No project stores found. Inspect Connections for source details.'});
 }
 function filterOptions() {
   const select=$('project-filter');
@@ -149,8 +146,7 @@ function work() {
   const hideParked=!showDeferred && !status.startsWith('gate:');
   const orders=hideParked ? base.filter(o=>!['deferred','tracking'].includes(o.gate_type)) : base;
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
-  $('work-list').replaceChildren(...orders.slice(pageIndex*size,(pageIndex+1)*size).map(orderRow));
-  if(!orders.length) empty($('work-list'),'No matching open work. Try another project, assignment, status, or search.');
+  reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, or search.'});
   $('results').textContent=`${orders.length} matching work order${orders.length===1?'':'s'}`;
   $('page-count').textContent=`Page ${pageIndex+1} of ${pages}`;
   $('previous').disabled=pageIndex===0;$('next').disabled=pageIndex>=pages-1;
@@ -227,31 +223,29 @@ function supervisorPanel() {
 }
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
-  $('seat-list').replaceChildren(...seats.map(agentCard));
-  if(!seats.length) empty($('seat-list'),'No seats registered in the readable registry.');
-  $('job-list').replaceChildren(...jobs.map(agentCard));
-  if(!jobs.length) empty($('job-list'),'No jobs registered in the readable registry.');
+  reconcileList($('seat-list'), seats, a=>a.id, agentCard, {emptyText:'No seats registered in the readable registry.'});
+  reconcileList($('job-list'), jobs, a=>a.id, agentCard, {emptyText:'No jobs registered in the readable registry.'});
   supervisorPanel();
 }
 function calendar() {
-  const dated=$('dated-work');dated.replaceChildren();
-  for(const event of [...(snapshot.work_dates || [])].sort((a,b)=>a.dtstart.localeCompare(b.dtstart))) {
+  const datedItems=[...(snapshot.work_dates || [])].sort((a,b)=>a.dtstart.localeCompare(b.dtstart));
+  reconcileList($('dated-work'), datedItems, event=>`${event.product}:${event.task_id}`, event=>{
     const row=link('', '/work-order?'+new URLSearchParams({project:event.product,id:event.task_id}),'bp-order');
     const details=el('div');details.append(el('strong',event.summary),el('span',`${event.all_day?event.dtstart+' · All day':date(event.dtstart)} · ${event.product} · ${event.kind==='timer'?'Hold until':'Due'}`,'bp-order-meta'));
-    row.append(details,badge(event.attention?'attention':'scheduled',event.attention?'Needs you':'Dated work'));dated.append(row);
-  }
-  if(!dated.children.length)empty(dated,'No dated work orders in the readable stores.');
-  const schedules=$('schedule-list');schedules.replaceChildren();
-  for(const agent of [...snapshot.agents].sort((a,b)=>String(a.next_fire || 'z').localeCompare(String(b.next_fire || 'z')))) {
+    row.append(details,badge(event.attention?'attention':'scheduled',event.attention?'Needs you':'Dated work'));
+    return row;
+  }, {emptyText:'No dated work orders in the readable stores.'});
+  const scheduleItems=[...snapshot.agents].sort((a,b)=>String(a.next_fire || 'z').localeCompare(String(b.next_fire || 'z')));
+  reconcileList($('schedule-list'), scheduleItems, agent=>agent.id, agent=>{
     const row=el('div',undefined,'bp-source');row.append(el('strong',agent.name),badge(agent.state==='unknown'?'unknown':(agent.state==='off'?'off':(agent.next_fire?'scheduled':'not_scheduled'))));
-    row.append(el('p',`${date(agent.next_fire)} · ${scheduleLabel(agent.schedule)}`,'bp-muted'));schedules.append(row);
-  }
-  if(!snapshot.agents.length)empty(schedules,'No agent schedules available.');
-  const events=$('event-list');events.replaceChildren();
-  for(const event of [...snapshot.events].sort((a,b)=>String(a.at).localeCompare(String(b.at)))) {
-    const row=el('details',undefined,'bp-event');const summary=el('summary');summary.append(el('strong',event.title || 'Untitled event'),el('span',`${date(event.at)} · ${event.source || 'Local calendar'} · ${event.state || 'State not specified'}`,'bp-order-meta'));row.append(summary,el('p',event.notes || 'No additional notes.','bp-note bp-muted'));events.append(row);
-  }
-  if(!snapshot.events.length)empty(events,'No local calendar events. Agent schedules above are independent of the calendar file.');
+    row.append(el('p',`${date(agent.next_fire)} · ${scheduleLabel(agent.schedule)}`,'bp-muted'));
+    return row;
+  }, {emptyText:'No agent schedules available.'});
+  const eventItems=[...snapshot.events].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+  reconcileList($('event-list'), eventItems, event=>`${event.title}|${event.at}`, event=>{
+    const row=el('details',undefined,'bp-event');const summary=el('summary');summary.append(el('strong',event.title || 'Untitled event'),el('span',`${date(event.at)} · ${event.source || 'Local calendar'} · ${event.state || 'State not specified'}`,'bp-order-meta'));row.append(summary,el('p',event.notes || 'No additional notes.','bp-note bp-muted'));
+    return row;
+  }, {emptyText:'No local calendar events. Agent schedules above are independent of the calendar file.'});
 }
 function paint() {
   const workspace=snapshot.workspace;
@@ -264,17 +258,24 @@ function paint() {
   filterOptions();
   if(page==='overview') overview();
   if(page==='work') work();
-  if(page==='projects') { $('projects-view').replaceChildren(...snapshot.projects.map(projectCard));if(!snapshot.projects.length) empty($('projects-view'),'No local project stores found.'); }
+  if(page==='projects') { reconcileList($('projects-view'), snapshot.projects, p=>p.id, projectCard, {emptyText:'No local project stores found.'}); }
   if(page==='agents') agents();
   if(page==='calendar') calendar();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
   if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; if(excluded.length) $('connection-list').append(el('p','Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.','bp-note bp-muted'));$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
+function liveIndicator() {
+  if(!lastSuccess) return lastError ? 'Unable to read workspace. Retry with Refresh.' : 'Connecting…';
+  if(document.hidden) return 'Paused';
+  if(streamState==='open') return lastChangeAt ? `Live · last change ${Math.floor((Date.now()-lastChangeAt)/1000)}s ago` : 'Live';
+  if(!everOpened) return 'Connecting…';
+  return consecutiveErrors>=3 ? 'Polling every 60 s' : 'Reconnecting';
+}
 function freshness() {
   const status=$('freshness');
   status.dataset.state=lastError?'error':'ok';
-  const streamNote = document.hidden || streamState==='open' ? '' : ' · live updates disconnected, polling every 60s';
-  status.textContent=lastSuccess ? `${lastError?'Refresh failed · showing last read':'Updated'} ${Math.floor((Date.now()-lastSuccess)/1000)}s ago${document.hidden?' · paused':''}${streamNote}` : (lastError?'Unable to read workspace. Retry with Refresh.':'Connecting…');
+  const indicator=liveIndicator();
+  status.textContent=lastError && lastSuccess ? `Refresh failed · showing last read · ${indicator}` : indicator;
 }
 async function refreshRemote() {
   if(remotePending || !['activity','connections'].includes(page)) return;
@@ -308,18 +309,19 @@ async function refreshRemote() {
   } catch(error) { $('remote-status').textContent='GitHub refresh failed. Previously displayed evidence may be stale.';$('github-connection-status').textContent='GitHub unavailable'; }
   finally { remotePending=false; }
 }
-async function refresh() {
+async function refresh(manual) {
   if(pending) return;
-  lastAttempt=Date.now();pending=true;$('refresh').disabled=true;$('refresh').textContent='Refreshing…';
+  lastAttempt=Date.now();pending=true;
+  if(manual) { $('refresh').disabled=true;$('refresh').textContent='Refreshing…'; }
   try {
     const response=await fetch('/api/operations',{cache:'no-store',signal:AbortSignal.timeout(10000)});
     if(!response.ok) throw new Error('Source request failed');
     const next=await response.json();
     const key=JSON.stringify(page==='work' ? {orders:next.orders,projects:next.projects,workspace:next.workspace,sources:next.sources.map(s=>({name:s.name,state:s.state})),truncated:next.truncated} : {...next,observed_at:null});
     snapshot=next;lastSuccess=Date.now();lastError=false;
-    if(key!==fingerprint) { paint();fingerprint=key;const view=$(page+'-view');view.classList.remove('bp-updated');void view.offsetWidth;view.classList.add('bp-updated'); }
+    if(key!==fingerprint) { paint();fingerprint=key;lastChangeAt=Date.now(); }
   } catch(error) { lastError=true; }
-  finally { pending=false;$('refresh').disabled=false;$('refresh').textContent='Refresh';freshness(); }
+  finally { pending=false;if(manual) { $('refresh').disabled=false;$('refresh').textContent='Refresh'; }freshness(); }
 }
 function updateFilters() {
   selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;showDeferred=$('show-deferred').checked;pageIndex=0;
@@ -328,12 +330,12 @@ function updateFilters() {
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
 $('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('show-deferred').addEventListener('change',updateFilters);
-$('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});$('refresh').addEventListener('click',()=>{refresh();refreshRemote();});
+$('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});$('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')$('desk-scope').open=false;});
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();freshness();});
 $('preferences').addEventListener('submit',event=>event.preventDefault());
 $('preferences').addEventListener('change',()=>{interval=Number($('refresh-preference').value);motion=$('motion-preference').value;document.body.classList.toggle('bp-reduce-motion',motion==='off');try{localStorage.setItem('bp-display',JSON.stringify({interval,motion}));$('preference-status').textContent='Saved in this browser.';}catch(error){$('preference-status').textContent='Applied for this page; browser storage is unavailable.';}});
-connectChanges(()=>{if(!document.hidden)refresh();},state=>{streamState=state;freshness();});
+connectChanges(()=>{if(!document.hidden)refresh();},state=>{streamState=state;if(state==='open'){everOpened=true;consecutiveErrors=0;}else if(state==='error'){consecutiveErrors++;}freshness();});
 setInterval(()=>{const effective=streamState==='open'?60:interval;if(effective && !document.hidden && Date.now()-lastAttempt>=effective*1000)refresh();},1000);setInterval(freshness,1000);setInterval(()=>{if(!document.hidden && Date.now()-remoteLast>15000)refreshRemote();},1000);refresh();refreshRemote();
 })();

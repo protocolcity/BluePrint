@@ -8,6 +8,7 @@ basename ever travels.
 """
 from __future__ import annotations
 
+import json
 import queue
 import shutil
 import sys
@@ -90,6 +91,43 @@ class ChangeFeedTests(unittest.TestCase):
         for i in range(4):
             daemon.write_text("{\"tick\": %d}" % i)
             self.feed.poll_once()
+        events = _drain(self.inbox)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["source"], "workforce")
+
+    def test_heartbeat_only_daemon_write_emits_nothing(self) -> None:
+        daemon = self.root / ".protocolcity" / "workforce" / "local" / "daemon.json"
+        daemon.write_text(json.dumps({"last_tick": "2026-09-13T00:00:00Z", "in_flight": ["a"]}))
+        self.feed.poll_once()
+        _drain(self.inbox)
+        daemon.write_text(json.dumps({"last_tick": "2026-09-13T00:00:15Z", "in_flight": ["a"]}))
+        self.feed.poll_once()
+        events = _drain(self.inbox)
+        self.assertEqual(events, [])
+
+    def test_real_daemon_change_alongside_heartbeat_still_emits(self) -> None:
+        daemon = self.root / ".protocolcity" / "workforce" / "local" / "daemon.json"
+        daemon.write_text(json.dumps({"last_tick": "2026-09-13T00:00:00Z", "in_flight": ["a"]}))
+        self.feed.poll_once()
+        _drain(self.inbox)
+        time.sleep(DEBOUNCE_SECS + 0.05)
+        daemon.write_text(json.dumps({"last_tick": "2026-09-13T00:00:15Z", "in_flight": ["a", "b"]}))
+        self.feed.poll_once()
+        events = _drain(self.inbox)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["source"], "workforce")
+        self.assertEqual(events[0]["path"], "daemon.json")
+
+    def test_heartbeat_only_daemon_write_alongside_ledger_change_still_emits(self) -> None:
+        daemon = self.root / ".protocolcity" / "workforce" / "local" / "daemon.json"
+        ledger = self.root / ".protocolcity" / "workforce" / "local" / "ledger" / "bp-claude-implementer.log"
+        daemon.write_text(json.dumps({"last_tick": "2026-09-13T00:00:00Z", "in_flight": []}))
+        self.feed.poll_once()
+        _drain(self.inbox)
+        time.sleep(DEBOUNCE_SECS + 0.05)
+        daemon.write_text(json.dumps({"last_tick": "2026-09-13T00:00:15Z", "in_flight": []}))
+        ledger.write_text("2026-09-13T00:00:15Z START budget_secs=60\n")
+        self.feed.poll_once()
         events = _drain(self.inbox)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["source"], "workforce")

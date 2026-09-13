@@ -9,11 +9,15 @@ Watches, with a single shared background thread and ``os.stat`` polling
 
 A stat change in any group emits one ``{"source", "path", "observed_at"}``
 event to every subscriber, coalesced so a burst of writes to the same
-source produces at most one event per ``DEBOUNCE_SECS``. Never the file
-content, never a path outside the workspace — only the basename travels.
+source produces at most one event per ``DEBOUNCE_SECS``. Never a path
+outside the workspace — only the basename travels. A daemon.json rewrite
+that only moves the ``last_tick`` heartbeat (nothing else in the file
+differs) is read and compared but never emitted; a real change to
+``in_flight`` or elsewhere in the file still is.
 """
 from __future__ import annotations
 
+import json
 import queue
 import threading
 import time
@@ -70,6 +74,35 @@ def _changed_name(before: tuple, after: tuple) -> str:
     after_keys = {row[0] for row in after}
     removed_keys = sorted(key for key in prior if key not in after_keys)
     return prior[removed_keys[0]][1] if removed_keys else ""
+
+
+def _diff_keys(before: tuple, after: tuple) -> set[str]:
+    """Path keys whose stat row was added, removed, or changed."""
+    prior = {row[0]: row for row in before}
+    now = {row[0]: row for row in after}
+    return {key for key in set(prior) | set(now) if prior.get(key) != now.get(key)}
+
+
+def _daemon_snapshot(root: Path | None) -> dict | None:
+    """Daemon content with the heartbeat tick removed — ``None`` when unreadable.
+
+    Used to tell a heartbeat rewrite (only ``last_tick`` moves) from a real
+    change to ``in_flight``; a snapshot that fails to parse is never treated
+    as equal to anything, so an unreadable file still counts as a change.
+    """
+    if root is None:
+        return None
+    daemon = resolve_daemon_path(root)
+    if daemon is None or not _within(daemon, root):
+        return None
+    try:
+        content = json.loads(daemon.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(content, dict):
+        return None
+    content.pop("last_tick", None)
+    return content
 
 
 def _worklane_paths(root: Path) -> list[tuple[Path, str]]:
@@ -141,6 +174,7 @@ class ChangeFeed:
         }
         self._last_emit: dict[str, float] = {name: float("-inf") for name in SOURCES}
         self._pending: dict[str, str] = {}
+        self._daemon_snapshot: dict | None = _daemon_snapshot(root)
 
     def subscribe(self):
         with self._lock:
@@ -194,6 +228,17 @@ class ChangeFeed:
                 if after == before:
                     continue
                 self._signatures[source] = after
+                if source == "workforce":
+                    only_daemon = _diff_keys(before, after) == {"daemon.json"}
+                    snapshot = _daemon_snapshot(self._root)
+                    heartbeat_only = (
+                        only_daemon
+                        and snapshot is not None
+                        and snapshot == self._daemon_snapshot
+                    )
+                    self._daemon_snapshot = snapshot
+                    if heartbeat_only:
+                        continue
                 self._pending[source] = _changed_name(before, after)
             for source, path in list(self._pending.items()):
                 if now - self._last_emit[source] < DEBOUNCE_SECS:
