@@ -46,6 +46,13 @@ class AssignmentFilterTests(unittest.TestCase):
         self.assertIn("snapshot.agents.filter(a=>a.group==='seat')", _SRC)
     def test_you_never_appears_as_an_assignment_option(self):
         self.assertNotIn("new Option('You'", _SRC)
+    def test_unassigned_filter_excludes_you_like_the_owner_label_does(self):
+        self.assertIn("o.workers.filter(w=>w!=='you').length", _SRC.replace(' ', ''))
+
+
+class BlockedFilterTests(unittest.TestCase):
+    def test_blocked_status_option_matches_declared_blockers_not_a_task_status(self):
+        self.assertIn("status==='blocked'?o.blockers&&o.blockers.length", _SRC.replace(' ', ''))
 
 
 if __name__ == '__main__':
