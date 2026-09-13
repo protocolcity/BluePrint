@@ -59,7 +59,7 @@ You qualifiers (see D11): `you:todo` (personal task), `you:remind` (dated remind
 | **Note** | `reminder:<date>` label or `you:note` / `you:todo` / `you:remind` | your own list; no gate | no |
 | (none) | everything else, including all deferred and tracking orders | nothing | no |
 
-Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only.
+Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only. A `deadline:YYYY-MM-DD` label is Due. A date taken from a gate note, title, or history is a mentioned date, not a deadline. An expired timer is labelled expired; it is not currently blocking. Needs you is the Decide face, never the existence of a date. Calendar presentation is in [OVERVIEW_CALENDAR_SETTINGS.md](OVERVIEW_CALENDAR_SETTINGS.md).
 
 **Naming decision (D6).** Overview says "Needs you 10" while the panel opens on "Decide · 8". They measure the same pile with different filters. The record fixes one word: the metric and the panel are both **For You**, the number is the whole pile, and the breakdown shows the faces (8 decide · 2 read · 2 watch · 5 note). Decide and Read are open by default; Watch and Note are collapsed with counts. "Needs you" survives only as the badge on a Decide row.
 
@@ -79,6 +79,8 @@ Three clocks stay separate: a timer gate is an embargo, a reminder label is a da
 
 Badge vocabulary and one-action-per-row rules are in AGENTS_INTENT.
 
+**Running is seats only (pc-1483).** A project's Running count — Overview's `Running` metric and the per-project `running` field the Map reads — counts a fresh heartbeat plus an open shift or in-flight ticket for a **seat** row only. A job (chief-of-staff, health-patrol and the like) shows `working` on its own Agents card while its shift is open, but it never claims a work order and must not add to a project's execution count; the two surfaces apply the identical `group === 'seat'` filter so a working job cannot make Map say a project is running while Overview says it is not.
+
 ## 3. What each surface must show per item
 
 Legend: ✓ shown today · ○ missing · — not needed there.
@@ -95,7 +97,7 @@ Legend: ✓ shown today · ○ missing · — not needed there.
 | blockers and parent | ○ | — | ○ | — | — | — |
 | updated, and by whom | ✓ time | ✓ time | ✓ | ○ last activity | — | — |
 | last note snippet | ○ | ✓ gate note | ✓ full | — | — | — |
-| dated fields (due, hold until, reminder) | ○ | ○ | ✓ | — | ✓ | — |
+| dated fields (due, hold until, reminder, mentioned date) | ○ | ○ | ✓ | — | ✓ with source field | — |
 | counts: open, For You, deferred | — | — | — | ✓ open, ✓ need you, ○ deferred | — | — |
 
 The gaps in the "live with / parked by" column are the ones that made the desk feel unwired: an order can be live with a seat and the Work row still says "you". The change feed (D2) makes the live column worth having; without push it would be stale on arrival.
@@ -130,3 +132,28 @@ Rules:
 - **Stored data is untouched.** No stored status is added, no gate or label is rewritten to make the view come out; the projection and the filters change, the records do not.
 
 Fixtures every implementation must carry: a personal reminder assigned to You; an agent-owned human gate visible in For You and still assigned to the agent; an ungated ready agent order; deferred and tracking records visible under All open but not ready; an expired timer beside an active one; an unavailable store and a truncated store.
+
+## 6. Label matrix — every tag on a work order, which axis it feeds, who writes it
+
+Inventory taken 2026-09-13 across all twelve registered stores (133 open orders). Labels are free text in WorkLane; this table is the desk's contract for reading them. A label that is not in the table is a project tag (area, topic) and feeds nothing on the desk except search. Nothing here creates a new stored status; every row maps a label onto one of the five axes of §5 or onto a fact the reader shows.
+
+| Label family | Meaning | Axis it feeds | Written by | Shown on the desk as |
+|---|---|---|---|---|
+| `product:<slug>` | Store identity stamped on every order | none (routing) | WorkLane on create | project name on the row |
+| `worker:<seat>` | Routed to a registered seat | **Assignment** | filer, coordinator, seat generator | Assigned to seat; Assignment filter |
+| `worker:you` | Routed to the person | **Assignment** = You | filer, coordinator | Assigned to You (pc-1493 fixes the host case) |
+| `you:todo` · `you:remind` · `you:note` | Personal item kinds; `you:host` = You implementing on this machine | **Kind** (and Assignment = You) | filer | Your todo / Reminder (date) / note; Note face in For You |
+| `reminder:YYYY-MM-DD` · `deadline:YYYY-MM-DD` | Dated clocks without an embargo | Calendar clocks; Note face | filer, reader | Reminder / Due with the source label named |
+| `inbox-report` · `inbox-report:<kind>` | A report was written for the person | **For You** = Read | report jobs | Read face |
+| `gate:founder` · `needs:founder-decision` · `needs:founder-present` | Only the person can pass this (publication, money, physical presence) | **For You** = Decide when the gate is human; otherwise a reader chip | filer | Needs you badge; chip |
+| `needs:routing` | WorkLane's stamp: no seat carried it when routing was last computed | none on the desk since .50; the desk computes Needs routing from ungated plus unassigned | WorkLane (engine) | Needs routing chip only when ungated and unassigned |
+| `execution:bounded` | Eligibility for the bounded implementation seats | Readiness (seat eligibility) | filer | Ready for seat |
+| `seat:cloud` | Historical: routed to a cloud/citizen executor that no longer exists | none; awaiting wf-258 | historical | nothing (search only) |
+| `epic` · `epic:tracking` · `epic:citizen-park` · `goal` | Structural umbrella markers | none; the **Gate** value tracking is the fact | filer | Tracking badge comes from gate_type, not the label |
+| `parent:<id>` · `slice-of:<id>` | Hierarchy | reader (Part of …) | filer | Part of link |
+| `adr:<n>` · `sys:<x>` · `area:<x>` · `phase:<x>` · `host:<x>` | Project taxonomy | none | project | search only |
+| `worker:<retired hand>` on done orders · `gate_type:<x>` · `gate_type=<x>` | Legacy markers; a gate must be a real gate field, never a label | none | historical | nothing; corrected when found (osp-1005, pc-1287) |
+
+What is not a label, and must not become one: status (`backlog`, `in_progress`, `in_review`, `done`, `canceled` are fields), the gate (`gate_type`, `gate_until`, `gate_note` are fields), a claim (the signed Owner marker comment), declared blockers (the `blockers` list; a declared blocker is the Gate value "Blocked on another order", pc-1493), and readiness (computed by the WorkLane policy from status, gate, blockers and eligibility).
+
+Reading the inventory: 80 open orders carry `needs:routing` and 57 carry `seat:cloud`; almost all of them are the 77 deferred or tracking orders whose historical hands were retired. They are parked on purpose, they are Unassigned because their seats no longer exist, and they need a seat only when their gate thaws. That is the whole relationship between Unassigned and parked on the Work page: nothing drops work there today; it is the retired-seat backlog, visible since .50 and filterable by Gate.
