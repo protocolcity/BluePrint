@@ -644,6 +644,37 @@ class AgentsCoverageHarnessTests(unittest.TestCase):
         self.assertTrue(self.result['no_hire_nodes_while_closed'])
 
 
+class RefreshTimelinePositionHarnessTests(unittest.TestCase):
+    """pc-1488 cursor-reviewer finding #2: a background poll on the default
+    first page (no Load more used) must keep the reader's scroll position
+    and surface a new-events count, anchored on scroll depth — not only
+    after timelineExpanded is set by Load more."""
+
+    _HARNESS = Path(__file__).resolve().parent / 'harness' / 'refresh_timeline_check.mjs'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping refreshTimeline harness')
+        proc = subprocess.run([node, str(cls._HARNESS)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'refreshTimeline harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        cls.result = json.loads(proc.stdout)
+
+    def test_position_kept_while_scrolled_on_default_first_page(self) -> None:
+        self.assertTrue(self.result['kept_position_while_scrolled'])
+
+    def test_new_events_count_shown_without_load_more(self) -> None:
+        self.assertRegex(self.result['new_events_count_shown_on_first_page'], r'1 new event')
+
+    def test_poll_at_top_may_still_bring_in_newest_rows(self) -> None:
+        self.assertEqual(self.result['replaced_rows_when_at_top'], ['r5', 'r4', 'r3', 'r2', 'r1'])
+
+
 class SeatHeaderProjectNameTests(unittest.TestCase):
     """pc-1474 scope addition: seat headers always name their project from
     the queue, not just held seats — 'No project queue' replaces the old

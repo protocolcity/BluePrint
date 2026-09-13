@@ -1112,13 +1112,16 @@ function freshness() {
 }
 async function refreshTimeline(append, opts = {}) {
   if (timelinePending || page !== 'timeline') return;
-  // Once the reader has loaded older pages (timelineExpanded), a quiet
-  // background poll (a change-feed push, not the reader's own Load more or
-  // the explicit Refresh button) must not move their reading position —
-  // it surfaces an affordance instead (pc-1483: "While reading older
-  // events show a new-events affordance instead of moving the reading
-  // position").
-  const background = !append && timelineExpanded && !opts.force;
+  // Once the reader has loaded older pages (timelineExpanded) or has simply
+  // scrolled down the default first page, a quiet background poll (a
+  // change-feed push, not the reader's own Load more or the explicit
+  // Refresh button) must not move their reading position — it surfaces an
+  // affordance instead (pc-1483/pc-1488 cursor-reviewer: gating this only
+  // on timelineExpanded left a reader scrolled partway down the first page
+  // jumped by every poll; anchor on the current top row / scroll depth).
+  const scrolled = (document.scrollingElement?.scrollTop || 0) > 0;
+  const hasReadingPosition = Boolean(timelineData?.rows?.length) && (timelineExpanded || scrolled);
+  const background = !append && hasReadingPosition && !opts.force;
   timelinePending = true;
   try {
     const params = new URLSearchParams();

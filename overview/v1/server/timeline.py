@@ -261,7 +261,14 @@ def _collapse_worklane_pairs(rows: list[dict]) -> list[dict]:
         out = {k: v for k, v in row.items() if not k.startswith('_')}
         body = (row.get('_body') or '').strip()
         if body:
-            out['title'] = body
+            headline = body.splitlines()[0]
+            out['title'] = headline
+            # Same as the merged path: an unmerged comment (no matching
+            # same-second event, or an extra same-second comment) must still
+            # expose its full body behind detail rather than dumping a long
+            # parked/closeout body straight into the bold headline.
+            if body != headline:
+                out['detail'] = body
         collapsed.append(out)
     return collapsed
 
@@ -501,6 +508,11 @@ def _supervisor_rows(root: Path) -> tuple[list[dict], dict]:
         outcome = str(pass_row.get('pass_outcome') or 'pass')
         evidence = str(pass_row.get('evidence_file') or 'supervisor pass')
         event = _supervisor_event_word(outcome)
+        # Title by outcome only — the source badge already reads "Supervisor",
+        # so repeating it in the title duplicated the word (pc-1488
+        # cursor-reviewer finding: "Passed · Supervisor pass · passed").
+        title = outcome.replace('_', ' ').strip() or 'pass'
+        title = title[0].upper() + title[1:]
         rows.append({
             'id': f'supervisor:{evidence}:{index}',
             'at': _normalize_at(at),
@@ -508,7 +520,7 @@ def _supervisor_rows(root: Path) -> tuple[list[dict], dict]:
             'project': '',
             'actor': 'bp-supervisor',
             **event,
-            'title': f'Supervisor pass · {event["event"]}',
+            'title': title,
             'link': {'href': '/agents', 'label': evidence},
         })
     return rows, {'name': 'supervisor', 'state': 'available', 'observed_at': observed, 'detail': ''}
