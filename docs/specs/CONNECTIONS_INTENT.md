@@ -56,7 +56,7 @@ No engine change is required for this order. If a future WorkLane `/health` capa
 
 ## Receipts
 
-`local/worklane/deployment.json` and `local/workforce/deployment.json` establish **installed version** and **activated** time. They do not establish that a daemon is running or that an API is usable. Badge: **installed**. Timestamp label: **Activated**, never Observed.
+`local/worklane/deployment.json` and `local/workforce/deployment.json` establish **installed version** and **activated** time. They do not establish that a daemon is running or that an API is usable. Badge: **installed**. Timestamp label: **Activated**, never Observed. WorkLane API and Supervisor last pass are live probes: they belong under Engine capabilities, and in Needs attention when they are exceptions, never under Installed engines.
 
 ## Primary hierarchy
 
@@ -77,6 +77,10 @@ CONNECTIONS                         Live (transport only) · N sources need atte
     WorkForce roster  available
     WorkForce heartbeat  fresh     Last tick 12s ago
     Calendar          not configured
+
+  Engine capabilities               live probes, not receipts
+    WorkLane API     available     Reachable · usable
+    Supervisor last pass  available  dispatched · last pass 03:41
 
   Installed engines                 receipts only as identity
     WorkLane   installed   0.1.7   Activated Sep 13 00:21

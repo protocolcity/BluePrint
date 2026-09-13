@@ -608,7 +608,8 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(result['engines']['worklane']['source'],'local/worklane/deployment.json')
         self.assertEqual(result['engines']['workforce']['source'],'local/workforce/deployment.json')
     def _engine_http(self, products=None, products_status=200, products_raw=None,
-                     passes=None, pass_status=200, raise_products=None, raise_supervisor=None):
+                     passes=None, pass_status=200, raise_products=None, raise_supervisor=None,
+                     supervisor_raw=None):
         class FakeResponse(io.BytesIO):
             def __init__(self, payload=None, status=200, raw=None):
                 body=raw if raw is not None else json.dumps(payload if payload is not None else {}).encode()
@@ -624,6 +625,8 @@ class OperationsTests(unittest.TestCase):
                     return FakeResponse(status=products_status, raw=products_raw)
                 return FakeResponse(products if products is not None else {'ok':True,'products':[]}, products_status)
             if raise_supervisor: raise raise_supervisor
+            if supervisor_raw is not None:
+                return FakeResponse(status=pass_status, raw=supervisor_raw)
             return FakeResponse({'passes': passes if passes is not None else []}, pass_status)
         return fake_open
     def test_engine_versions_reachability_and_supervisor_pass(self):
@@ -715,3 +718,18 @@ class OperationsTests(unittest.TestCase):
         self.assertIn('provider failed',supervisor['detail'])
         self.assertTrue(supervisor['next_step'])
         self.assertNotEqual(supervisor['state'],'available')
+    def test_supervisor_http_200_malformed_body_is_reachable_not_usable(self):
+        (self.root/'local/workforce').mkdir(parents=True)
+        (self.root/'local/workforce/deployment.json').write_text(json.dumps({
+            'version':'0.1.9+test','api_origin':'http://127.0.0.1:8797'}))
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect=self._engine_http(
+                supervisor_raw=b'not-json{', pass_status=200)
+            result=operations_snapshot(self.root)
+        supervisor=result['engines']['supervisor']
+        self.assertTrue(supervisor['reachable'])
+        self.assertFalse(supervisor['usable'])
+        self.assertEqual(supervisor['http_status'],200)
+        self.assertEqual(supervisor['state'],'unavailable')
+        self.assertIn('unexpected shape',supervisor['detail'].lower())
+        self.assertNotIn('not reachable',supervisor['detail'].lower())
