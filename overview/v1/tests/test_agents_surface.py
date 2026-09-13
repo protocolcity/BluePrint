@@ -263,6 +263,62 @@ class AgentsSurfaceTests(unittest.TestCase):
         self.assertEqual(supervisor['passes']['state'], 'not_configured')
 
 
+class ProviderModelResolutionTests(unittest.TestCase):
+    """pc-1472: provider/model resolution order and the trimmed card fields."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.runtime = self.root / 'workforce/local'
+        self.runtime.mkdir(parents=True)
+        (self.runtime / 'ledger').mkdir()
+        tick = datetime.now(timezone.utc)
+        (self.runtime / 'daemon.json').write_text(json.dumps({'last_tick': tick.isoformat(), 'in_flight': []}))
+
+    def _roster(self, workers):
+        (self.runtime / 'roster.json').write_text(json.dumps({'workers': workers}))
+
+    def _agent(self, identity='agent'):
+        return next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == identity)
+
+    def test_roster_model_wins_first(self):
+        self._roster({'agent': {'display': 'Agent', 'command': ['claude'], 'identity': 'agent',
+                                 'kind': 'lane', 'model': 'claude-sonnet-5'}})
+        self.assertEqual(self._agent()['model'], 'claude-sonnet-5')
+
+    def test_runner_config_provider_and_model(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/claude', '--model', 'sonnet', '-p', 'x']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Claude sonnet')
+
+    def test_runner_config_provider_without_model_flag(self):
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/cursor-agent', '--print']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Cursor')
+
+    def test_executable_inference_when_no_config(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['/usr/local/bin/grok', '-p', 'x']}})
+        self.assertEqual(self._agent()['model'], 'Grok')
+
+    def test_python_module_reads_local_job(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['/usr/bin/python3', '-m', 'protocolcity.operations_job']}})
+        self.assertEqual(self._agent()['model'], 'Local job')
+
+    def test_unrecognized_command_is_never_not_specified(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['/usr/local/bin/mystery-tool']}})
+        model = self._agent()['model']
+        self.assertNotEqual(model, 'Not specified')
+        self.assertEqual(model, 'Provider unknown')
+
+
 class _FakeResponse:
     def __init__(self, payload):
         self._payload = json.dumps(payload).encode('utf-8')

@@ -184,18 +184,23 @@ function agentCard(agent) {
   const heading=el('div',undefined,'bp-section-head');
   const title=el('div');title.append(el('h2',agent.name));
   if(agent.group==='seat') title.append(el('span',`${agent.held ? agent.held.project : 'Unassigned'} · ${agent.model}`,'bp-muted'));
+  title.append(el('p',agent.id,'bp-muted bp-note'));
   heading.append(title,badge(agent.state,agent.badge));
   card.append(heading,el('p',`Source: ${agent.badge_source}`,'bp-muted'));
-  const facts=el('dl',undefined,'bp-facts');
-  for(const [name,value] of [['Identity',agent.id],['Type',agent.kind],['Configuration',agent.configuration],['Schedule',scheduleLabel(agent.schedule)],['Next run',agent.schedule==='manual'?'On demand':date(agent.next_fire)],['Model',agent.model],['Scheduler heartbeat',date(agent.last_at)]]) facts.append(el('dt',name),el('dd',value));
-  card.append(facts,link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
+  if(agent.group==='job') {
+    const facts=el('dl',undefined,'bp-facts');
+    facts.append(el('dt','Schedule'),el('dd',scheduleLabel(agent.schedule)));
+    facts.append(el('dt','Next run'),el('dd',agent.schedule==='manual'?'On demand':date(agent.next_fire)));
+    card.append(facts);
+  }
   if(agent.group==='seat' && agent.held) card.append(el('p',`Holds ${agent.held.id}${agent.held_verified?' (owner verified)':' (not yet verified)'}${agent.shift && agent.shift.lock_held?' · lock held':''}`,'bp-note'));
   if(agent.shift) card.append(el('p',`${agent.shift.stale?'Shift open past its budget with no terminal row; verify the process before dispatching again':'Shift open'} · since ${date(agent.shift.started_at)} · budget ${agent.shift.budget_secs}s${agent.shift.candidates.length?' · candidates '+agent.shift.candidates.join(', '):''} · ${agent.shift.source}${agent.shift.lock_held?' · lock held':''}`,agent.shift.stale?'bp-note':'bp-note bp-muted'));
-  if(agent.last_run) card.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)} · ${agent.last_run.reason} · ledger/${agent.id}.log`,'bp-note bp-muted'));
-  if(agent.recovery_attempts) card.append(el('p',`Recovery attempts: ${agent.recovery_attempts}`,'bp-note bp-muted'));
   if(agent.report) {
     const report=el('div',undefined,'bp-note');report.append(badge(agent.report.state),el('p',agent.report.summary),el('p',`${date(agent.report.observed_at)} · ${agent.report.mode}`,'bp-muted'),el('p',agent.report.detail,'bp-muted'));card.append(report);
   }
+  if(agent.last_run) card.append(el('p',`Last run: ${agent.last_run.outcome} · ${date(agent.last_run.at)} · ${agent.last_run.reason} · ledger/${agent.id}.log`,'bp-note bp-muted'));
+  if(agent.group==='seat' && agent.recovery_attempts) card.append(el('p',`Recovery attempts: ${agent.recovery_attempts}`,'bp-note bp-muted'));
+  if(agent.group==='seat') card.append(link('Find assigned work','/work?'+new URLSearchParams({assignment:'worker:'+agent.id}),'bp-order-meta'));
   card.append(...agentAction(agent));
   return card;
 }
@@ -221,8 +226,16 @@ function supervisorPanel() {
   }
   container.append(...agentAction(supervisor,'Run a pass'));
 }
+function heartbeatLine() {
+  const heartbeat=(snapshot.sources || []).find(s=>s.name==='WorkForce heartbeat');
+  if(!heartbeat || !heartbeat.last_at || heartbeat.state==='unknown') return 'WorkForce daemon: not reachable';
+  const seconds=Math.max(0,Math.floor((Date.now()-new Date(heartbeat.last_at).getTime())/1000));
+  const ago=seconds<60?`${seconds}s ago`:`${Math.floor(seconds/60)}m ago`;
+  return `WorkForce daemon: seen ${ago}`;
+}
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
+  $('agents-heartbeat').textContent=heartbeatLine();
   reconcileList($('seat-list'), seats, a=>a.id, agentCard, {emptyText:'No seats registered in the readable registry.'});
   reconcileList($('job-list'), jobs, a=>a.id, agentCard, {emptyText:'No jobs registered in the readable registry.'});
   supervisorPanel();

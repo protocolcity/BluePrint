@@ -169,6 +169,59 @@ def _config_argument(command):
     return None
 
 
+# Executable basenames this surface recognizes as an AI provider, mapped to
+# their display name (AGENTS_INTENT.md provider/model resolution).
+_PROVIDER_DISPLAY = {'claude': 'Claude', 'cursor-agent': 'Cursor', 'grok': 'Grok'}
+
+
+def _executable_name(command):
+    if not isinstance(command, list) or not command or not isinstance(command[0], str):
+        return None
+    return Path(command[0]).name
+
+
+def _is_python_executable(name):
+    return name in ('python', 'python3') or (name or '').startswith('python3.')
+
+
+def _model_flag(command):
+    """The value of an inline ``--model`` argument, ignoring an unfilled template."""
+    if not isinstance(command, list):
+        return None
+    for index, item in enumerate(command):
+        if item == '--model' and index + 1 < len(command):
+            value = command[index + 1]
+            return value if isinstance(value, str) and value and '{' not in value else None
+    return None
+
+
+def resolve_provider_model(row, root):
+    """Provider/model display text, in the order AGENTS_INTENT.md fixes:
+
+    the roster's own ``model``; else the seat's runner config (the actual
+    provider command it names, read via the roster command's ``--config``
+    path); else the roster command's own executable, with the model left
+    blank at that tier. Never returns the literal "Not specified".
+    """
+    command = row.get('command')
+    roster_model = row.get('model')
+    if isinstance(roster_model, str) and roster_model.strip():
+        return roster_model.strip()
+    config_path = _config_argument(command)
+    if config_path and Path(config_path).is_absolute():
+        config = read_json(Path(config_path), root)
+        inner_command = (config or {}).get('command')
+        provider = _PROVIDER_DISPLAY.get(_executable_name(inner_command))
+        if provider:
+            model = _model_flag(inner_command)
+            return f'{provider} {model}' if model else provider
+    executable = _executable_name(command)
+    if _is_python_executable(executable):
+        return 'Local job'
+    provider = _PROVIDER_DISPLAY.get(executable)
+    return provider or 'Provider unknown'
+
+
 def preserved_reservation(root, command, order_id):
     """A task_runner preparation receipt still exists for the held order.
 
@@ -415,7 +468,7 @@ def operations_snapshot(binder):
                 'badge_source': 'daemon' if (state == 'working' and not shift) else BADGE_SOURCE[state],
                 'group': group, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
-                'model': row.get('model') or 'Not specified', 'last_at': tick, 'source': 'Local WorkForce',
+                'model': resolve_provider_model(row, root), 'last_at': tick, 'source': 'Local WorkForce',
                 'held': {'id': held['id'], 'project': held['project_name']} if held else None,
                 'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}
