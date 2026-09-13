@@ -547,6 +547,199 @@ class SeatProjectFieldTests(unittest.TestCase):
         self.assertIsNone(row['project_name'])
 
 
+class SeatParkedClaimTests(unittest.TestCase):
+    """pc-1495: Agents rows surface parked handoffs and a finishing state."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.runtime = self.root / 'workforce/local'
+        self.runtime.mkdir(parents=True)
+        (self.runtime / 'ledger').mkdir()
+        manifest = self.root / 'product/.protocolcity/desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': 'product', 'prefix': 'pc', 'display': 'Product'}))
+        self.data = self.root / 'worklane/worklane/local/data'
+        self.data.mkdir(parents=True)
+
+    def _daemon(self, in_flight=None, fresh=True):
+        tick = datetime.now(timezone.utc) - (timedelta(seconds=0) if fresh else timedelta(hours=1))
+        (self.runtime / 'daemon.json').write_text(json.dumps({'last_tick': tick.isoformat(), 'in_flight': in_flight or []}))
+
+    def _roster(self, workers):
+        (self.runtime / 'roster.json').write_text(json.dumps({'workers': workers}))
+
+    @staticmethod
+    def _stamp(delta):
+        return (datetime.now(timezone.utc) - delta).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    def _ledger(self, identity, text):
+        (self.runtime / 'ledger' / (identity + '.log')).write_text(text)
+
+    def _seed_task(self, task_id, status, labels, comments=()):
+        import sqlite3
+        db = self.data / 'product.db'
+        if not db.exists():
+            with sqlite3.connect(db) as conn:
+                conn.executescript(
+                    'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+                    'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);')
+        with sqlite3.connect(db) as conn:
+            conn.execute('DELETE FROM tasks')
+            conn.execute('DELETE FROM task_comments')
+            conn.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                         (task_id, f'pc-{task_id}', f'Order {task_id}', status, 1, '2026-09-13T12:00:00Z', json.dumps(labels)))
+            for index, (body, author, created_at) in enumerate(comments, start=1):
+                conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)', (index, task_id, body, author, created_at))
+
+    def _seat(self, identity='seat'):
+        self._roster({identity: {'display': 'Seat', 'command': ['runner'], 'identity': identity, 'kind': 'lane'}})
+        return identity
+
+    def _agent(self, identity):
+        return next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == identity)
+
+    def test_open_shift_with_in_progress_claim(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=2))
+        self._ledger(identity, f'{started} START identity={identity} kind=lane budget_secs=1500\n{started} CANDIDATE ticket=pc-1\n')
+        self._daemon()
+        self._seed_task(1, 'in_progress', [f'worker:{identity}'],
+                        [('Owner: ' + identity + '\nStart: ' + started, identity, started)])
+        row = self._agent(identity)
+        self.assertEqual(row['badge'], 'WORKING')
+        self.assertIsNotNone(row['held'])
+        self.assertEqual(row['held']['id'], 'pc-1')
+        self.assertTrue(row['held_verified'])
+        self.assertFalse(row['finishing'])
+        self.assertIsNone(row['parked'])
+
+    def test_open_shift_with_parked_claim_reads_finishing(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=2))
+        parked_at = self._stamp(timedelta(minutes=1))
+        self._ledger(identity, f'{started} START identity={identity} kind=lane budget_secs=1500\n{started} CANDIDATE ticket=pc-3\n')
+        self._daemon()
+        self._seed_task(3, 'in_review', [f'worker:{identity}'],
+                        [('Owner: ' + identity + '\nStart: ' + started, identity, started),
+                         ('Parked: awaiting integration', identity, parked_at)])
+        row = self._agent(identity)
+        self.assertEqual(row['badge'], 'WORKING')
+        self.assertIsNone(row['held'])
+        self.assertEqual([p['id'] for p in row['parked']], ['pc-3'])
+        self.assertTrue(row['finishing'])
+        self.assertTrue(row['parked'][0]['verified'])
+
+    def test_closed_shift_with_parked_claims_stays_idle_and_lists_them(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=10))
+        stopped = self._stamp(timedelta(minutes=5))
+        self._ledger(identity,
+                     f'{started} START identity={identity} kind=lane budget_secs=1500\n'
+                     f'{started} CANDIDATE ticket=pc-4\n{stopped} STOP reason="single-pass complete"\n')
+        self._daemon()
+        self._seed_task(4, 'in_review', [f'worker:{identity}'],
+                        [('Owner: ' + identity + '\nStart: ' + started, identity, started),
+                         ('Parked: awaiting integration', identity, stopped)])
+        row = self._agent(identity)
+        self.assertEqual(row['badge'], 'IDLE')
+        self.assertIsNone(row['held'])
+        self.assertEqual([p['id'] for p in row['parked']], ['pc-4'])
+        self.assertFalse(row['finishing'])
+
+    def test_nothing_held_or_parked(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=2))
+        stopped = self._stamp(timedelta(minutes=1))
+        self._ledger(identity, f'{started} START identity={identity} kind=lane budget_secs=1500\n{stopped} STOP reason="single-pass complete"\n')
+        self._daemon()
+        row = self._agent(identity)
+        self.assertIsNone(row['held'])
+        self.assertIsNone(row['parked'])
+        self.assertFalse(row['finishing'])
+
+    def test_earlier_shift_park_with_new_empty_shift_is_not_finishing(self):
+        identity = self._seat()
+        old_started = self._stamp(timedelta(minutes=20))
+        old_stopped = self._stamp(timedelta(minutes=15))
+        new_started = self._stamp(timedelta(minutes=2))
+        parked_at = self._stamp(timedelta(minutes=16))
+        self._ledger(identity,
+                     f'{old_started} START identity={identity} kind=lane budget_secs=1500\n'
+                     f'{old_started} CANDIDATE ticket=pc-5\n{old_stopped} STOP reason="single-pass complete"\n'
+                     f'{new_started} START identity={identity} kind=lane budget_secs=1500\n')
+        self._daemon()
+        self._seed_task(5, 'in_review', [f'worker:{identity}'],
+                        [('Owner: ' + identity + '\nStart: ' + old_started, identity, old_started),
+                         ('Parked: awaiting integration', identity, parked_at)])
+        row = self._agent(identity)
+        self.assertEqual(row['badge'], 'WORKING')
+        self.assertEqual([p['id'] for p in row['parked']], ['pc-5'])
+        self.assertFalse(row['finishing'])
+
+    def test_mixed_verified_and_unverified_parked_orders(self):
+        identity = self._seat()
+        old_started = self._stamp(timedelta(minutes=20))
+        old_stopped = self._stamp(timedelta(minutes=15))
+        new_started = self._stamp(timedelta(minutes=4))
+        parked_old = self._stamp(timedelta(minutes=14))
+        parked_new = self._stamp(timedelta(minutes=1))
+        self._ledger(identity,
+                     f'{old_started} START identity={identity} kind=lane budget_secs=1500\n'
+                     f'{old_started} CANDIDATE ticket=pc-6\n{old_stopped} STOP reason="single-pass complete"\n'
+                     f'{new_started} START identity={identity} kind=lane budget_secs=1500\n'
+                     f'{new_started} CANDIDATE ticket=pc-7\n')
+        self._daemon()
+        self._seed_task(6, 'in_review', [f'worker:{identity}'],
+                        [('Owner: ' + identity, identity, old_started),
+                         ('Parked: first handoff', identity, parked_old)])
+        import sqlite3
+        with sqlite3.connect(self.data / 'product.db') as conn:
+            conn.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                          (7, 'pc-7', 'Order 7', 'in_review', 1, '2026-09-13T12:00:00Z', json.dumps([f'worker:{identity}'])))
+            conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)',
+                          (3, 7, 'Owner: ' + identity, identity, new_started))
+            conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)',
+                          (4, 7, 'Parked: second handoff', identity, parked_new))
+        row = self._agent(identity)
+        self.assertEqual([p['id'] for p in row['parked']], ['pc-7', 'pc-6'])
+        self.assertTrue(row['parked'][0]['verified'])
+        self.assertFalse(row['parked'][1]['verified'])
+
+    def test_parked_orders_sorted_newest_first_when_snapshot_is_older_last(self):
+        identity = self._seat()
+        started = self._stamp(timedelta(minutes=4))
+        parked_old = self._stamp(timedelta(minutes=3))
+        parked_new = self._stamp(timedelta(minutes=1))
+        self._ledger(identity,
+                     f'{started} START identity={identity} kind=lane budget_secs=1500\n'
+                     f'{started} CANDIDATE ticket=pc-8\n{started} CANDIDATE ticket=pc-9\n')
+        self._daemon()
+        import sqlite3
+        with sqlite3.connect(self.data / 'product.db') as conn:
+            conn.executescript(
+                'CREATE TABLE IF NOT EXISTS tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+                'CREATE TABLE IF NOT EXISTS task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);')
+            conn.execute('DELETE FROM tasks')
+            conn.execute('DELETE FROM task_comments')
+            conn.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                          (8, 'pc-8', 'Order 8', 'in_review', 1, '2026-09-13T11:00:00Z', json.dumps([f'worker:{identity}'])))
+            conn.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                          (9, 'pc-9', 'Order 9', 'in_review', 1, '2026-09-13T12:00:00Z', json.dumps([f'worker:{identity}'])))
+            conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)',
+                          (1, 8, 'Owner: ' + identity, identity, started))
+            conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)',
+                          (2, 8, 'Parked: older handoff', identity, parked_old))
+            conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)',
+                          (3, 9, 'Owner: ' + identity, identity, started))
+            conn.execute('INSERT INTO task_comments VALUES(?,?,?,?,?)',
+                          (4, 9, 'Parked: newer handoff', identity, parked_new))
+        row = self._agent(identity)
+        self.assertEqual([p['id'] for p in row['parked']], ['pc-9', 'pc-8'])
+        self.assertEqual(row['parked'][0]['since'], parked_new)
+
+
 class _FakeResponse:
     def __init__(self, payload):
         self._payload = json.dumps(payload).encode('utf-8')

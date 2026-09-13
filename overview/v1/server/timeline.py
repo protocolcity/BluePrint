@@ -134,12 +134,15 @@ def _decode_cursor(cursor: str) -> tuple[str, str] | None:
 
 
 def _comment_event_word(body: str) -> str:
+    # A parked/closeout body carries its own "Owner: <author>" line as
+    # provenance under the lifecycle heading (worklane write.py: "Parked:
+    # {reason}\nOwner: {author}"); a bare anywhere-in-body Owner search must
+    # not outrank the first-line heading that actually names the transition,
+    # or a parked/closed row misreads as a fresh claim.
     first = (body or '').strip().splitlines()[0] if body else ''
     lowered = first.lower()
     if first.startswith('Intake:'):
         return 'filed'
-    if first.startswith('Owner:') or _OWNER_RE.search(body or ''):
-        return 'claimed'
     if first.startswith('Parked:'):
         return 'parked'
     if first.startswith('Released by'):
@@ -150,6 +153,8 @@ def _comment_event_word(body: str) -> str:
         return 'canceled'
     if first.startswith('Blocked:') or 'gate:' in lowered:
         return 'gated'
+    if first.startswith('Owner:') or _OWNER_RE.search(body or ''):
+        return 'claimed'
     return 'note'
 
 
@@ -237,8 +242,15 @@ def _collapse_worklane_pairs(rows: list[dict]) -> list[dict]:
             comment = comments.pop(0)
             merged_comment_ids.add(comment['id'])
             body = (comment.get('_body') or '').strip()
-            detail = body.splitlines()[0] if body else row['title']
-            collapsed.append({k: v for k, v in row.items() if not k.startswith('_')} | {'title': detail})
+            headline = body.splitlines()[0] if body else row['title']
+            extra = {'title': headline}
+            # The merged headline is only the comment's first line; the
+            # reader must still be able to reach the rest of the original
+            # comment (a failure/decision reason must never be clipped away
+            # silently — pc-1488 Done-when).
+            if body and body != headline:
+                extra['detail'] = body
+            collapsed.append({k: v for k, v in row.items() if not k.startswith('_')} | extra)
         else:
             collapsed.append({k: v for k, v in row.items() if not k.startswith('_')})
     for row in rows:
@@ -249,7 +261,14 @@ def _collapse_worklane_pairs(rows: list[dict]) -> list[dict]:
         out = {k: v for k, v in row.items() if not k.startswith('_')}
         body = (row.get('_body') or '').strip()
         if body:
-            out['title'] = body
+            headline = body.splitlines()[0]
+            out['title'] = headline
+            # Same as the merged path: an unmerged comment (no matching
+            # same-second event, or an extra same-second comment) must still
+            # expose its full body behind detail rather than dumping a long
+            # parked/closeout body straight into the bold headline.
+            if body != headline:
+                out['detail'] = body
         collapsed.append(out)
     return collapsed
 
@@ -359,9 +378,21 @@ def _ledger_fields(parts: list[str]) -> dict[str, str]:
     return dict(item.split('=', 1) for item in parts[2:] if '=' in item)
 
 
+def _project_prefix_map(root: Path) -> dict[str, str]:
+    """Ticket id prefix (e.g. 'pc') -> registered project slug."""
+    return {prefix: slug for slug, prefix, _ in _registered_dbs(root)}
+
+
+def _resolve_ticket_project(ticket: str, prefix_map: dict[str, str]) -> str:
+    if '-' not in ticket:
+        return ''
+    return prefix_map.get(ticket.split('-', 1)[0], '')
+
+
 def _workforce_rows(root: Path) -> tuple[list[dict], dict]:
     observed = _now_iso()
     rows: list[dict] = []
+    prefix_map = _project_prefix_map(root)
     daemon = resolve_daemon_path(root)
     if daemon is None:
         return rows, {'name': 'workforce', 'state': 'not_configured', 'observed_at': observed,
@@ -407,16 +438,32 @@ def _workforce_rows(root: Path) -> tuple[list[dict], dict]:
                 'error': f'Shift failed · {fields.get("reason", identity)}',
                 'skip': f'Shift skipped · {fields.get("reason", identity)}',
             }.get(event_key, f'{parts[1]} · {identity}')
-            link = _work_order_link(fields.get('project', ''), ticket) if ticket else {'href': '/agents', 'label': identity}
+            # A blank ledger project= must not become an ambiguous
+            # work-order link (observed against pc-1480): resolve it from
+            # the ticket's own id prefix against the registered project
+            # stores, and otherwise fall back to a plain seat link rather
+            # than a link with an unresolved project.
+            project = fields.get('project', '') or _resolve_ticket_project(ticket, prefix_map)
+            if ticket and project:
+                link = _work_order_link(project, ticket)
+            elif ticket:
+                link = {'href': '/agents', 'label': ticket}
+            else:
+                link = {'href': '/agents', 'label': identity}
             rows.append({
                 'id': f'workforce:{identity}:{index}:{_normalize_at(parts[0])}',
                 'at': _normalize_at(parts[0]),
                 'source': 'workforce',
-                'project': fields.get('project', ''),
+                'project': project,
                 'actor': identity,
                 **_ledger_event_word(parts[1], fields),
                 'title': title,
                 'link': link,
+                # Verified correlation key (identity + ticket, both
+                # structured ledger fields) for grouping a shift's
+                # dispatch/start/recovery/terminal rows together (pc-1488
+                # Done-when); never grouped on prose/time similarity alone.
+                'group_key': f'workforce:{identity}:{ticket}' if ticket else '',
             })
     state = 'available' if rows else 'empty'
     return rows, {'name': 'workforce', 'state': state, 'observed_at': observed, 'detail': ''}
@@ -461,6 +508,16 @@ def _supervisor_rows(root: Path) -> tuple[list[dict], dict]:
         outcome = str(pass_row.get('pass_outcome') or 'pass')
         evidence = str(pass_row.get('evidence_file') or 'supervisor pass')
         event = _supervisor_event_word(outcome)
+        # The headline already carries the action word (from the outcome) and
+        # the badge carries the source, so the title states what the pass did:
+        # which seats it dispatched and how they ended (pc-1488 second-pass
+        # finding: "Passed · Passed" repeated the action word).
+        dispatched = [d for d in (pass_row.get('dispatched') or []) if isinstance(d, dict)]
+        if dispatched:
+            parts = [f"{d.get('worker') or 'seat'} {d.get('outcome') or 'unknown'}".strip() for d in dispatched]
+            title = f"{len(dispatched)} seat{'s' if len(dispatched) != 1 else ''} · " + ', '.join(parts)
+        else:
+            title = 'no seat dispatched'
         rows.append({
             'id': f'supervisor:{evidence}:{index}',
             'at': _normalize_at(at),
@@ -468,7 +525,7 @@ def _supervisor_rows(root: Path) -> tuple[list[dict], dict]:
             'project': '',
             'actor': 'bp-supervisor',
             **event,
-            'title': f'Supervisor pass · {event["event"]}',
+            'title': title,
             'link': {'href': '/agents', 'label': evidence},
         })
     return rows, {'name': 'supervisor', 'state': 'available', 'observed_at': observed, 'detail': ''}
@@ -531,6 +588,12 @@ def _github_rows(root: Path) -> tuple[list[dict], dict]:
             if not at or not _in_window(at):
                 continue
             url = str(item.get('url') or '')
+            # A PR and its CI runs share the same head commit (verified by
+            # GitHub, not inferred from prose/time); group them on that sha
+            # so a "PR opened → CI passed → merged" run reads as one story
+            # (pc-1488 Done-when). Releases carry no head sha and stay
+            # ungrouped.
+            sha = str(item.get('sha') or '') if item.get('kind') in ('pull_request', 'workflow') else ''
             rows.append({
                 'id': f'github:{repo.get("repo")}:{_github_kind_key(item)}:{_normalize_at(at)}',
                 'at': _normalize_at(at),
@@ -540,6 +603,7 @@ def _github_rows(root: Path) -> tuple[list[dict], dict]:
                 **_github_event_word(item),
                 'title': str(item.get('title') or repo.get('repo') or 'Repository event'),
                 'link': {'href': url, 'label': str(item.get('repo') or repo.get('repo') or 'PR'), 'external': True},
+                'group_key': f'github:{repo.get("repo")}:{sha}' if sha else '',
             })
     repo_state = _github_source_state(snapshot, rows)
     return rows, {'name': 'github', 'state': repo_state, 'observed_at': observed, 'detail': detail}

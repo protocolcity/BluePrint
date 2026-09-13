@@ -17,7 +17,7 @@ function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringif
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
 let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false, timelineFingerprint = '', timelineExpanded = false;
-let timelineProject = '', timelineSource = '', timelineActor = '';
+let timelineProject = '', timelineSource = '', timelineActor = '', timelinePeriod = '';
 let streamState = 'connecting', everOpened = false, consecutiveErrors = 0, lastChangeAt = null;
 let interval = 15, motion = 'system';
 try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,15,30].includes(saved.interval))interval=saved.interval;if(saved.motion==='off')motion='off'; } catch(error) { /* Unavailable storage uses defaults. */ }
@@ -27,6 +27,7 @@ const query = new URLSearchParams(location.search);
 timelineProject = query.get('project') || '';
 timelineSource = query.get('source') || '';
 timelineActor = query.get('actor') || '';
+timelinePeriod = query.get('period') || '';
 $('search').value = query.get('q') || '';
 // Compatible mapping for pre-pc-1482 links: status carried gate/attention
 // values and a deferred=1 toggle; those axes now have their own filters
@@ -477,10 +478,40 @@ function currentOrderFor(agent) {
   if(!agent.held) return null;
   return (snapshot.orders || []).find(o=>o.id===agent.held.id && o.project===agent.held.project) || null;
 }
+function parkedOrderIds(agent) {
+  return (agent.parked || []).map(p=>p.id);
+}
+// Timestamps arrive as ISO ("…T…Z") from WorkForce and as SQLite text
+// ("YYYY-MM-DD HH:MM:SS") from WorkLane; compare them as instants, never as
+// strings (pc-1495 second-pass finding).
+function tsEpoch(value) {
+  if(!value) return null;
+  let text=String(value).trim().replace(' ','T');
+  if(!/[zZ]$|[+-]\d\d:?\d\d$/.test(text)) text+='Z';
+  const ms=Date.parse(text);
+  return Number.isNaN(ms)?null:ms;
+}
+function currentShiftParkedIds(agent) {
+  if(!agent.shift || !agent.parked) return [];
+  const start=tsEpoch(agent.shift.started_at);
+  if(start===null) return parkedOrderIds(agent);
+  return agent.parked.filter(p=>{const s=tsEpoch(p.since); return s!==null && s>=start;}).map(p=>p.id);
+}
+function latestParkedSince(agent) {
+  return (agent.parked || []).reduce((latest,p)=>{
+    const s=tsEpoch(p.since);
+    if(s===null) return latest;
+    return (!latest || s>tsEpoch(latest)) ? p.since : latest;
+  }, null);
+}
 function heldLink(agent) {
   const order=currentOrderFor(agent);
   if(order) return link(`${order.title} · ${order.id}`,workUrl(order));
   if(agent.held) return link(agent.held.id,readerHref('/work-order?'+new URLSearchParams({project:agent.held.project,id:agent.held.id})));
+  const finishingIds=currentShiftParkedIds(agent);
+  if(agent.finishing && finishingIds.length) return el('span',`Finishing · parked ${finishingIds.join(', ')}`);
+  const parkedIds=parkedOrderIds(agent);
+  if(parkedIds.length) return el('span',`Parked: ${parkedIds.join(', ')} · awaiting integration`);
   return el('span','No current work','bp-muted');
 }
 function elapsedText(agent) {
@@ -548,6 +579,11 @@ function timelineStep(label, value) {
 function agentTimelineValues(agent) {
   let claim='Not reported';
   if(agent.held) claim=agent.held_verified ? `Verified: holds ${agent.held.id}` : `Holds ${agent.held.id} · not yet verified against the last dispatch candidates`;
+  else if(agent.parked && agent.parked.length) {
+    const detail=agent.parked.map(p=>p.verified ? `${p.id} (verified)` : `${p.id} (not yet verified)`).join(', ');
+    const when=latestParkedSince(agent);
+    claim=when ? `Parked ${detail} · ${date(when)}` : `Parked ${detail}`;
+  }
   else if(agent.state==='last_run_failed') claim=agent.preserved_reservation ? 'No order currently held here; a preserved reservation is available to recover' : 'No order currently held here; the failed ticket may already be resolved by another provider';
   let terminal='Not reported';
   if(agent.shift) terminal='Open — no terminal row yet';
@@ -753,36 +789,117 @@ function agents() {
   supervisorPanel();
   renderCoverage();
 }
+const SOURCE_LABEL = {worklane: 'WorkLane', workforce: 'WorkForce', supervisor: 'Supervisor', github: 'GitHub'};
+function timelineActionLabel(row) {
+  const raw = row.event === 'event' ? (row.event_title || 'event') : row.event;
+  const text = String(raw).replaceAll('_', ' ').replaceAll('/', ' · ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+function timelineHeadline(row) {
+  return `${timelineActionLabel(row)} · ${row.title}`;
+}
+function timelineMeta(row) {
+  return [row.project || 'desk', row.actor, date(row.at)].filter(Boolean).join(' · ');
+}
+// Headline (action + work/project/actor) carries the action word exactly
+// once; the badge names the source instead of repeating it (pc-1488
+// Done-when: avoid repeated status/badge words).
 function timelineRow(row) {
   const node = el('article', undefined, 'bp-order');
   const content = el('div');
-  content.append(el('strong', row.title));
-  const local = date(row.at);
-  content.append(el('span', `${row.source} · ${row.project || 'desk'} · ${row.actor} · ${row.event} · ${local}`, 'bp-order-meta'));
-  const eventBadge = badge(row.source, row.event);
-  if (row.event_title) eventBadge.title = row.event_title;
-  node.append(content, eventBadge);
+  content.append(el('strong', timelineHeadline(row)));
+  content.append(el('span', timelineMeta(row), 'bp-order-meta'));
+  // The full original comment is never clipped away: a short headline is
+  // shown, and the complete text stays reachable behind this expansion.
+  if (row.detail && row.detail !== row.title) {
+    const detail = el('details', undefined, 'bp-timeline-detail');
+    detail.append(el('summary', 'Full text'), el('p', row.detail));
+    content.append(detail);
+  }
+  const sourceBadge = badge(row.source, SOURCE_LABEL[row.source] || row.source);
+  if (row.event_title) sourceBadge.title = row.event_title;
+  node.append(content, sourceBadge);
   if (row.link?.href) {
     const href = row.link.href;
-    const linkNode = row.link.external ? link(row.link.label || 'Open', href, 'bp-order-link') : link(row.link.label || 'Open', href, 'bp-order-link');
+    const linkNode = link(row.link.label || 'Open', row.link.external ? href : readerHref(href), 'bp-order-link');
     if (row.link.external) { linkNode.target = '_blank'; linkNode.rel = 'noopener noreferrer'; }
     node.append(linkNode);
   }
   return node;
 }
+// Consecutive rows sharing a verified correlation key (WorkForce
+// identity+ticket, or a GitHub PR/CI run's shared head sha — never
+// prose/time similarity alone) collapse into one expandable group; the
+// raw per-row view stays reachable inside it (pc-1488 Done-when).
+function buildTimelineGroups(rows) {
+  const groups = [];
+  let index = 0;
+  while (index < rows.length) {
+    const row = rows[index];
+    let end = index + 1;
+    if (row.group_key) { while (end < rows.length && rows[end].group_key === row.group_key) end++; }
+    if (end - index > 1) { groups.push({id: 'group:' + row.group_key + ':' + row.id, rows: rows.slice(index, end)}); }
+    else { groups.push({id: row.id, rows: [row]}); }
+    index = end;
+  }
+  return groups;
+}
+function timelineGroupNode(group) {
+  if (group.rows.length === 1) return timelineRow(group.rows[0]);
+  const wrap = el('details', undefined, 'bp-timeline-group');
+  const head = group.rows[0];
+  const actions = group.rows.map(timelineActionLabel).join(' → ');
+  wrap.append(el('summary', `${group.rows.length} events · ${head.title} · ${actions}`));
+  for (const row of group.rows) wrap.append(timelineRow(row));
+  return wrap;
+}
+function timelinePeriodCutoff() {
+  if (!timelinePeriod) return null;
+  const days = Number(timelinePeriod);
+  return Number.isFinite(days) && days > 0 ? Date.now() - days * 86400000 : null;
+}
+function timelineVisibleRows() {
+  const rows = timelineData?.rows || [];
+  const cutoff = timelinePeriodCutoff();
+  if (!cutoff) return rows;
+  return rows.filter(row => { const at = Date.parse(row.at); return Number.isNaN(at) || at >= cutoff; });
+}
 function timelineSources() {
-  reconcileList($('timeline-sources'), timelineData?.sources || [], source => source.name, source => {
-    const row = el('div', undefined, 'bp-source');
-    row.append(el('span', source.name), badge(source.state));
-    const detail = [source.detail, source.observed_at ? `Observed ${date(source.observed_at)}` : ''].filter(Boolean).join(' · ');
-    if (detail) row.append(el('p', detail, 'bp-muted'));
-    return row;
-  }, {emptyText: 'No timeline sources reported.'});
+  const rows = sortBySeverity(timelineData?.sources || [], s => s.name);
+  reconcileList($('timeline-sources'), rows, source => source.name,
+    source => connectionRow(source.name, source, isException(source) ? 'exception' : 'compact'),
+    {emptyText: 'No timeline sources reported.'});
+  const exceptions = rows.filter(isException);
+  $('timeline-source-summary').textContent = exceptions.length
+    ? `Sources · ${exceptions.length} notice${exceptions.length === 1 ? '' : 's'}`
+    : 'Sources';
+  // Force-open on a real exception so observation/error detail is never
+  // hidden by a stale collapse; otherwise leave the reader's own toggle
+  // alone rather than fighting it on every repaint.
+  if (exceptions.length) $('timeline-source-strip').open = true;
+}
+function timelineFilterChips() {
+  const chips = [];
+  if (timelineProject) { const opt = Array.from($('timeline-project').options).find(o => o.value === timelineProject); chips.push(opt ? opt.text : timelineProject); }
+  if (timelineSource) chips.push($('timeline-source').selectedOptions[0].text);
+  if (timelineActor) chips.push('Actor: ' + timelineActor);
+  if (timelinePeriod) chips.push($('timeline-period').selectedOptions[0].text);
+  return chips;
 }
 function timeline() {
-  reconcileList($('timeline-list'), timelineData?.rows || [], row => row.id, timelineRow, {emptyText: 'No timeline rows in the readable window.'});
+  const groups = buildTimelineGroups(timelineVisibleRows());
+  reconcileList($('timeline-list'), groups, g => g.id, timelineGroupNode, {emptyText: 'No timeline rows in the readable window.'});
   timelineSources();
   $('timeline-more').hidden = !timelineMore;
+  $('timeline-clear-filters').hidden = !timelineFilterChips().length;
+}
+function timelineFilterParams() {
+  const params = new URLSearchParams();
+  if (timelineProject) params.set('project', timelineProject);
+  if (timelineSource) params.set('source', timelineSource);
+  if (timelineActor) params.set('actor', timelineActor);
+  if (timelinePeriod) params.set('period', timelinePeriod);
+  return params;
 }
 function updateTimelineFilters() {
   timelineProject = $('timeline-project').value;
@@ -790,12 +907,29 @@ function updateTimelineFilters() {
   timelineActor = $('timeline-actor').value.trim();
   timelineCursor = '';
   timelineExpanded = false;
-  const params = new URLSearchParams();
-  if (timelineProject) params.set('project', timelineProject);
-  if (timelineSource) params.set('source', timelineSource);
-  if (timelineActor) params.set('actor', timelineActor);
+  const params = timelineFilterParams();
   history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
   refreshTimeline(false, {force: true});
+}
+// Period narrows the already-fetched (server-bounded 14-day) window; it
+// repaints in place and never triggers a refetch or moves the reading
+// position (STATES_AND_TERMS.md pc-1483 pattern extended to this filter).
+function updateTimelinePeriod() {
+  timelinePeriod = $('timeline-period').value;
+  const params = timelineFilterParams();
+  history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
+  if (timelineData) timeline();
+}
+function clearTimelineFilters() {
+  $('timeline-project').value = '';
+  $('timeline-source').value = '';
+  $('timeline-actor').value = '';
+  $('timeline-period').value = '';
+  // The period is client-side state with its own URL parameter; a clear
+  // reset must drop it from the address too (pc-1488 browser check on .58
+  // left ?period=3 after Clear).
+  timelinePeriod = '';
+  updateTimelineFilters();
 }
 function onDemandSeat(agent) {
   return agent.group==='seat' && (agent.schedule==='manual' || agent.schedule==='Not scheduled');
@@ -1017,13 +1151,16 @@ function freshness() {
 }
 async function refreshTimeline(append, opts = {}) {
   if (timelinePending || page !== 'timeline') return;
-  // Once the reader has loaded older pages (timelineExpanded), a quiet
-  // background poll (a change-feed push, not the reader's own Load more or
-  // the explicit Refresh button) must not move their reading position —
-  // it surfaces an affordance instead (pc-1483: "While reading older
-  // events show a new-events affordance instead of moving the reading
-  // position").
-  const background = !append && timelineExpanded && !opts.force;
+  // Once the reader has loaded older pages (timelineExpanded) or has simply
+  // scrolled down the default first page, a quiet background poll (a
+  // change-feed push, not the reader's own Load more or the explicit
+  // Refresh button) must not move their reading position — it surfaces an
+  // affordance instead (pc-1483/pc-1488 cursor-reviewer: gating this only
+  // on timelineExpanded left a reader scrolled partway down the first page
+  // jumped by every poll; anchor on the current top row / scroll depth).
+  const scrolled = (document.scrollingElement?.scrollTop || 0) > 0;
+  const hasReadingPosition = Boolean(timelineData?.rows?.length) && (timelineExpanded || scrolled);
+  const background = !append && hasReadingPosition && !opts.force;
   timelinePending = true;
   try {
     const params = new URLSearchParams();
@@ -1036,7 +1173,14 @@ async function refreshTimeline(append, opts = {}) {
     const data = await response.json();
     if (background) {
       const currentTop = timelineData?.rows?.[0]?.id;
-      $('timeline-new-events').hidden = !(data.rows.length && data.rows[0].id !== currentTop);
+      const isNew = Boolean(data.rows.length && data.rows[0].id !== currentTop);
+      const button = $('timeline-new-events');
+      button.hidden = !isNew;
+      if (isNew) {
+        const seenIndex = data.rows.findIndex(row => row.id === currentTop);
+        const count = seenIndex === -1 ? data.rows.length : seenIndex;
+        button.textContent = count ? `${count} new event${count === 1 ? '' : 's'} — refresh to see them` : 'New events — refresh to see them';
+      }
       lastSuccess = Date.now();
       lastError = false;
       return;
@@ -1167,11 +1311,14 @@ if ($('timeline-filters')) {
   $('timeline-project').value = timelineProject;
   $('timeline-source').value = timelineSource;
   $('timeline-actor').value = timelineActor;
+  $('timeline-period').value = timelinePeriod;
   $('timeline-filters').addEventListener('submit', event => event.preventDefault());
   $('timeline-project').addEventListener('change', updateTimelineFilters);
   $('timeline-source').addEventListener('change', updateTimelineFilters);
   $('timeline-actor').addEventListener('change', updateTimelineFilters);
   $('timeline-actor').addEventListener('input', updateTimelineFilters);
+  $('timeline-period').addEventListener('change', updateTimelinePeriod);
+  $('timeline-clear-filters').addEventListener('click', clearTimelineFilters);
   $('timeline-more').addEventListener('click', () => { timelineExpanded = true; refreshTimeline(true); });
   $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; refreshTimeline(false, {force: true}); });
 }
