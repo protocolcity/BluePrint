@@ -1081,6 +1081,10 @@ function clearTimelineFilters() {
   $('timeline-source').value = '';
   $('timeline-actor').value = '';
   $('timeline-period').value = '';
+  // The period is client-side state with its own URL parameter; a clear
+  // reset must drop it from the address too (pc-1488 browser check on .58
+  // left ?period=3 after Clear).
+  timelinePeriod = '';
   updateTimelineFilters();
 }
 function onDemandSeat(agent) {
