@@ -33,3 +33,9 @@ Use `blueprint status --root /path/to/workspace` to check the actual responding 
 For rollback, activate a previously verified release directory. Rollback does not restore or discard work orders, agent history, or notes. The deployment receipt and previous service configuration are diagnostic metadata; no routine copies of runtime databases are created by this process.
 
 Homebrew can remain installed for Python and other tools. BP's application lifecycle must use this release path while source consolidation is active; do not use a Homebrew upgrade as a second BP deployment path. Independent engines retain their own upgrade procedures.
+
+## Read-only staffing audit
+
+Run `python -m protocolcity.open_work_audit --workspace /path/to/workspace --json --feeds --process --decay` with the installed BP interpreter. An explicitly selected workspace uses its registered stores and installed WorkLane readiness policy on temporary SQLite snapshots; original stores are opened read-only. It does not fall back to another host's default desk. The current adapter supports the workspace's standard local WorkLane layout; an unavailable engine or store is reported as unknown.
+
+Coverage distinguishes You, no worker, missing/retired workers, manual and scheduled lanes, ambiguous assignments and queue-scope mismatches. Configured coverage is not authentication, liveness or execution proof. Process checks use saved readiness and configuration; they do not certify transport. Legacy URL-only audits remain available, but cannot establish selected-workspace staffing coverage. The scheduled operations reports use the explicit workspace path and carry these limits.
