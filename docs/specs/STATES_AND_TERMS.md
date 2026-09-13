@@ -1,0 +1,104 @@
+# States and terms — what every word on the desk means
+
+Status: design record for pc-1461, 2026-09-13. Source of each definition is the engine or paper named beside it; BluePrint may only show what one of them establishes. Companion to [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md), [AGENTS_INTENT.md](AGENTS_INTENT.md) and [SURFACES_REVIEW_2026_09.md](SURFACES_REVIEW_2026_09.md). WorkLane's own rules are in `worklane/PROTOCOL.md`; this paper restates them in the desk's words and fixes how each surface presents them.
+
+## 1. A work order has four independent axes
+
+An order is not "in one state". It has a **status** (where it is in the pool), a **gate** (whether anyone may take it), an **assignment** (who it is routed to), and a **claim** (who actually holds it). Attention (For You) is derived from those four and the clock. Every surface must keep the axes separate; collapsing them is how "in progress" got read as "an agent is working".
+
+### 1.1 Status (WorkLane pool position)
+
+| Status | Meaning (PROTOCOL §1, §4) | Surface word |
+|---|---|---|
+| backlog | Free pool; anyone eligible may take it | **Open** |
+| in_review | Soft lock: reserved, parked or bundled by an identity; others skip. Not a sign-off queue | **Parked** (by whom) |
+| in_progress | The live order for one identity; exactly one per identity | **Live** (with whom) |
+| done | Closed with Completed / Verification / Links / Follow-ups | **Done** |
+| canceled | Withdrawn with a signed reason | **Canceled** |
+
+Rule kept from PROTOCOL 7a: finished agent work parked in_review is a handoff to the host integrator, not a request for You to approve it.
+
+### 1.2 Gate (may anyone take it)
+
+| gate_type | Meaning | Ready? | Surface word |
+|---|---|---|---|
+| none | Ungated | yes, if blockers are done | (nothing) |
+| human | You must act now; gate_note says what and what clears it | no | **Needs a decision** |
+| timer | Embargoed until gate_until, then thaws itself | no until then | **Held until (date)** |
+| deferred | Parked on purpose; gate_note says what would thaw it | no | **Deferred** |
+| tracking | Structural umbrella; children implement; never claimed | no | **Tracking** |
+
+**Ready** (WorkLane readiness policy, wl-517): status backlog, no active gate, every declared and structured blocker done, and, for a seat, carrying that seat's `worker:` label and the seat's required eligibility label (`execution:bounded` for the bounded implementation seats). Ready is a computed fact; it is never a status.
+
+### 1.3 Assignment (who it is routed to) versus claim (who holds it)
+
+| Term | Evidence | Surface word |
+|---|---|---|
+| Assigned | one or more `worker:<id>` labels | **Assigned to** You / seat name |
+| Unassigned | no `worker:` label | **Unassigned** |
+| Needs routing | `needs:routing` label | **Needs routing** (a triage chip, not a state) |
+| Claimed (live) | signed Owner marker comment and status in_progress | **Live with** identity, since time |
+| Parked (held) | Owner marker and status in_review | **Parked by** identity, since time |
+| Verified holder | WorkForce confirms the WorkLane owner matches the seat | small "verified" mark on Agents |
+
+You seats are assignments too: `worker:you` plus `you:host` (You implementing on this machine), `you:todo` (an inbox item for You), `you:remind` (a dated reminder), `you:note` (a personal note). `gate:founder` marks a publication or money gate that only You can pass. An assignment is routing intent; only a claim proves anyone is working. Work rows today print the assignment as "owner"; the record renames it **Assigned to** and adds **Live with / Parked by** from the Owner marker.
+
+### 1.4 Attention: For You and its four faces
+
+**For You** is the one pile of things that want a person. It has four faces, computed by BluePrint (attention_view.face) from gates, labels and the clock, never stored:
+
+| Face | Rule (exact) | What it asks of you | Gold? |
+|---|---|---|---|
+| **Decide** | gate human with an act-now note (not parking language), or `gate:human` / `needs:founder-decision` label | act now; the note says what and what clears it | yes |
+| **Read** | `inbox-report` label (a report was written for you) | read, then clear or snooze | yes |
+| **Watch** | timer gate, or a live/parked order untouched for 90 minutes | look at evidence; not proof anything died | no |
+| **Note** | `reminder:<date>` label or `you:note` / `you:todo` / `you:remind` | your own list; no gate | no |
+| (none) | everything else, including all deferred and tracking orders | nothing | no |
+
+Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only.
+
+**Naming decision (D6).** Overview says "Needs you 10" while the panel opens on "Decide · 8". They measure the same pile with different filters. The record fixes one word: the metric and the panel are both **For You**, the number is the whole pile, and the breakdown shows the faces (8 decide · 2 read · 2 watch · 5 note). Decide and Read are open by default; Watch and Note are collapsed with counts. "Needs you" survives only as the badge on a Decide row.
+
+## 2. Seats, jobs, shifts and passes (WorkForce)
+
+| Term | Evidence | Surface word |
+|---|---|---|
+| Seat (lane) | roster kind lane; claims work orders under its own identity | **Seat** |
+| Job | roster kind job; scheduled or manual duty; never claims | **Job** |
+| Schedule | cron or manual | **Automatic (cron text)** / **On demand** |
+| Heartbeat | daemon last tick | fresh under 2 min · stale · unknown |
+| Shift | ledger START to STOP/ERROR | **Working** (open, within budget plus grace) · **Stale shift** (past it, no terminal row) |
+| Last run | last terminal ledger row | outcome and reason verbatim |
+| Recovery attempt | ledger rows tagged recovery=1; attempts/N receipts | **Recovery n** on the shift line |
+| Supervisor pass | /api/supervisor row | pass outcome: no eligible ready work · stopped by operator · escalated · provider failed · proposed · dispatched |
+| Dispatch outcome | per seat in a pass | completed · failed · denied · skipped · rejected at dispatch time |
+
+Badge vocabulary and one-action-per-row rules are in AGENTS_INTENT.
+
+## 3. What each surface must show per item
+
+Legend: ✓ shown today · ○ missing · — not needed there.
+
+| Field | Work row | For You card | Reader | Projects card | Calendar row | Agents row |
+|---|---|---|---|---|---|---|
+| id, project, title | ✓ | ✓ | ✓ | — | ✓ | held order ✓ |
+| status word (Open/Live/Parked) | ✓ badge | ○ | ✓ | — | — | — |
+| gate word and note | ✓ truncated | ✓ | ✓ | — | hold-until ✓ | — |
+| face and why (rule that fired) | ✓ badge, ○ why | ✓ badge, ○ why | ○ | — | ✓ badge | — |
+| assigned to | ✓ (as "owner") | ✓ | ✓ | ○ seats per project | — | — |
+| live with / parked by, since | ○ | ○ | ○ (only in comments) | — | — | ✓ holding |
+| ready for seat / eligibility label | ○ | — | ○ | — | — | ✓ ready count |
+| blockers and parent | ○ | — | ○ | — | — | — |
+| updated, and by whom | ✓ time | ✓ time | ✓ | ○ last activity | — | — |
+| last note snippet | ○ | ✓ gate note | ✓ full | — | — | — |
+| dated fields (due, hold until, reminder) | ○ | ○ | ✓ | — | ✓ | — |
+| counts: open, For You, deferred | — | — | — | ✓ open, ✓ need you, ○ deferred | — | — |
+
+The gaps in the "live with / parked by" column are the ones that made the desk feel unwired: an order can be live with a seat and the Work row still says "you". The change feed (D2) makes the live column worth having; without push it would be stale on arrival.
+
+## 4. Decisions recorded here
+
+- D6 One word: For You everywhere; faces as the breakdown; "Needs you" only as a row badge. Recommended.
+- D7 Rows carry both axes: Assigned to (labels) and Live with / Parked by (claim), never one word for both. Recommended.
+- D8 Watch threshold stays at 90 minutes untouched; shown as "no update for 1h 40m", never as "stalled". Recommended.
+- D9 Deferred and tracking never enter For You and are hidden from Work by default (D3), with counts visible.
