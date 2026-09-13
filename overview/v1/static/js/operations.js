@@ -2,6 +2,7 @@
 (async () => {
 'use strict';
 const {readerHref} = await import('/js/reader-navigation.mjs');
+const {connectChanges} = await import('/js/change-feed.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/activity':'activity','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -14,6 +15,7 @@ function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringif
 $('attention-face').addEventListener('change',()=>overview());
 $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
 let remotePending = false, remoteLast = 0;
+let streamState = 'connecting';
 let interval = 15, motion = 'system';
 try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,15,30].includes(saved.interval))interval=saved.interval;if(saved.motion==='off')motion='off'; } catch(error) { /* Unavailable storage uses defaults. */ }
 $('refresh-preference').value=String(interval);$('motion-preference').value=motion;
@@ -183,12 +185,13 @@ function paint() {
   if(page==='agents') agents();
   if(page==='calendar') calendar();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
-  if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; if(excluded.length) $('connection-list').append(el('p','Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.','bp-note bp-muted'));$('refresh-description').textContent=interval ? `Every ${interval} seconds while this page is visible` : 'Manual refresh only';$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
+  if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; if(excluded.length) $('connection-list').append(el('p','Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.','bp-note bp-muted'));$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 function freshness() {
   const status=$('freshness');
   status.dataset.state=lastError?'error':'ok';
-  status.textContent=lastSuccess ? `${lastError?'Refresh failed · showing last read':'Updated'} ${Math.floor((Date.now()-lastSuccess)/1000)}s ago${document.hidden?' · paused':''}` : (lastError?'Unable to read workspace. Retry with Refresh.':'Connecting…');
+  const streamNote = document.hidden || streamState==='open' ? '' : ' · live updates disconnected, polling every 60s';
+  status.textContent=lastSuccess ? `${lastError?'Refresh failed · showing last read':'Updated'} ${Math.floor((Date.now()-lastSuccess)/1000)}s ago${document.hidden?' · paused':''}${streamNote}` : (lastError?'Unable to read workspace. Retry with Refresh.':'Connecting…');
 }
 async function refreshRemote() {
   if(remotePending || !['activity','connections'].includes(page)) return;
@@ -248,5 +251,6 @@ document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.tar
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();freshness();});
 $('preferences').addEventListener('submit',event=>event.preventDefault());
 $('preferences').addEventListener('change',()=>{interval=Number($('refresh-preference').value);motion=$('motion-preference').value;document.body.classList.toggle('bp-reduce-motion',motion==='off');try{localStorage.setItem('bp-display',JSON.stringify({interval,motion}));$('preference-status').textContent='Saved in this browser.';}catch(error){$('preference-status').textContent='Applied for this page; browser storage is unavailable.';}});
-setInterval(()=>{if(interval && !document.hidden && Date.now()-lastAttempt>=interval*1000)refresh();},1000);setInterval(freshness,1000);setInterval(()=>{if(!document.hidden && Date.now()-remoteLast>15000)refreshRemote();},1000);refresh();refreshRemote();
+connectChanges(()=>{if(!document.hidden)refresh();},state=>{streamState=state;freshness();});
+setInterval(()=>{const effective=streamState==='open'?60:interval;if(effective && !document.hidden && Date.now()-lastAttempt>=effective*1000)refresh();},1000);setInterval(freshness,1000);setInterval(()=>{if(!document.hidden && Date.now()-remoteLast>15000)refreshRemote();},1000);refresh();refreshRemote();
 })();
