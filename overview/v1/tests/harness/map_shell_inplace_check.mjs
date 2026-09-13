@@ -27,7 +27,7 @@ FakeDate.now = () => fakeNow;
 FakeDate.prototype = RealDate.prototype;
 const basePayload = () => ({
   workspace: {name: 'Desk', path: '/tmp/desk'},
-  projects: [{id: 'example', name: 'Example', folder: 'example', open: 3, attention: 1, working: 1, state: 'available', has_instructions: false}],
+  projects: [{id: 'example', name: 'Example', folder: 'example', open: 3, attention: 1, claimed: 1, running: 0, state: 'available', has_instructions: false}],
   orders: [{project: 'example', status: 'in_progress', gate_type: ''}],
   sources: [{name: 'WorkLane', state: 'available'}],
   truncated: false,
@@ -71,7 +71,7 @@ await settle();
 const summaryContainer = get('map-project-context');
 assert.equal(fetchCalls, 1);
 const [heading1, summary1, nav1, note1] = summaryContainer.children;
-assert.equal(summary1.textContent, '3 open · 1 For You · 1 working');
+assert.equal(summary1.textContent, '3 open · 1 For You · 0 running · 1 claimed');
 
 // Re-fetch with an identical payload (a heartbeat-only tick, driven by
 // the same 60s fallback poll as map_shell_fallback_check.mjs). The three
@@ -96,7 +96,7 @@ fakeNow += 60000;
 tick();
 await settle();
 const [, summary3] = summaryContainer.children;
-assert.equal(summary3.textContent, '9 open · 1 For You · 1 working', 'a real change updates the summary text');
+assert.equal(summary3.textContent, '9 open · 1 For You · 0 running · 1 claimed', 'a real change updates the summary text');
 
 // A throw mid-render (e.g. DOM construction fails partway) must not
 // commit the new fingerprint — otherwise every later load with the same
@@ -122,6 +122,6 @@ tick();
 await settle();
 const [, summaryAfterRetry] = summaryContainer.children;
 assert.equal(summaryContainer.children.length, 4, 'a retry after a failed render rebuilds all four nodes, not just the note');
-assert.equal(summaryAfterRetry.textContent, '42 open · 1 For You · 1 working', 'the retried render reflects the data that failed to commit the first time');
+assert.equal(summaryAfterRetry.textContent, '42 open · 1 For You · 0 running · 1 claimed', 'the retried render reflects the data that failed to commit the first time');
 
 console.log('ok');
