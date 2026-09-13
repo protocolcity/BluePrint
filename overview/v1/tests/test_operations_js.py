@@ -56,6 +56,12 @@ class DefaultFilterTests(unittest.TestCase):
         the first paint."""
         self.assertIn('legacyParam', _SRC)
         self.assertIn('if (legacyParam)', _SRC)
+    def test_old_attention_equals_note_link_maps_to_the_due_face(self):
+        """Review finding (pc-1494 recovery): the retired Note face value
+        must not silently yield an empty list; ?attention=note resolves to
+        Due and is canonicalised like every other legacy param."""
+        self.assertIn("attentionParam === 'note'", _SRC)
+        self.assertIn("attentionParam = 'due'", _SRC)
 
 
 class ClaimPresentationTests(unittest.TestCase):
