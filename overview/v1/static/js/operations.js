@@ -184,7 +184,7 @@ function agentCard(agent) {
   const card=el('article',undefined,'bp-panel');
   const heading=el('div',undefined,'bp-section-head');
   const title=el('div');title.append(el('h2',agent.name));
-  if(agent.group==='seat') title.append(el('span',`${agent.held ? agent.held.project : 'Unassigned'} · ${agent.model}`,'bp-muted'));
+  if(agent.group==='seat') title.append(el('span',`${agent.project_name || 'No project queue'} · ${agent.model}`,'bp-muted'));
   title.append(el('p',agent.id,'bp-muted bp-note'));
   heading.append(title,badge(agent.state,agent.badge));
   card.append(heading,el('p',`Source: ${agent.badge_source}`,'bp-muted'));
@@ -234,9 +234,31 @@ function heartbeatLine() {
   const ago=seconds<60?`${seconds}s ago`:`${Math.floor(seconds/60)}m ago`;
   return `WorkForce daemon: seen ${ago}`;
 }
+function coverageCard(row) {
+  const card=el('article',undefined,'bp-panel bp-coverage-row');
+  card.append(el('p',row.text));
+  if(row.missing.length) {
+    const hire=el('div',undefined,'bp-note');
+    for(const provider of row.missing) {
+      const command=row.hire_commands[provider];
+      const wrap=el('p',undefined,'bp-muted');
+      const code=el('code',command);
+      const button=el('button','Copy Hire command');
+      button.type='button';
+      button.addEventListener('click',()=>navigator.clipboard.writeText(command));
+      wrap.append(`Hire ${provider}: `,code,' ',button);
+      hire.append(wrap);
+    }
+    card.append(hire);
+  }
+  if(row.not_configured.length) card.append(el('p',row.not_configured.map(p=>`${p}: ${row.install_hints[p]}`).join(' · '),'bp-muted bp-note'));
+  card.append(el('p','AGENT_ADOPTION.md D15 — the coordinator’s classifier refuses roster writes; run the Hire command on the host.','bp-muted bp-note'));
+  return card;
+}
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
   $('agents-heartbeat').textContent=heartbeatLine();
+  reconcileList($('coverage-list'), snapshot.coverage || [], row=>row.project, coverageCard, {emptyText:'No registered projects.'});
   reconcileList($('seat-list'), seats, a=>a.id, agentCard, {emptyText:'No seats registered in the readable registry.'});
   reconcileList($('job-list'), jobs, a=>a.id, agentCard, {emptyText:'No jobs registered in the readable registry.'});
   supervisorPanel();

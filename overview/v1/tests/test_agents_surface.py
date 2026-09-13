@@ -361,6 +361,82 @@ class ProviderModelResolutionTests(unittest.TestCase):
         self.assertEqual(next(a for a in snapshot['agents'] if a['id'] == 'agent-one')['model'], 'Claude sonnet')
         self.assertEqual(next(a for a in snapshot['agents'] if a['id'] == 'agent-two')['model'], 'Claude sonnet')
 
+    def test_codex_app_path_and_dash_c_model_flag_resolve(self):
+        """pc-1474 scope addition (1): the Codex app path plus ``-c model="..."``."""
+        config = self.root / 'runner.json'
+        config.write_text(json.dumps({'command': [
+            '/Applications/ChatGPT.app/Contents/Resources/codex', '-c', 'model="gpt-6-astra"', 'exec',
+        ]}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', 'launch.py', '--config', str(config)]}})
+        self.assertEqual(self._agent()['model'], 'Codex gpt-6-astra')
+
+    def test_codex_on_path_without_model_flag_reads_bare_provider(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['/usr/local/bin/codex', 'exec']}})
+        self.assertEqual(self._agent()['model'], 'Codex')
+
+    def test_bare_codex_token_no_path_resolves(self):
+        """pc-1474 scope addition (3): a bare first token infers the provider."""
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'job',
+                                 'command': ['codex', 'exec']}})
+        self.assertEqual(self._agent()['model'], 'Codex')
+
+    def test_launcher_without_config_falls_back_to_sibling_runner_json(self):
+        """pc-1474 scope addition (2): pos-cursor-implementer's ``launch.py`` names
+        no ``--config`` — the sibling runner.json in the launcher's own folder
+        is the seat's config."""
+        launcher_dir = self.root / 'local/worker-config/pos-cursor-implementer'
+        launcher_dir.mkdir(parents=True)
+        config = launcher_dir / 'runner.json'
+        config.write_text(json.dumps({'command': ['/usr/local/bin/cursor-agent', '--model', 'composer-2.5']}))
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', str(launcher_dir / 'launch.py')]}})
+        self.assertEqual(self._agent()['model'], 'Cursor composer-2.5')
+
+    def test_launcher_without_config_and_without_sibling_runner_falls_through(self):
+        launcher_dir = self.root / 'local/worker-config/pos-cursor-implementer'
+        launcher_dir.mkdir(parents=True)
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'command': ['python', str(launcher_dir / 'launch.py')]}})
+        self.assertEqual(self._agent()['model'], 'Local job')
+
+
+class SeatProjectFieldTests(unittest.TestCase):
+    """pc-1474 scope addition: every seat names its project from the queue,
+    not only held seats — 'No project queue' replaces 'Unassigned'."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.runtime = self.root / 'workforce/local'
+        self.runtime.mkdir(parents=True)
+        (self.runtime / 'ledger').mkdir()
+        (self.runtime / 'daemon.json').write_text(json.dumps({'last_tick': datetime.now(timezone.utc).isoformat(), 'in_flight': []}))
+        manifest = self.root / 'blueprint/.protocolcity/desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': 'blueprint', 'prefix': 'pc', 'display': 'BluePrint'}))
+
+    def _roster(self, workers):
+        (self.runtime / 'roster.json').write_text(json.dumps({'workers': workers}))
+
+    def _agent(self, identity):
+        return next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == identity)
+
+    def test_seat_with_a_scoped_queue_names_its_project_even_when_not_held(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane',
+                                 'queue_url': 'worklane://local?product=blueprint', 'command': ['claude']}})
+        row = self._agent('agent')
+        self.assertEqual(row['project'], 'blueprint')
+        self.assertEqual(row['project_name'], 'BluePrint')
+
+    def test_seat_with_no_queue_product_reads_none(self):
+        self._roster({'agent': {'display': 'Agent', 'identity': 'agent', 'kind': 'lane', 'command': ['claude']}})
+        row = self._agent('agent')
+        self.assertIsNone(row['project'])
+        self.assertIsNone(row['project_name'])
+
 
 class _FakeResponse:
     def __init__(self, payload):
