@@ -508,11 +508,16 @@ def _supervisor_rows(root: Path) -> tuple[list[dict], dict]:
         outcome = str(pass_row.get('pass_outcome') or 'pass')
         evidence = str(pass_row.get('evidence_file') or 'supervisor pass')
         event = _supervisor_event_word(outcome)
-        # Title by outcome only — the source badge already reads "Supervisor",
-        # so repeating it in the title duplicated the word (pc-1488
-        # cursor-reviewer finding: "Passed · Supervisor pass · passed").
-        title = outcome.replace('_', ' ').strip() or 'pass'
-        title = title[0].upper() + title[1:]
+        # The headline already carries the action word (from the outcome) and
+        # the badge carries the source, so the title states what the pass did:
+        # which seats it dispatched and how they ended (pc-1488 second-pass
+        # finding: "Passed · Passed" repeated the action word).
+        dispatched = [d for d in (pass_row.get('dispatched') or []) if isinstance(d, dict)]
+        if dispatched:
+            parts = [f"{d.get('worker') or 'seat'} {d.get('outcome') or 'unknown'}".strip() for d in dispatched]
+            title = f"{len(dispatched)} seat{'s' if len(dispatched) != 1 else ''} · " + ', '.join(parts)
+        else:
+            title = 'no seat dispatched'
         rows.append({
             'id': f'supervisor:{evidence}:{index}',
             'at': _normalize_at(at),

@@ -339,7 +339,9 @@ class TimelineProjectionTests(unittest.TestCase):
         deployment.write_text(json.dumps({'api_origin': 'http://127.0.0.1:9999'}))
         payload = {'ok': True, 'passes': [
             {'generated_at': _RECENT, 'pass_outcome': 'passed', 'evidence_file': 'pass.json'},
-            {'generated_at': _RECENT, 'pass_outcome': 'provider_failed', 'evidence_file': 'fail.json'},
+            {'generated_at': _RECENT, 'pass_outcome': 'provider_failed', 'evidence_file': 'fail.json',
+             'dispatched': [{'worker': 'bp-claude-implementer', 'outcome': 'failed'},
+                            {'worker': 'bp-cursor-implementer', 'outcome': 'exception'}]},
         ]}
         class _FakeResponse:
             def read(self):
@@ -351,8 +353,14 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(len(supervisor_rows), 2)
         for row in supervisor_rows:
             self.assertNotIn('Supervisor', row['title'])
+            # The title must not repeat the action word the headline already
+            # carries from the outcome (second-pass finding: "Passed · Passed").
+            self.assertNotEqual(row['title'].lower(), str(row['event']).replace('_', ' ').lower())
         titles = {row['title'] for row in supervisor_rows}
-        self.assertEqual(titles, {'Passed', 'Provider failed'})
+        self.assertEqual(titles, {
+            'no seat dispatched',
+            '2 seats · bp-claude-implementer failed, bp-cursor-implementer exception',
+        })
 
     def test_github_source_unavailable_when_not_configured(self):
         result = timeline_snapshot(self.root)
