@@ -26,6 +26,38 @@ STATE_ORDER = {'working': 0, 'last_run_failed': 1, 'stale_shift': 2, 'idle': 3,
 
 
 _LEDGER_TAIL_BYTES = 16384
+_OWNER_RE = re.compile(r'(?m)^Owner:\s*(\S+)')
+_RELEASE_RE = re.compile(r'(?m)^(?:Released by|Reopened by|Blocked:)')
+_DEPENDS_RE = re.compile(r'(?i)depends on[:\s]+#?([A-Za-z][A-Za-z0-9]*-\d+)')
+STATUS_WORD = {'backlog': 'Open', 'in_review': 'Parked', 'in_progress': 'Live', 'done': 'Done', 'canceled': 'Canceled'}
+
+
+def task_comment_index(conn):
+    """One pass over a project's comments: last Owner marker and last note per task.
+
+    Returns (owner_by_task, last_note_by_task) keyed by task_id, each a dict
+    with the fields a row needs — never a full comment history.
+    """
+    owner_by_task, last_note_by_task = {}, {}
+    try:
+        comment_rows = conn.execute('SELECT task_id, body, created_at FROM task_comments ORDER BY created_at, id').fetchall()
+    except sqlite3.OperationalError:
+        return owner_by_task, last_note_by_task
+    for row in comment_rows:
+        task_id, body, created_at = row['task_id'], row['body'] or '', row['created_at']
+        snippet = body.strip().splitlines()[0] if body.strip() else ''
+        last_note_by_task[task_id] = snippet[:160] + ('…' if len(snippet) > 160 else '')
+        if _RELEASE_RE.search(body):
+            owner_by_task.pop(task_id, None)
+            continue
+        match = _OWNER_RE.search(body)
+        if match:
+            owner_by_task[task_id] = {'identity': match.group(1), 'since': created_at}
+    return owner_by_task, last_note_by_task
+
+
+def declared_blockers(description):
+    return sorted(set(_DEPENDS_RE.findall(description or '')))
 
 
 def _split_row(line):
@@ -271,6 +303,7 @@ def operations_snapshot(binder):
                 count = conn.execute("SELECT count(*) FROM tasks WHERE status NOT IN ('done','canceled','cancelled')").fetchone()[0]
                 summary['open'] = count
                 result['truncated'] |= count > 2000
+                owner_by_task, last_note_by_task = task_comment_index(conn)
                 for row in rows[:2000]:
                     item = dict(row)
                     try:
@@ -279,25 +312,45 @@ def operations_snapshot(binder):
                         labels = []
                     labels = labels if isinstance(labels, list) else []
                     workers = [x[7:] for x in labels if isinstance(x, str) and x.startswith('worker:') and x[7:]]
-                    from .attention_view import face
+                    routable_workers = [w for w in workers if w != 'you']
+                    from .attention_view import face, face_reason
                     attention_face = face(item, labels, now)
-                    attention = attention_face in ('decide','read')
+                    attention = bool(attention_face)
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
                     from suite.api.calendar import events_from_task
                     for event in events_from_task({**item, 'id':order_id, 'labels':labels, 'product':path.stem}):
                         result['work_dates'].append({**event, 'dtstart':event['dtstart'].isoformat(), 'attention':attention})
+                    status = item.get('status')
+                    marker = owner_by_task.get(item['id'])
+                    parent = next((label[7:] for label in labels if isinstance(label, str) and label.startswith('parent:') and label[7:]), '')
                     result['orders'].append({'id': order_id, 'project': path.stem, 'project_name': project['name'],
-                        'title': item.get('title') or order_id, 'status': item.get('status'),
+                        'title': item.get('title') or order_id, 'status': status,
+                        'status_word': STATUS_WORD.get(status, status),
                         'priority': item.get('priority'), 'updated_at': item.get('updated_at'),
-                        'attention': attention, 'attention_face': attention_face, 'gate_until':item.get('gate_until'),
+                        'attention': attention, 'attention_face': attention_face,
+                        'face_reason': face_reason(item, labels, attention_face, now),
+                        'gate_until':item.get('gate_until'),
                         'gate_type': item.get('gate_type') or '',
                         'gate_note': item.get('gate_note') or '',
-                        'workers': workers, 'needs_routing': not workers or 'needs:routing' in labels,
-                        'owner': ', '.join(str(x)[7:] for x in labels if isinstance(x,str) and x.startswith('worker:')) or 'Unassigned'})
+                        'workers': workers,
+                        'needs_routing': not routable_workers and not (item.get('gate_type') or ''),
+                        'owner': ', '.join(routable_workers) or 'Unassigned',
+                        'live_with': marker['identity'] if marker and status == 'in_progress' else None,
+                        'parked_by': marker['identity'] if marker and status == 'in_review' else None,
+                        'since': marker['since'] if marker and status in ('in_progress', 'in_review') else None,
+                        'last_note': last_note_by_task.get(item['id']) or '',
+                        'parent': parent, 'blockers': declared_blockers(item.get('description')),
+                        'ready_for': None})
                     summary['attention'] += int(attention)
         except (OSError, sqlite3.Error):
             summary['state'] = 'unavailable'
         result['projects'].append(summary)
+    open_ids = {o['id'] for o in result['orders']}
+    for order in result['orders']:
+        seat = next((w for w in order['workers'] if w != 'you'), None)
+        blocked = any(b in open_ids for b in order['blockers'])
+        if seat and order['status'] == 'backlog' and not order['gate_type'] and not blocked:
+            order['ready_for'] = seat
     found = {p.stem for p in paths}
     for slug, project in registry.items():
         if slug not in found:

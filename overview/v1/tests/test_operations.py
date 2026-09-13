@@ -41,17 +41,102 @@ class OperationsTests(unittest.TestCase):
     def test_assignment_and_routing_are_separate_from_project(self):
         self.seed()
         for labels, expected_workers, needs_routing in [
+            # Seeded task 1 starts gated (human); an active gate means it never needs
+            # routing regardless of labels, so these rows are also ungated here.
             ([], [], True),
             (['worker:agent'], ['agent'], False),
-            (['worker:agent', 'needs:routing'], ['agent'], True),
+            # needs:routing is a stale label duplicating "no worker assigned"; the desk
+            # computes routing need itself (ungated and unassigned), per STATES_AND_TERMS D10.
+            (['worker:agent', 'needs:routing'], ['agent'], False),
             (['worker:agent', 'worker:second'], ['agent', 'second'], False),
         ]:
             with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
-                conn.execute('UPDATE tasks SET labels=? WHERE id=1', (json.dumps(labels),))
+                conn.execute('UPDATE tasks SET labels=?, gate_type=? WHERE id=1', (json.dumps(labels), None))
             order = operations_snapshot(self.root)['orders'][0]
             self.assertEqual(order['project'], 'product')
             self.assertEqual(order['workers'], expected_workers)
             self.assertEqual(order['needs_routing'], needs_routing)
+    def test_owner_marker_reads_live_and_parked_with_since(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='in_progress' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Intake: filed','you','2026-09-12T00:00:00Z')")
+            conn.execute("INSERT INTO task_comments VALUES(2,1,'Owner: bp-claude-implementer\nStart: 2026-09-12T05:00:00Z','bp-claude-implementer','2026-09-12T05:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['status_word'], 'Live')
+        self.assertEqual(order['live_with'], 'bp-claude-implementer')
+        self.assertIsNone(order['parked_by'])
+        self.assertEqual(order['since'], '2026-09-12T05:00:00Z')
+    def test_owner_marker_reads_parked_from_in_review(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='in_review' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-claude-implementer\nStart: t','bp-claude-implementer','2026-09-12T05:00:00Z')")
+            conn.execute("INSERT INTO task_comments VALUES(2,1,'Parked: done for now','bp-claude-implementer','2026-09-12T06:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['status_word'], 'Parked')
+        self.assertEqual(order['parked_by'], 'bp-claude-implementer')
+        self.assertIsNone(order['live_with'])
+        self.assertEqual(order['since'], '2026-09-12T05:00:00Z')
+        self.assertEqual(order['last_note'], 'Parked: done for now')
+    def test_release_comment_clears_prior_owner_marker(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-claude-implementer\nStart: t','bp-claude-implementer','2026-09-12T05:00:00Z')")
+            conn.execute("INSERT INTO task_comments VALUES(2,1,'Released by bp-claude-implementer \xe2\x80\x94 returning to backlog','bp-claude-implementer','2026-09-12T06:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['status_word'], 'Open')
+        self.assertIsNone(order['live_with']);self.assertIsNone(order['parked_by']);self.assertIsNone(order['since'])
+    def test_blocked_release_comment_clears_prior_owner_marker(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-claude-implementer\nStart: t','bp-claude-implementer','2026-09-12T05:00:00Z')")
+            conn.execute("INSERT INTO task_comments VALUES(2,1,'Blocked: waiting on credentials\nNext step: ask You','bp-claude-implementer','2026-09-12T06:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertIsNone(order['live_with']);self.assertIsNone(order['parked_by'])
+    def test_backlog_reads_open_with_no_claim(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog', gate_type=NULL WHERE id=1")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['status_word'], 'Open')
+        self.assertIsNone(order['live_with']);self.assertIsNone(order['parked_by']);self.assertIsNone(order['since'])
+    def test_ready_for_seat_requires_backlog_ungated_unassigned_blockers_clear(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN description TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', gate_type=NULL, description='Depends on pc-2' WHERE id=1")
+            conn.execute("UPDATE tasks SET status='backlog' WHERE id=2")  # blocker still open
+        result = operations_snapshot(self.root)
+        order = next(o for o in result['orders'] if o['id']=='pc-1')
+        self.assertEqual(order['blockers'], ['pc-2'])
+        self.assertIsNone(order['ready_for'])
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='done' WHERE id=2")  # blocker cleared
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['ready_for'], 'agent')
+    def test_parent_label_surfaces_on_row(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=? WHERE id=1', (json.dumps(['worker:agent','parent:pc-99']),))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['parent'], 'pc-99')
+    def test_face_reason_names_the_rule_that_fired(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET gate_type='human', gate_note='Ratify the plan' WHERE id=1")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['attention_face'], 'decide')
+        self.assertEqual(order['face_reason'], 'Ratify the plan')
+    def test_persona_worker_you_never_shows_as_assignment(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=?, gate_type=NULL WHERE id=1', (json.dumps(['worker:you']),))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['owner'], 'Unassigned')
+        self.assertTrue(order['needs_routing'])
     def test_unregistered_work_labels_do_not_create_agents(self):
         self.seed()
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
