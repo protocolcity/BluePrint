@@ -118,6 +118,25 @@ class RemoteTests(unittest.TestCase):
         self.assertEqual(result['groups'][0]['deploy_state'],'deployed')
         self.assertEqual(result['summary']['recent_merges'],1)
 
+    def test_revision_without_source_head_does_not_mark_deployed(self):
+        receipt={'version':'1.2.3','revision':'abc123full'}
+        items=[{'kind':'pull_request','sha':'abc123full'}]
+        self.assertEqual(remote._deploy_state(items,receipt),'unknown')
+
+    def test_version_only_release_match_is_version_note_not_installed(self):
+        receipt={'version':'1.2.3','revision':'other'}
+        items=[{'kind':'release','title':'v1.2.3','sha':'zzz'}]
+        self.assertEqual(remote._deploy_state(items,receipt),'version_note')
+
+    def test_merged_pull_request_without_pr_event_badges_merged(self):
+        pr={'kind':'pull_request','title':'Ship','state':'closed','merged_at':_RECENT,'number':2}
+        self.assertEqual(remote._group_badge([pr]),'merged')
+        self.assertIn('merged',remote._group_headline([pr]))
+
+    def test_merged_flag_without_pr_event_badges_merged(self):
+        pr={'kind':'pull_request','title':'Ship','state':'closed','merged':True,'number':3}
+        self.assertEqual(remote._group_badge([pr]),'merged')
+
     def test_missing_deployment_evidence_stays_unknown(self):
         pr={'title':'Ship','html_url':'https://github.com/org/repo/pull/2','state':'closed','merged_at':_RECENT,'number':2,'head':{'sha':'zzz'}}
         values=[{'private':False},[],[pr],{'workflow_runs':[]},[]]
