@@ -21,7 +21,7 @@
       $('paper-source').textContent = `${paper.path} · ${paper.exposure}`;
       if (paper.content_html) setTrustedHtml($('paper-content'), paper.content_html);
       else $('paper-content').textContent = paper.content || '';
-      paintOutline($('paper-outline'), paper.content_outline);
+      paintOutline($('paper-outline'), paper.content_outline); bindHashReveal(document);
       $('paper-reader').hidden = false;
       history.replaceState(null, '', '/documents?' + new URLSearchParams({
         project,
