@@ -205,6 +205,31 @@ class SeatCoverageTests(unittest.TestCase):
         self.assertNotIn('Registered local agents, schedules, and reported runtime state.', _SRC)
 
 
+class SeatCoverageReviewFixTests(unittest.TestCase):
+    """pc-1480 review fixes: reconcile coverage rows, lazy hire bodies,
+    unknown project stores stay active."""
+
+    def test_render_coverage_reconciles_rows_instead_of_replacing_children(self):
+        fn = _SRC.split('function renderCoverage()')[1].split('function agents()')[0]
+        self.assertIn('reconcileList($(\'coverage-list\')', fn)
+        self.assertNotIn('container.replaceChildren()', fn)
+
+    def test_hire_commands_populate_only_when_disclosure_opens(self):
+        self.assertIn('paintCoverageHireBody(hire, row)', _SRC)
+        self.assertIn("container.addEventListener('toggle'", _SRC)
+        self.assertNotIn('coverageHireBlock(row)', _SRC)
+
+    def test_unavailable_project_store_is_not_treated_as_zero_open(self):
+        self.assertIn('function projectStoreState(slug)', _SRC)
+        self.assertIn('function coverageIsActive(row)', _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("if(projectStoreState(row.project)!=='available')returntrue", compact)
+        self.assertIn("'Store unavailable'", _SRC)
+
+    def test_open_hire_disclosures_repaint_after_reconcile(self):
+        self.assertIn('refreshCoverageHireBodies($(\'coverage-list\'))', _SRC)
+
+
 class AgentsCoverageHarnessTests(unittest.TestCase):
     """pc-1480: live-shaped fixture proves seat-first order, one collapsed
     unstaffed line, and hire commands hidden until disclosure opens."""
@@ -235,6 +260,15 @@ class AgentsCoverageHarnessTests(unittest.TestCase):
 
     def test_no_classifier_text_in_the_dom(self) -> None:
         self.assertTrue(self.result['no_classifier'])
+
+    def test_hire_disclosure_stays_open_across_repaint(self) -> None:
+        self.assertTrue(self.result['hire_open_survives_repaint'])
+
+    def test_unavailable_store_renders_active_not_collapsed(self) -> None:
+        self.assertTrue(self.result['unavailable_store_active'])
+
+    def test_closed_rows_have_no_hire_command_nodes(self) -> None:
+        self.assertTrue(self.result['no_hire_nodes_while_closed'])
 
 
 class SeatHeaderProjectNameTests(unittest.TestCase):
