@@ -182,7 +182,11 @@ class ContentFingerprintTests(unittest.TestCase):
         fn = _SRC.split('function contentKey(next)')[1].split('async function refresh(')[0]
         self.assertIn('last_at', fn)
         self.assertIn("worklane_api", fn)
-        self.assertIn('observed_at:null', fn)
+        self.assertIn('stripProbeTimes', fn)
+        self.assertIn('supervisor', fn)
+        helper = _SRC.split('function stripProbeTimes(engine)')[1].split('function contentKey(next)')[0]
+        self.assertIn('observed_at', helper)
+        self.assertIn('last_success_at', helper)
 
     def test_content_key_strips_shift_age_seconds(self):
         """Review finding (pc-1483 recovery 2): an agent's open-shift
@@ -202,6 +206,8 @@ class ContentFingerprintTests(unittest.TestCase):
         result = json.loads(proc.stdout)
         self.assertTrue(result['same_key_for_different_age_seconds'])
         self.assertTrue(result['different_key_for_different_started_at'])
+        self.assertTrue(result['same_key_for_probe_timestamps'])
+        self.assertTrue(result['different_key_for_capability_state'])
 
     def test_refresh_uses_content_key_not_a_raw_json_stringify(self):
         fn = _SRC.split('async function refresh(manual)')[1].split('function updateFilters()')[0]
@@ -240,7 +246,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
+        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
@@ -730,8 +736,10 @@ class NewEventsAffordanceTests(unittest.TestCase):
 class ConnectionsEngineTests(unittest.TestCase):
     def test_engine_list_paints_versions_reachability_and_supervisor(self):
         self.assertIn('id="engine-list"', _HTML)
+        self.assertIn('id="capability-list"', _HTML)
         self.assertIn('id="connection-exceptions"', _HTML)
         self.assertIn("function engines()", _SRC)
+        self.assertIn("function capabilities()", _SRC)
         self.assertIn("'WorkLane engine'", _SRC)
         self.assertIn("'WorkForce engine'", _SRC)
         self.assertIn("'WorkLane API'", _SRC)
@@ -743,6 +751,18 @@ class ConnectionsEngineTests(unittest.TestCase):
         self.assertIn("'Next: '", _SRC)
         self.assertIn("'Endpoint, path and version'", _SRC)
         self.assertNotIn("'Observed '", _SRC)
+
+    def test_installed_engines_panel_is_receipts_only(self):
+        engines_fn = _SRC.split('function engines()')[1].split('function excludedStores()')[0]
+        self.assertIn('receiptEngineRows()', engines_fn)
+        self.assertNotIn('capabilityEngineRows()', engines_fn)
+        self.assertNotIn("'WorkLane API'", engines_fn)
+        self.assertNotIn("'Supervisor last pass'", engines_fn)
+        self.assertIn("reconcileList($('engine-list')", engines_fn)
+        self.assertIn('Engine capabilities', _HTML)
+        caps_fn = _SRC.split('function capabilities()')[1].split('function engines()')[0]
+        self.assertIn('capabilityEngineRows()', caps_fn)
+        self.assertIn("reconcileList($('capability-list')", caps_fn)
 
     def test_receipt_timestamp_is_activated_not_observed(self):
         self.assertIn("record.activated_at", _SRC)

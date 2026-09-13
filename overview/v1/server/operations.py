@@ -449,10 +449,17 @@ _SUPERVISOR_FAILED = frozenset({'failed', 'provider_failed', 'escalated'})
 
 def _read_bounded(stream, limit=65536):
     try:
-        data = stream.read(limit)
+        try:
+            data = stream.read(limit)
+        except TypeError:
+            data = stream.read()
     except (OSError, ValueError, AttributeError):
         return b''
-    return bytes(data) if isinstance(data, (bytes, bytearray)) else b''
+    if isinstance(data, str):
+        data = data.encode('utf-8', errors='replace')
+    if not isinstance(data, (bytes, bytearray)):
+        return b''
+    return bytes(data[:limit])
 
 
 def _json_object(body):
@@ -510,30 +517,29 @@ def supervisor_snapshot(root):
 
     Same origin-verification shape as agent_actions.dispatch_agent, but a
     plain read with a 3 s timeout — the one upstream call this surface adds.
+    An HTTP reply proves reachability even when the body is malformed;
+    usability still requires a JSON object with a ``passes`` list.
     """
     receipt = read_json(root / 'local/workforce/deployment.json', root) or {}
     origin = verified_local_origin(receipt)
     if not origin:
         return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.',
                 'passes': [], 'reachable': False, 'http_status': None, 'probed': False}
-    request = Request(origin.rstrip('/') + '/api/supervisor?limit=3')
-    opener = build_opener(_NoRedirect())
-    try:
-        with opener.open(request, timeout=3) as response:
-            payload = json.load(response)
-            status = getattr(response, 'status', None) or getattr(response, 'code', 200)
-    except HTTPError as exc:
-        if 300 <= exc.code < 400:
-            return {'state': 'unavailable', 'detail': 'WorkForce redirected the supervisor read; refusing to leave the verified origin.',
-                    'passes': [], 'reachable': False, 'http_status': exc.code, 'probed': True}
-        if exc.code == 404:
-            return {'state': 'not_configured', 'detail': 'This WorkForce engine does not report supervisor passes.',
-                    'passes': [], 'reachable': True, 'http_status': 404, 'probed': True}
-        return {'state': 'unavailable', 'detail': 'WorkForce declined the supervisor read.',
-                'passes': [], 'reachable': True, 'http_status': exc.code, 'probed': True}
-    except (URLError, TimeoutError, ValueError, OSError):
+    probe = probe_local_http(origin, '/api/supervisor?limit=3')
+    if probe.get('redirect'):
+        return {'state': 'unavailable', 'detail': 'WorkForce redirected the supervisor read; refusing to leave the verified origin.',
+                'passes': [], 'reachable': False, 'http_status': probe.get('status'), 'probed': True}
+    if not probe.get('ok'):
         return {'state': 'unavailable', 'detail': 'WorkForce is not reachable.',
                 'passes': [], 'reachable': False, 'http_status': None, 'probed': True}
+    status = probe.get('status')
+    if status == 404:
+        return {'state': 'not_configured', 'detail': 'This WorkForce engine does not report supervisor passes.',
+                'passes': [], 'reachable': True, 'http_status': 404, 'probed': True}
+    if status != 200:
+        return {'state': 'unavailable', 'detail': 'WorkForce declined the supervisor read.',
+                'passes': [], 'reachable': True, 'http_status': status, 'probed': True}
+    payload = _json_object(probe.get('body'))
     passes = payload.get('passes') if isinstance(payload, dict) else None
     if not isinstance(passes, list):
         return {'state': 'unavailable', 'detail': 'Supervisor endpoint returned an unexpected shape.',

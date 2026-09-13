@@ -254,9 +254,18 @@ function connectionRow(name, record, mode) {
 function sortBySeverity(items, nameOf) {
   return [...items].sort((a,b)=>sourceSeverity(a)-sourceSeverity(b) || String(nameOf(a)).localeCompare(String(nameOf(b))));
 }
-function engineRows() {
+function namedEngineRows(pairs) {
   const engines=snapshot.engines || {};
-  return [['WorkLane engine',engines.worklane],['WorkForce engine',engines.workforce],['WorkLane API',engines.worklane_api],['Supervisor last pass',engines.supervisor]].filter(([,engine])=>engine);
+  return pairs.map(([name, key])=>[name, engines[key]]).filter(([,engine])=>engine);
+}
+function receiptEngineRows() {
+  return namedEngineRows([['WorkLane engine','worklane'],['WorkForce engine','workforce']]);
+}
+function capabilityEngineRows() {
+  return namedEngineRows([['WorkLane API','worklane_api'],['Supervisor last pass','supervisor']]);
+}
+function engineRows() {
+  return receiptEngineRows().concat(capabilityEngineRows());
 }
 function overviewFaceRow(order) {
   const row=el('div',undefined,'bp-order bp-order-compact bp-face-row');
@@ -942,8 +951,12 @@ function calendar() {
     return row;
   }, {emptyText:eventEmpty});
 }
+function capabilities() {
+  const rows=sortBySeverity(capabilityEngineRows().map(([name, engine])=>({...engine, name})), row=>row.name);
+  reconcileList($('capability-list'), rows, row=>row.name, row=>connectionRow(row.name, row, 'details'), {emptyText:'No live engine probes reported.'});
+}
 function engines() {
-  const rows=sortBySeverity(engineRows().map(([name, engine])=>({...engine, name})), row=>row.name);
+  const rows=sortBySeverity(receiptEngineRows().map(([name, engine])=>({...engine, name})), row=>row.name);
   reconcileList($('engine-list'), rows, row=>row.name, row=>connectionRow(row.name, row, 'details'), {emptyText:'Engine receipts are not available in this workspace.'});
 }
 function excludedStores() {
@@ -972,7 +985,7 @@ function paint() {
   if(page==='calendar') calendar();
   if(page==='timeline') timeline();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
-  if(page==='connections') { connectionExceptions();sources($('connection-list'),true);engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
+  if(page==='connections') { connectionExceptions();sources($('connection-list'),true);capabilities();engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 // Three independent clocks, never collapsed into one ambiguous word
 // (STATES_AND_TERMS.md, pc-1483): the transport (is the push connection
@@ -1087,14 +1100,19 @@ async function refreshRemote() {
 // churn: 'observed_at' is stamped fresh on every read, 'sources[].last_at'
 // and 'agents[].last_at' mirror the same daemon heartbeat tick on every
 // entry, 'agents[].shift.age_seconds' is recomputed from the wall clock on
-// every read of an otherwise-unchanged open shift, and the WorkLane API
-// health probe's 'observed_at' is a bare probe-time stamp — none of those
-// are application content, so a snapshot that only differs in these fields
-// must not read as a meaningful change (pc-1483: "Content-change
-// fingerprints ignore read times/heartbeat tick churn").
+// every read of an otherwise-unchanged open shift, and probed engine rows
+// (worklane_api, supervisor) stamp observed_at and last_success_at on every
+// poll — none of those are application content, so a snapshot that only
+// differs in these fields must not read as a meaningful change (pc-1483:
+// "Content-change fingerprints ignore read times/heartbeat tick churn").
 function stripShiftAge(shift) {
   if(!shift) return shift;
   const {age_seconds, ...rest}=shift;
+  return rest;
+}
+function stripProbeTimes(engine) {
+  if(!engine) return engine;
+  const {observed_at, last_success_at, ...rest}=engine;
   return rest;
 }
 function contentKey(next) {
@@ -1102,8 +1120,11 @@ function contentKey(next) {
   const sources=(next.sources || []).map(({last_at, ...rest})=>rest);
   const agents=(next.agents || []).map(({last_at, shift, ...rest})=>({...rest,shift:stripShiftAge(shift)}));
   const supervisor=next.supervisor ? (({last_at, shift, ...rest})=>({...rest,shift:stripShiftAge(shift)}))(next.supervisor) : next.supervisor;
-  const worklaneApi=next.engines?.worklane_api ? {...next.engines.worklane_api,observed_at:null} : next.engines?.worklane_api;
-  const engines=next.engines ? {...next.engines,worklane_api:worklaneApi} : next.engines;
+  const engines=next.engines ? {
+    ...next.engines,
+    worklane_api:stripProbeTimes(next.engines.worklane_api),
+    supervisor:stripProbeTimes(next.engines.supervisor),
+  } : next.engines;
   return JSON.stringify({...next,observed_at:null,sources,agents,supervisor,engines});
 }
 async function refresh(manual) {
