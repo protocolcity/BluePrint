@@ -2944,6 +2944,11 @@ def diagnose_retired_seats(
     def _seat_is_bad(seat: str) -> Optional[str]:
         if not seat:
             return None
+        if seat == "you":
+            # You is a persona (D11), never a WorkForce roster seat — a
+            # bare worker:you label is covered by YOU-STARVE-*, not a
+            # retired/unknown seat here.
+            return None
         if seat in roster_ids:
             # Live on roster — even if §5.2 says retired, employment wins for
             # dispatch (doctor can still flag UNREGISTERED / succession separately).
