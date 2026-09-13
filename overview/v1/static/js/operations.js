@@ -6,8 +6,8 @@ const {connectChanges} = await import('/js/change-feed.mjs');
 const {reconcileList, syncNote} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
-const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/activity':'activity','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {activity:['Activity','Verified repository activity across your projects.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents','Registered local agents, schedules, and reported runtime state.'],connections:['Connections','Where the information comes from and how current it is.']};
+const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
+const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents','Registered local agents, schedules, and reported runtime state.'],connections:['Connections','Where the information comes from and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
@@ -43,6 +43,19 @@ function link(text, href, cls) { const node = el('a',text,cls); node.href=href; 
 function badge(state, text) { const node=el('span',text || state.replaceAll('_',' '),'bp-badge'); node.dataset.state=state; return node; }
 function date(value) { if(!value) return 'Not reported'; const d=new Date(value); return Number.isNaN(d.valueOf()) ? 'Not reported' : d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
 function empty(parent, text) { parent.append(el('p',text,'bp-empty')); }
+function deliveryRow(item) {
+  if(item.kind==='workflow') {
+    const commit=item.sha?item.sha.slice(0,7):'no commit';
+    const count=item.count>1?` · ×${item.count}`:'';
+    return `CI · ${item.workflow_name || item.title} · ${item.state} · ${commit}${count}`;
+  }
+  if(item.kind==='pull_request') {
+    const event=item.pr_event || (item.state==='open'?'opened':item.state);
+    return `PR #${item.number} · ${item.title} · ${event} · ${date(item.updated_at)}`;
+  }
+  if(item.kind==='release') return `Release · ${item.title} · ${date(item.updated_at)}`;
+  return `${item.kind.replaceAll('_',' ')} · ${item.title} · ${date(item.updated_at)}`;
+}
 function scheduleLabel(value) { if(value==='manual')return 'Manual';if(!value || value==='Not scheduled')return 'Not scheduled';return 'Automatic schedule'; }
 function workUrl(order) { return readerHref('/work-order?' + new URLSearchParams({project:order.project,id:order.id})); }
 function statusText(order) {
@@ -314,7 +327,7 @@ function freshness() {
   status.textContent=lastError && lastSuccess ? `Refresh failed · showing last read · ${indicator}` : indicator;
 }
 async function refreshRemote() {
-  if(remotePending || !['activity','connections'].includes(page)) return;
+  if(remotePending || !['delivery','connections'].includes(page)) return;
   remotePending=true;remoteLast=Date.now();
   try {
     const response=await fetch('/api/remote-activity',{cache:'no-store',signal:AbortSignal.timeout(10000)});
@@ -335,13 +348,13 @@ async function refreshRemote() {
         let url;try{url=new URL(item.url);}catch(error){continue;}
         if(url.protocol!=='https:' || url.hostname!=='github.com')continue;
         const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';const text=el('div');
-        text.append(el('strong',item.title),el('span',`${item.kind.replaceAll('_',' ')} · ${date(item.updated_at)}${item.sha?' · '+item.sha.slice(0,7):''}`,'bp-order-meta'));
+        text.append(el('strong',deliveryRow(item)),el('span',`Observed ${date(item.updated_at)}`,'bp-order-meta'));
         row.append(text,badge(item.state));section.append(row);
       }
-      if(!(repo.items || []).length)empty(section,repo.state==='connected'?'No open pull requests, recent workflow runs, or published releases returned.':'No verified activity available.');
+      if(!(repo.items || []).length)empty(section,repo.quiet?'Quiet in the last 14 days.':'No verified delivery available.');
       container.append(section);
     }
-    if(!data.repositories?.length && !data.refreshing)empty(container,'No repository activity available. Check connection configuration or GitHub access.');
+    if(!data.repositories?.length && !data.refreshing)empty(container,'No repository delivery available. Check connection configuration or GitHub access.');
   } catch(error) { $('remote-status').textContent='GitHub refresh failed. Previously displayed evidence may be stale.';$('github-connection-status').textContent='GitHub unavailable'; }
   finally { remotePending=false; }
 }
