@@ -24,21 +24,26 @@
     const inProgress=orders.filter(o=>o.status==='in_progress').length;
     const key=JSON.stringify([project?.id,unavailable,count,deferred,inProgress,data.truncated,project?.has_instructions]);
     if(key===renderFingerprint) { if(noteEl)noteEl.textContent=noteText(); return; }
-    renderFingerprint=key;
-    context.replaceChildren();
-    const heading=document.createElement('strong');heading.textContent=project?.name || 'Workspace work';context.append(heading);
-    const summary=document.createElement('p');
-    summary.textContent=unavailable ? 'Work source unavailable; counts are incomplete.' : `${count} open · ${deferred} deferred/tracking · ${inProgress} in progress`;
-    if(data.truncated)summary.textContent+=' · Partial detail';
-    context.append(summary);
-    const links=document.createElement('nav');links.setAttribute('aria-label','Project context');
-    const query=project ? '?project='+encodeURIComponent(project.id) : '';
-    const entries=[['Work','/work'+query],['Needs you','/work'+(query ? query+'&' : '?')+'status=attention'],['Agents and jobs','/agents'],['Papers',project ? '/documents'+query : '/projects']];
-    if(project?.has_instructions)entries.push(['Instructions','/map?'+new URLSearchParams({path:project.folder,md:project.folder+'/AGENTS.md'})]);
-    for(const [label,href] of entries){const a=document.createElement('a');a.textContent=label;a.href=href;links.append(a);}
-    context.append(links);
-    const note=document.createElement('small');note.textContent=noteText();context.append(note);
-    noteEl=note;
+    try {
+      context.replaceChildren();
+      const heading=document.createElement('strong');heading.textContent=project?.name || 'Workspace work';context.append(heading);
+      const summary=document.createElement('p');
+      summary.textContent=unavailable ? 'Work source unavailable; counts are incomplete.' : `${count} open · ${deferred} deferred/tracking · ${inProgress} in progress`;
+      if(data.truncated)summary.textContent+=' · Partial detail';
+      context.append(summary);
+      const links=document.createElement('nav');links.setAttribute('aria-label','Project context');
+      const query=project ? '?project='+encodeURIComponent(project.id) : '';
+      const entries=[['Work','/work'+query],['Needs you','/work'+(query ? query+'&' : '?')+'status=attention'],['Agents and jobs','/agents'],['Papers',project ? '/documents'+query : '/projects']];
+      if(project?.has_instructions)entries.push(['Instructions','/map?'+new URLSearchParams({path:project.folder,md:project.folder+'/AGENTS.md'})]);
+      for(const [label,href] of entries){const a=document.createElement('a');a.textContent=label;a.href=href;links.append(a);}
+      context.append(links);
+      const note=document.createElement('small');note.textContent=noteText();context.append(note);
+      noteEl=note;
+      renderFingerprint=key;
+    } catch(error) {
+      renderFingerprint='';
+      throw error;
+    }
   }
   document.addEventListener('bp:map-location',event=>{locationPath=event.detail.path;render();});
   connectChanges(()=>{if(!document.hidden)load();});

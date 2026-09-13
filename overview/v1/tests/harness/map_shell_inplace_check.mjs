@@ -93,4 +93,30 @@ await settle();
 const [, summary3] = summaryContainer.children;
 assert.equal(summary3.textContent, '9 open · 0 deferred/tracking · 1 in progress', 'a real change updates the summary text');
 
+// A throw mid-render (e.g. DOM construction fails partway) must not
+// commit the new fingerprint — otherwise every later load with the same
+// data silently skips and leaves the sidebar stuck on the partial write.
+payload = {...basePayload(), projects: [{...basePayload().projects[0], open: 42}]};
+fakeNow += 60000;
+const realCreateElement = context.document.createElement;
+let createCalls = 0;
+context.document.createElement = () => {
+  createCalls += 1;
+  if (createCalls === 3) throw new Error('boom mid-render');
+  return realCreateElement();
+};
+tick();
+await settle();
+context.document.createElement = realCreateElement;
+const partial = summaryContainer.children.slice();
+assert.ok(partial.length < 4, 'the failed attempt left a partial write (sanity check that the throw actually interrupted the render)');
+
+// Retrying the same (previously failed) data must fully rebuild, not skip.
+fakeNow += 60000;
+tick();
+await settle();
+const [, summaryAfterRetry] = summaryContainer.children;
+assert.equal(summaryContainer.children.length, 4, 'a retry after a failed render rebuilds all four nodes, not just the note');
+assert.equal(summaryAfterRetry.textContent, '42 open · 0 deferred/tracking · 1 in progress', 'the retried render reflects the data that failed to commit the first time');
+
 console.log('ok');
