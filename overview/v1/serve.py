@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import queue
+import re
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -131,6 +132,41 @@ def _rewrite_map_html(text: str) -> str:
         .replace('href="./css/', 'href="/map/css/')
         .replace('src="./js/', 'src="/map/js/')
     )
+
+
+def _operations_shell_parts(active_page: str | None = None) -> tuple[str, str, str]:
+    operations = (_OV_STATIC_DIR / "operations.html").read_text(encoding="utf-8")
+    header = '<header class="bp-header">' + operations.split('<header class="bp-header">', 1)[1].split('</header>', 1)[0] + '</header>'
+    nav = '<nav class="bp-nav"' + operations.split('<nav class="bp-nav"', 1)[1].split('</nav>', 1)[0] + '</nav>'
+    if active_page:
+        nav = nav.replace(f'data-page="{active_page}"', f'data-page="{active_page}" aria-current="page"')
+    footer = '<footer class="bp-footer"><span>BluePrint · local operations</span><span id="footer-status">Connecting…</span></footer>'
+    return header, nav, footer
+
+
+def _inject_reader_shell(html: str, *, brand_suffix: str, back_href: str = '/work') -> str:
+    header, nav, footer = _operations_shell_parts()
+    skip = '<a class="bp-skip" href="#detail">Skip to content</a>'
+    search = (_OV_STATIC_DIR / 'workspace-search.html').read_text(encoding='utf-8')
+    brand = f'BluePrint <small>{brand_suffix}</small>'
+    html = re.sub(
+        r'<header class="bp-header">.*?</header>\s*<nav class="bp-nav".*?</nav>',
+        skip + header + nav + search,
+        html,
+        count=1,
+        flags=re.S,
+    )
+    html = re.sub(r'BluePrint <small>[^<]+</small>', brand, html, count=1)
+    back_link = '<a id="reader-back" href="/work">Back</a>'
+    html = html.replace('</header>', back_link + '</header>', 1)
+    if '</main>' in html and footer not in html:
+        html = html.replace('</main>', '</main>' + footer)
+    html = html.replace(
+        '</body>',
+        '<script src="/js/workspace-search.js"></script>'
+        '<script src="/js/reader-shell.js"></script></body>',
+    )
+    return html
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -236,7 +272,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if route in ("/work-order", "/work-order/", "/ticket", "/ticket/"):
-            self._serve_static(_OV_STATIC_DIR, "work-order.html")
+            self._serve_reader_page("work-order.html", brand_suffix="Work order")
             return
         if route == '/api/find':
             from server.workspace_search import find
@@ -246,10 +282,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(400, {'error':str(exc)})
             return
         if route == "/api/work-order":
-            from server.work_order import read_work_order
+            from server.work_order import prepare_work_order
             import sqlite3
             try:
-                result = read_work_order(self.binder_root, query.get("project", ""), query.get("id", ""))
+                result = prepare_work_order(self.binder_root, query.get("project", ""), query.get("id", ""))
                 from server.work_actions import assignment_options
                 result['reveal_supported'] = sys.platform == 'darwin'
                 result["assignment_options"] = assignment_options(self.binder_root, result["project"])
@@ -263,7 +299,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if route in ("/documents", "/documents/"):
-            self._serve_static(_OV_STATIC_DIR, "documents.html")
+            self._serve_reader_page("documents.html", brand_suffix="Project papers")
             return
         if route in ("/api/documents", "/api/document"):
             from server.documents import catalog, read_document
@@ -492,16 +528,22 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send_bytes(200, candidate.read_bytes(), ctype)
 
+    def _serve_reader_page(self, name: str, *, brand_suffix: str) -> None:
+        candidate = (_OV_STATIC_DIR / name).resolve()
+        if not candidate.is_file():
+            self._send_text(404, "not found")
+            return
+        text = _inject_reader_shell(candidate.read_text(encoding='utf-8'), brand_suffix=brand_suffix)
+        self._send_text(200, text, "text/html; charset=utf-8")
+
     def _serve_map_shell(self) -> None:
         shell = _MAP_STATIC_DIR / "workspace_map.html"
         if not shell.is_file():
             self._send_text(404, "map shell missing")
             return
         text = _rewrite_map_html(shell.read_text(encoding="utf-8"))
-        operations = (_OV_STATIC_DIR / "operations.html").read_text(encoding="utf-8")
-        nav = '<nav class="bp-nav"' + operations.split('<nav class="bp-nav"', 1)[1].split('</nav>', 1)[0] + '</nav>'
+        header, nav, _footer = _operations_shell_parts()
         nav = nav.replace('href="/map"', 'href="/map" aria-current="page"')
-        header = '<header class="bp-header">' + operations.split('<header class="bp-header">', 1)[1].split('</header>', 1)[0] + '</header>'
         search = (_OV_STATIC_DIR / 'workspace-search.html').read_text(encoding='utf-8')
         text = text.replace('</head>', '<link rel="stylesheet" href="/css/overview.css"><link rel="stylesheet" href="/css/operations.css"></head>')
         text = text.replace('<body>', '<body class="bp-operations bp-map-page">' + header + nav + search)
