@@ -52,7 +52,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -82,6 +84,7 @@ from server.overview_state import (  # noqa: E402
     load_project,
     load_pulse,
 )
+from server.change_feed import ChangeFeed, HEARTBEAT_SECS  # noqa: E402
 
 # Map V1 projector — imported from map/v1/server/map_tree.py. We alias the
 # import so it does not collide with the overview `server/` package.
@@ -137,6 +140,7 @@ class Handler(BaseHTTPRequestHandler):
     # file). Set when --binder is on and no --fixture override; None keeps
     # ``state`` as the boot-pinned source.
     binder_overview: BinderOverview | None = None
+    change_feed: ChangeFeed | None = None
 
     def _overview_state(self) -> dict:
         """State for this request.
@@ -301,6 +305,9 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, ValueError):
                 self._send_json(503, {"error": "Workspace sources could not be read."})
             return
+        if route == "/api/changes":
+            self._serve_changes()
+            return
         if route in ("/", "/overview", "/overview/", "/work", "/agents", "/activity", "/projects", "/connections", "/calendar", "/calendar/", "/settings", "/settings/"):
             self._serve_static(_OV_STATIC_DIR, "operations.html")
             return
@@ -402,6 +409,38 @@ class Handler(BaseHTTPRequestHandler):
             self._send_text(404, "not found")
         except ValueError as exc:
             self._send_text(400, str(exc))
+
+    # ── change feed (D2) — text/event-stream, one connection per client ─
+    def _serve_changes(self) -> None:
+        feed = self.change_feed
+        subscription = feed.subscribe() if feed is not None else None
+        if subscription is None:
+            self._send_text(503, "Too many open change-feed connections.")
+            return
+        client_id, inbox = subscription
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            last_sent = time.monotonic()
+            while True:
+                try:
+                    event = inbox.get(timeout=1.0)
+                    self.wfile.write(f"event: changed\ndata: {json.dumps(event)}\n\n".encode("utf-8"))
+                except queue.Empty:
+                    if time.monotonic() - last_sent < HEARTBEAT_SECS:
+                        continue
+                    self.wfile.write(b": heartbeat\n\n")
+                self.wfile.flush()
+                last_sent = time.monotonic()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            self.close_connection = True
+            if feed is not None:
+                feed.unsubscribe(client_id)
 
     # ── static + map shell ─────────────────────────────────────────────
     def _serve_static(self, base_dir: Path, rel: str) -> None:
@@ -520,6 +559,7 @@ def main(argv: list[str] | None = None) -> int:
     Handler.state = state
     Handler.binder_overview = source
     Handler.binder_root = binder
+    Handler.change_feed = ChangeFeed(binder)
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     redirects = []

@@ -60,7 +60,7 @@ for(const target of [work,map,...unsafe.filter(x=>typeof x==='string')]) {
 {
   const env=environment(work);
   // Expose only the existing URL factory for assertion; the full script runs.
-  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace('function orderRow(order)', 'window.testWorkUrl = workUrl;\nfunction orderRow(order)');
+  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace('function orderRow(order)', 'window.testWorkUrl = workUrl;\nfunction orderRow(order)');
   env.context.fetch=async()=>({ok:false});
   vm.runInContext(source,env.context);await settle();
   const href=env.context.window.testWorkUrl({project:'example',id:'ex-1'});

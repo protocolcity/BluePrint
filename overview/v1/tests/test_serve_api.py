@@ -63,12 +63,14 @@ def _start_server(
     *,
     binder_overview=None,
     binder_root: Path | None = None,
+    change_feed=None,
 ) -> tuple[object, int, threading.Thread]:
     # Handler carries truth on the class — reset each knob on every boot so
     # one test class can't leak a binder into the next.
     overview_serve.Handler.state = state
     overview_serve.Handler.binder_overview = binder_overview
     overview_serve.Handler.binder_root = binder_root
+    overview_serve.Handler.change_feed = change_feed
     port = _pick_port()
     httpd = overview_serve.ThreadingHTTPServer(("127.0.0.1", port), overview_serve.Handler)
     thread = threading.Thread(target=httpd.serve_forever, name=f"ov-v1-{port}", daemon=True)
