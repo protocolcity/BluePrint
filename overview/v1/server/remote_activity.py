@@ -105,6 +105,7 @@ def _load_repo(executable, spec):
     if not isinstance(metadata, dict):
         raise ValueError('Invalid repository response')
     rows = []
+    workflow_rows = []
     failures = []
     queries = [
         ('pull_request', 'pulls?state=open&per_page=8'),
@@ -133,16 +134,16 @@ def _load_repo(executable, spec):
                         continue
                     rows.append(_pull_item(item, repo, spec, closed=True))
                 elif kind == 'workflow':
-                    if not _in_window(item.get('updated_at') or item.get('created_at')):
-                        continue
-                    rows.append(_workflow_item(item, repo, spec))
+                    workflow_rows.append(_workflow_item(item, repo, spec))
                 elif kind == 'release':
                     if not _in_window(item.get('published_at') or item.get('created_at')):
                         continue
                     rows.append(_release_item(item, repo, spec))
         except (RuntimeError, ValueError, subprocess.TimeoutExpired, OSError):
             failures.append(kind.replace('_closed', ''))
-    rows = _collapse_workflows(rows)
+    for row in _collapse_workflows(workflow_rows):
+        if _in_window(row.get('updated_at')):
+            rows.append(row)
     _sort_rows(rows)
     connected = 'connected' if not failures else 'partial'
     return {'repo': repo, 'project': spec.get('project', ''), 'role': spec.get('role', 'repository'),
@@ -192,7 +193,7 @@ def remote_snapshot(binder):
     if not executable:
         return {'state': 'unavailable', 'error': 'GitHub CLI is not available to this application.', 'repositories': [], 'refreshing': False}
     if not specs: return {'state': 'not_configured', 'repositories': [], 'refreshing': False}
-    key = (str(root), json.dumps(specs, sort_keys=True))
+    key = (str(root), json.dumps(specs, sort_keys=True), _WINDOW_SECONDS)
     with _LOCK:
         entry = _CACHE.setdefault(key, {'checked': 0, 'busy': False, 'data': {'state': 'loading', 'repositories': []}})
         if not entry['busy'] and time.monotonic()-entry['checked']>_TTL:

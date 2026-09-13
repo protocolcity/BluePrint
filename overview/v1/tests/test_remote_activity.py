@@ -51,6 +51,32 @@ class RemoteTests(unittest.TestCase):
         self.assertEqual(len(result['items']),2)
         self.assertEqual(result['items'][0]['count'],2)
         self.assertEqual(result['items'][1]['count'],2)
+    def test_workflow_collapse_happens_before_window_filter(self):
+        run_a={'name':'CI','status':'completed','conclusion':'success','head_sha':'abc','updated_at':_RECENT,'html_url':'https://github.com/org/repo/actions/runs/1'}
+        run_b={'name':'CI','status':'completed','conclusion':'failure','head_sha':'def','updated_at':_OLD,'html_url':'https://github.com/org/repo/actions/runs/2'}
+        run_c=dict(run_a, html_url='https://github.com/org/repo/actions/runs/3')
+        values=[{'private':False},[],[],{'workflow_runs':[run_a,dict(run_a),run_b,run_c]},[]]
+        with patch.object(remote,'_github',side_effect=values):
+            result=remote._load_repo('gh',{'repo':'org/repo'})
+        workflows=[row for row in result['items'] if row['kind']=='workflow']
+        self.assertEqual(len(workflows),2)
+        self.assertEqual(workflows[0]['count'],2)
+        self.assertEqual(workflows[1]['count'],1)
+    def test_cache_key_includes_window_seconds(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'.blueprint').mkdir()
+            spec=[{'repo':'org/repo'}]
+            (root/'.blueprint/connections.json').write_text(json.dumps({'github':{'repositories':spec}}))
+            remote._CACHE.clear()
+            specs_json=json.dumps(spec,sort_keys=True)
+            key=(str(root.resolve()),specs_json,remote._WINDOW_SECONDS)
+            remote._CACHE[key]={'checked':0,'busy':False,'data':{'state':'loading','repositories':[]}}
+            values=[{'private':False},[],[],{'workflow_runs':[]},[]]
+            with patch.object(remote,'_github',side_effect=values):
+                remote._refresh(key,'gh',spec)
+            self.assertIn(key,remote._CACHE)
+            old_key=(str(root.resolve()),specs_json)
+            self.assertNotIn(old_key,remote._CACHE)
     def test_repositories_group_rows_and_mark_quiet(self):
         spec={'repo':'org/repo','project':'example','role':'product source'}
         with patch.object(remote,'_github',side_effect=[{'private':False},[],[],{'workflow_runs':[]},[]]):
