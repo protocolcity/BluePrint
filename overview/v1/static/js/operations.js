@@ -480,14 +480,28 @@ function currentOrderFor(agent) {
 function parkedOrderIds(agent) {
   return (agent.parked || []).map(p=>p.id);
 }
+// Timestamps arrive as ISO ("…T…Z") from WorkForce and as SQLite text
+// ("YYYY-MM-DD HH:MM:SS") from WorkLane; compare them as instants, never as
+// strings (pc-1495 second-pass finding).
+function tsEpoch(value) {
+  if(!value) return null;
+  let text=String(value).trim().replace(' ','T');
+  if(!/[zZ]$|[+-]\d\d:?\d\d$/.test(text)) text+='Z';
+  const ms=Date.parse(text);
+  return Number.isNaN(ms)?null:ms;
+}
 function currentShiftParkedIds(agent) {
   if(!agent.shift || !agent.parked) return [];
-  const start=agent.shift.started_at;
-  if(!start) return parkedOrderIds(agent);
-  return agent.parked.filter(p=>p.since && p.since>=start).map(p=>p.id);
+  const start=tsEpoch(agent.shift.started_at);
+  if(start===null) return parkedOrderIds(agent);
+  return agent.parked.filter(p=>{const s=tsEpoch(p.since); return s!==null && s>=start;}).map(p=>p.id);
 }
 function latestParkedSince(agent) {
-  return (agent.parked || []).reduce((latest,p)=>((!latest || (p.since && p.since>latest)) ? p.since : latest), null);
+  return (agent.parked || []).reduce((latest,p)=>{
+    const s=tsEpoch(p.since);
+    if(s===null) return latest;
+    return (!latest || s>tsEpoch(latest)) ? p.since : latest;
+  }, null);
 }
 function heldLink(agent) {
   const order=currentOrderFor(agent);

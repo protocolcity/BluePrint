@@ -30,7 +30,7 @@ STATE_ORDER = {'working': 0, 'last_run_failed': 1, 'stale_shift': 2, 'idle': 3,
 _LEDGER_TAIL_BYTES = 16384
 _OWNER_RE = re.compile(r'(?m)^Owner:\s*(\S+)')
 _RELEASE_RE = re.compile(r'(?m)^(?:Released by|Reopened by|Blocked:)')
-_PARKED_RE = re.compile(r'(?m)^Parked(?:ed by|:)')
+_PARKED_RE = re.compile(r'(?m)^Parked(?: by|:)')
 _DEPENDS_RE = re.compile(r'(?i)depends on[:\s]+#?([A-Za-z][A-Za-z0-9]*-\d+)')
 STATUS_WORD = {'backlog': 'Open', 'in_review': 'Parked', 'in_progress': 'Live', 'done': 'Done', 'canceled': 'Canceled'}
 
@@ -1122,6 +1122,28 @@ def provider_coverage(root, registry, workers, config_cache, host_providers=None
     return rows
 
 
+
+def ts_epoch(value):
+    """Seconds since the epoch for an ISO or SQLite-style timestamp, or None.
+
+    WorkLane comments carry "YYYY-MM-DD HH:MM:SS" or ISO "…T…+00:00" while
+    WorkForce shifts carry ISO "…T…Z"; comparing those as strings orders "T"
+    after " " and misreads an earlier park as later than a shift start
+    (pc-1495 second-pass finding). Naive values are read as UTC.
+    """
+    if not value:
+        return None
+    text = str(value).strip().replace(' ', 'T', 1)
+    if text.endswith('Z'):
+        text = text[:-1] + '+00:00'
+    try:
+        stamp = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp.timestamp()
+
 def age_seconds(value, now):
     try:
         stamp = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
@@ -1367,9 +1389,11 @@ def operations_snapshot(binder):
             parked = _seat_parked_orders(result['orders'], identity, last_candidates) if group == 'seat' else []
             verified = bool(held and held['id'] in last_candidates)
             shift_start = shift['started_at'] if shift and open_shift else None
+            shift_start_epoch = ts_epoch(shift_start)
             finishing = bool(
-                group == 'seat' and open_shift and not held and shift_start
-                and any(p.get('since') and p['since'] >= shift_start for p in parked))
+                group == 'seat' and open_shift and not held and shift_start_epoch is not None
+                and any(ts_epoch(p.get('since')) is not None and ts_epoch(p.get('since')) >= shift_start_epoch
+                        for p in parked))
             reservation = bool(held and state == 'last_run_failed' and preserved_reservation(root, command, held['id']))
             project_slug = _row_project_slug(row)
             project_name = registry.get(project_slug, {}).get('name') if project_slug else None
