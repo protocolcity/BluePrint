@@ -83,11 +83,24 @@ class HubLayoutTests(unittest.TestCase):
             "applyCamera must fit against currentOuterRadius, not the fixed cfg.radius",
         )
 
+    def test_host_paints_node_state_from_operations(self) -> None:
+        self.assertIn("nodeState", self.host)
+        self.assertIn("bp:map-operations", self.host)
+        self.assertIn("indexNodeState", self.host)
+
     def test_file_label_gets_muted_class(self) -> None:
         # File dots on the inner ring get their own muted label class so the
         # folder ring's labels read first (Theme §Enhance).
         self.assertIn("map-lot-file-label", self.paint)
         self.assertIn(".map-lot-file-label", self.css)
+
+    def test_project_nodes_carry_three_counts_in_existing_muted_token(self) -> None:
+        self.assertIn("map-lot-counts", self.paint)
+        self.assertIn(".map-lot-counts", self.css)
+        self.assertIn("nodeState", self.paint)
+        self.assertIn("read-only", self.paint)
+        self.assertIn("For You", self.paint)
+        self.assertIn("fill: var(--map-muted)", self.css)
 
 
 class HubLayoutRuntimeShapeTests(unittest.TestCase):

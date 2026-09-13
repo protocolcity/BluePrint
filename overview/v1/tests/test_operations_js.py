@@ -94,19 +94,14 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list'):
+        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
-    def test_excluded_stores_note_is_patched_in_place_not_appended_every_paint(self):
-        """Review fix (pc-1470, PR #87): the Connections page note used to
-        be unconditionally .append()-ed on every paint(), piling up one
-        copy per paint even though the fingerprint check passed. It must
-        now go through syncNote's stable-key patch (see test_dom_reconcile
-        for the append-once/update-in-place harness proof)."""
-        self.assertIn("syncNote", _SRC)
-        self.assertIn("{reconcileList, syncNote} = await import('/js/dom-reconcile.mjs')", _SRC)
+    def test_excluded_stores_are_a_reconciled_list_not_a_joined_note(self):
+        self.assertIn("reconcileList($('excluded-store-list')", _SRC)
+        self.assertIn('id="excluded-store-list"', _HTML)
+        self.assertNotIn("Excluded unregistered databases:", _SRC)
         self.assertNotIn("$('connection-list').append(el('p','Excluded", _SRC)
-        self.assertIn("syncNote($('connection-list'),'excluded-stores'", _SRC)
 
 
 class AgentCardBodyTests(unittest.TestCase):
@@ -196,6 +191,37 @@ class SeatHeaderProjectNameTests(unittest.TestCase):
 
     def test_unassigned_literal_is_gone_from_the_seat_header(self):
         self.assertNotIn("agent.held ? agent.held.project : 'Unassigned'", _SRC)
+
+
+class CalendarRowTests(unittest.TestCase):
+    def test_manual_seats_collapse_behind_on_demand_line(self):
+        self.assertIn("function onDemandSeat(agent)", _SRC)
+        self.assertIn("On demand seats: ", _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("agent.group==='seat'", compact)
+        self.assertIn("agent.schedule==='manual'", compact)
+        self.assertIn("agent.schedule==='Notscheduled'", compact)
+
+    def test_due_and_hold_until_merge_on_the_same_row(self):
+        self.assertIn("function mergeDatedWork(items)", _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("event.kind!=='deadline'&&event.kind!=='timer'", compact)
+        self.assertIn("row.due=", compact)
+        self.assertIn("row.hold=", compact)
+        self.assertIn("' · Due'", _SRC)
+        self.assertIn("' · Hold until'", _SRC)
+
+
+class ConnectionsEngineTests(unittest.TestCase):
+    def test_engine_list_paints_versions_reachability_and_supervisor(self):
+        self.assertIn('id="engine-list"', _HTML)
+        self.assertIn("function engines()", _SRC)
+        self.assertIn("'WorkLane engine'", _SRC)
+        self.assertIn("'WorkForce engine'", _SRC)
+        self.assertIn("'WorkLane API'", _SRC)
+        self.assertIn("'Supervisor last pass'", _SRC)
+        self.assertIn("Source: ", _SRC)
+        self.assertIn("Observed ", _SRC)
 
 
 if __name__ == '__main__':
