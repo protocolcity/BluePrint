@@ -480,12 +480,22 @@ function currentOrderFor(agent) {
 function parkedOrderIds(agent) {
   return (agent.parked || []).map(p=>p.id);
 }
+function currentShiftParkedIds(agent) {
+  if(!agent.shift || !agent.parked) return [];
+  const start=agent.shift.started_at;
+  if(!start) return parkedOrderIds(agent);
+  return agent.parked.filter(p=>p.since && p.since>=start).map(p=>p.id);
+}
+function latestParkedSince(agent) {
+  return (agent.parked || []).reduce((latest,p)=>((!latest || (p.since && p.since>latest)) ? p.since : latest), null);
+}
 function heldLink(agent) {
   const order=currentOrderFor(agent);
   if(order) return link(`${order.title} · ${order.id}`,workUrl(order));
   if(agent.held) return link(agent.held.id,readerHref('/work-order?'+new URLSearchParams({project:agent.held.project,id:agent.held.id})));
+  const finishingIds=currentShiftParkedIds(agent);
+  if(agent.finishing && finishingIds.length) return el('span',`Finishing · parked ${finishingIds.join(', ')}`);
   const parkedIds=parkedOrderIds(agent);
-  if(agent.finishing && parkedIds.length) return el('span',`Finishing · parked ${parkedIds.join(', ')}`);
   if(parkedIds.length) return el('span',`Parked: ${parkedIds.join(', ')} · awaiting integration`);
   return el('span','No current work','bp-muted');
 }
@@ -555,9 +565,9 @@ function agentTimelineValues(agent) {
   let claim='Not reported';
   if(agent.held) claim=agent.held_verified ? `Verified: holds ${agent.held.id}` : `Holds ${agent.held.id} · not yet verified against the last dispatch candidates`;
   else if(agent.parked && agent.parked.length) {
-    const ids=parkedOrderIds(agent).join(', ');
-    const when=agent.parked[0].since ? date(agent.parked[0].since) : 'Not reported';
-    claim=agent.parked_verified ? `Verified: parked ${ids} · ${when}` : `Parked ${ids} · ${when} · not yet verified against the last dispatch candidates`;
+    const detail=agent.parked.map(p=>p.verified ? `${p.id} (verified)` : `${p.id} (not yet verified)`).join(', ');
+    const when=latestParkedSince(agent);
+    claim=when ? `Parked ${detail} · ${date(when)}` : `Parked ${detail}`;
   }
   else if(agent.state==='last_run_failed') claim=agent.preserved_reservation ? 'No order currently held here; a preserved reservation is available to recover' : 'No order currently held here; the failed ticket may already be resolved by another provider';
   let terminal='Not reported';
