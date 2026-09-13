@@ -30,6 +30,7 @@ STATE_ORDER = {'working': 0, 'last_run_failed': 1, 'stale_shift': 2, 'idle': 3,
 _LEDGER_TAIL_BYTES = 16384
 _OWNER_RE = re.compile(r'(?m)^Owner:\s*(\S+)')
 _RELEASE_RE = re.compile(r'(?m)^(?:Released by|Reopened by|Blocked:)')
+_PARKED_RE = re.compile(r'(?m)^Parked(?: by|:)')
 _DEPENDS_RE = re.compile(r'(?i)depends on[:\s]+#?([A-Za-z][A-Za-z0-9]*-\d+)')
 STATUS_WORD = {'backlog': 'Open', 'in_review': 'Parked', 'in_progress': 'Live', 'done': 'Done', 'canceled': 'Canceled'}
 
@@ -37,25 +38,28 @@ STATUS_WORD = {'backlog': 'Open', 'in_review': 'Parked', 'in_progress': 'Live', 
 def task_comment_index(conn):
     """One pass over a project's comments: last Owner marker and last note per task.
 
-    Returns (owner_by_task, last_note_by_task) keyed by task_id, each a dict
-    with the fields a row needs — never a full comment history.
+    Returns (owner_by_task, last_note_by_task, parked_at_by_task) keyed by
+    task_id — never a full comment history.
     """
-    owner_by_task, last_note_by_task = {}, {}
+    owner_by_task, last_note_by_task, parked_at_by_task = {}, {}, {}
     try:
         comment_rows = conn.execute('SELECT task_id, body, created_at FROM task_comments ORDER BY created_at, id').fetchall()
     except sqlite3.OperationalError:
-        return owner_by_task, last_note_by_task
+        return owner_by_task, last_note_by_task, parked_at_by_task
     for row in comment_rows:
         task_id, body, created_at = row['task_id'], row['body'] or '', row['created_at']
         snippet = body.strip().splitlines()[0] if body.strip() else ''
         last_note_by_task[task_id] = snippet[:160] + ('…' if len(snippet) > 160 else '')
         if _RELEASE_RE.search(body):
             owner_by_task.pop(task_id, None)
+            parked_at_by_task.pop(task_id, None)
             continue
+        if _PARKED_RE.search(body):
+            parked_at_by_task[task_id] = created_at
         match = _OWNER_RE.search(body)
         if match:
             owner_by_task[task_id] = {'identity': match.group(1), 'since': created_at}
-    return owner_by_task, last_note_by_task
+    return owner_by_task, last_note_by_task, parked_at_by_task
 
 
 def declared_blockers(description):
@@ -179,6 +183,19 @@ def last_shift_candidates(daemon_path, root, identity):
         if ticket and ticket not in candidates:
             candidates.append(ticket)
     return candidates
+
+
+def _seat_parked_orders(orders, identity, last_candidates):
+    """in_review orders this seat parked (Owner marker), for Agents rows."""
+    rows = [
+        {'id': o['id'], 'project': o['project'], 'project_name': o['project_name'],
+         'title': o['title'], 'since': o.get('since'),
+         'verified': o['id'] in last_candidates}
+        for o in orders
+        if o['status'] == 'in_review' and o.get('parked_by') == identity
+    ]
+    rows.sort(key=lambda row: row.get('since') or '', reverse=True)
+    return rows
 
 
 def recovery_attempts(daemon_path, root, identity):
@@ -1105,6 +1122,28 @@ def provider_coverage(root, registry, workers, config_cache, host_providers=None
     return rows
 
 
+
+def ts_epoch(value):
+    """Seconds since the epoch for an ISO or SQLite-style timestamp, or None.
+
+    WorkLane comments carry "YYYY-MM-DD HH:MM:SS" or ISO "…T…+00:00" while
+    WorkForce shifts carry ISO "…T…Z"; comparing those as strings orders "T"
+    after " " and misreads an earlier park as later than a shift start
+    (pc-1495 second-pass finding). Naive values are read as UTC.
+    """
+    if not value:
+        return None
+    text = str(value).strip().replace(' ', 'T', 1)
+    if text.endswith('Z'):
+        text = text[:-1] + '+00:00'
+    try:
+        stamp = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp.timestamp()
+
 def age_seconds(value, now):
     try:
         stamp = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
@@ -1166,7 +1205,7 @@ def operations_snapshot(binder):
                 count = conn.execute("SELECT count(*) FROM tasks WHERE status NOT IN ('done','canceled','cancelled')").fetchone()[0]
                 summary['open'] = count
                 result['truncated'] |= count > 2000
-                owner_by_task, last_note_by_task = task_comment_index(conn)
+                owner_by_task, last_note_by_task, parked_at_by_task = task_comment_index(conn)
                 prefix = project.get('prefix') or ''
                 for task_row in conn.execute('SELECT id, ext_id, status FROM tasks').fetchall():
                     task_id = task_row['ext_id'] or (f"{prefix}-{task_row['id']}" if prefix else str(task_row['id']))
@@ -1230,7 +1269,8 @@ def operations_snapshot(binder):
                         'owner': 'You' if assigned_you else (', '.join(routable_workers) or 'Unassigned'),
                         'live_with': marker['identity'] if marker and status == 'in_progress' else None,
                         'parked_by': marker['identity'] if marker and status == 'in_review' else None,
-                        'since': marker['since'] if marker and status in ('in_progress', 'in_review') else None,
+                        'since': (parked_at_by_task.get(item['id']) if status == 'in_review' and parked_at_by_task.get(item['id'])
+                                  else marker['since'] if marker and status in ('in_progress', 'in_review') else None),
                         'last_note': last_note_by_task.get(item['id']) or '',
                         'parent': parent, 'blockers': declared_blockers(item.get('description')),
                         'ready_for': None})
@@ -1346,7 +1386,14 @@ def operations_snapshot(binder):
             group = 'supervisor' if identity == 'bp-supervisor' else ('seat' if kind == 'lane' else 'job')
             held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
             last_candidates = last_shift_candidates(daemon_path, root, identity)
+            parked = _seat_parked_orders(result['orders'], identity, last_candidates) if group == 'seat' else []
             verified = bool(held and held['id'] in last_candidates)
+            shift_start = shift['started_at'] if shift and open_shift else None
+            shift_start_epoch = ts_epoch(shift_start)
+            finishing = bool(
+                group == 'seat' and open_shift and not held and shift_start_epoch is not None
+                and any(ts_epoch(p.get('since')) is not None and ts_epoch(p.get('since')) >= shift_start_epoch
+                        for p in parked))
             reservation = bool(held and state == 'last_run_failed' and preserved_reservation(root, command, held['id']))
             project_slug = _row_project_slug(row)
             project_name = registry.get(project_slug, {}).get('name') if project_slug else None
@@ -1373,6 +1420,7 @@ def operations_snapshot(binder):
                 'model': _seat_model_text(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'project': project_slug, 'project_name': project_name,
                 'held': {'id': held['id'], 'project': held['project'], 'project_name': held['project_name'], 'title': held['title']} if held else None,
+                'parked': parked or None, 'finishing': finishing,
                 'held_verified': verified, 'last_candidates': last_candidates,
                 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}

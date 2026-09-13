@@ -825,5 +825,25 @@ class ConnectionsEngineTests(unittest.TestCase):
         self.assertIn("The live indicator is only the update transport.", _HTML)
 
 
+class SeatParkedClaimRowTests(unittest.TestCase):
+    """pc-1495: seat rows show finishing and parked handoff copy."""
+
+    def test_held_link_prefers_live_claim_then_finishing_then_parked(self):
+        fn = _SRC.split('function heldLink(agent)')[1].split('function elapsedText')[0]
+        compact = fn.replace(' ', '')
+        self.assertLess(compact.index('currentOrderFor(agent)'), compact.index('agent.finishing'))
+        self.assertLess(compact.index('agent.finishing'), compact.index('parkedIds.length'))
+        self.assertIn('Finishing·parked', compact.replace(' ', ''))
+        self.assertIn('Parked:', fn)
+        self.assertIn('awaiting integration', fn)
+
+    def test_timeline_uses_parked_time_when_no_live_claim(self):
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
+        self.assertIn('agent.parked', fn)
+        self.assertIn('p.verified', fn)
+        self.assertIn('latestParkedSince(agent)', fn)
+        self.assertIn('currentShiftParkedIds(agent)', _SRC)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -478,10 +478,40 @@ function currentOrderFor(agent) {
   if(!agent.held) return null;
   return (snapshot.orders || []).find(o=>o.id===agent.held.id && o.project===agent.held.project) || null;
 }
+function parkedOrderIds(agent) {
+  return (agent.parked || []).map(p=>p.id);
+}
+// Timestamps arrive as ISO ("…T…Z") from WorkForce and as SQLite text
+// ("YYYY-MM-DD HH:MM:SS") from WorkLane; compare them as instants, never as
+// strings (pc-1495 second-pass finding).
+function tsEpoch(value) {
+  if(!value) return null;
+  let text=String(value).trim().replace(' ','T');
+  if(!/[zZ]$|[+-]\d\d:?\d\d$/.test(text)) text+='Z';
+  const ms=Date.parse(text);
+  return Number.isNaN(ms)?null:ms;
+}
+function currentShiftParkedIds(agent) {
+  if(!agent.shift || !agent.parked) return [];
+  const start=tsEpoch(agent.shift.started_at);
+  if(start===null) return parkedOrderIds(agent);
+  return agent.parked.filter(p=>{const s=tsEpoch(p.since); return s!==null && s>=start;}).map(p=>p.id);
+}
+function latestParkedSince(agent) {
+  return (agent.parked || []).reduce((latest,p)=>{
+    const s=tsEpoch(p.since);
+    if(s===null) return latest;
+    return (!latest || s>tsEpoch(latest)) ? p.since : latest;
+  }, null);
+}
 function heldLink(agent) {
   const order=currentOrderFor(agent);
   if(order) return link(`${order.title} · ${order.id}`,workUrl(order));
   if(agent.held) return link(agent.held.id,readerHref('/work-order?'+new URLSearchParams({project:agent.held.project,id:agent.held.id})));
+  const finishingIds=currentShiftParkedIds(agent);
+  if(agent.finishing && finishingIds.length) return el('span',`Finishing · parked ${finishingIds.join(', ')}`);
+  const parkedIds=parkedOrderIds(agent);
+  if(parkedIds.length) return el('span',`Parked: ${parkedIds.join(', ')} · awaiting integration`);
   return el('span','No current work','bp-muted');
 }
 function elapsedText(agent) {
@@ -549,6 +579,11 @@ function timelineStep(label, value) {
 function agentTimelineValues(agent) {
   let claim='Not reported';
   if(agent.held) claim=agent.held_verified ? `Verified: holds ${agent.held.id}` : `Holds ${agent.held.id} · not yet verified against the last dispatch candidates`;
+  else if(agent.parked && agent.parked.length) {
+    const detail=agent.parked.map(p=>p.verified ? `${p.id} (verified)` : `${p.id} (not yet verified)`).join(', ');
+    const when=latestParkedSince(agent);
+    claim=when ? `Parked ${detail} · ${date(when)}` : `Parked ${detail}`;
+  }
   else if(agent.state==='last_run_failed') claim=agent.preserved_reservation ? 'No order currently held here; a preserved reservation is available to recover' : 'No order currently held here; the failed ticket may already be resolved by another provider';
   let terminal='Not reported';
   if(agent.shift) terminal='Open — no terminal row yet';
