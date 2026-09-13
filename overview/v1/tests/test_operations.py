@@ -325,3 +325,12 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(dates[0]['task_id'],'pc-1')
         self.assertEqual(dates[0]['product'],'product')
         self.assertEqual(dates[0]['dtstart'],'2026-09-20')
+    def test_due_and_hold_until_remain_two_work_dates(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_until=? WHERE id=1',
+                         (json.dumps(['worker:agent','deadline:2026-09-20']),'timer','2026-09-22T12:00:00+00:00'))
+        dates=operations_snapshot(self.root)['work_dates']
+        self.assertEqual(sorted(d['kind'] for d in dates),['deadline','timer'])
+        self.assertEqual({d['task_id'] for d in dates},{'pc-1'})

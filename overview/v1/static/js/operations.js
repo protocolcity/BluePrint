@@ -331,16 +331,48 @@ function updateTimelineFilters() {
   history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
   refreshTimeline(false);
 }
+function onDemandSeat(agent) {
+  return agent.group==='seat' && (agent.schedule==='manual' || agent.schedule==='Not scheduled');
+}
+function mergeDatedWork(items) {
+  const merged=new Map(), extras=[];
+  for(const event of items) {
+    if(event.kind!=='deadline' && event.kind!=='timer') { extras.push(event); continue; }
+    const key=event.product+':'+event.task_id;
+    const row=merged.get(key) || {product:event.product,task_id:event.task_id,summary:event.summary,attention:false,dtstart:event.dtstart,due:null,hold:null,due_all_day:false};
+    if(event.kind==='deadline') { row.due=event.dtstart; row.due_all_day=!!event.all_day; }
+    if(event.kind==='timer') row.hold=event.dtstart;
+    if(event.attention) row.attention=true;
+    if(event.summary) row.summary=event.summary;
+    if(event.dtstart < row.dtstart) row.dtstart=event.dtstart;
+    merged.set(key,row);
+  }
+  return [...merged.values(), ...extras].sort((a,b)=>String(a.dtstart).localeCompare(String(b.dtstart)));
+}
+function datedStamp(value, allDay) {
+  return allDay ? value+' · All day' : date(value);
+}
 function calendar() {
-  const datedItems=[...(snapshot.work_dates || [])].sort((a,b)=>a.dtstart.localeCompare(b.dtstart));
-  reconcileList($('dated-work'), datedItems, event=>`${event.product}:${event.task_id}`, event=>{
+  const datedItems=mergeDatedWork(snapshot.work_dates || []);
+  reconcileList($('dated-work'), datedItems, event=>event.due||event.hold ? event.product+':'+event.task_id+':dated' : event.product+':'+event.task_id+':'+event.kind+':'+event.dtstart, event=>{
     const row=link('', '/work-order?'+new URLSearchParams({project:event.product,id:event.task_id}),'bp-order');
-    const details=el('div');details.append(el('strong',event.summary),el('span',`${event.all_day?event.dtstart+' · All day':date(event.dtstart)} · ${event.product} · ${event.kind==='timer'?'Hold until':'Due'}`,'bp-order-meta'));
+    const parts=[];
+    if(event.due) parts.push(datedStamp(event.due,event.due_all_day)+' · Due');
+    if(event.hold) parts.push(date(event.hold)+' · Hold until');
+    if(!parts.length) parts.push((event.all_day?event.dtstart+' · All day':date(event.dtstart))+' · '+(event.kind==='timer'?'Hold until':'Due'));
+    const details=el('div');details.append(el('strong',event.summary),el('span',parts.join(' · ')+' · '+event.product,'bp-order-meta'));
     row.append(details,badge(event.attention?'attention':'scheduled',event.attention?'Needs you':'Dated work'));
     return row;
   }, {emptyText:'No dated work orders in the readable stores.'});
-  const scheduleItems=[...snapshot.agents].sort((a,b)=>String(a.next_fire || 'z').localeCompare(String(b.next_fire || 'z')));
+  const demand=snapshot.agents.filter(onDemandSeat);
+  const scheduled=[...snapshot.agents.filter(agent=>!onDemandSeat(agent))].sort((a,b)=>String(a.next_fire || 'z').localeCompare(String(b.next_fire || 'z')));
+  const scheduleItems=demand.length ? scheduled.concat([{id:'_on-demand-seats', on_demand:demand.length}]) : scheduled;
   reconcileList($('schedule-list'), scheduleItems, agent=>agent.id, agent=>{
+    if(agent.on_demand) {
+      const row=el('div',undefined,'bp-source');
+      row.append(el('strong','On demand seats: '+agent.on_demand));
+      return row;
+    }
     const row=el('div',undefined,'bp-source');row.append(el('strong',agent.name),badge(agent.state==='unknown'?'unknown':(agent.state==='off'?'off':(agent.next_fire?'scheduled':'not_scheduled'))));
     row.append(el('p',`${date(agent.next_fire)} · ${scheduleLabel(agent.schedule)}`,'bp-muted'));
     return row;
