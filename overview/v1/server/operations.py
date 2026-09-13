@@ -34,6 +34,66 @@ _DEPENDS_RE = re.compile(r'(?i)depends on[:\s]+#?([A-Za-z][A-Za-z0-9]*-\d+)')
 STATUS_WORD = {'backlog': 'Open', 'in_review': 'Parked', 'in_progress': 'Live', 'done': 'Done', 'canceled': 'Canceled'}
 
 
+_ACTIVITY_SKIP_PREFIXES = ('Intake:', 'Evidence:')
+
+
+def _comment_activity_word(body):
+    first = (body or '').strip().splitlines()[0] if body and body.strip() else ''
+    lowered = first.lower()
+    if first.startswith('Owner:') or _OWNER_RE.search(body or ''):
+        return 'claim'
+    if first.startswith('Parked:'):
+        return 'park'
+    if first.startswith('Released by'):
+        return 'release'
+    if first.startswith('Completed:'):
+        return 'close'
+    if lowered.startswith('canceled:') or lowered.startswith('cancelled:'):
+        return 'cancel'
+    if first.startswith('Blocked:') or 'gate:' in lowered:
+        return 'gate'
+    return 'note'
+
+
+def store_last_change(conn, prefix):
+    """Most recent meaningful WorkLane comment or event for one project store."""
+    try:
+        rows = conn.execute(
+            """SELECT c.body, c.author, c.created_at, t.ext_id, t.id AS task_id
+               FROM task_comments c JOIN tasks t ON t.id = c.task_id
+               ORDER BY c.created_at DESC, c.id DESC LIMIT 100"""
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    for row in rows:
+        body = row['body'] or ''
+        first = body.strip().splitlines()[0] if body.strip() else ''
+        if any(first.startswith(prefix) for prefix in _ACTIVITY_SKIP_PREFIXES):
+            continue
+        order_id = row['ext_id'] or (f"{prefix}-{row['task_id']}" if prefix else str(row['task_id']))
+        actor = 'You' if (row['author'] or '').lower() == 'you' else (row['author'] or 'Unknown')
+        verb = _comment_activity_word(body)
+        return {'at': row['created_at'], 'actor': actor, 'order_id': order_id,
+                'verb': verb, 'text': f'{verb} {order_id}'}
+    try:
+        rows = conn.execute(
+            """SELECT e.event_type, e.status, e.actor, e.created_at, t.ext_id, t.id AS task_id
+               FROM task_events e JOIN tasks t ON t.id = e.task_id
+               ORDER BY e.created_at DESC, e.id DESC LIMIT 50"""
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return None
+    if not rows:
+        return None
+    row = rows[0]
+    order_id = row['ext_id'] or (f"{prefix}-{row['task_id']}" if prefix else str(row['task_id']))
+    verb = {'status_change': row['status'] or 'update', 'created': 'filed'}.get(
+        row['event_type'], 'event')
+    actor = 'You' if (row['actor'] or '').lower() == 'you' else (row['actor'] or 'Unknown')
+    return {'at': row['created_at'], 'actor': actor, 'order_id': order_id,
+            'verb': verb, 'text': f'{verb} {order_id}'}
+
+
 def task_comment_index(conn):
     """One pass over a project's comments: last Owner marker and last note per task.
 
@@ -1156,7 +1216,9 @@ def operations_snapshot(binder):
     store_available = {}
     for path in paths:
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
-        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'claimed': 0, 'running': 0, 'state': 'available'}
+        summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'claimed': 0,
+                   'running': 0, 'deferred': 0, 'parked': 0, 'state': 'available',
+                   'partial': False, 'last_change': None}
         try:
             if not path.resolve().is_relative_to(root):
                 raise OSError('external store')
@@ -1165,9 +1227,11 @@ def operations_snapshot(binder):
                 rows = conn.execute("SELECT * FROM tasks WHERE status NOT IN ('done','canceled','cancelled') ORDER BY priority, updated_at DESC LIMIT 2001").fetchall()
                 count = conn.execute("SELECT count(*) FROM tasks WHERE status NOT IN ('done','canceled','cancelled')").fetchone()[0]
                 summary['open'] = count
-                result['truncated'] |= count > 2000
+                summary['partial'] = count > 2000
+                result['truncated'] |= summary['partial']
                 owner_by_task, last_note_by_task = task_comment_index(conn)
                 prefix = project.get('prefix') or ''
+                summary['last_change'] = store_last_change(conn, prefix)
                 for task_row in conn.execute('SELECT id, ext_id, status FROM tasks').fetchall():
                     task_id = task_row['ext_id'] or (f"{prefix}-{task_row['id']}" if prefix else str(task_row['id']))
                     status_by_id[task_id] = task_row['status']
@@ -1235,6 +1299,11 @@ def operations_snapshot(binder):
                         'parent': parent, 'blockers': declared_blockers(item.get('description')),
                         'ready_for': None})
                     summary['attention'] += int(attention)
+                    gate_type = item.get('gate_type') or ''
+                    if gate_type == 'deferred':
+                        summary['deferred'] += 1
+                    if status == 'in_review' and marker is not None:
+                        summary['parked'] += 1
                     # A claim (in_progress with a signed Owner marker) is not
                     # execution evidence — a days-old human claim counts here
                     # the same as a fresh agent shift. 'running' below is the
@@ -1248,7 +1317,9 @@ def operations_snapshot(binder):
     found = {p.stem for p in paths}
     for slug, project in registry.items():
         if slug not in found:
-            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'claimed': 0, 'running': 0, 'state': 'unavailable'})
+            result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'claimed': 0,
+                                       'running': 0, 'deferred': 0, 'parked': 0, 'state': 'unavailable',
+                                       'partial': False, 'last_change': None})
             store_available[slug] = False
     unavailable_slugs = {slug for slug, ok in store_available.items() if not ok}
     prefix_to_slug = {proj['prefix']: slug for slug, proj in registry.items() if proj.get('prefix')}
