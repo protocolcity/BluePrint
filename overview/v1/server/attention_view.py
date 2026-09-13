@@ -65,6 +65,12 @@ def face_reason(order, labels, computed_face, now):
         return 'No recent update'
     if computed_face == 'note':
         reminder = next((label for label in labels if isinstance(label, str) and label.startswith('reminder:')), None)
+        if 'you:todo' in labels:
+            return 'Your todo'
+        if 'you:remind' in labels and reminder:
+            return 'Reminder ' + reminder.split(':', 1)[1]
+        if 'you:note' in labels:
+            return 'Your note'
         if reminder:
             return 'Reminder set for ' + reminder.split(':', 1)[1]
         return 'Your own note'
