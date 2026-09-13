@@ -1004,7 +1004,12 @@ def operations_snapshot(binder):
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
                     from suite.api.calendar import events_from_task
                     for event in events_from_task({**item, 'id':order_id, 'labels':labels, 'product':path.stem}):
-                        result['work_dates'].append({**event, 'dtstart':event['dtstart'].isoformat(), 'attention':attention})
+                        result['work_dates'].append({
+                            **event,
+                            'dtstart': event['dtstart'].isoformat(),
+                            'attention': attention_face == 'decide',
+                            'attention_face': attention_face,
+                        })
                     status = item.get('status')
                     marker = owner_by_task.get(item['id'])
                     parent = next((label[7:] for label in labels if isinstance(label, str) and label.startswith('parent:') and label[7:]), '')

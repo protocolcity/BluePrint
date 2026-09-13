@@ -380,6 +380,33 @@ class OperationsTests(unittest.TestCase):
         dates=operations_snapshot(self.root)['work_dates']
         self.assertEqual(sorted(d['kind'] for d in dates),['deadline','timer'])
         self.assertEqual({d['task_id'] for d in dates},{'pc-1'})
+        by_kind={d['kind']:d for d in dates}
+        self.assertEqual(by_kind['deadline']['source'],'deadline:2026-09-20')
+        self.assertEqual(by_kind['timer']['source'],'gate_until')
+
+    def test_human_gate_note_date_projects_as_mentioned_not_due(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_note=? WHERE id=1',
+                         (json.dumps(['worker:agent']),'human','Founder ratification (2026-09-13): decide the leftover stack.'))
+        dates=operations_snapshot(self.root)['work_dates']
+        self.assertEqual(len(dates),1)
+        self.assertEqual(dates[0]['kind'],'mentioned')
+        self.assertEqual(dates[0]['source'],'gate_note')
+        self.assertEqual(dates[0]['dtstart'],'2026-09-13')
+        self.assertTrue(dates[0]['attention'])
+        self.assertEqual(dates[0]['attention_face'],'decide')
+
+    def test_watch_timer_does_not_mark_calendar_needs_you(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_until=?, gate_note=? WHERE id=1',
+                         (json.dumps(['worker:agent']),'timer','2026-10-12T14:00:00+00:00','Held until review'))
+        dates=operations_snapshot(self.root)['work_dates']
+        self.assertEqual(dates[0]['kind'],'timer')
+        self.assertFalse(dates[0]['attention'])
+        self.assertEqual(dates[0]['attention_face'],'watch')
     def test_engine_receipts_missing_are_unavailable(self):
         result=operations_snapshot(self.root)
         for key in ('worklane','workforce','worklane_api','supervisor'):
