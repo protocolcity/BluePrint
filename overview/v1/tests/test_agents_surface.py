@@ -77,6 +77,18 @@ class AgentsSurfaceTests(unittest.TestCase):
         by_id = {a['id']: a for a in operations_snapshot(self.root)['agents']}
         self.assertEqual(by_id['held']['badge'], 'OFF')
 
+    def test_no_kind_seat_with_empty_schedule_reads_off(self):
+        """review finding pc-1477: coverage and the Agents snapshot share one
+        held predicate — a row with no ``kind`` (a seat, per the Seats group)
+        carrying an empty schedule reads OFF here too, not just explicit
+        ``kind: lane`` rows."""
+        self._daemon(fresh=True)
+        self._roster({
+            'held': {'display': 'Held seat', 'command': ['runner'], 'identity': 'held', 'schedule': ''},
+        })
+        by_id = {a['id']: a for a in operations_snapshot(self.root)['agents']}
+        self.assertEqual(by_id['held']['badge'], 'OFF')
+
     def test_unknown_badge_from_stale_heartbeat(self):
         self._roster({'agent': {'display': 'Agent', 'command': ['runner'], 'identity': 'agent', 'kind': 'lane'}})
         self._daemon(fresh=False)
