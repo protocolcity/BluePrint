@@ -27,6 +27,7 @@ STATE_ORDER = {'working': 0, 'last_run_failed': 1, 'stale_shift': 2, 'idle': 3,
 
 _LEDGER_TAIL_BYTES = 16384
 _OWNER_RE = re.compile(r'(?m)^Owner:\s*(\S+)')
+_RELEASE_RE = re.compile(r'(?m)^(?:Released by|Reopened by|Blocked:)')
 _DEPENDS_RE = re.compile(r'(?i)depends on[:\s]+#?([A-Za-z][A-Za-z0-9]*-\d+)')
 STATUS_WORD = {'backlog': 'Open', 'in_review': 'Parked', 'in_progress': 'Live', 'done': 'Done', 'canceled': 'Canceled'}
 
@@ -46,6 +47,9 @@ def task_comment_index(conn):
         task_id, body, created_at = row['task_id'], row['body'] or '', row['created_at']
         snippet = body.strip().splitlines()[0] if body.strip() else ''
         last_note_by_task[task_id] = snippet[:160] + ('…' if len(snippet) > 160 else '')
+        if _RELEASE_RE.search(body):
+            owner_by_task.pop(task_id, None)
+            continue
         match = _OWNER_RE.search(body)
         if match:
             owner_by_task[task_id] = {'identity': match.group(1), 'since': created_at}

@@ -79,6 +79,23 @@ class OperationsTests(unittest.TestCase):
         self.assertIsNone(order['live_with'])
         self.assertEqual(order['since'], '2026-09-12T05:00:00Z')
         self.assertEqual(order['last_note'], 'Parked: done for now')
+    def test_release_comment_clears_prior_owner_marker(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-claude-implementer\nStart: t','bp-claude-implementer','2026-09-12T05:00:00Z')")
+            conn.execute("INSERT INTO task_comments VALUES(2,1,'Released by bp-claude-implementer \xe2\x80\x94 returning to backlog','bp-claude-implementer','2026-09-12T06:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['status_word'], 'Open')
+        self.assertIsNone(order['live_with']);self.assertIsNone(order['parked_by']);self.assertIsNone(order['since'])
+    def test_blocked_release_comment_clears_prior_owner_marker(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-claude-implementer\nStart: t','bp-claude-implementer','2026-09-12T05:00:00Z')")
+            conn.execute("INSERT INTO task_comments VALUES(2,1,'Blocked: waiting on credentials\nNext step: ask You','bp-claude-implementer','2026-09-12T06:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertIsNone(order['live_with']);self.assertIsNone(order['parked_by'])
     def test_backlog_reads_open_with_no_claim(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:

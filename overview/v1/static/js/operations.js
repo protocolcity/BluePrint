@@ -142,7 +142,7 @@ function filterOptions() {
 }
 function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value;
-  const base=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.length:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status.startsWith('gate:')?o.gate_type===status.slice(5):status.startsWith('face:')?o.attention_face===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const base=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || (selectedAssignment==='unassigned'?!o.workers.filter(w=>w!=='you').length:o.workers.includes(selectedAssignment.slice(7)))) && (!status || (status==='attention'?o.attention:status==='blocked'?o.blockers && o.blockers.length:status.startsWith('gate:')?o.gate_type===status.slice(5):status.startsWith('face:')?o.attention_face===status.slice(5):o.status===status)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const parked=base.filter(o=>['deferred','tracking'].includes(o.gate_type));
   $('deferred-count').textContent=parked.length;
   $('deferred-toggle').hidden=!parked.length && !showDeferred;
