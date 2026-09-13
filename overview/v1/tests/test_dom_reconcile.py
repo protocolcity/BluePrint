@@ -89,6 +89,21 @@ class ReconcileListTests(unittest.TestCase):
         self.assertEqual(c["text"], "Nothing here")
         self.assertTrue(c["sameNode"])
 
+    def test_duplicate_key_is_deduped_not_compounded(self) -> None:
+        c = self.cases["duplicate_key_deduped"]
+        self.assertEqual(c["countAfterDupeInput"], 1)
+        self.assertEqual(c["keysAfterDupeInput"], ["p:1"])
+        self.assertEqual(c["countAfterFollowUp"], 2)
+        self.assertEqual(c["order"], ["p:1", "p:2"])
+        self.assertTrue(c["firstNodeReused"])
+
+    def test_sync_note_patches_a_fixed_note_in_place(self) -> None:
+        c = self.cases["sync_note_stable"]
+        self.assertEqual(c["countBeforeRemoval"], 1)
+        self.assertTrue(c["sameNodeAfterRepeat"])
+        self.assertEqual(c["textAfterUpdate"], "Excluded: a, b, c.")
+        self.assertEqual(c["countAfterRemoval"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

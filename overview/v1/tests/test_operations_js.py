@@ -97,6 +97,17 @@ class RowReconciliationTests(unittest.TestCase):
         for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
+    def test_excluded_stores_note_is_patched_in_place_not_appended_every_paint(self):
+        """Review fix (pc-1470, PR #87): the Connections page note used to
+        be unconditionally .append()-ed on every paint(), piling up one
+        copy per paint even though the fingerprint check passed. It must
+        now go through syncNote's stable-key patch (see test_dom_reconcile
+        for the append-once/update-in-place harness proof)."""
+        self.assertIn("syncNote", _SRC)
+        self.assertIn("{reconcileList, syncNote} = await import('/js/dom-reconcile.mjs')", _SRC)
+        self.assertNotIn("$('connection-list').append(el('p','Excluded", _SRC)
+        self.assertIn("syncNote($('connection-list'),'excluded-stores'", _SRC)
+
 
 if __name__ == '__main__':
     unittest.main()

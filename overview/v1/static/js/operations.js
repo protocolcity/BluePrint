@@ -3,7 +3,7 @@
 'use strict';
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
-const {reconcileList} = await import('/js/dom-reconcile.mjs');
+const {reconcileList, syncNote} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/activity':'activity','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -262,7 +262,7 @@ function paint() {
   if(page==='agents') agents();
   if(page==='calendar') calendar();
   if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
-  if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; if(excluded.length) $('connection-list').append(el('p','Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.','bp-note bp-muted'));$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
+  if(page==='connections') { sources($('connection-list'),true);const excluded=snapshot.excluded_stores || []; syncNote($('connection-list'),'excluded-stores',excluded.length ? 'Excluded unregistered databases: ' + excluded.join(', ') + '. These are not counted as active projects.' : null,'bp-note bp-muted');$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 function liveIndicator() {
   if(!lastSuccess) return lastError ? 'Unable to read workspace. Retry with Refresh.' : 'Connecting…';

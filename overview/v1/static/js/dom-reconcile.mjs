@@ -79,11 +79,16 @@ export function reconcileList(container, items, keyOf, buildRow, options = {}) {
   if (container.dataset.emptyText !== undefined) delete container.dataset.emptyText;
   const existing = new Map();
   for (const node of Array.from(container.childNodes)) {
-    if (node.dataset && node.dataset.key !== undefined) existing.set(node.dataset.key, node);
+    if (!node.dataset || node.dataset.key === undefined) continue;
+    if (existing.has(node.dataset.key)) { container.removeChild(node); continue; }
+    existing.set(node.dataset.key, node);
   }
+  const seen = new Set();
   let cursor = container.firstChild;
   for (const item of items) {
     const key = String(keyOf(item));
+    if (seen.has(key)) continue;
+    seen.add(key);
     const rendered = buildRow(item);
     rendered.dataset.key = key;
     const node = existing.get(key);
@@ -98,4 +103,27 @@ export function reconcileList(container, items, keyOf, buildRow, options = {}) {
     }
   }
   for (const leftover of existing.values()) container.removeChild(leftover);
+}
+
+/* A single fixed-identity note sibling inside a `reconcileList` container
+   (e.g. an "Excluded ..." footnote after the keyed rows): patched in
+   place by a stable `key`, never appended again on the next paint. Pass
+   `text` as null/undefined/empty to remove the note. */
+export function syncNote(container, key, text, cls) {
+  let node = null;
+  for (const child of Array.from(container.childNodes)) {
+    if (child.dataset && child.dataset.note === key) { node = child; break; }
+  }
+  if (!text) {
+    if (node) container.removeChild(node);
+    return null;
+  }
+  if (!node) {
+    node = container.ownerDocument.createElement('p');
+    node.dataset.note = key;
+    container.appendChild(node);
+  }
+  if (cls !== undefined && node.className !== cls) node.className = cls;
+  if (node.textContent !== text) node.textContent = text;
+  return node;
 }

@@ -2,7 +2,7 @@
 // insertBefore/removeChild/appendChild/attributes/classList/dataset well
 // enough to prove node identity survives a reconcile (the whole point of
 // the module — see test_dom_reconcile.py).
-import { reconcileList } from "../../static/js/dom-reconcile.mjs";
+import { reconcileList, syncNote } from "../../static/js/dom-reconcile.mjs";
 
 let nextId = 0;
 
@@ -221,6 +221,51 @@ const cases = {};
     childCount: container.childNodes.length,
     text: container.childNodes[0] ? container.childNodes[0].textContent : "",
     sameNode: container.childNodes[0] === firstEmptyNode,
+  };
+}
+
+// 8. A duplicate key among the current children (should never happen from
+// reconcileList itself, but must not compound if it does) is deduped down
+// to one node, and a duplicate key in the incoming items list is patched
+// once and the second occurrence skipped — never three nodes for two items.
+{
+  const container = root();
+  const build = (item) => el("div", item.label, "row");
+  const dupA = el("div", "stale A", "row");
+  dupA.dataset.key = "p:1";
+  const dupB = el("div", "stale B", "row");
+  dupB.dataset.key = "p:1";
+  container.appendChild(dupA);
+  container.appendChild(dupB);
+  reconcileList(container, [{ id: "p:1", label: "One" }, { id: "p:1", label: "One" }], (i) => i.id, build);
+  const afterDedupe = container.childNodes.slice();
+  reconcileList(container, [{ id: "p:1", label: "One" }, { id: "p:2", label: "Two" }], (i) => i.id, build);
+  cases.duplicate_key_deduped = {
+    countAfterDupeInput: afterDedupe.length,
+    keysAfterDupeInput: afterDedupe.map((n) => n.getAttribute("data-key")),
+    countAfterFollowUp: container.childNodes.length,
+    order: container.childNodes.map((n) => n.getAttribute("data-key")),
+    firstNodeReused: container.childNodes[0] === dupA,
+  };
+}
+
+// 9. syncNote: a fixed-identity note sibling is created once and patched
+// in place on repeated calls, never appended again; passing a falsy text
+// removes it.
+{
+  const container = root();
+  syncNote(container, "excluded", "Excluded: a, b.", "bp-note");
+  const first = container.childNodes[0];
+  syncNote(container, "excluded", "Excluded: a, b.", "bp-note");
+  syncNote(container, "excluded", "Excluded: a, b, c.", "bp-note");
+  const afterUpdate = container.childNodes[0];
+  const countBeforeRemoval = container.childNodes.length;
+  syncNote(container, "excluded", null);
+  cases.sync_note_stable = {
+    countBeforeRemoval,
+    sameNodeAfterRepeat: first === afterUpdate,
+    textAfterUpdate: afterUpdate.textContent,
+    countAfterRemoval: container.childNodes.length,
   };
 }
 
