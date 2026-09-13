@@ -219,9 +219,17 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-hit:hover .map-lot-plate, .map-hit:hover .map-dig-plate { stroke: var(--map-lot-focus); }
 @media (max-width: 700px) {
   .map-chrome { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0,1fr) auto; }
-  .map-browser { grid-column: 1 / -1; width: 100%; }
+  .map-browser, .map-project-panel { grid-column: 1 / -1; width: 100%; }
   #map-reset { grid-column: 2; }
   #map-page-controls { grid-column: 2; }
+}
+
+/* FOCUSED_PROJECT §Rules — "narrow widths render the same hierarchy as an
+ * expandable list with the same selection model, not a miniature canvas."
+ * The list is #map-project-panel / #map-browser-list — already the exact
+ * same viewState-driven markup the wide canvas mirrors, so hiding the SVG
+ * here changes no data, only which surface is visible. */
+@media (max-width: 400px) {
   #map-svg { display: none; }
   #map-page-controls { display: none; }
 }
@@ -240,3 +248,53 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
   #map-browser-list *, .map-md-panel { animation: none !important; transition: none !important; }
 }
 .bp-reduce-motion #map-browser-list *, .bp-reduce-motion .map-md-panel { animation: none !important; transition: none !important; }
+
+/* Focused exploded project (MAP_FOCUSED_PROJECT.md, pc-1492) — one project
+ * centered, four branch chips, one expanded at a time. Motion explains what
+ * opened: items animate in from the branch chip; everything else holds
+ * still (Rule: "stable positions for everything else"). */
+.map-project-node .map-hub-disc { fill: var(--map-lot-focus); }
+.map-branch-plate { fill: var(--map-lot); stroke: #1e2128; stroke-width: 1; }
+.map-branch-chip.is-expanded .map-branch-plate { stroke: var(--map-lot-focus); stroke-width: 2; }
+.map-branch-chip.is-unavailable .map-branch-plate { fill: #2a2226; }
+.map-branch-chip.is-empty .map-branch-plate { opacity: .7; }
+.map-branch-label { fill: var(--map-fg); font-size: 12px; font-weight: 600; pointer-events: none; }
+.map-branch-summary { fill: var(--map-muted); font-size: 10px; pointer-events: none; }
+.map-branch-item-plate { fill: var(--map-dig); stroke: #1e2128; stroke-width: 1; }
+.map-branch-item-more .map-branch-item-plate { fill: transparent; stroke: var(--map-chrome-border); stroke-dasharray: 3 3; }
+.map-branch-item-label { fill: var(--map-fg); font-size: 10px; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .map-branch-item { transition: transform 160ms ease-out, opacity 160ms ease-out; }
+  .map-branch-item.map-branch-item-enter { opacity: 0; transform-origin: center; }
+}
+.bp-reduce-motion .map-branch-item { transition: none !important; }
+
+/* The sidebar's project-focus panel — same selection the canvas paints,
+ * so keyboard/touch/narrow users get identical actions (Rule: "narrow
+ * widths render the same hierarchy as an expandable list"). */
+.map-project-panel { display: grid; gap: 6px; }
+.map-project-back { justify-self: start; background: transparent; color: inherit; border: 1px solid var(--map-chrome-border); border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+#map-project-name { margin: 2px 0; font-size: 14px; }
+#map-branch-buttons { display: grid; gap: 4px; }
+#map-branch-buttons button {
+  text-align: left; padding: 7px 8px; border: 1px solid var(--map-chrome-border); border-radius: 4px;
+  background: transparent; color: var(--map-chrome-fg); font: inherit; cursor: pointer;
+}
+#map-branch-buttons button[aria-expanded="true"] { border-color: var(--map-lot-focus); }
+#map-branch-buttons button.is-unavailable { opacity: .6; }
+#map-branch-items { display: grid; gap: 3px; max-height: 32vh; overflow-y: auto; }
+#map-branch-items button {
+  text-align: left; padding: 6px 8px; border: 0; border-radius: 4px; background: transparent;
+  color: var(--map-chrome-fg); font: inherit; cursor: pointer;
+}
+#map-branch-items button:hover, #map-branch-items button:focus-visible { background: #273347; outline: 2px solid #789bce; outline-offset: -2px; }
+#map-branch-items .map-branch-item-detail { display: block; color: var(--map-muted); font-size: 11px; }
+#map-item-detail {
+  border: 1px solid var(--map-chrome-border); border-radius: 6px; padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+}
+#map-item-detail a { color: #9db8e8; }
+@media (prefers-reduced-motion: no-preference) {
+  #map-branch-items > button { animation: map-content-arrive 130ms ease-out both; }
+}
+.bp-reduce-motion #map-branch-items *, .bp-reduce-motion .map-branch-item { animation: none !important; transition: none !important; }

@@ -12,9 +12,11 @@ import { createViewState } from './view-state.js';
 import { createMapTree } from './map-tree.js';
 import {
   ensureLayers, paintHub, paintLots, paintDigIn, clearDigIn, fitTransform,
+  paintProjectFocus,
 } from './map-paint.js';
 import { createHitRouter } from './map-hit-router.js';
 import { createMdViewer } from './md-viewer.js';
+import { buildBranches, branchLabel } from './project-focus.js';
 
 const CONFIG = {
   worldId: 'world',
@@ -31,6 +33,11 @@ const CONFIG = {
   digRadius: 130,
   minZoom: 0.5,
   maxZoom: 4,
+  // Fixed framing for the project-focus canvas (center + branch ring +
+  // item fan) — the layout doesn't grow with content, so the camera never
+  // has to re-fit while a project is in focus (Rule: "preserve camera").
+  projectFocusRadius: 360,
+  remoteEndpoint: '/api/remote-activity',
 };
 
 function indexNodeState(projects) {
@@ -67,6 +74,27 @@ export async function boot(opts = {}) {
   let restoring = true;
   const viewState = createViewState();
   const tree = createMapTree({ fetcher: opts.fetcher || fetch, endpoints: opts.endpoints });
+  const fetchImpl = opts.fetcher || fetch;
+  const remoteEndpoint = (opts.endpoints && opts.endpoints.remote) || cfg.remoteEndpoint;
+
+  // Work/Agents come from the shared operations projection (map-shell.js
+  // dispatches `bp:map-operations` after its own /api/operations fetch);
+  // Delivery comes from the remote-activity cache. Both are read-only
+  // snapshots — project-focus.js composes the branches, never this host.
+  let latestOperations = null;
+  let latestRemote = null;
+  let lastBranches = [];
+  async function refreshRemote() {
+    try {
+      const res = await fetchImpl(remoteEndpoint, { headers: { accept: 'application/json' } });
+      latestRemote = res && res.ok ? await res.json() : null;
+    } catch (_) { latestRemote = null; }
+    scheduleRepaint();
+  }
+  document.addEventListener('bp:map-operations', event => {
+    latestOperations = event.detail || null;
+    refreshRemote();
+  });
   const viewer = createMdViewer({
     fetcher: opts.fetcher || fetch,
     endpoint: (opts.endpoints && opts.endpoints.file) || '/api/file',
@@ -77,11 +105,26 @@ export async function boot(opts = {}) {
   function syncUrl() {
     if (restoring) return;
     const url = new URL(location.href);
-    const path = viewState.snapshot().dig?.relPath;
+    const snap = viewState.snapshot();
+    const path = snap.dig?.relPath;
     const md = viewer.currentPath();
     if (path) url.searchParams.set('path', path); else url.searchParams.delete('path');
     if (md) url.searchParams.set('md', md); else url.searchParams.delete('md');
+    // FOCUSED_PROJECT §Rules — "URL carries project, branch and item" so
+    // back/forward, refresh and the reader's return restore the same view.
+    if (snap.project) {
+      url.searchParams.set('project', snap.project.relPath);
+    } else {
+      url.searchParams.delete('project');
+    }
+    if (snap.branch) url.searchParams.set('branch', snap.branch); else url.searchParams.delete('branch');
+    if (snap.item) url.searchParams.set('item', String(snap.item.id)); else url.searchParams.delete('item');
     history.replaceState(history.state, '', '/map' + url.search + url.hash);
+  }
+  function currentMapUrl() { return '/map' + location.search; }
+  function withReturnTo(href) {
+    const sep = href.includes('?') ? '&' : '?';
+    return href + sep + 'return_to=' + encodeURIComponent(currentMapUrl());
   }
   function openPaper(path, options) {
     const opening = viewer.open(path, options);
@@ -114,8 +157,50 @@ export async function boot(opts = {}) {
     );
   }
 
-  function repaint() {
+  // Keyboard focus survives a repaint (Rule: "Content updates preserve …
+  // keyboard focus") even though paint*() functions replaceChildren() the
+  // SVG groups they own — capture the focused hit's identity, repaint, then
+  // find and refocus its successor node.
+  function withFocusPreserved(fn) {
+    const active = document.activeElement;
+    const ds = active && active.dataset;
+    const key = ds && (ds.branch || ds.relPath) ? { ...ds } : null;
+    fn();
+    if (!key) return;
+    let selector = null;
+    if (key.itemId) selector = `[data-branch="${key.branch}"][data-item-id="${key.itemId}"]`;
+    else if (key.branch) selector = `[data-branch="${key.branch}"]`;
+    else if (key.relPath) selector = `[data-rel-path="${key.relPath}"]`;
+    if (!selector) return;
+    try {
+      const match = world.querySelector(selector);
+      if (match && typeof match.focus === 'function') match.focus();
+    } catch (_) { /* selector built from live data; a mismatch is a no-op */ }
+  }
+
+  function currentBranches(snap) {
+    return snap.project ? buildBranches(snap.project, latestOperations, latestRemote) : [];
+  }
+
+  function repaint() { withFocusPreserved(repaintInner); }
+
+  function repaintInner() {
     const snap = viewState.snapshot();
+    if (snap.project) {
+      lastBranches = currentBranches(snap);
+      world.querySelector('#hub').style.display = 'none';
+      world.querySelector('#lots').style.display = 'none';
+      if (snap.branch !== 'papers') clearDigIn(world);
+      paintProjectFocus(world, { project: snap.project, branches: lastBranches, expandedBranch: snap.branch });
+      currentOuterRadius = cfg.projectFocusRadius;
+      applyCamera();
+      renderTrail();
+      renderProjectPanel(snap);
+      return;
+    }
+    lastBranches = [];
+    world.querySelector('#project-focus-layer')?.replaceChildren();
+    world.querySelector('#hub').style.display = '';
     // Selected top-level lot = the root of the current dig trail. Passing
     // its relPath into paintLots lights the 2px accent focus ring on the
     // matching lot so "digging into X" is visually anchored to X.
@@ -129,7 +214,119 @@ export async function boot(opts = {}) {
     if (!snap.dig) { clearDigIn(world); }
     applyCamera();
     renderTrail();
+    renderProjectPanel(snap);
     renderBrowser();
+  }
+
+  // Selecting a project focuses the canvas on it (FOCUSED_PROJECT §Rules:
+  // "Selecting a project replaces the canvas; it never layers every
+  // project behind its children"). A fresh focus always starts collapsed —
+  // no branch open — so the four chips are the first thing the person sees.
+  function selectProjectView(node) {
+    page = 0; camera.x = 0; camera.y = 0; camera.k = 1;
+    viewState.selectProject(node);
+    scheduleRepaint();
+  }
+
+  function clearProjectFocusView() {
+    camera.x = 0; camera.y = 0; camera.k = 1;
+    viewState.clearProject();
+    scheduleRepaint();
+  }
+
+  // One branch open at a time (FOCUSED_PROJECT §Rules: "Opening a branch
+  // collapses the previously open one"). Papers keeps the real folder tree,
+  // so opening it reuses the existing dig machinery scoped to the project's
+  // own folder; the other three branches are flat, already-fetched lists.
+  async function toggleBranchView(key) {
+    const wasExpanded = viewState.snapshot().branch === key;
+    viewState.setBranch(key);
+    if (!wasExpanded && key === 'papers') {
+      const project = viewState.snapshot().project;
+      if (project) await digInto(project, { mode: 'root' });
+      return;
+    }
+    if (wasExpanded && key === 'papers') clearDigIn(world);
+    scheduleRepaint();
+  }
+
+  function renderProjectPanel(snap) {
+    const panel = document.getElementById('map-project-panel');
+    if (!panel) return;
+    if (!snap.project) { panel.hidden = true; return; }
+    panel.hidden = false;
+    const nameEl = document.getElementById('map-project-name');
+    if (nameEl) nameEl.textContent = snap.project.name;
+    const buttonsHost = document.getElementById('map-branch-buttons');
+    if (buttonsHost) {
+      buttonsHost.replaceChildren();
+      for (const branch of lastBranches) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = `map-branch-btn-${branch.key}`;
+        btn.className = `is-${branch.state}`;
+        btn.setAttribute('aria-expanded', snap.branch === branch.key ? 'true' : 'false');
+        btn.textContent = `${branch.label} — ${branch.summary}`;
+        btn.addEventListener('click', () => toggleBranchView(branch.key));
+        buttonsHost.appendChild(btn);
+      }
+    }
+    const itemsHost = document.getElementById('map-branch-items');
+    if (itemsHost) {
+      itemsHost.replaceChildren();
+      if (snap.branch === 'papers') {
+        itemsHost.textContent = 'Browse the folder list below.';
+      } else if (snap.branch) {
+        const branch = lastBranches.find(b => b.key === snap.branch);
+        const items = (branch && branch.items) || [];
+        if (items.length === 0) {
+          itemsHost.textContent = branch ? branch.summary : '';
+        } else {
+          for (const item of items) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.branch = snap.branch;
+            btn.dataset.itemId = String(item.id);
+            const label = document.createElement('span');
+            label.textContent = item.label;
+            btn.appendChild(label);
+            if (item.detail) {
+              const detail = document.createElement('span');
+              detail.className = 'map-branch-item-detail';
+              detail.textContent = item.detail;
+              btn.appendChild(detail);
+            }
+            btn.addEventListener('click', () => { viewState.setItem(item); scheduleRepaint(); });
+            itemsHost.appendChild(btn);
+          }
+        }
+      }
+    }
+    renderItemDetail(snap);
+  }
+
+  function renderItemDetail(snap) {
+    const box = document.getElementById('map-item-detail');
+    if (!box) return;
+    if (!snap.item) { box.hidden = true; box.replaceChildren(); return; }
+    box.hidden = false;
+    box.replaceChildren();
+    const heading = document.createElement('strong');
+    heading.textContent = snap.item.label;
+    box.append(heading);
+    if (snap.item.detail) {
+      const p = document.createElement('p');
+      p.textContent = snap.item.detail;
+      box.append(p);
+    }
+    if (snap.item.href) {
+      const a = document.createElement('a');
+      a.textContent = 'Open';
+      const external = /^https?:\/\//.test(snap.item.href);
+      a.href = external ? snap.item.href : withReturnTo(snap.item.href);
+      if (external) { a.target = '_blank'; a.rel = 'noopener'; }
+      box.append(a);
+    }
   }
 
   let repaintScheduled = false;
@@ -241,6 +438,36 @@ export async function boot(opts = {}) {
     syncUrl();
     const el = document.getElementById(cfg.chromeIds.trail);
     if (!el) return;
+    const snap = viewState.snapshot();
+    // FOCUSED_PROJECT §Rules — "Sidebar, canvas and breadcrumb share one
+    // selection." A focused project always shows Home › Project [› Branch
+    // [› Item]], not the raw Papers dig trail (that only surfaces once the
+    // Papers branch is the expanded one, as its own nested crumbs below).
+    if (snap.project && snap.branch !== 'papers') {
+      el.hidden = false;
+      el.replaceChildren();
+      const crumbs = [
+        { label: tree.binder?.name || 'hub', onClick: clearProjectFocusView },
+        { label: snap.project.name, onClick: () => { viewState.clearBranch(); scheduleRepaint(); } },
+      ];
+      if (snap.branch) crumbs.push({ label: branchLabel(snap.branch), onClick: () => { viewState.clearItem(); scheduleRepaint(); } });
+      if (snap.item) crumbs.push({ label: snap.item.label, onClick: null });
+      crumbs.forEach((crumb, i) => {
+        if (i > 0) {
+          const sep = document.createElement('span');
+          sep.className = 'map-trail-sep';
+          sep.textContent = '›';
+          el.appendChild(sep);
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'map-trail-crumb' + (i === 0 ? ' map-trail-home' : '');
+        btn.textContent = crumb.label;
+        if (crumb.onClick) btn.addEventListener('click', crumb.onClick); else btn.disabled = true;
+        el.appendChild(btn);
+      });
+      return;
+    }
     const trail = viewState.snapshot().trail;
     if (trail.length === 0) { el.replaceChildren(); el.hidden = true; return; }
     el.hidden = false;
@@ -249,7 +476,7 @@ export async function boot(opts = {}) {
     home.type = 'button';
     home.className = 'map-trail-crumb map-trail-home';
     home.textContent = tree.binder?.name || 'hub';
-    home.addEventListener('click', resetView);
+    home.addEventListener('click', snap.project ? clearProjectFocusView : resetView);
     el.appendChild(home);
     trail.forEach((entry, i) => {
       const sep = document.createElement('span');
@@ -285,8 +512,25 @@ export async function boot(opts = {}) {
       case 'chrome':
         return; // owned elsewhere
       case 'hub': {
+        // The project-focus center node also reports layer 'hub' — clicking
+        // it, like the old hub, always returns to the workspace.
+        if (viewState.snapshot().project) { clearProjectFocusView(); return; }
         if (viewState.snapshot().dig) { resetView(); return; }
         // hub click on cold canvas = repaint anchor; no-op verb.
+        return;
+      }
+      case 'branch': {
+        toggleBranchView(hit.root.getAttribute('data-branch'));
+        return;
+      }
+      case 'branch-item': {
+        const key = hit.root.getAttribute('data-branch');
+        const itemId = hit.root.getAttribute('data-item-id');
+        const branch = lastBranches.find(b => b.key === key);
+        const item = itemId && branch ? branch.items.find(it => String(it.id) === itemId) : null;
+        if (item) { viewState.setItem(item); scheduleRepaint(); }
+        // The "+N more" chip carries no item id — the sidebar already lists
+        // every item, so there is nothing further to do here.
         return;
       }
       case 'lots':
@@ -302,9 +546,10 @@ export async function boot(opts = {}) {
         }
         if (!isDir) return; // non-md file: no verb in V1
         // hit.layer semantics pin the dig grammar:
-        //   'lots'   → root-ring click; REPLACE trail (sibling swap)
+        //   'lots'   → root-ring click; focus this project (FOCUSED_PROJECT)
         //   'dig-in' → child inside the current fan; PUSH trail (nested)
         const mode = hit.layer === 'dig-in' ? 'nest' : 'root';
+        if (mode === 'root') { selectProjectView({ relPath, name, hasMd }); return; }
         digInto({ relPath, name }, { mode });
         return;
       }
@@ -364,6 +609,9 @@ export async function boot(opts = {}) {
   const resetBtn = document.getElementById(cfg.chromeIds.reset);
   if (resetBtn) resetBtn.addEventListener('click', resetView);
 
+  const projectBackBtn = document.getElementById('map-project-back');
+  if (projectBackBtn) projectBackBtn.addEventListener('click', clearProjectFocusView);
+
   // Back on Backspace.
   document.addEventListener('keydown', async (ev) => {
     if (viewer.isOpen()) return;
@@ -396,8 +644,22 @@ export async function boot(opts = {}) {
   });
   window.addEventListener('resize', applyCamera);
   await tree.load();
+  await refreshRemote();
   repaint();
-  if(initial.get('path')) {
+  if (initial.get('project')) {
+    const projectPath = initial.get('project');
+    selectProjectView({ relPath: projectPath, name: projectPath.split('/').pop() });
+    const branch = initial.get('branch');
+    if (branch) {
+      await toggleBranchView(branch);
+      const itemId = initial.get('item');
+      if (itemId) {
+        const found = lastBranches.find(b => b.key === branch);
+        const item = found && found.items.find(it => String(it.id) === itemId);
+        if (item) { viewState.setItem(item); scheduleRepaint(); }
+      }
+    }
+  } else if(initial.get('path')) {
     let relative='';
     for(const part of initial.get('path').split('/').filter(Boolean)) {
       relative=relative ? relative+'/'+part : part;
@@ -412,6 +674,8 @@ export async function boot(opts = {}) {
     // Exposed for smoke tests + dogfood introspection.
     viewState, tree, viewer, hitRouter,
     repaint, resetView, digInto,
+    selectProjectView, clearProjectFocusView, toggleBranchView,
+    get lastBranches() { return lastBranches; },
   };
 }
 
