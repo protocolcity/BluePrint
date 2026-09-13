@@ -137,21 +137,27 @@ class FiveAxisFilterTests(unittest.TestCase):
 
 
 class LiveIndicatorTests(unittest.TestCase):
-    """D2 live rendering (pc-1470): header reads Live/Reconnecting/Polling,
-    never a ticking 'Updated Xs ago' counter."""
+    """pc-1483: the freshness line separates three independent clocks —
+    transport (Updates connected/reconnecting/polling/paused), last
+    successful source read/age, and last meaningful content change — never
+    one ambiguous word. Supersedes pc-1470's ban on a ticking 'Updated Xs
+    ago' counter: that decision was about conflating read time with content
+    change into a single label; these are three distinct, self-explanatory
+    clauses instead (STATES_AND_TERMS.md, OPERATIONS_EVOLUTION_2026_09.md)."""
 
-    def test_no_more_ticking_updated_ago_counter(self):
-        self.assertNotIn('Updated', _SRC)
-        self.assertNotIn('${Math.floor((Date.now()-lastSuccess)', _SRC.replace(' ', ''))
-
-    def test_open_stream_reads_live_with_last_change_age(self):
-        self.assertIn("streamState==='open'", _SRC)
-        self.assertIn('Live · last change', _SRC)
-
-    def test_dropped_stream_reads_reconnecting_then_polling(self):
-        self.assertIn("'Reconnecting'", _SRC)
-        self.assertIn("'Polling every 60 s'", _SRC)
+    def test_transport_state_is_its_own_clause(self):
+        self.assertIn("'Updates connected'", _SRC)
+        self.assertIn("'Updates reconnecting'", _SRC)
+        self.assertIn("'Updates polling every 60 s'", _SRC)
+        self.assertIn("'Updates paused'", _SRC)
         self.assertIn('consecutiveErrors', _SRC)
+
+    def test_last_read_age_is_its_own_clause(self):
+        self.assertIn('last read ${readAge}s ago', _SRC)
+
+    def test_last_change_age_is_its_own_clause_and_never_a_bare_read(self):
+        self.assertIn('last change ${Math.floor((Date.now()-lastChangeAt)/1000)}s ago', _SRC)
+        self.assertIn('no change observed yet', _SRC)
 
     def test_refresh_button_label_only_flips_on_a_manual_read(self):
         compact = _SRC.replace(' ', '')
@@ -161,6 +167,61 @@ class LiveIndicatorTests(unittest.TestCase):
         # resume) must not pass `true` — only the click handler does.
         auto_call_sites = _SRC.count('refresh();')
         self.assertGreaterEqual(auto_call_sites, 3)
+
+
+class ContentFingerprintTests(unittest.TestCase):
+    """pc-1483: a fingerprint used to decide whether the content actually
+    changed must not include pure read-time/heartbeat-tick fields, or a
+    silent identical re-read repaints and bumps 'last change' every poll."""
+
+    def test_content_key_strips_heartbeat_tick_and_probe_read_time(self):
+        fn = _SRC.split('function contentKey(next)')[1].split('async function refresh(')[0]
+        self.assertIn('last_at', fn)
+        self.assertIn("worklane_api", fn)
+        self.assertIn('observed_at:null', fn)
+
+    def test_content_key_strips_shift_age_seconds(self):
+        """Review finding (pc-1483 recovery 2): an agent's open-shift
+        age_seconds is recomputed from the wall clock on every read, so two
+        otherwise-identical snapshots that only differ there must fingerprint
+        the same — the prior fix stripped last_at from agents/supervisor but
+        kept the full shift object, which still carried age_seconds."""
+        fn = _SRC.split('function contentKey(next)')[1].split('async function refresh(')[0]
+        self.assertIn('stripShiftAge', fn)
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping contentKey behavioral check')
+        harness = Path(__file__).resolve().parent / 'harness' / 'content_key_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'content key harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertTrue(result['same_key_for_different_age_seconds'])
+        self.assertTrue(result['different_key_for_different_started_at'])
+
+    def test_refresh_uses_content_key_not_a_raw_json_stringify(self):
+        fn = _SRC.split('async function refresh(manual)')[1].split('function updateFilters()')[0]
+        self.assertIn('contentKey(next)', fn)
+
+    def test_timeline_change_clock_ignores_an_identical_successful_read(self):
+        """refreshTimeline() must not stamp lastChangeAt on every successful
+        read (STATES_AND_TERMS.md/pc-1483: 'Timeline successful identical
+        reads must not reset last meaningful change')."""
+        fn = _SRC.split('async function refreshTimeline(')[1].split('async function refreshRemote(')[0]
+        self.assertNotIn('lastChangeAt = Date.now();\n  } catch (error) {', fn)
+        self.assertIn('timelineFingerprint', fn)
+        self.assertIn('timelineKey!==timelineFingerprint', fn.replace(' ', ''))
+
+    def test_manual_refresh_forces_a_full_timeline_reload(self):
+        """Review finding (pc-1483 recovery 2): after Load more sets
+        timelineExpanded, refreshTimeline(false) alone takes the background
+        path (only toggling the new-events affordance), so the explicit
+        Refresh button did nothing visible. The click handler must pass
+        {force: true} so a manual refresh always reloads the list, the same
+        way the new-events affordance click already does."""
+        handler = _SRC.split("$('refresh').addEventListener('click',")[1].split(');\n')[0]
+        compact = handler.replace(' ', '')
+        self.assertIn('refreshTimeline(false,{force:true})', compact)
 
 
 class RowReconciliationTests(unittest.TestCase):
@@ -175,8 +236,15 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list'):
+        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'remote-repositories'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
+
+    def test_delivery_no_longer_replaces_all_repository_children(self):
+        """pc-1483: refreshRemote() must reconcile repository sections by
+        key instead of tearing the whole list down on every poll."""
+        fn = _SRC.split('async function refreshRemote()')[1].split('async function refresh(')[0]
+        self.assertNotIn("container.replaceChildren()", fn)
+        self.assertIn("reconcileList($('remote-repositories')", fn)
 
     def test_excluded_stores_are_a_reconciled_list_not_a_joined_note(self):
         self.assertIn("reconcileList($('excluded-store-list')", _SRC)
@@ -213,10 +281,125 @@ class AgentCardBodyTests(unittest.TestCase):
         self.assertIn('WorkForce daemon: seen', _SRC)
 
     def test_find_assigned_work_is_seat_only(self):
-        self.assertIn("if(agent.group==='seat')card.append(link('Findassignedwork'", _SRC.replace(' ', ''))
+        """pc-1485: the link moved into the seat-only inspector panel;
+        jobRow never renders it."""
+        self.assertIn("container.append(link('Find assigned work'", _SRC)
+        self.assertNotIn("Find assigned work", _SRC.split('function jobRow')[1].split('function ')[0])
 
     def test_recovery_attempts_is_seat_only(self):
-        self.assertIn("if(agent.group==='seat' && agent.recovery_attempts)", _SRC)
+        """pc-1485: recovery attempts moved into the seat-only run timeline;
+        jobRow never references it."""
+        self.assertIn("'Recovery attempts'", _SRC.split('function agentTimelineValues')[1].split('function ')[0])
+        self.assertNotIn('recovery_attempts', _SRC.split('function jobRow')[1].split('function ')[0])
+
+
+class AgentCompactRowAndInspectorTests(unittest.TestCase):
+    """pc-1485: compact comparable seat rows plus a selected-run inspector
+    with a source-labelled timeline; jobs stay a compact schedule/report
+    line with no timeline."""
+
+    def test_seat_and_job_lists_use_compact_rows_not_the_old_card_grid(self):
+        self.assertIn('id="seat-list" class="bp-agent-rows"', _HTML)
+        self.assertIn('id="job-list" class="bp-agent-rows"', _HTML)
+        self.assertNotIn('bp-agent-grid', _HTML)
+        self.assertNotIn('bp-agent-grid', _SRC)
+
+    def test_agent_detail_panel_exists_and_starts_hidden(self):
+        self.assertIn('id="agent-detail"', _HTML)
+        self.assertIn('id="agent-detail" class="bp-panel bp-agent-detail" hidden', _HTML)
+
+    def test_seat_row_carries_project_state_work_elapsed_update_and_one_action(self):
+        fn = _SRC.split('function agentRow(agent)')[1].split('function jobRow')[0]
+        self.assertIn("agent.project_name || 'No project queue'", fn)
+        self.assertIn('badge(agent.state,agent.badge)', fn)
+        self.assertIn('heldLink(agent)', fn)
+        self.assertIn('elapsedText(agent)', fn)
+        self.assertIn('lastUpdateText(agent)', fn)
+        self.assertIn('agentAction(agent)', fn)
+
+    def test_selecting_a_row_toggles_selection_and_repaints(self):
+        self.assertIn('function selectAgent(id)', _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("selectedAgentId=selectedAgentId===id?'':id", compact)
+        self.assertIn('agents();', _SRC.split('function selectAgent(id)')[1].split('}')[0] + '}')
+
+    def test_row_is_keyboard_operable_without_reactivating_on_button_or_link_clicks(self):
+        fn = _SRC.split('function agentRow(agent)')[1].split('function jobRow')[0]
+        self.assertIn("select.setAttribute('role','button')", fn)
+        self.assertIn('select.tabIndex=1'.replace('1', '0'), fn.replace(' ', ''))
+        self.assertIn("event.target.closest('a')", fn)
+        self.assertIn("event.key==='Enter'", fn)
+
+    def test_action_cell_is_not_inside_the_selectable_region(self):
+        """pc-1485 review fix: the action cell (a real button/link) must
+        not be nested inside the role=button selectable region — it is a
+        sibling of it on the row."""
+        fn = _SRC.split('function agentRow(agent)')[1].split('function jobRow')[0]
+        select_body = fn.split('row.append(select);')[0]
+        self.assertNotIn('bp-agent-action', select_body)
+        self.assertIn("row.append(select);", fn)
+        self.assertIn("row.append(actionCell);", fn.split('row.append(select);')[1])
+
+    def test_elapsed_is_a_time_budget_never_a_percent(self):
+        fn = _SRC.split('function elapsedText(agent)')[1].split('function ')[0]
+        self.assertIn('budget', fn)
+        self.assertNotIn('%', fn)
+
+    def test_current_work_id_is_a_usable_reader_link(self):
+        fn = _SRC.split('function heldLink(agent)')[1].split('function ')[0]
+        self.assertIn("readerHref('/work-order?'", fn)
+        self.assertIn('workUrl(order)', fn)
+
+    def test_timeline_covers_the_five_source_labelled_phases_in_order(self):
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
+        for phase in ('Dispatch candidate', 'Verified claim', 'Observed run start', 'Recovery attempts', 'Terminal outcome'):
+            self.assertIn(f"'{phase}'", fn)
+        order = [fn.index(f"'{phase}'") for phase in
+                 ('Dispatch candidate', 'Verified claim', 'Observed run start', 'Recovery attempts', 'Terminal outcome')]
+        self.assertEqual(order, sorted(order))
+
+    def test_missing_timeline_phases_read_not_reported_not_inferred(self):
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
+        self.assertIn("'Not reported'", fn)
+
+    def test_an_old_failure_no_longer_held_is_distinguished_from_a_current_failure(self):
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
+        self.assertIn("state==='last_run_failed'", fn)
+        self.assertIn('resolved by another provider', fn)
+
+    def test_job_row_is_a_compact_schedule_report_line_with_no_timeline(self):
+        fn = _SRC.split('function jobRow(agent)')[1].split('function timelineStep')[0]
+        self.assertIn('scheduleLabel(agent.schedule)', fn)
+        self.assertIn('agent.report', fn)
+        self.assertNotIn('agentTimeline', fn)
+        self.assertNotIn('heldLink', fn)
+
+    def test_inspector_action_is_seat_only_and_hides_when_nothing_selected(self):
+        fn = _SRC.split('function agentDetail()')[1].split('})();')[0]
+        self.assertIn("a.group==='seat'", fn)
+        self.assertIn('container.hidden=true', fn)
+
+    def test_inspector_reconciliation_escape_and_row_control_split(self):
+        """pc-1485 review recovery 1: DOM-behavioral guards a source-string
+        check cannot make honest — (1) an identical repaint of the selected
+        agent leaves every inspector node untouched and a single changed
+        field updates only that field; (2) Escape clears the seat selection,
+        hides the inspector, and returns focus to the row; (3) the action
+        cell is never nested inside the role=button selectable region."""
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping agent inspector harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'agent_inspector_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'agent inspector harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertTrue(result['identical_repaint_stable'])
+        self.assertTrue(result['changed_phase_isolated'])
+        self.assertTrue(result['escape_clears_selection'])
+        self.assertTrue(result['escape_hides_inspector'])
+        self.assertTrue(result['escape_returns_focus'])
+        self.assertTrue(result['action_cell_outside_select_region'])
 
 
 class DeliveryQuietCopyTests(unittest.TestCase):
@@ -229,16 +412,99 @@ class DeliveryQuietCopyTests(unittest.TestCase):
 
 
 class PersonaChipTests(unittest.TestCase):
-    """pc-1473 review fix: the chip slot must print the persona text
-    (Your todo / Reminder <date> / Your note) instead of "Needs routing"
-    on you-qualifier rows, and still print "Needs routing" when there is
-    no persona."""
+    """pc-1484: persona and needs-routing move into the expandable detail body."""
 
-    def test_persona_renders_in_the_chip_slot_before_needs_routing(self):
-        self.assertIn("if(order.persona)content.append(el('span',order.persona,'bp-order-note'));", _SRC.replace(' ', ''))
+    def test_persona_renders_in_the_detail_body_before_needs_routing(self):
+        fn = _SRC.split('function orderDetailBody(order, content)')[1].split('function orderHasDetail')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("if(order.persona)content.append(el('p',order.persona,'bp-order-note'));", compact)
+        self.assertLess(compact.index('if(order.persona)'), compact.index('elseif(order.needs_routing)'))
 
-    def test_needs_routing_only_renders_when_there_is_no_persona(self):
-        self.assertIn("elseif(order.needs_routing)content.append(el('span','Needsrouting','bp-order-note'));", _SRC.replace(' ', ''))
+    def test_needs_routing_only_renders_in_detail_when_there_is_no_persona(self):
+        fn = _SRC.split('function orderDetailBody(order, content)')[1].split('function orderHasDetail')[0]
+        self.assertIn("elseif(order.needs_routing)content.append(el('p','Needsrouting','bp-order-note'));", fn.replace(' ', ''))
+
+
+class CompactRowTests(unittest.TestCase):
+    """pc-1484: compact Overview and Work rows with progressive disclosure."""
+
+    def test_work_row_uses_one_meta_line_not_assigned_to_owner(self):
+        fn = _SRC.split('function orderRow(order)')[1].split('function gateLabel')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('compactMetaLine(order)', compact)
+        self.assertNotIn('Assignedto${order.owner}', compact)
+
+    def test_assignment_summary_never_prefixes_assigned_to(self):
+        self.assertIn('function assignmentSummary(order)', _SRC)
+        self.assertNotIn("'Assigned to'", _SRC.split('function assignmentSummary')[1].split('function lifecycleSummary')[0])
+
+    def test_boilerplate_notes_are_filtered_from_summary_and_detail_gate(self):
+        self.assertIn('function isBoilerplateNote(note)', _SRC)
+        self.assertIn('Intake:', _SRC)
+        self.assertIn('!isBoilerplateNote(order.last_note)', _SRC.replace(' ', ''))
+
+    def test_overview_starts_with_current_execution_before_metrics(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertLess(compact.index("reconcileList($('overview-executions')"), compact.index("reconcileList($('metrics')"))
+
+    def test_overview_has_recent_changes_list(self):
+        self.assertIn('id="overview-executions"', _HTML)
+        self.assertIn('id="overview-recent"', _HTML)
+        self.assertIn("reconcileList($('overview-recent')", _SRC)
+
+    def test_for_you_uses_overview_face_row_not_full_order_row(self):
+        self.assertIn('function overviewFaceRow(order)', _SRC)
+        self.assertIn('overviewFaceRow(order)', _SRC.split('function faceEntry')[1].split('function faceHeading')[0])
+
+    def test_running_and_claimed_metrics_are_distinct(self):
+        self.assertIn("'Running'", _SRC)
+        self.assertIn("'Claimed'", _SRC)
+
+
+class CompactRowReviewFixTests(unittest.TestCase):
+    """pc-1484 review recovery 1: recent changes sort, More outside the link,
+    assignment summary from server owner."""
+
+    def test_recent_changes_sort_by_parsed_time_and_exclude_closed(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('function orderUpdatedAt(order)', _SRC)
+        self.assertIn('function isClosedOrder(order)', _SRC)
+        self.assertIn('!isClosedOrder(o)', compact)
+        self.assertIn('orderUpdatedAt(b)-orderUpdatedAt(a)', compact)
+        self.assertNotIn("localeCompare(String(a.updated_at", fn)
+
+    def test_more_disclosure_is_outside_the_row_link(self):
+        for fn_name in ('orderRow', 'overviewFaceRow'):
+            fn = _SRC.split(f'function {fn_name}(order)')[1].split('function ')[0]
+            compact = fn.replace(' ', '')
+            self.assertIn('anchor.append(content)', compact)
+            self.assertNotIn('anchor.append(details)', compact)
+            self.assertIn('row.append(details)', compact)
+            self.assertLess(fn.index('row.append(anchor'), fn.index('row.append(details)'))
+
+    def test_assignment_summary_uses_server_owner_field(self):
+        fn = _SRC.split('function assignmentSummary(order)')[1].split('function lifecycleSummary')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('order.owner', fn)
+        self.assertNotIn('order.assigned_you', compact)
+        self.assertNotIn('order.workers', compact)
+
+    def test_compact_row_dom_behavior(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping compact row harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'compact_row_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'compact row harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertTrue(result['persona_owner_shows_you'])
+        self.assertTrue(result['recent_sorts_by_real_time'])
+        self.assertTrue(result['done_order_excluded'])
+        self.assertTrue(result['more_outside_link'])
+        self.assertTrue(result['more_open_survives_repaint'])
 
 
 class SeatCoverageTests(unittest.TestCase):
@@ -417,6 +683,44 @@ class CalendarRowTests(unittest.TestCase):
     def test_missing_calendar_file_is_not_configured(self):
         self.assertIn("No local calendar file. Agent schedules above are independent of a calendar file.", _SRC)
         self.assertIn("No next run reported", _SRC)
+
+
+class ActivityCueTests(unittest.TestCase):
+    """pc-1483/pc-1485: elapsed feedback on a seat row is restrained and
+    evidence-bound — read only from the server-reported shift.age_seconds
+    on each real refresh, never a local per-second ticking animation, and
+    always a time budget, never a fake percent-complete value."""
+
+    def test_elapsed_is_read_from_server_shift_evidence_not_a_local_timer(self):
+        fn = _SRC.split('function elapsedText(agent)')[1].split('\nfunction ')[0]
+        self.assertIn('agent.shift.age_seconds', fn)
+        self.assertNotIn('setInterval', fn)
+        self.assertNotIn('Date.now()', fn)
+
+    def test_elapsed_text_is_a_real_duration_not_a_fake_progress_value(self):
+        self.assertIn('function elapsedText(agent)', _SRC)
+        fn = _SRC.split('function elapsedText(agent)')[1].split('\n}')[0]
+        ret = [line for line in fn.splitlines() if 'return' in line]
+        self.assertTrue(ret)
+        self.assertFalse(any('%' in line for line in ret))
+        self.assertIn('budget', fn)
+
+
+class NewEventsAffordanceTests(unittest.TestCase):
+    """pc-1483: a background Timeline refresh while the reader has loaded
+    older pages must not silently move the reading position — it shows an
+    affordance instead."""
+
+    def test_new_events_control_exists_in_the_markup(self):
+        self.assertIn('id="timeline-new-events"', _HTML)
+
+    def test_background_refresh_does_not_replace_an_expanded_reading_position(self):
+        fn = _SRC.split('async function refreshTimeline(')[1].split('async function refreshRemote(')[0]
+        self.assertIn('timelineExpanded', fn)
+
+    def test_loading_more_marks_the_reader_as_expanded(self):
+        self.assertIn('timelineExpanded = true', _SRC.replace(' ', '') and _SRC)
+        self.assertIn('timelineExpanded=true', _SRC.replace(' ', ''))
 
 
 class ConnectionsEngineTests(unittest.TestCase):
