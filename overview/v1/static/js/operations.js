@@ -127,13 +127,15 @@ function nextActionText(order) {
   if(order.attention_face==='watch' && order.gate_type==='timer') return 'Review when the hold expires';
   if(order.attention_face==='watch') return 'Check for new evidence';
   if(order.ready_for) return `Ready for ${order.ready_for}`;
-  if(order.blockers && order.blockers.length) return `Blocked on ${order.blockers.join(', ')}`;
+  if(order.blocked_on==='unknown' && order.blocked_note) return order.blocked_note;
+  if(order.blocked_on==='open' && order.blockers && order.blockers.length) return `Blocked on ${order.blockers.join(', ')}`;
   if(!isBoilerplateNote(order.last_note)) return truncateText(order.last_note, 120);
   return '';
 }
 function orderDetailBody(order, content) {
   if(order.parent) content.append(el('p',`Part of ${order.parent}`,'bp-order-note'));
-  if(order.blockers && order.blockers.length) content.append(el('p',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
+  if(order.blocked_on==='unknown' && order.blocked_note) content.append(el('p',order.blocked_note,'bp-order-note'));
+  else if(order.blocked_on==='open' && order.blockers && order.blockers.length) content.append(el('p',`Blocked on ${order.blockers.join(', ')}`,'bp-order-note'));
   if(order.ready_for) content.append(el('p',`Ready for ${order.ready_for}`,'bp-order-note'));
   if(order.persona) content.append(el('p',order.persona,'bp-order-note'));
   else if(order.needs_routing) content.append(el('p','Needs routing','bp-order-note'));
@@ -143,12 +145,15 @@ function orderDetailBody(order, content) {
   if(order.status==='in_review' && order.parked_by && order.since) content.append(el('p',`Parked by ${order.parked_by} since ${date(order.since)}`,'bp-order-meta'));
 }
 function orderHasDetail(order) {
-  return Boolean(order.parent || (order.blockers && order.blockers.length) || order.ready_for || order.persona || order.needs_routing || order.gate_note || !isBoilerplateNote(order.last_note) || (order.since && (order.live_with || order.parked_by)));
+  return Boolean(order.parent || order.blocked_on==='open' || order.blocked_on==='unknown' || order.ready_for || order.persona || order.needs_routing || order.gate_note || !isBoilerplateNote(order.last_note) || (order.since && (order.live_with || order.parked_by)));
 }
 function orderBadges(order) {
   const gateWord=gateLabel(order);
   const badges=[badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined))];
-  if(gateWord) badges.push(badge(order.gate_type+(order.gate_expired?'-expired':''),gateWord));
+  if(gateWord) {
+    const gateKind=order.gate_type || ((order.blocked_on==='open' || order.blocked_on==='unknown') ? 'blocked' : '');
+    badges.push(badge(gateKind+(order.gate_expired?'-expired':''),gateWord));
+  }
   return badges;
 }
 function orderRow(order) {
@@ -172,6 +177,7 @@ function gateLabel(order) {
   if(order.gate_type==='tracking') return 'Tracking';
   if(order.gate_type==='timer') return order.gate_expired ? 'Timer expired' : `Held until ${date(order.gate_until)}`;
   if(order.gate_type==='human') return 'Needs a decision';
+  if(order.blocked_on==='open' || order.blocked_on==='unknown') return 'Blocked on another order';
   return '';
 }
 function overviewFaceRow(order) {
@@ -308,8 +314,8 @@ function matchesAssignment(order, value) {
   return order.workers.includes(value.slice(7));
 }
 function matchesGate(order, value) {
-  if(value==='none') return !order.gate_type && !order.blocked_on;
-  if(value==='blocked') return order.blocked_on;
+  if(value==='none') return !order.gate_type && order.blocked_on==='clear';
+  if(value==='blocked') return order.blocked_on==='open' || order.blocked_on==='unknown';
   return order.gate_type===value;
 }
 function filterChips() {

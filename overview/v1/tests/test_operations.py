@@ -214,11 +214,31 @@ class OperationsTests(unittest.TestCase):
             conn.execute("UPDATE tasks SET status='backlog' WHERE id=2")
         result = operations_snapshot(self.root)
         order = next(o for o in result['orders'] if o['id'] == 'pc-1')
-        self.assertTrue(order['blocked_on'])
+        self.assertEqual(order['blocked_on'], 'open')
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute("UPDATE tasks SET status='done' WHERE id=2")
         order = operations_snapshot(self.root)['orders'][0]
-        self.assertFalse(order['blocked_on'])
+        self.assertEqual(order['blocked_on'], 'clear')
+    def test_unknown_blocker_in_unavailable_store_stays_blocked(self):
+        self.seed()
+        self.seed('workforce', registered=True)
+        manifest = self.root/'workforce'/'.protocolcity'/'desk-join.json'
+        manifest.write_text(json.dumps({'slug': 'workforce', 'prefix': 'wf', 'display': 'WorkForce'}))
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN description TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', gate_type=NULL, description='Depends on wf-1' WHERE id=1")
+        (self.root/'worklane/worklane/local/data/workforce.db').write_bytes(b'not sqlite')
+        order = next(o for o in operations_snapshot(self.root)['orders'] if o['id'] == 'pc-1')
+        self.assertEqual(order['blocked_on'], 'unknown')
+        self.assertIn('dependency unknown: wf-1 (store unavailable)', order['blocked_note'])
+    def test_unknown_blocker_id_stays_blocked(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('ALTER TABLE tasks ADD COLUMN description TEXT')
+            conn.execute("UPDATE tasks SET status='backlog', gate_type=NULL, description='Depends on pc-999' WHERE id=1")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['blocked_on'], 'unknown')
+        self.assertEqual(order['blocked_note'], 'dependency unknown: pc-999')
     def test_unlabeled_backlog_needs_routing(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
