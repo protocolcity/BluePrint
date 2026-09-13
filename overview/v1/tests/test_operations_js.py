@@ -90,9 +90,13 @@ class GateBlockedFilterTests(unittest.TestCase):
     def test_blocked_filter_control_is_removed_from_the_markup(self):
         self.assertNotIn('id="blocked-filter"', _HTML)
     def test_gate_filter_matches_open_blockers_via_blocked_on(self):
-        self.assertIn("if(value==='blocked')returnorder.blocked_on", _SRC.replace(' ', ''))
+        self.assertIn("if(value==='blocked')returnorder.blocked_on==='open'||order.blocked_on==='unknown'", _SRC.replace(' ', ''))
     def test_ungated_excludes_orders_with_open_blockers(self):
-        self.assertIn("if(value==='none')return!order.gate_type&&!order.blocked_on", _SRC.replace(' ', ''))
+        self.assertIn("if(value==='none')return!order.gate_type&&order.blocked_on==='clear'", _SRC.replace(' ', ''))
+    def test_gate_label_surfaces_blocked_on_another_order(self):
+        self.assertIn("if(order.blocked_on==='open'||order.blocked_on==='unknown')return'Blockedonanotherorder'", _SRC.replace(' ', ''))
+    def test_unknown_blocker_note_surfaces_in_reader_text(self):
+        self.assertIn("if(order.blocked_on==='unknown'&&order.blocked_note)returnorder.blocked_note", _SRC.replace(' ', ''))
     def test_legacy_blocked_param_maps_to_gate_blocked(self):
         self.assertIn("query.get('blocked') === '1'", _SRC)
         self.assertIn("gateParam = gateParam || 'blocked'", _SRC)
