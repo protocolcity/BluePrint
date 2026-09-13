@@ -7,6 +7,7 @@ filter, and the claim-aware status text cannot silently regress.
 import json
 import shutil
 import subprocess
+import re
 import unittest
 from pathlib import Path
 
@@ -69,7 +70,8 @@ class ClaimPresentationTests(unittest.TestCase):
         self.assertIn('Live with', _SRC)
         self.assertIn('Parked by', _SRC)
     def test_watch_copy_never_says_stalled(self):
-        self.assertNotIn('stalled', _SRC.lower())
+        # Whole word only: "installed" is legitimate Delivery wording (pc-1487).
+        self.assertIsNone(re.search(r'\bstalled\b', _SRC.lower()))
 
 
 class AssignmentFilterTests(unittest.TestCase):
@@ -1005,7 +1007,10 @@ class DeliverySurfaceTests(unittest.TestCase):
         badge_fn = _SRC.split('function deliveryBadgeState(')[1].split('function deliveryPeriodCutoff')[0]
         self.assertIn("'deployed'", badge_fn)
         self.assertIn('`Activated ${when}`', badge_fn)
-        self.assertIn("'Activated'", badge_fn)
+        # Activated only with a time; without one the badge reads Installed
+        # (pc-1487 second pass: never overclaim activation).
+        self.assertNotIn("'Activated'", badge_fn)
+        self.assertIn('`Installed${version}`', badge_fn)
         self.assertIn("'version_note'", badge_fn)
         self.assertNotIn("'Deployed'", badge_fn)
         self.assertNotIn("'Released'", badge_fn)
