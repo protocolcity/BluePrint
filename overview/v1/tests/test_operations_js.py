@@ -998,8 +998,28 @@ class DeliverySurfaceTests(unittest.TestCase):
 
     def test_merged_pull_requests_badge_event_not_closed_state(self):
         fn = _SRC.split('function deliveryEvidenceRow(')[1].split('function deliveryGroupRow')[0]
-        self.assertIn("item.pr_event", fn)
+        self.assertIn('deliveryPullEvent(item)', fn)
         self.assertNotIn('badge(item.state)', fn)
+
+    def test_delivery_receipt_match_uses_installed_wording(self):
+        badge_fn = _SRC.split('function deliveryBadgeState(')[1].split('function deliveryPeriodCutoff')[0]
+        self.assertIn("'deployed'", badge_fn)
+        self.assertIn('`Activated ${when}`', badge_fn)
+        self.assertIn("'Activated'", badge_fn)
+        self.assertIn("'version_note'", badge_fn)
+        self.assertNotIn("'Deployed'", badge_fn)
+        self.assertNotIn("'Released'", badge_fn)
+        summary_fn = _SRC.split('function deliverySummaryLine(')[1].split('function deliveryEvidenceRow')[0]
+        self.assertIn('`Activated ${activated}`', summary_fn)
+        self.assertIn('`Version note ${repo.deployment.version}`', summary_fn)
+        self.assertNotIn("'Running'", summary_fn)
+        self.assertNotIn("'Receipt'", summary_fn)
+
+    def test_delivery_pull_event_prefers_merged_before_state(self):
+        fn = _SRC.split('function deliveryPullEvent(')[1].split('function deliveryBadgeState')[0]
+        self.assertIn('merged_at', fn)
+        self.assertIn('merged', fn)
+        self.assertLess(fn.index('merged_at'), fn.index('pr_event'))
 
     def test_delivery_status_reports_cache_age_separately(self):
         fn = _SRC.split('function remoteStatusText(')[1].split('async function refreshRemote')[0]

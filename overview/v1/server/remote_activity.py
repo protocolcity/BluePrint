@@ -42,11 +42,21 @@ def _in_window(value):
 
 
 def _pr_event(item):
-    if item.get('merged_at'):
+    if item.get('merged_at') or item.get('merged'):
         return 'merged'
     if str(item.get('state') or '') == 'open':
         return 'opened'
     return 'closed'
+
+
+def _pull_event(item):
+    if item.get('merged_at') or item.get('merged'):
+        return 'merged'
+    if item.get('pr_event'):
+        return item.get('pr_event')
+    if str(item.get('state') or '') == 'open':
+        return 'opened'
+    return item.get('state') or 'unknown'
 
 
 def _workflow_item(item, repo, spec):
@@ -66,6 +76,8 @@ def _pull_item(item, repo, spec, *, closed=False):
             'url': str(item.get('html_url') or ''),
             'state': str(item.get('state') or 'open'),
             'pr_event': _pr_event(item),
+            'merged_at': item.get('merged_at'),
+            'merged': bool(item.get('merged_at') or item.get('merged')),
             'updated_at': stamp,
             'sha': (item.get('head') if isinstance(item.get('head'), dict) else {}).get('sha') or item.get('head_sha'),
             'number': item.get('number'), 'role': spec.get('role', 'repository')}
@@ -146,7 +158,7 @@ def _group_priority(items):
         elif kind == 'pull_request':
             if item.get('state') == 'open' or item.get('pr_event') == 'opened':
                 best = min(best, 2)
-            elif item.get('pr_event') == 'merged':
+            elif _pull_event(item) == 'merged':
                 best = min(best, 3)
             else:
                 best = min(best, 4)
@@ -169,24 +181,24 @@ def _group_key(item):
 def _deploy_state(items, receipt):
     if not receipt:
         return 'unknown'
-    head = receipt.get('source_head') or receipt.get('revision')
+    source_head = receipt.get('source_head')
     version = str(receipt.get('version') or '').strip()
     shas = {str(item.get('sha') or '') for item in items if item.get('sha')}
-    if head and head in shas:
+    if source_head and str(source_head) in shas:
         return 'deployed'
     for item in items:
         if item.get('kind') != 'release':
             continue
         tag = str(item.get('title') or '').strip()
         if version and tag and (tag == version or tag.lstrip('v') == version.lstrip('v')):
-            return 'released'
+            return 'version_note'
     return 'unknown'
 
 
 def _group_headline(items):
     pr = next((item for item in items if item.get('kind') == 'pull_request'), None)
     if pr:
-        event = pr.get('pr_event') or ('opened' if pr.get('state') == 'open' else pr.get('state'))
+        event = _pull_event(pr)
         number = pr.get('number')
         prefix = f'PR #{number} · ' if number is not None else 'PR · '
         return prefix + str(pr.get('title') or 'Pull request') + f' · {event}'
@@ -206,7 +218,7 @@ def _group_headline(items):
 def _group_badge(items):
     pr = next((item for item in items if item.get('kind') == 'pull_request'), None)
     if pr:
-        return pr.get('pr_event') or ('opened' if pr.get('state') == 'open' else pr.get('state') or 'unknown')
+        return _pull_event(pr)
     workflow = next((item for item in items if item.get('kind') == 'workflow'), None)
     if workflow:
         return _workflow_state(workflow)
@@ -273,7 +285,7 @@ def _build_summary(groups, receipt):
             if item.get('kind') == 'pull_request':
                 if item.get('state') == 'open' or item.get('pr_event') == 'opened':
                     summary['open_prs'] += 1
-                elif item.get('pr_event') == 'merged':
+                elif _pull_event(item) == 'merged':
                     summary['recent_merges'] += 1
             elif item.get('kind') == 'workflow':
                 state = _workflow_state(item)

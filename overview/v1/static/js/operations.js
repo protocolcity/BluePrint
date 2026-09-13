@@ -89,15 +89,28 @@ function deliveryRow(item) {
     return `CI · ${item.workflow_name || item.title} · ${item.state} · ${commit}${count}`;
   }
   if(item.kind==='pull_request') {
-    const event=item.pr_event || (item.state==='open'?'opened':item.state);
+    const event=deliveryPullEvent(item);
     return `PR #${item.number} · ${item.title} · ${event}`;
   }
   if(item.kind==='release') return `Release · ${item.title}`;
   return `${item.kind.replaceAll('_',' ')} · ${item.title}`;
 }
-function deliveryBadgeState(group) {
-  if(group.deploy_state==='deployed') return ['deployed','Deployed'];
-  if(group.deploy_state==='released') return ['released','Released'];
+function deliveryPullEvent(item) {
+  if(item.merged_at || item.merged) return 'merged';
+  if(item.pr_event) return item.pr_event;
+  if(item.state==='open') return 'opened';
+  return item.state;
+}
+function deliveryBadgeState(group, deployment) {
+  if(group.deploy_state==='deployed') {
+    const when=deployment?.activated_at ? date(deployment.activated_at) : '';
+    const label=when ? `Activated ${when}` : 'Activated';
+    return ['deployed', label];
+  }
+  if(group.deploy_state==='version_note') {
+    const version=deployment?.version ? ` ${deployment.version}` : '';
+    return ['version_note', `Version note${version}`];
+  }
   return [group.badge || 'unknown', (group.badge || 'unknown').replaceAll('_',' ')];
 }
 function deliveryPeriodCutoff() {
@@ -124,8 +137,11 @@ function deliverySummaryLine(repo) {
   if(summary.recent_merges) parts.push(`${summary.recent_merges} merged`);
   if(summary.recent_releases) parts.push(`${summary.recent_releases} release${summary.recent_releases===1?'':'s'}`);
   if(repo.deployment?.version) {
-    const label=repo.deployment.state==='verified' ? 'Running' : 'Receipt';
-    parts.push(`${label} ${repo.deployment.version}`);
+    const activated=repo.deployment.activated_at ? date(repo.deployment.activated_at) : '';
+    if(repo.deployment.state==='verified') {
+      const bit=activated ? `Activated ${activated}` : 'Activated';
+      parts.push(`${bit} · ${repo.deployment.version}`);
+    } else parts.push(`Version note ${repo.deployment.version}`);
   }
   return parts.length ? parts.join(' · ') : (repo.quiet ? 'Quiet in the last 14 days.' : 'No verified delivery available.');
 }
@@ -134,11 +150,11 @@ function deliveryEvidenceRow(item) {
   const row=link('',url.href,'bp-order');row.target='_blank';row.rel='noopener noreferrer';
   const text=el('div');
   text.append(el('strong',deliveryRow(item)),el('span',`Event ${date(item.updated_at)}`,'bp-order-meta'));
-  const badgeState=item.kind==='pull_request' ? (item.pr_event || (item.state==='open'?'opened':item.state)) : item.state;
+  const badgeState=item.kind==='pull_request' ? deliveryPullEvent(item) : item.state;
   row.append(text,badge(badgeState));
   return row;
 }
-function deliveryGroupRow(group) {
+function deliveryGroupRow(group, deployment) {
   if(group.items.length===1) {
     const item=group.items[0];
     const url=item.url ? new URL(item.url) : null;
@@ -147,7 +163,7 @@ function deliveryGroupRow(group) {
     const text=el('div');
     text.append(el('strong',group.headline || deliveryRow(item)),el('span',`Event ${date(group.updated_at || item.updated_at)}`,'bp-order-meta'));
     row.append(text);
-    const [state,label]=deliveryBadgeState(group);
+    const [state,label]=deliveryBadgeState(group, deployment);
     row.append(badge(state,label));
     return row;
   }
@@ -156,7 +172,7 @@ function deliveryGroupRow(group) {
   const head=el('div');
   head.append(el('strong',group.headline || 'Delivery group'),el('span',`${group.items.length} events · Event ${date(group.updated_at)}`,'bp-order-meta'));
   summary.append(head);
-  const [state,label]=deliveryBadgeState(group);
+  const [state,label]=deliveryBadgeState(group, deployment);
   summary.append(badge(state,label));
   wrap.append(summary);
   for(const item of group.items) wrap.append(deliveryEvidenceRow(item));
@@ -1534,7 +1550,7 @@ function paintDelivery(data) {
   for(const repo of repos) {
     const container=document.querySelector(`[data-delivery-repo="${repo.repo}"] .bp-delivery-groups`);
     if(!container) continue;
-    reconcileList(container, deliveryVisibleGroups(repo), group=>group.id, deliveryGroupRow,
+    reconcileList(container, deliveryVisibleGroups(repo), group=>group.id, group=>deliveryGroupRow(group, repo.deployment),
       {emptyText: repo.quiet ? 'Quiet in the last 14 days.' : 'No verified delivery available.'});
   }
   deliveryFilters();
