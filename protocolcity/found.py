@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from protocolcity.desk import (
     DEFAULT_DESK,
@@ -599,6 +599,10 @@ def found(
     desk_url: str = DEFAULT_DESK,
     sample_ticket: bool = True,
     map_port: int = 8801,
+    plant_seats: bool = False,
+    hire_seats: bool = False,
+    held_providers: Optional[Iterable[str]] = None,
+    workforce_bin: str = "workforce",
 ) -> Dict[str, object]:
     """Scaffold a workspace at *target*. Returns a receipt dict for the CLI/proof.
 
@@ -855,6 +859,7 @@ def found(
 
     clis = detect_vendor_clis()
 
+    seats_result: Optional[Dict] = None
     desk_result: Optional[Dict] = None
     if with_desk and hood and store_slug and hood_title and prefix:
         if desk_reachable(desk_url):
@@ -908,6 +913,19 @@ def found(
             "skipped": True,
             "reason": "no project at found — adopt or --project first",
         }
+
+    if plant_seats and hood and store_slug and hood_dir is not None:
+        from protocolcity.adopt import plant_standard_seats
+
+        seats_result = plant_standard_seats(
+            root,
+            store_slug,
+            project_path=hood_dir,
+            prefix=prefix,
+            hire=hire_seats,
+            held=held_providers,
+            workforce_bin=workforce_bin,
+        )
 
     first_run = _write_first_run(
         root,
@@ -971,6 +989,7 @@ def found(
         "mcp_layer": mcp_layer,
         "secrets_layer": secrets_layer,
         "desk": desk_result,
+        "seats": seats_result,
         "map_port": map_port,
         "next_steps": next_steps,
     }

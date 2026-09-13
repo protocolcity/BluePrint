@@ -1785,6 +1785,27 @@ def main(argv: Optional[List[str]] = None) -> int:
             "(default: no stubs — work-order-only projects stay clean; pc-489)"
         ),
     )
+    p_adopt.add_argument(
+        "--hire",
+        action="store_true",
+        help=(
+            "run the printed standard-seat-set `workforce hire` commands "
+            "(AGENT_ADOPTION D12) — default is print only, adoption never "
+            "registers agents silently"
+        ),
+    )
+    p_adopt.add_argument(
+        "--held",
+        action="append",
+        default=[],
+        metavar="PROVIDER",
+        help="mark PROVIDER's standard-seat hire command --held (repeatable)",
+    )
+    p_adopt.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="explicit no-op — printing the standard-seat commands without --hire is the default",
+    )
 
     p_doctor = sub.add_parser(
         "doctor",
@@ -2441,6 +2462,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 desk_url=args.desk,
                 with_demo_worker=with_demo,
                 allow_live_desk=bool(getattr(args, "live_desk", False)),
+                plant_seats=True,
+                hire_seats=bool(getattr(args, "hire", False)),
+                held_providers=getattr(args, "held", None),
             )
         except Exception as e:
             print("error: adopt failed: %s" % e, file=sys.stderr)
@@ -2452,6 +2476,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             adopt_payload,
             fallback_name=str(args.neighborhood or ""),
         )
+        seats = (adopt_payload or {}).get("seats") if isinstance(adopt_payload, dict) else None
+        if isinstance(seats, dict) and seats.get("commands"):
+            verb = "ran" if getattr(args, "hire", False) else "standard seat set —"
+            print("\n%s:" % verb)
+            for row in seats["commands"]:
+                print("  %s" % row["command"])
         return 0 if result.get("ok") else 1
 
     if args.cmd == "doctor":

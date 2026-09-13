@@ -3475,6 +3475,74 @@ def heal_stale_retired_cli(city_root: Path) -> List[str]:
     return patched
 
 
+def diagnose_seat_drift(city_root: Path) -> List[Finding]:
+    """AGENT_ADOPTION.md D12 standard-seat-set drift, report-only (pc-1475):
+    a provider installed on this host with no implementer seat for a
+    registered project (``MISSING-SEAT`` — ``blueprint adopt --hire``
+    plants it), a registered seat whose provider is no longer on this
+    host (``SEAT-PROVIDER-MISSING``), and a held seat (``SEAT-HELD``).
+    Never fixed here — WorkForce hire is the only roster writer.
+    """
+    root = city_root.expanduser().resolve()
+    out: List[Finding] = []
+    try:
+        from overview.v1.server.operations import (
+            _PROVIDER_ORDER,
+            _project_seat_providers,
+            detect_providers,
+            project_registry,
+        )
+    except ImportError:
+        return out
+    registry = project_registry(root)
+    if not registry:
+        return out
+    workers = _load_roster_workers(root)
+    host_providers = detect_providers()
+    config_cache: Dict[str, Any] = {}
+    for slug, project in sorted(registry.items(), key=lambda kv: kv[1].get("name") or kv[0]):
+        seats = _project_seat_providers(workers, slug, root, config_cache)
+        name = project.get("name") or slug
+        for provider in _PROVIDER_ORDER:
+            state = seats.get(provider)
+            if state == "held":
+                out.append(
+                    _finding(
+                        level="L1",
+                        code="SEAT-HELD",
+                        path=slug,
+                        status="weak",
+                        detail="%s: %s seat held (enabled: false)" % (name, provider),
+                        fixable=False,
+                    )
+                )
+            elif state == "present" and not host_providers.get(provider):
+                out.append(
+                    _finding(
+                        level="L1",
+                        code="SEAT-PROVIDER-MISSING",
+                        path=slug,
+                        status="weak",
+                        detail="%s: %s seat registered but %s is not installed on this host"
+                        % (name, provider, provider),
+                        fixable=False,
+                    )
+                )
+            elif state is None and host_providers.get(provider):
+                out.append(
+                    _finding(
+                        level="L1",
+                        code="MISSING-SEAT",
+                        path=slug,
+                        status="weak",
+                        detail="%s: %s installed, no seat — `blueprint adopt %s --hire`"
+                        % (name, provider, project.get("folder") or slug),
+                        fixable=False,
+                    )
+                )
+    return out
+
+
 def diagnose(
     city_root: Path,
     *,
@@ -3501,6 +3569,8 @@ def diagnose(
     # pc-1063: policy + secrets shelves (vendor-agnostic layer)
     findings.extend(diagnose_policy_shelf(root))
     findings.extend(diagnose_secrets_shelf(root))
+    # pc-1475: AGENT_ADOPTION D12 standard-seat-set drift (report-only)
+    findings.extend(diagnose_seat_drift(root))
     name = (neighborhood or cabinet or "").strip().strip("/") or None
     neighborhoods: List[str] = []
     if name:
@@ -3799,6 +3869,10 @@ def fix(
     desk_url: str = DEFAULT_DESK,
     with_demo_worker: bool = False,
     allow_live_desk: bool = False,
+    plant_seats: bool = False,
+    hire_seats: bool = False,
+    held_providers: Optional[Any] = None,
+    workforce_bin: str = "workforce",
 ) -> Dict[str, Any]:
     """Apply safe fixes for missing papers. Returns diagnose + actions taken.
 
@@ -4049,6 +4123,10 @@ def fix(
             sample_ticket=False,
             with_demo_worker=with_demo_worker,
             allow_live_desk=allow_live_desk,
+            plant_seats=plant_seats,
+            hire_seats=hire_seats,
+            held_providers=held_providers,
+            workforce_bin=workforce_bin,
         )
         actions.append({"scope": "neighborhood", "adopt": adopt_result})
         # pc-820: best-effort refresh hands block after adopt
