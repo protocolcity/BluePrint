@@ -23,6 +23,8 @@ Never invent seats or WOs. Missing / malformed → honest empty.
 from __future__ import annotations
 
 import json
+import shlex
+from datetime import datetime, timezone
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -101,14 +103,124 @@ def projector_stamp(binder: Path) -> tuple:
     return tuple(parts)
 
 
+# ── Engine ledger shifts ───────────────────────────────────────────────────
+
+_TERMINAL_SHIFT_EVENTS = frozenset({"STOP", "ERROR"})
+SHIFT_GRACE_SECS = 600
+_LEDGER_TAIL_BYTES = 16384
+_IDENTITY_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def _split_row(line: str) -> list[str]:
+    try:
+        return shlex.split(line)
+    except ValueError:
+        return []
+
+
+def _row_fields(parts: list[str]) -> dict[str, str]:
+    return dict(item.split("=", 1) for item in parts[2:] if "=" in item)
+
+
+def _ledger_tail_lines(path: Path) -> list[str]:
+    try:
+        with path.open("rb") as stream:
+            stream.seek(0, 2)
+            stream.seek(max(0, stream.tell() - _LEDGER_TAIL_BYTES))
+            return stream.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+
+
+def _parse_stamp(value: str) -> datetime | None:
+    try:
+        stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    return stamp if stamp.tzinfo is not None else None
+
+
+def ledger_open_shift(ledger_path: Path, now: datetime,
+                      grace_secs: int = SHIFT_GRACE_SECS) -> dict | None:
+    """Newest START row with no later STOP/ERROR → open-shift evidence.
+
+    This is the engine's own ledger, not a process check: a shift dispatched
+    outside the daemon tick (bounded supervisor pass, manual engine dispatch)
+    is visible here while ``daemon.json`` ``in_flight`` stays empty. A START
+    older than its budget plus grace with no terminal row is ``stale``: the
+    shift may have died without writing one, so it is never painted working.
+    """
+    lines = _ledger_tail_lines(ledger_path)
+    start_index = None
+    for index in range(len(lines) - 1, -1, -1):
+        parts = _split_row(lines[index])
+        if len(parts) >= 2 and parts[1] == "START":
+            start_index = index
+            break
+    if start_index is None:
+        return None
+    start = _split_row(lines[start_index])
+    candidates: list[str] = []
+    for line in lines[start_index + 1:]:
+        parts = _split_row(line)
+        if len(parts) < 2:
+            continue
+        if parts[1] in _TERMINAL_SHIFT_EVENTS:
+            return None
+        if parts[1] == "CANDIDATE":
+            ticket = _row_fields(parts).get("ticket", "")
+            if ticket and ticket not in candidates:
+                candidates.append(ticket)
+    try:
+        budget = int(_row_fields(start).get("budget_secs") or 0)
+    except ValueError:
+        budget = 0
+    started = _parse_stamp(start[0])
+    age = (now - started).total_seconds() if started is not None else None
+    stale = age is None or age < -30 or age > budget + grace_secs
+    return {
+        "started_at": start[0],
+        "budget_secs": budget,
+        "candidates": candidates,
+        "age_seconds": int(age) if age is not None else None,
+        "stale": stale,
+        "source": "engine ledger",
+    }
+
+
+def engine_open_shift(daemon_path: Path | None, root: Path, identity: str,
+                      now: datetime) -> dict | None:
+    """Open shift for ``identity`` from the ledger beside the runtime daemon file.
+
+    Paths stay inside ``root``; an identity outside the engine's slug charset
+    is never used to build a path. ``lock_held`` reports whether the engine's
+    per-worker lock directory exists — evidence, not liveness.
+    """
+    if daemon_path is None or not identity or any(c not in _IDENTITY_CHARS for c in identity):
+        return None
+    runtime = daemon_path.resolve().parent
+    ledger = runtime / "ledger" / (identity + ".log")
+    try:
+        if not ledger.resolve().is_relative_to(root.resolve()):
+            return None
+    except OSError:
+        return None
+    shift = ledger_open_shift(ledger, now)
+    if shift is None:
+        return None
+    shift["lock_held"] = (runtime / "locks" / (identity + ".lock")).is_dir()
+    return shift
+
+
 # ── Agents ─────────────────────────────────────────────────────────────────
 
 
 def project_agents(binder: Path) -> list[dict]:
     """Project WorkForce roster workers → ``[{name, state}, …]``.
 
-    Rows come only from ``workers``. ``daemon.json`` ``in_flight`` may flip
-    a known worker to ``working``; it never invents a seat.
+    Rows come only from ``workers``. ``daemon.json`` ``in_flight`` or an open
+    engine-ledger shift (START without STOP/ERROR, within budget plus grace)
+    may flip a known worker to ``working``; neither invents a seat.
     """
     binder = Path(binder)
     roster_path = resolve_roster_path(binder)
@@ -122,6 +234,7 @@ def project_agents(binder: Path) -> list[dict]:
         return []
 
     in_flight: set[str] = set()
+    now = datetime.now(timezone.utc)
     daemon_path = roster_path.parent / "daemon.json"
     if daemon_path.is_file():
         daemon = _read_json(daemon_path)
@@ -150,6 +263,10 @@ def project_agents(binder: Path) -> list[dict]:
         if not name:
             continue
         state = "working" if (identity in in_flight or str(wid) in in_flight) else "idle"
+        if state == "idle" and daemon_path.is_file():
+            shift = engine_open_shift(daemon_path, binder, identity, now)
+            if shift is not None and not shift["stale"]:
+                state = "working"
         agents.append({"name": name, "state": state})
     return agents
 

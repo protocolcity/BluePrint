@@ -77,6 +77,65 @@ class OperationsTests(unittest.TestCase):
         self.assertNotIn('SECRET',json.dumps(result))
         (runtime/'daemon.json').write_text(json.dumps({'last_tick':datetime.now(timezone.utc).isoformat(),'in_flight':['agent']}))
         self.assertEqual(operations_snapshot(self.root)['agents'][0]['state'],'working')
+    def _runtime_with_ledger(self, ledger_text, in_flight=None, fresh=True):
+        runtime=self.root/'workforce/local';runtime.mkdir(parents=True,exist_ok=True)
+        (runtime/'roster.json').write_text(json.dumps({'workers':{'agent':{'display':'Agent','command':['example-agent'],'identity':'agent','kind':'lane'}}}))
+        tick=datetime.now(timezone.utc)-(timedelta(seconds=0) if fresh else timedelta(hours=1))
+        (runtime/'daemon.json').write_text(json.dumps({'last_tick':tick.isoformat(),'in_flight':in_flight or []}))
+        (runtime/'ledger').mkdir(exist_ok=True)
+        (runtime/'ledger/agent.log').write_text(ledger_text)
+        return runtime
+    @staticmethod
+    def _stamp(delta):
+        return (datetime.now(timezone.utc)-delta).strftime('%Y-%m-%dT%H:%M:%SZ')
+    def test_open_ledger_shift_paints_working_with_candidates(self):
+        started=self._stamp(timedelta(minutes=2))
+        self._runtime_with_ledger(f'{started} START identity=agent kind=lane model=default budget_secs=1500 max_passes=1 queue=1\n{started} CANDIDATE ticket=wf-9 title="Real work" product=workforce priority=2\n')
+        row=operations_snapshot(self.root)['agents'][0]
+        self.assertEqual(row['state'],'working')
+        self.assertEqual(row['shift']['candidates'],['wf-9'])
+        self.assertFalse(row['shift']['stale'])
+        self.assertEqual(row['shift']['budget_secs'],1500)
+        self.assertEqual(row['shift']['source'],'engine ledger')
+        self.assertFalse(row['shift']['lock_held'])
+        self.assertIsNone(row['last_run'])
+    def test_terminal_row_closes_shift_and_keeps_last_run(self):
+        started=self._stamp(timedelta(minutes=5));stopped=self._stamp(timedelta(minutes=1))
+        self._runtime_with_ledger(f'{started} START identity=agent kind=lane budget_secs=1500\n{started} CANDIDATE ticket=wf-9\n{stopped} DONE rc=0 on_pass=1 secs=240\n{stopped} STOP reason="single-pass complete"\n')
+        row=operations_snapshot(self.root)['agents'][0]
+        self.assertEqual(row['state'],'idle')
+        self.assertIsNone(row['shift'])
+        self.assertEqual(row['last_run']['outcome'],'stop')
+    def test_error_row_closes_shift(self):
+        started=self._stamp(timedelta(minutes=5));errored=self._stamp(timedelta(minutes=1))
+        self._runtime_with_ledger(f'{started} START identity=agent kind=lane budget_secs=1500\n{errored} ERROR reason="agent exit" rc=143 on_pass=1\n')
+        row=operations_snapshot(self.root)['agents'][0]
+        self.assertEqual(row['state'],'idle');self.assertIsNone(row['shift']);self.assertEqual(row['last_run']['outcome'],'error')
+    def test_stale_open_shift_is_never_working(self):
+        started=self._stamp(timedelta(hours=3))
+        self._runtime_with_ledger(f'{started} START identity=agent kind=lane budget_secs=1500\n{started} CANDIDATE ticket=wf-9\n')
+        row=operations_snapshot(self.root)['agents'][0]
+        self.assertEqual(row['state'],'stale_shift')
+        self.assertTrue(row['shift']['stale'])
+        self.assertEqual(row['shift']['candidates'],['wf-9'])
+    def test_open_shift_with_stale_heartbeat_stays_unknown(self):
+        started=self._stamp(timedelta(minutes=2))
+        self._runtime_with_ledger(f'{started} START identity=agent kind=lane budget_secs=1500\n',fresh=False)
+        row=operations_snapshot(self.root)['agents'][0]
+        self.assertEqual(row['state'],'unknown')
+        self.assertFalse(row['shift']['stale'])
+    def test_daemon_in_flight_still_paints_working_without_ledger_rows(self):
+        self._runtime_with_ledger('',in_flight=['agent'])
+        row=operations_snapshot(self.root)['agents'][0]
+        self.assertEqual(row['state'],'working');self.assertIsNone(row['shift'])
+    def test_ledger_outside_workspace_is_not_read(self):
+        started=self._stamp(timedelta(minutes=2))
+        runtime=self._runtime_with_ledger('')
+        with tempfile.TemporaryDirectory() as other:
+            outside=Path(other)/'agent.log';outside.write_text(f'{started} START identity=agent kind=lane budget_secs=1500\n')
+            (runtime/'ledger/agent.log').unlink();(runtime/'ledger/agent.log').symlink_to(outside)
+            row=operations_snapshot(self.root)['agents'][0]
+            self.assertEqual(row['state'],'idle');self.assertIsNone(row['shift'])
     def test_workspace_isolation(self):
         self.seed()
         with tempfile.TemporaryDirectory() as other:
