@@ -261,7 +261,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
+        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
@@ -746,6 +746,82 @@ class NewEventsAffordanceTests(unittest.TestCase):
     def test_loading_more_marks_the_reader_as_expanded(self):
         self.assertIn('timelineExpanded = true', _SRC.replace(' ', '') and _SRC)
         self.assertIn('timelineExpanded=true', _SRC.replace(' ', ''))
+
+
+class ProjectsSurfaceTests(unittest.TestCase):
+    """pc-1486 / PROJECTS_INTENT: comparison rows, activity ordering,
+    quiet collapse, unavailable/partial honesty, and scoped go links."""
+
+    def test_projects_page_uses_a_comparison_table_not_card_grid(self):
+        self.assertIn('id="projects-list"', _HTML)
+        self.assertIn('bp-projects-row', _HTML)
+        self.assertIn("function projects()", _SRC)
+        self.assertIn("function projectComparisonRow(", _SRC)
+
+    def test_activity_ordering_prefers_running_then_attention_then_open(self):
+        self.assertIn('function projectActivitySort(a,b)', _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn('if(project.running)return0', compact)
+        self.assertIn('if(project.claimed)return1', compact)
+        self.assertIn('if(project.attention)return2', compact)
+
+    def test_quiet_projects_collapse_into_one_disclosure(self):
+        self.assertIn('bp-projects-collapsed', _SRC)
+        self.assertIn('Quiet projects (no open work, no seats)', _SRC)
+
+    def test_unavailable_store_never_paints_zero_open(self):
+        self.assertIn("project.state!=='available'", _SRC)
+        self.assertIn("'Store unavailable'", _SRC)
+        self.assertIn('partial (limited to 2,000)', _SRC)
+
+    def test_last_change_reads_from_server_not_read_time(self):
+        self.assertIn('project.last_change', _SRC)
+        self.assertIn("'no activity recorded'", _SRC)
+
+    def test_go_links_carry_the_project_id(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn('params=id=>newURLSearchParams({project:id})', compact)
+        self.assertIn("newURLSearchParams({project:project.id,attention:'any'})", compact)
+        self.assertIn("'/map?project='+encodeURIComponent(project.id)", compact)
+
+    def test_breakdown_is_keyboard_reachable(self):
+        self.assertIn('bp-projects-detail', _SRC)
+        self.assertIn("el('summary','Breakdown')", _SRC)
+
+
+class ProjectsSurfaceHarnessTests(unittest.TestCase):
+    """pc-1486: live-shaped fixture proves comparison rows, quiet collapse,
+    unavailable honesty, and project-scoped links."""
+
+    _HARNESS = Path(__file__).resolve().parent / 'harness' / 'projects_surface_check.mjs'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping projects surface harness')
+        proc = subprocess.run([node, str(cls._HARNESS)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'projects surface harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        cls.result = json.loads(proc.stdout)
+
+    def test_comparison_rows_render_for_active_projects(self) -> None:
+        self.assertGreater(self.result['active_row_count'], 0)
+
+    def test_quiet_projects_collapse_to_one_line(self) -> None:
+        self.assertRegex(self.result['quiet_summary'], r'Quiet projects')
+
+    def test_unavailable_store_is_not_zero_open(self) -> None:
+        self.assertTrue(self.result['unavailable_honest'])
+
+    def test_go_links_include_project_query(self) -> None:
+        self.assertTrue(self.result['links_carry_project'])
+
+    def test_breakdown_disclosure_is_present(self) -> None:
+        self.assertTrue(self.result['breakdown_present'])
 
 
 class ConnectionsEngineTests(unittest.TestCase):
