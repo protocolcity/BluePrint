@@ -115,7 +115,7 @@ The user reviewed the installed Work surface on consolidation.47 and corrected t
 |---|---|---|---|
 | **Assignment** | Who is responsible | **You** · each registered seat · Unassigned | `worker:` labels and persona qualifiers; You matches `worker:you` and human-owned decisions, never an agent-owned decision |
 | **Status** | Where in the lifecycle | Open · Live · Parked (plus Done, Canceled when asked for) | WorkLane status |
-| **Gate** | May it execute | none · human · timer (active or expired) · deferred · tracking | WorkLane gate fields; an expired timer is not an active embargo |
+| **Gate** | May it execute | none · human · timer (active or expired) · deferred · tracking · blocked on another order | WorkLane gate fields; an expired timer is not an active embargo; a declared blocker whose dependency is still open is the Gate value "Blocked on another order" |
 | **Kind** | What sort of item | work · note · todo · reminder · report, where recorded | `you:*`, `reminder:*`, `inbox-report` labels |
 | **For You** | Does it want a person now | the four faces (Decide · Read · Watch · Note) | computed attention (§1.4); a named view, not a status |
 

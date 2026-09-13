@@ -997,12 +997,14 @@ def operations_snapshot(binder):
                     labels = labels if isinstance(labels, list) else []
                     workers = [x[7:] for x in labels if isinstance(x, str) and x.startswith('worker:') and x[7:]]
                     routable_workers = [w for w in workers if w != 'you']
-                    you_qualifier = any(label in ('you:todo', 'you:remind', 'you:note') for label in labels if isinstance(label, str))
-                    # A human gate with nobody routed to it is a decision that
-                    # belongs to You; one with a routable worker stays that
-                    # worker's (STATES_AND_TERMS.md §5: agent-owned gates stay
-                    # assigned to the agent even while they appear in For You).
-                    assigned_you = you_qualifier or (item.get('gate_type') == 'human' and not routable_workers)
+                    has_worker_you = 'you' in workers
+                    # worker:you (with or without you:host or persona qualifiers)
+                    # is Assignment = You unless a registered seat is also
+                    # routed. A human gate with nobody routed is also You
+                    # (STATES_AND_TERMS.md §5).
+                    assigned_you = (has_worker_you and not routable_workers) or (
+                        item.get('gate_type') == 'human' and not routable_workers
+                    )
                     gate_expired = False
                     if item.get('gate_type') == 'timer' and item.get('gate_until'):
                         from suite.api.calendar import parse_gate_until
@@ -1034,7 +1036,8 @@ def operations_snapshot(binder):
                         'gate_expired': gate_expired,
                         'gate_note': item.get('gate_note') or '',
                         'workers': workers,
-                        'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not you_qualifier,
+                        'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not has_worker_you,
+                        'blocked_on': False,
                         'persona': persona_text(item, labels),
                         'assigned_you': assigned_you,
                         'owner': 'You' if assigned_you else (', '.join(routable_workers) or 'Unassigned'),
@@ -1054,6 +1057,7 @@ def operations_snapshot(binder):
     for order in result['orders']:
         seat = next((w for w in order['workers'] if w != 'you'), None)
         blocked = any(b in open_ids for b in order['blockers'])
+        order['blocked_on'] = blocked
         if seat and order['status'] == 'backlog' and not order['gate_type'] and not blocked:
             order['ready_for'] = seat
     found = {p.stem for p in paths}

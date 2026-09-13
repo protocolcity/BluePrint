@@ -33,18 +33,17 @@ $('search').value = query.get('q') || '';
 let statusParam = query.get('status') || '';
 let gateParam = query.get('gate') || '';
 let attentionParam = query.get('attention') || '';
-let blockedParam = query.get('blocked') === '1';
 let legacyParam = false;
 if (statusParam.startsWith('gate:')) { gateParam = gateParam || statusParam.slice(5); statusParam = ''; legacyParam = true; }
 else if (statusParam === 'deferred') { gateParam = gateParam || 'deferred'; statusParam = ''; legacyParam = true; }
 else if (statusParam.startsWith('face:')) { attentionParam = attentionParam || statusParam.slice(5); statusParam = ''; legacyParam = true; }
 else if (statusParam === 'attention') { attentionParam = attentionParam || 'any'; statusParam = ''; legacyParam = true; }
-else if (statusParam === 'blocked') { blockedParam = true; statusParam = ''; legacyParam = true; }
+else if (statusParam === 'blocked') { gateParam = gateParam || 'blocked'; statusParam = ''; legacyParam = true; }
 if (query.get('deferred') === '1') { gateParam = gateParam || 'deferred'; legacyParam = true; }
+if (query.get('blocked') === '1') { gateParam = gateParam || 'blocked'; legacyParam = true; }
 $('status-filter').value = statusParam;
 $('gate-filter').value = gateParam;
 $('attention-filter').value = attentionParam;
-$('blocked-filter').checked = blockedParam;
 let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
 let calendarDay = query.get('day') || '';
@@ -55,7 +54,6 @@ if (legacyParam) {
   if (statusParam) canonical.set('status', statusParam);
   if (gateParam) canonical.set('gate', gateParam);
   if (attentionParam) canonical.set('attention', attentionParam);
-  if (blockedParam) canonical.set('blocked', '1');
   if (query.get('q')) canonical.set('q', query.get('q'));
   if (calendarDay) canonical.set('day', calendarDay);
   history.replaceState(null, '', location.pathname + (canonical.size ? '?' + canonical : '') + location.hash);
@@ -193,6 +191,11 @@ function matchesAssignment(order, value) {
   if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
   return order.workers.includes(value.slice(7));
 }
+function matchesGate(order, value) {
+  if(value==='none') return !order.gate_type && !order.blocked_on;
+  if(value==='blocked') return order.blocked_on;
+  return order.gate_type===value;
+}
 function filterChips() {
   const chips=[];
   if($('search').value) chips.push(['Search: '+$('search').value,()=>{$('search').value='';}]);
@@ -201,7 +204,6 @@ function filterChips() {
   if($('status-filter').value) chips.push(['Status: '+$('status-filter').selectedOptions[0].text,()=>{$('status-filter').value='';}]);
   if($('gate-filter').value) chips.push(['Gate: '+$('gate-filter').selectedOptions[0].text,()=>{$('gate-filter').value='';}]);
   if($('attention-filter').value) chips.push(['For You: '+$('attention-filter').selectedOptions[0].text,()=>{$('attention-filter').value='';}]);
-  if($('blocked-filter').checked) chips.push(['Blocked only',()=>{$('blocked-filter').checked=false;}]);
   return chips;
 }
 function renderActiveFilters() {
@@ -215,9 +217,9 @@ function renderActiveFilters() {
   $('clear-filters').hidden=!chips.length;
 }
 function work() {
-  const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, attention=$('attention-filter').value, blockedOnly=$('blocked-filter').checked;
+  const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, attention=$('attention-filter').value;
   const total=snapshot.orders.length;
-  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || (gate==='none' ? !o.gate_type : o.gate_type===gate)) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!blockedOnly || (o.blockers && o.blockers.length)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || matchesGate(o,gate)) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
   reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, gate, or search.'});
   $('results').textContent=`${orders.length} of ${total} matching work order${orders.length===1?'':'s'}`;
@@ -740,12 +742,12 @@ async function refresh(manual) {
 }
 function updateFilters() {
   selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
-  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('blocked-filter').checked)params.set('blocked','1');if($('search').value)params.set('q',$('search').value);
+  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('search').value)params.set('q',$('search').value);
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
-$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('gate-filter').addEventListener('change',updateFilters);$('attention-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);$('blocked-filter').addEventListener('change',updateFilters);
-$('clear-filters').addEventListener('click',()=>{$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('attention-filter').value='';$('blocked-filter').checked=false;updateFilters();});
+$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('gate-filter').addEventListener('change',updateFilters);$('attention-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);
+$('clear-filters').addEventListener('click',()=>{$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('attention-filter').value='';updateFilters();});
 $('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});
 if ($('calendar-filters')) {
   $('calendar-filters').addEventListener('submit', event => event.preventDefault());
