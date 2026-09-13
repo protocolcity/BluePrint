@@ -219,6 +219,10 @@ class SeatCoverageReviewFixTests(unittest.TestCase):
         self.assertIn("container.addEventListener('toggle'", _SRC)
         self.assertNotIn('coverageHireBlock(row)', _SRC)
 
+    def test_hire_toggle_listener_uses_capture_phase(self):
+        fn = _SRC.split('function ensureCoverageHireDelegation()')[1].split('function renderCoverage()')[0]
+        self.assertRegex(fn, r"addEventListener\('toggle'[\s\S]*,\s*true\)")
+
     def test_unavailable_project_store_is_not_treated_as_zero_open(self):
         self.assertIn('function projectStoreState(slug)', _SRC)
         self.assertIn('function coverageIsActive(row)', _SRC)

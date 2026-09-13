@@ -333,7 +333,7 @@ function ensureCoverageHireDelegation() {
     if(hire.tagName!=='DETAILS' || !hire.dataset.coverageProject) return;
     const row=(snapshot.coverage || []).find(item=>item.project===hire.dataset.coverageProject);
     if(row) paintCoverageHireBody(hire, row);
-  });
+  },true);
 }
 function renderCoverage() {
   ensureCoverageHireDelegation();
