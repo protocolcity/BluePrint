@@ -118,10 +118,17 @@ class ChangeFeed:
     other client.
     """
 
-    def __init__(self, root: Path | None, poll_interval: float = POLL_INTERVAL_SECS):
+    def __init__(
+        self,
+        root: Path | None,
+        poll_interval: float = POLL_INTERVAL_SECS,
+        auto_poll: bool = True,
+    ):
         self._root = root
         self._poll_interval = poll_interval
+        self._auto_poll = auto_poll
         self._lock = threading.Lock()
+        self._poll_lock = threading.Lock()
         self._clients: dict[int, "queue.Queue[dict]"] = {}
         self._next_id = 0
         self._thread: threading.Thread | None = None
@@ -158,6 +165,8 @@ class ChangeFeed:
         self._stop.set()
 
     def _ensure_thread_started(self) -> None:
+        if not self._auto_poll:
+            return
         if self._thread is None or not self._thread.is_alive():
             self._stop.clear()
             self._thread = threading.Thread(target=self._run, daemon=True)
@@ -170,21 +179,28 @@ class ChangeFeed:
             time.sleep(self._poll_interval)
 
     def poll_once(self) -> None:
-        """One stat sweep — public so tests can drive it without a thread."""
-        now = time.monotonic()
-        for source in SOURCES:
-            before = self._signatures[source]
-            after = _signature(_SOURCE_PATHS[source](self._root))
-            if after == before:
-                continue
-            self._signatures[source] = after
-            self._pending[source] = _changed_name(before, after)
-        for source, path in list(self._pending.items()):
-            if now - self._last_emit[source] < DEBOUNCE_SECS:
-                continue
-            self._last_emit[source] = now
-            del self._pending[source]
-            self._broadcast(source, path)
+        """One stat sweep — public so tests can drive it without a thread.
+
+        Serialized: the background thread and a test's manual call must
+        never run concurrently, or both can observe the same stat move and
+        double-emit (the second sees the change only if it reads the prior
+        signature before the first writes the new one).
+        """
+        with self._poll_lock:
+            now = time.monotonic()
+            for source in SOURCES:
+                before = self._signatures[source]
+                after = _signature(_SOURCE_PATHS[source](self._root))
+                if after == before:
+                    continue
+                self._signatures[source] = after
+                self._pending[source] = _changed_name(before, after)
+            for source, path in list(self._pending.items()):
+                if now - self._last_emit[source] < DEBOUNCE_SECS:
+                    continue
+                self._last_emit[source] = now
+                del self._pending[source]
+                self._broadcast(source, path)
 
     def _broadcast(self, source: str, path: str) -> None:
         event = {

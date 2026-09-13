@@ -44,7 +44,7 @@ class ChangeFeedTests(unittest.TestCase):
         (workforce / "daemon.json").write_text("{}")
         (workforce / "ledger").mkdir()
         (workforce / "reports" / "supervisor").mkdir(parents=True)
-        self.feed = ChangeFeed(self.root, poll_interval=999)
+        self.feed = ChangeFeed(self.root, poll_interval=999, auto_poll=False)
         client = self.feed.subscribe()
         assert client is not None
         self.client_id, self.inbox = client
