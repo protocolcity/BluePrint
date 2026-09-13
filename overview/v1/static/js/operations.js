@@ -7,7 +7,7 @@ const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents','Registered local agents, schedules, and reported runtime state.'],connections:['Connections','Where the information comes from and how current it is.']};
+const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Agent schedules and local events, with their sources visible.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Project stores connected to this workspace.'],agents:['Agents',''],connections:['Connections','Where the information comes from and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
@@ -259,34 +259,69 @@ function heartbeatLine() {
   const ago=seconds<60?`${seconds}s ago`:`${Math.floor(seconds/60)}m ago`;
   return `WorkForce daemon: seen ${ago}`;
 }
-function coverageCard(row) {
-  const card=el('article',undefined,'bp-panel bp-coverage-row');
-  card.append(el('p',row.text));
-  if(row.missing.length) {
-    const hire=el('div',undefined,'bp-note');
-    for(const provider of row.missing) {
-      const command=row.hire_commands[provider];
-      const wrap=el('p',undefined,'bp-muted');
-      const code=el('code',command);
-      const button=el('button','Copy Hire command');
-      button.type='button';
-      button.addEventListener('click',()=>navigator.clipboard.writeText(command));
-      wrap.append(`Hire ${provider}: `,code,' ',button);
-      hire.append(wrap);
-    }
-    card.append(hire);
+function projectOpenCount(slug) {
+  const project=(snapshot.projects || []).find(p=>p.id===slug);
+  return project && project.state==='available' ? project.open : 0;
+}
+function coverageCompactLine(row) {
+  const staffed=[...row.present, ...row.held.map(p=>`${p} off`)];
+  let line=`${row.name} · ${staffed.length ? staffed.join(', ') : 'none staffed'}`;
+  if(row.missing.length) line+=` · missing ${row.missing.join(', ')}`;
+  if(row.not_configured.length) line+=` · not configured: ${row.not_configured.join(', ')}`;
+  return line;
+}
+function coverageHireBlock(row) {
+  const block=el('div',undefined,'bp-coverage-hire');
+  for(const provider of row.missing) {
+    const command=row.hire_commands[provider];
+    const wrap=el('p',undefined,'bp-muted');
+    const button=el('button','Copy');
+    button.type='button';
+    button.addEventListener('click',()=>navigator.clipboard.writeText(command));
+    wrap.append(`Hire ${provider}: `,el('code',command),' ',button);
+    block.append(wrap);
   }
-  if(row.not_configured.length) card.append(el('p',row.not_configured.map(p=>`${p}: ${row.install_hints[p]}`).join(' · '),'bp-muted bp-note'));
-  card.append(el('p','AGENT_ADOPTION.md D15 — the coordinator’s classifier refuses roster writes; run the Hire command on the host.','bp-muted bp-note'));
-  return card;
+  if(row.not_configured.length) block.append(el('p',row.not_configured.map(p=>`${p}: ${row.install_hints[p]}`).join(' · '),'bp-muted bp-note'));
+  return block;
+}
+function coverageRow(row) {
+  const node=el('div',undefined,'bp-coverage-row');
+  node.append(el('p',coverageCompactLine(row),'bp-muted'));
+  if(row.missing.length || row.not_configured.length) {
+    const hire=el('details');
+    hire.append(el('summary','Hire…'));
+    hire.append(coverageHireBlock(row));
+    node.append(hire);
+  }
+  return node;
+}
+function renderCoverage() {
+  const rows=snapshot.coverage || [], active=[], collapsed=[];
+  for(const row of rows) {
+    if(row.present.length || row.held.length || projectOpenCount(row.project) > 0) active.push(row);
+    else collapsed.push(row);
+  }
+  const container=$('coverage-list');
+  container.replaceChildren();
+  for(const row of active) container.append(coverageRow(row));
+  if(collapsed.length) {
+    const bundle=el('details',undefined,'bp-coverage-collapsed');
+    const names=collapsed.map(row=>row.project).join(', ');
+    bundle.append(el('summary',`${collapsed.length} project${collapsed.length===1?'':'s'} unstaffed (${names})`));
+    const inner=el('div',undefined,'bp-coverage-collapsed-rows');
+    for(const row of collapsed) inner.append(coverageRow(row));
+    bundle.append(inner);
+    container.append(bundle);
+  }
+  if(!rows.length) empty(container,'No registered projects.');
 }
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
   $('agents-heartbeat').textContent=heartbeatLine();
-  reconcileList($('coverage-list'), snapshot.coverage || [], row=>row.project, coverageCard, {emptyText:'No registered projects.'});
   reconcileList($('seat-list'), seats, a=>a.id, agentCard, {emptyText:'No seats registered in the readable registry.'});
   reconcileList($('job-list'), jobs, a=>a.id, agentCard, {emptyText:'No jobs registered in the readable registry.'});
   supervisorPanel();
+  renderCoverage();
 }
 function timelineRow(row) {
   const node = el('article', undefined, 'bp-order');
