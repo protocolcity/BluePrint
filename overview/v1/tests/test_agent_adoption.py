@@ -3,6 +3,7 @@ coverage and the Hire command text. Disposable roster + fake PATH; no host
 provider, no roster write."""
 import json
 from pathlib import Path
+import shlex
 import tempfile
 import unittest
 
@@ -39,13 +40,29 @@ class ProviderDetectionTests(unittest.TestCase):
 
 
 class HireCommandTests(unittest.TestCase):
-    def test_hire_command_text_names_provider_pin_project_and_dry_run(self):
+    def test_hire_command_text_names_provider_pin_project_and_repository(self):
         command = hire_command('Cursor', project_slug='blueprint', project_path='/ws/blueprint', prefix='pc')
-        self.assertIn('blueprint hire pc-cursor-implementer', command)
-        self.assertIn('--workdir /ws/blueprint', command)
+        self.assertIn('workforce hire pc-cursor-implementer', command)
+        self.assertIn('--provider Cursor', command)
+        self.assertIn('--repository /ws/blueprint', command)
         self.assertIn('--model composer-2.5', command)
         self.assertIn('--project blueprint', command)
-        self.assertIn('--dry-run', command)
+        self.assertIn('--schedule manual', command)
+        self.assertNotIn('--remote', command)
+
+    def test_hire_command_names_the_remote_when_the_project_registration_knows_one(self):
+        command = hire_command('Claude', project_slug='blueprint', project_path='/ws/blueprint', prefix='pc',
+                                remote='https://github.com/protocolcity/BluePrint')
+        self.assertIn('--remote https://github.com/protocolcity/BluePrint', command)
+
+    def test_hire_command_quotes_every_argument_not_just_role(self):
+        command = hire_command('Claude', project_slug='blue print', project_path='/ws/blue print; rm -rf ~',
+                                prefix='pc', remote='https://github.com/x/y; rm -rf ~')
+        parsed = shlex.split(command)
+        self.assertIn('/ws/blue print; rm -rf ~', parsed)
+        self.assertIn('blue print', parsed)
+        self.assertIn('https://github.com/x/y; rm -rf ~', parsed)
+        self.assertNotIn('rm', parsed)
 
     def test_hire_command_never_carries_a_permission_bypass_flag(self):
         for provider in ('Claude', 'Cursor', 'Grok', 'Codex'):
@@ -57,7 +74,7 @@ class ProviderCoverageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
 
     def _registry(self, slug='blueprint', name='BluePrint', prefix='pc'):
         return {slug: {'name': name, 'prefix': prefix, 'folder': slug, 'has_instructions': True}}
@@ -95,8 +112,31 @@ class ProviderCoverageTests(unittest.TestCase):
         host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
         row = provider_coverage(self.root, self._registry(), {}, {}, host_providers=host_providers)[0]
         self.assertIn('Claude', row['missing'])
-        self.assertIn('blueprint hire pc-claude-implementer', row['hire_commands']['Claude'])
+        self.assertIn('workforce hire pc-claude-implementer', row['hire_commands']['Claude'])
         self.assertNotIn('Cursor', row['hire_commands'])
+
+    def test_missing_provider_hire_command_names_the_registered_remote(self):
+        connections = self.root / '.blueprint/connections.json'
+        connections.parent.mkdir(parents=True)
+        connections.write_text(json.dumps({'github': {'repositories': [
+            {'project': 'blueprint', 'repo': 'protocolcity/BluePrint', 'role': 'Canonical product'}]}}))
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), {}, {}, host_providers=host_providers)[0]
+        self.assertIn('--remote https://github.com/protocolcity/BluePrint', row['hire_commands']['Claude'])
+
+    def test_bare_pin_model_still_counts_as_a_present_seat(self):
+        workers = {'blueprint-claude': self._seat(['python', 'launch.py'])}
+        workers['blueprint-claude']['model'] = 'claude-sonnet-5'
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], ['Claude'])
+
+    def test_seat_with_no_kind_field_still_counts_as_a_seat(self):
+        workers = {'blueprint-claude': {'display': 'Seat', 'identity': 'seat',
+                                          'queue_url': 'worklane://local?product=blueprint', 'command': ['claude']}}
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], ['Claude'])
 
     def test_not_configured_provider_carries_an_install_hint(self):
         host_providers = {'Claude': None, 'Cursor': '/x/cursor-agent', 'Grok': '/x/grok', 'Codex': '/x/codex'}
