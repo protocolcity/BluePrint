@@ -77,6 +77,7 @@ document.title = `BluePrint · ${titles[page][0]}`;
 $(page + '-view').hidden = false;
 if(page==='projects' && $('projects-filter')) $('projects-filter').value=projectsFilter;
 document.querySelector(`[data-page="${page}"]`).setAttribute('aria-current','page');
+import('/js/nav-shell.mjs').then(m => m.ensureActiveNavVisible()).catch(() => {});
 function el(tag, text, cls) { const node = document.createElement(tag); if(text !== undefined) node.textContent = text; if(cls) node.className = cls; return node; }
 function link(text, href, cls) { const node = el('a',text,cls); node.href=href; return node; }
 function badge(state, text) { const node=el('span',text || state.replaceAll('_',' '),'bp-badge'); node.dataset.state=state; return node; }
@@ -1375,7 +1376,7 @@ function paint() {
   ];
   $('source-warning').hidden=!issues.length && !snapshot.truncated;
   $('source-warning').textContent=issues.length ? `Some sources need attention: ${issues.map(s=>`${s.name} (${s.state})`).join(', ')}. Counts may be incomplete.` : 'Large stores are limited to 2,000 open records each. Filtered counts may be incomplete.';
-  $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Activity`;
+  $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Delivery`;
   filterOptions();
   if(page==='overview') overview();
   if(page==='work') work();
@@ -1383,7 +1384,7 @@ function paint() {
   if(page==='agents') agents();
   if(page==='calendar') calendar();
   if(page==='timeline') timeline();
-  if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; }
+  if(page==='settings') { $('settings-build').textContent=snapshot.build;$('settings-workspace').textContent=snapshot.workspace?.path || 'Not selected'; if($('settings-updates')) $('settings-updates').textContent=liveIndicator(); }
   if(page==='connections') { connectionExceptions();sources($('connection-list'),true);capabilities();engines();excludedStores();$('refresh-description').textContent=(streamState==='open' ? 'Live updates when the desk changes; ' : '')+(interval ? `fallback poll every ${streamState==='open'?60:interval} seconds while this page is visible` : 'manual fallback only');$('build').textContent=snapshot.build;$('workspace-path').textContent=workspace?.path || 'Not selected'; }
 }
 // Three independent clocks, never collapsed into one ambiguous word
@@ -1407,6 +1408,7 @@ function freshness() {
   status.dataset.state=lastError?'error':'ok';
   const indicator=liveIndicator();
   status.textContent=lastError && lastSuccess ? `Refresh failed · showing last read · ${indicator}` : indicator;
+  if(page==='settings' && $('settings-updates')) $('settings-updates').textContent=indicator;
 }
 async function refreshTimeline(append, opts = {}) {
   if (timelinePending || page !== 'timeline') return;
