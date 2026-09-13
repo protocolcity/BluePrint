@@ -198,5 +198,24 @@ class SeatHeaderProjectNameTests(unittest.TestCase):
         self.assertNotIn("agent.held ? agent.held.project : 'Unassigned'", _SRC)
 
 
+class CalendarRowTests(unittest.TestCase):
+    def test_manual_seats_collapse_behind_on_demand_line(self):
+        self.assertIn("function onDemandSeat(agent)", _SRC)
+        self.assertIn("On demand seats: ", _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("agent.group==='seat'", compact)
+        self.assertIn("agent.schedule==='manual'", compact)
+        self.assertIn("agent.schedule==='Notscheduled'", compact)
+
+    def test_due_and_hold_until_merge_on_the_same_row(self):
+        self.assertIn("function mergeDatedWork(items)", _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("event.kind!=='deadline'&&event.kind!=='timer'", compact)
+        self.assertIn("row.due=", compact)
+        self.assertIn("row.hold=", compact)
+        self.assertIn("' · Due'", _SRC)
+        self.assertIn("' · Hold until'", _SRC)
+
+
 if __name__ == '__main__':
     unittest.main()
