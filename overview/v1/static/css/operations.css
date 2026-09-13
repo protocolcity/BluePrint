@@ -42,10 +42,16 @@
 .bp-order:hover { background: var(--ov-bg); }.bp-order strong { font-size: 14px; font-weight: 500; display: block; overflow-wrap: anywhere; }
 .bp-order-meta { display: block; margin-top: 5px; font-size: 12px; color: #a3a8b1; }.bp-order-note { display: block; font-size: 12px; color: var(--ov-focus); margin-top: 7px; }
 .bp-badge { align-self: start; display: inline-block; font-size: 11px; color: #b4bbc6; border: 1px solid var(--ov-tile-border-strong); border-radius: 4px; padding: 3px 7px; white-space: nowrap; }
-.bp-badge[data-state="attention"],.bp-badge[data-state="stale"],.bp-badge[data-state="partial"] { color: var(--ov-focus); }
+.bp-badge[data-state="attention"],.bp-badge[data-state="stale"],.bp-badge[data-state="partial"],.bp-badge[data-state="reachable"],.bp-badge[data-state="unknown"] { color: var(--ov-focus); }
 .bp-badge[data-state="in_progress"],.bp-badge[data-state="fresh"],.bp-badge[data-state="available"],.bp-badge[data-state="working"] { color: var(--ov-state-working); }
-.bp-badge[data-state="blocked"],.bp-badge[data-state="unavailable"] { color: var(--ov-state-error); }
+.bp-badge[data-state="blocked"],.bp-badge[data-state="unavailable"],.bp-badge[data-state="failed"] { color: var(--ov-state-error); }
+.bp-badge[data-state="installed"],.bp-badge[data-state="empty"],.bp-badge[data-state="not_configured"] { color: #b4bbc6; }
 .bp-source { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 13px 0; border-bottom: 1px solid var(--ov-tile-border); }.bp-source p { grid-column: 1/-1; overflow-wrap: anywhere; }.bp-source:last-child { border: 0; }
+.bp-source-compact { padding: 8px 0; }
+.bp-source-next { color: var(--ov-focus); font-size: 13px; margin: 4px 0 0; }
+.bp-source-raw { grid-column: 1/-1; font-size: 13px; }
+.bp-source-raw summary { cursor: pointer; color: var(--ov-muted); }
+.bp-source-raw p { margin: 6px 0 0; }
 .bp-note { margin-top: 16px !important; line-height: 1.6; }
 .bp-project-grid,.bp-agent-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
 .bp-coverage-list { display: grid; gap: 10px; }

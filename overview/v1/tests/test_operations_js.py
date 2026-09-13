@@ -168,7 +168,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list'):
+        for list_id in ('metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'dated-work', 'schedule-list', 'event-list', 'engine-list', 'excluded-store-list', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_excluded_stores_are_a_reconciled_list_not_a_joined_note(self):
@@ -380,13 +380,33 @@ class CalendarRowTests(unittest.TestCase):
 class ConnectionsEngineTests(unittest.TestCase):
     def test_engine_list_paints_versions_reachability_and_supervisor(self):
         self.assertIn('id="engine-list"', _HTML)
+        self.assertIn('id="connection-exceptions"', _HTML)
         self.assertIn("function engines()", _SRC)
         self.assertIn("'WorkLane engine'", _SRC)
         self.assertIn("'WorkForce engine'", _SRC)
         self.assertIn("'WorkLane API'", _SRC)
         self.assertIn("'Supervisor last pass'", _SRC)
-        self.assertIn("Source: ", _SRC)
-        self.assertIn("Observed ", _SRC)
+        self.assertIn("function connectionExceptions()", _SRC)
+        self.assertIn("'Activated '", _SRC)
+        self.assertIn("'Last observation '", _SRC)
+        self.assertIn("'Last outcome '", _SRC)
+        self.assertIn("'Next: '", _SRC)
+        self.assertIn("'Endpoint, path and version'", _SRC)
+        self.assertNotIn("'Observed '", _SRC)
+
+    def test_receipt_timestamp_is_activated_not_observed(self):
+        self.assertIn("record.activated_at", _SRC)
+        self.assertIn("'Activated '", _SRC)
+        self.assertNotIn("'Observed '", _SRC)
+
+    def test_failed_supervisor_is_not_painted_available(self):
+        self.assertIn("EXCEPTION_STATES", _SRC)
+        self.assertIn("'failed'", _SRC)
+        self.assertIn("item.usable===false", _SRC.replace(' ', ''))
+
+    def test_transport_warning_includes_engine_exceptions(self):
+        self.assertIn("engineRows().filter(([,engine])=>isException(engine))", _SRC.replace(' ', ''))
+        self.assertIn("The live indicator is only the update transport.", _HTML)
 
 
 if __name__ == '__main__':
