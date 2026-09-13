@@ -1,5 +1,16 @@
 """Human attention presentation over durable work; never changes eligibility."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+
+
+def _dated_label(labels, prefix):
+    """The date carried by the first ``prefix``-tagged label, or ``None``."""
+    for label in labels:
+        if isinstance(label, str) and label.startswith(prefix):
+            try:
+                return date.fromisoformat(label[len(prefix):].strip())
+            except ValueError:
+                return None
+    return None
 
 
 def face(order, labels, now):
@@ -15,8 +26,9 @@ def face(order, labels, now):
         return 'read'
     if gate == 'human' or 'gate:human' in labels or 'needs:founder-decision' in labels:
         return 'decide'
-    if any(isinstance(label,str) and label.startswith('reminder:') for label in labels):
-        return 'note'
+    due = _dated_label(labels, 'reminder:') or _dated_label(labels, 'deadline:')
+    if due and due <= now.date():
+        return 'due'
     if gate == 'timer':
         return 'watch'
     if order.get('status') in ('in_progress','in_review'):
@@ -26,8 +38,6 @@ def face(order, labels, now):
                 return 'watch'
         except (ValueError,TypeError):
             pass
-    if any(label in labels for label in ('you:note','you:todo','you:remind')):
-        return 'note'
     return ''
 
 
@@ -41,18 +51,31 @@ def _duration_words(seconds):
     return f'{minutes}m'
 
 
+def kind_of(order, labels):
+    """Item-type axis (STATES_AND_TERMS.md §5): work, todo, note, reminder, report."""
+    if any(isinstance(label, str) and (label == 'inbox-report' or label.startswith('inbox-report:')) for label in labels):
+        return 'report'
+    if any(isinstance(label, str) and label.startswith('reminder:') for label in labels):
+        return 'reminder'
+    if 'you:todo' in labels or 'you:remind' in labels:
+        return 'todo'
+    if 'you:note' in labels:
+        return 'note'
+    return 'work'
+
+
 def persona_text(order, labels):
-    """You-qualifier chip text (you:todo / you:remind / you:note); '' when none apply."""
-    if 'you:todo' in labels:
+    """Kind chip text for personal items and dated reminders; '' when none apply.
+
+    `you:remind` has no date of its own (a legacy alias, STATES_AND_TERMS.md
+    §6): with a `reminder:<date>` label it adds nothing, without one it reads
+    as an undated todo, never "Reminder (no date)".
+    """
+    reminder = next((label for label in labels if isinstance(label, str) and label.startswith('reminder:')), None)
+    if reminder:
+        return 'Reminder ' + reminder.split(':', 1)[1]
+    if 'you:todo' in labels or 'you:remind' in labels:
         return 'Your todo'
-    if 'you:remind' in labels:
-        reminder = next((label for label in labels if isinstance(label, str) and label.startswith('reminder:')), None)
-        if reminder:
-            return 'Reminder ' + reminder.split(':', 1)[1]
-        gate_until = str(order.get('gate_until') or '').strip()
-        if gate_until:
-            return 'Reminder ' + gate_until.split('T', 1)[0]
-        return 'Reminder (no date)'
     if 'you:note' in labels:
         return 'Your note'
     return ''
@@ -80,12 +103,12 @@ def face_reason(order, labels, computed_face, now):
         if updated and updated.tzinfo:
             return f'No update for {_duration_words((now - updated).total_seconds())}'
         return 'No recent update'
-    if computed_face == 'note':
-        persona = persona_text(order, labels)
-        if persona:
-            return persona
+    if computed_face == 'due':
         reminder = next((label for label in labels if isinstance(label, str) and label.startswith('reminder:')), None)
         if reminder:
-            return 'Reminder set for ' + reminder.split(':', 1)[1]
-        return 'Your own note'
+            return 'Reminder due ' + reminder.split(':', 1)[1]
+        deadline = next((label for label in labels if isinstance(label, str) and label.startswith('deadline:')), None)
+        if deadline:
+            return 'Deadline due ' + deadline.split(':', 1)[1]
+        return 'Due'
     return ''

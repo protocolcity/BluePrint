@@ -1008,7 +1008,7 @@ def operations_snapshot(binder):
                         from suite.api.calendar import parse_gate_until
                         due = parse_gate_until(item['gate_until'])
                         gate_expired = due is not None and due <= now
-                    from .attention_view import face, face_reason, persona_text
+                    from .attention_view import face, face_reason, kind_of, persona_text
                     attention_face = face(item, labels, now)
                     attention = bool(attention_face)
                     order_id = item.get('ext_id') or (f"{project['prefix']}-{item['id']}" if project['prefix'] else str(item['id']))
@@ -1035,6 +1035,7 @@ def operations_snapshot(binder):
                         'gate_note': item.get('gate_note') or '',
                         'workers': workers,
                         'needs_routing': not routable_workers and not (item.get('gate_type') or '') and not you_qualifier,
+                        'kind': kind_of(item, labels),
                         'persona': persona_text(item, labels),
                         'assigned_you': assigned_you,
                         'owner': 'You' if assigned_you else (', '.join(routable_workers) or 'Unassigned'),
