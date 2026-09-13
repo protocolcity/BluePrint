@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as navigation from '../../static/js/reader-navigation.mjs';
+import * as reconcile from '../../static/js/dom-reconcile.mjs';
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 class Element {
   constructor() { this.children=[];this.listeners={};this.value='';this.options=[];this.style={};this.dataset={};this.textContent='';this.classList={add(){},remove(){},toggle(){}}; }
@@ -18,7 +19,7 @@ class Element {
 const settle = async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
 function environment(path) {
   const nodes=new Map(), get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
-  const context={URL,URLSearchParams,AbortController,AbortSignal,Event,console,navigation,location:new URL(path,'https://desk.example'),setInterval(){},setTimeout(){},clearTimeout(){},Option:class extends Element {constructor(text,value){super();this.textContent=text;this.value=value;}},localStorage:{getItem(){return null;}}};
+  const context={URL,URLSearchParams,AbortController,AbortSignal,Event,console,navigation,reconcile,location:new URL(path,'https://desk.example'),setInterval(){},setTimeout(){},clearTimeout(){},Option:class extends Element {constructor(text,value){super();this.textContent=text;this.value=value;}},localStorage:{getItem(){return null;}}};
   context.navigation={...navigation,readerHref:href=>navigation.readerHref(href,context.location)};
   context.document={getElementById:get,createElement:()=>new Element(),querySelector:get,body:new Element(),addEventListener(){},dispatchEvent(){}};
   context.window={addEventListener(){},dispatchEvent(){},__MAP_V1_AUTOBOOT__:false};
@@ -60,7 +61,7 @@ for(const target of [work,map,...unsafe.filter(x=>typeof x==='string')]) {
 {
   const env=environment(work);
   // Expose only the existing URL factory for assertion; the full script runs.
-  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace('function orderRow(order)', 'window.testWorkUrl = workUrl;\nfunction orderRow(order)');
+  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace("await import('/js/dom-reconcile.mjs')",'reconcile').replace('function orderRow(order)', 'window.testWorkUrl = workUrl;\nfunction orderRow(order)');
   env.context.fetch=async()=>({ok:false});
   vm.runInContext(source,env.context);await settle();
   const href=env.context.window.testWorkUrl({project:'example',id:'ex-1'});
