@@ -130,3 +130,28 @@ Rules:
 - **Stored data is untouched.** No stored status is added, no gate or label is rewritten to make the view come out; the projection and the filters change, the records do not.
 
 Fixtures every implementation must carry: a personal reminder assigned to You; an agent-owned human gate visible in For You and still assigned to the agent; an ungated ready agent order; deferred and tracking records visible under All open but not ready; an expired timer beside an active one; an unavailable store and a truncated store.
+
+## 6. Label matrix — every tag on a work order, which axis it feeds, who writes it
+
+Inventory taken 2026-09-13 across all twelve registered stores (133 open orders). Labels are free text in WorkLane; this table is the desk's contract for reading them. A label that is not in the table is a project tag (area, topic) and feeds nothing on the desk except search. Nothing here creates a new stored status; every row maps a label onto one of the five axes of §5 or onto a fact the reader shows.
+
+| Label family | Meaning | Axis it feeds | Written by | Shown on the desk as |
+|---|---|---|---|---|
+| `product:<slug>` | Store identity stamped on every order | none (routing) | WorkLane on create | project name on the row |
+| `worker:<seat>` | Routed to a registered seat | **Assignment** | filer, coordinator, seat generator | Assigned to seat; Assignment filter |
+| `worker:you` | Routed to the person | **Assignment** = You | filer, coordinator | Assigned to You (pc-1493 fixes the host case) |
+| `you:todo` · `you:remind` · `you:note` | Personal item kinds; `you:host` = You implementing on this machine | **Kind** (and Assignment = You) | filer | Your todo / Reminder (date) / note; Note face in For You |
+| `reminder:YYYY-MM-DD` · `deadline:YYYY-MM-DD` | Dated clocks without an embargo | Calendar clocks; Note face | filer, reader | Reminder / Due with the source label named |
+| `inbox-report` · `inbox-report:<kind>` | A report was written for the person | **For You** = Read | report jobs | Read face |
+| `gate:founder` · `needs:founder-decision` · `needs:founder-present` | Only the person can pass this (publication, money, physical presence) | **For You** = Decide when the gate is human; otherwise a reader chip | filer | Needs you badge; chip |
+| `needs:routing` | WorkLane's stamp: no seat carried it when routing was last computed | none on the desk since .50; the desk computes Needs routing from ungated plus unassigned | WorkLane (engine) | Needs routing chip only when ungated and unassigned |
+| `execution:bounded` | Eligibility for the bounded implementation seats | Readiness (seat eligibility) | filer | Ready for seat |
+| `seat:cloud` | Historical: routed to a cloud/citizen executor that no longer exists | none; awaiting wf-258 | historical | nothing (search only) |
+| `epic` · `epic:tracking` · `epic:citizen-park` · `goal` | Structural umbrella markers | none; the **Gate** value tracking is the fact | filer | Tracking badge comes from gate_type, not the label |
+| `parent:<id>` · `slice-of:<id>` | Hierarchy | reader (Part of …) | filer | Part of link |
+| `adr:<n>` · `sys:<x>` · `area:<x>` · `phase:<x>` · `host:<x>` | Project taxonomy | none | project | search only |
+| `worker:<retired hand>` on done orders · `gate_type:<x>` · `gate_type=<x>` | Legacy markers; a gate must be a real gate field, never a label | none | historical | nothing; corrected when found (osp-1005, pc-1287) |
+
+What is not a label, and must not become one: status (`backlog`, `in_progress`, `in_review`, `done`, `canceled` are fields), the gate (`gate_type`, `gate_until`, `gate_note` are fields), a claim (the signed Owner marker comment), declared blockers (the `blockers` list; a declared blocker is the Gate value "Blocked on another order", pc-1493), and readiness (computed by the WorkLane policy from status, gate, blockers and eligibility).
+
+Reading the inventory: 80 open orders carry `needs:routing` and 57 carry `seat:cloud`; almost all of them are the 77 deferred or tracking orders whose historical hands were retired. They are parked on purpose, they are Unassigned because their seats no longer exist, and they need a seat only when their gate thaws. That is the whole relationship between Unassigned and parked on the Work page: nothing drops work there today; it is the retired-seat backlog, visible since .50 and filterable by Gate.
