@@ -43,7 +43,7 @@ class HireCommandTests(unittest.TestCase):
     def test_hire_command_text_names_provider_pin_project_and_repository(self):
         command = hire_command('Cursor', project_slug='blueprint', project_path='/ws/blueprint', prefix='pc')
         self.assertIn('workforce hire pc-cursor-implementer', command)
-        self.assertIn('--provider Cursor', command)
+        self.assertIn('--provider cursor', command)
         self.assertIn('--repository /ws/blueprint', command)
         self.assertIn('--model composer-2.5', command)
         self.assertIn('--project blueprint', command)
@@ -68,6 +68,16 @@ class HireCommandTests(unittest.TestCase):
         for provider in ('Claude', 'Cursor', 'Grok', 'Codex'):
             command = hire_command(provider, project_slug='wl', project_path='/ws/worklane', prefix='wl')
             self.assertNotIn('dangerously-skip-permissions', command)
+
+    def test_hire_command_provider_value_is_a_lowercase_adapter_key(self):
+        """review finding pc-1477: hire CLI's --provider choices (workforce/
+        cli.py) are lowercase adapter keys, not display names — the printed
+        command must use one or it fails as written."""
+        for provider in ('Claude', 'Cursor', 'Grok', 'Codex'):
+            command = hire_command(provider, project_slug='wl', project_path='/ws/worklane', prefix='wl')
+            parsed = shlex.split(command)
+            value = parsed[parsed.index('--provider') + 1]
+            self.assertIn(value, ('claude', 'cursor', 'grok', 'codex'))
 
 
 class ProviderCoverageTests(unittest.TestCase):
@@ -169,6 +179,20 @@ class ProviderCoverageTests(unittest.TestCase):
         """pc-1477 scope addition (4): wf-259's generator marks a held seat
         with schedule=='' — that must read as held, not present."""
         seat = self._seat(['claude'])
+        seat['schedule'] = ''
+        workers = {'blueprint-claude': seat}
+        host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}
+        row = provider_coverage(self.root, self._registry(), workers, {}, host_providers=host_providers)[0]
+        self.assertEqual(row['present'], [])
+        self.assertEqual(row['held'], ['Claude'])
+
+    def test_seat_with_no_kind_and_empty_schedule_is_held_not_present(self):
+        """review finding pc-1477: coverage and the Agents snapshot must
+        share one held predicate — a row with no ``kind`` (still a seat, per
+        the Seats group) carrying an empty schedule is held here too, not
+        just explicit ``kind: lane`` rows."""
+        seat = self._seat(['claude'])
+        del seat['kind']
         seat['schedule'] = ''
         workers = {'blueprint-claude': seat}
         host_providers = {'Claude': '/x/claude', 'Cursor': None, 'Grok': None, 'Codex': None}

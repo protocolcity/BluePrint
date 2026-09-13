@@ -431,6 +431,10 @@ def project_registry(root):
 _PROVIDER_ORDER = ('Claude', 'Cursor', 'Grok', 'Codex')
 _PROVIDER_COMMAND = {'Claude': 'claude', 'Cursor': 'cursor-agent', 'Grok': 'grok', 'Codex': 'codex'}
 _PROVIDER_PIN = {'Claude': 'claude-sonnet-5', 'Cursor': 'composer-2.5', 'Grok': 'grok-4.6', 'Codex': 'gpt-6-astra'}
+# workforce hire's --provider choices (workforce/cli.py) — lowercase adapter
+# keys, distinct from the desk's display names above (review finding
+# pc-1477: the printed hire command must use these, not "Cursor"/"Codex").
+_PROVIDER_ADAPTER_KEY = {'Claude': 'claude', 'Cursor': 'cursor', 'Grok': 'grok', 'Codex': 'codex'}
 _PROVIDER_INSTALL_HINT = {
     'Claude': 'not on PATH — install: https://docs.claude.com/en/docs/claude-code',
     'Cursor': 'not on PATH — install: https://cursor.com/cli',
@@ -473,11 +477,13 @@ def hire_command(provider, *, project_slug, project_path, prefix, remote=None):
     --repository <path> --remote <url> --schedule manual --model <pin>``, with
     ``--remote`` only when the project's registration names one. Every
     argument is shell-quoted — a project path or remote can carry spaces or
-    shell metacharacters.
+    shell metacharacters. ``--provider`` prints the hire CLI's lowercase
+    adapter key (review finding pc-1477: the display name printed here fails
+    the hire CLI's ``choices=("claude", "cursor", "grok", "codex")``).
     """
     name = f'{(prefix or project_slug).rstrip("-")}-{provider.lower()}-implementer'
-    parts = ['workforce', 'hire', name, '--provider', provider, '--project', project_slug,
-             '--repository', project_path]
+    parts = ['workforce', 'hire', name, '--provider', _PROVIDER_ADAPTER_KEY[provider],
+             '--project', project_slug, '--repository', project_path]
     if remote:
         parts += ['--remote', remote]
     parts += ['--schedule', 'manual', '--model', _PROVIDER_PIN[provider]]
@@ -552,6 +558,22 @@ def _seat_executable_provider(row, root, config_cache):
     return _PROVIDER_DISPLAY.get(_executable_name(inner_command))
 
 
+def _row_is_seat_kind(kind):
+    """A lane, or a row with no ``kind`` — the Seats group counts both as a
+    seat (review finding pc-1474), only an explicit non-``lane`` kind
+    (e.g. ``job``) excludes it."""
+    return kind in (None, 'lane')
+
+
+def _row_is_held(row, kind):
+    """Shared held predicate for coverage and the Agents snapshot (review
+    finding pc-1477): disabled outright, or a seat-kind row carrying the
+    wf-259 generator's held state — an empty ``schedule``. Coverage and the
+    Agents snapshot must agree on this so a held seat never reads present in
+    one and OFF in the other."""
+    return row.get('enabled') is False or (_row_is_seat_kind(kind) and row.get('schedule') == '')
+
+
 def _project_seat_providers(workers, project_slug, root, config_cache):
     """``{provider display: 'present'|'held'}`` for one project's implementer
     seats — a seat's ``queue_url`` names its project (AGENT_ADOPTION.md D12:
@@ -571,7 +593,7 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             continue
         if identity == 'demo-worker' and not _seat_command_configured(row.get('command')):
             continue
-        if row.get('kind') not in (None, 'lane'):
+        if not _row_is_seat_kind(row.get('kind')):
             continue
         if _row_project_slug(row) != project_slug:
             continue
@@ -584,10 +606,7 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             provider = _provider_from_pin(model_text)
         if not provider:
             continue
-        # wf-259 generator's held state: a lane seat with schedule=='' is
-        # armed but held, not present (pc-1477 scope addition).
-        held = row.get('enabled') is False or row.get('schedule') == ''
-        result[provider] = 'held' if held else 'present'
+        result[provider] = 'held' if _row_is_held(row, row.get('kind')) else 'present'
     return result
 
 
@@ -774,9 +793,11 @@ def operations_snapshot(binder):
             configured = _seat_command_configured(command)
             kind = row.get('kind') or 'agent'
             if not configured: state = 'not_configured'
-            # wf-259 generator's held state: a lane seat with schedule=='' is
-            # armed but held, off in the Agents surface (pc-1477 scope addition).
-            if row.get('enabled') is False or (kind == 'lane' and row.get('schedule') == ''):
+            # Same held predicate as coverage (review finding pc-1477): a
+            # seat-kind row (lane, or no kind — _row_is_seat_kind) carrying
+            # the wf-259 generator's held state reads OFF here too, not just
+            # explicit lane rows.
+            if _row_is_held(row, row.get('kind')):
                 state = 'off'
             live = runtime.get(identity, {})
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
