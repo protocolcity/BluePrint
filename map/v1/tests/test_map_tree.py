@@ -13,7 +13,7 @@ _HERE = Path(__file__).resolve().parent
 _MAP_V1 = _HERE.parent
 sys.path.insert(0, str(_MAP_V1))
 
-from server.map_tree import build_tree, children_at, render_file  # noqa: E402
+from server.map_tree import attach_project_state, build_tree, children_at, render_file  # noqa: E402
 
 FIXTURE = _HERE / "fixtures" / "binder-01"
 
@@ -114,6 +114,37 @@ class DocumentAccessTests(unittest.TestCase):
                 self.assertIn("Readable paper", render_file(root, relative)[0])
             (root / "linked.md").symlink_to(root / "project/AGENTS.md")
             self.assertIn("Readable paper", render_file(root, "linked.md")[0])
+
+
+class AttachProjectStateTests(unittest.TestCase):
+    def test_stamps_open_for_you_and_working_on_matching_folder(self):
+        tree = {
+            "binder": {"name": "desk", "path": "/tmp/desk"},
+            "lots": [
+                {"relPath": "recipes", "name": "recipes", "isDir": True, "hasMd": True, "managed": True, "hidden": False},
+                {"relPath": "notes", "name": "notes", "isDir": True, "hasMd": False, "managed": False, "hidden": False},
+            ],
+            "git": None,
+        }
+        stamped = attach_project_state(tree, [
+            {"folder": "recipes", "open": 4, "attention": 2, "working": 1, "state": "available"},
+        ])
+        recipes = next(lot for lot in stamped["lots"] if lot["name"] == "recipes")
+        notes = next(lot for lot in stamped["lots"] if lot["name"] == "notes")
+        self.assertEqual(recipes["open"], 4)
+        self.assertEqual(recipes["attention"], 2)
+        self.assertEqual(recipes["working"], 1)
+        self.assertEqual(recipes["storeState"], "available")
+        self.assertNotIn("open", notes)
+        self.assertNotIn("storeState", notes)
+
+    def test_unavailable_store_is_read_only(self):
+        tree = {"lots": [{"relPath": "career", "name": "career", "isDir": True}]}
+        stamped = attach_project_state(tree, [
+            {"folder": "career", "open": 0, "attention": 0, "working": 0, "state": "unavailable"},
+        ])
+        self.assertEqual(stamped["lots"][0]["storeState"], "unavailable")
+        self.assertEqual(stamped["lots"][0]["open"], 0)
 
 
 if __name__ == "__main__":
