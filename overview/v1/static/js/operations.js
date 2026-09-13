@@ -175,18 +175,19 @@ function supervisorPanel() {
   if(!supervisor) { empty(container,'No supervisor registered on this roster.'); return; }
   const heading=el('div',undefined,'bp-section-head');heading.append(el('h2',supervisor.name),badge(supervisor.state,supervisor.badge));container.append(heading);
   container.append(el('p',`Schedule: ${scheduleLabel(supervisor.schedule)}`,'bp-muted'));
+  const passList=el('div',undefined,'bp-pass-list');container.append(passList);
   const passes=supervisor.passes || {state:'unavailable',detail:'Supervisor pass record unavailable.',passes:[]};
   if(passes.state==='available') {
-    if(!passes.passes.length) empty(container,'No supervisor passes recorded yet.');
+    if(!passes.passes.length) empty(passList,'No supervisor passes recorded yet.');
     for(const pass of passes.passes.slice(0,3)) {
       const row=el('div',undefined,'bp-note');
       row.append(el('strong',`${date(pass.generated_at)} · ${pass.mode || 'mode not reported'}`));
       row.append(el('p',`${pass.pass_outcome || 'outcome not reported'} · proposals ${pass.proposals_valid ?? '—'}/${pass.proposals_total ?? '—'} · dispatched ${pass.dispatch_completed ?? 0}/${pass.dispatch_attempted ?? 0}`,'bp-muted'));
       for(const item of pass.dispatched || []) row.append(el('p',`${item.worker} → ${item.project} · ${item.outcome}`,'bp-muted'));
-      container.append(row);
+      passList.append(row);
     }
   } else {
-    empty(container, passes.detail || 'Supervisor pass record unavailable.');
+    empty(passList, passes.detail || 'Supervisor pass record unavailable.');
   }
   container.append(...agentAction(supervisor,'Run a pass'));
 }

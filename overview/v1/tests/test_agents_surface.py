@@ -157,6 +157,34 @@ class AgentsSurfaceTests(unittest.TestCase):
         self.assertTrue(row['preserved_reservation'])
         self.assertEqual(row['action'], 'recover')
 
+    def test_reservation_lookup_does_not_normalize_order_id(self):
+        # A receipt exists for a *different* order ('foo-bar'); the held order
+        # is 'foo/bar', which the old regex normalization collapsed to the
+        # same slug. Without normalization these must not collide.
+        self._daemon(fresh=True)
+        config = self.root / 'runner.json'
+        state_dir = self.root / 'state'
+        config.write_text(json.dumps({'state_dir': str(state_dir), 'worker': 'failed'}))
+        reservation = state_dir / 'failed' / 'foo-bar'
+        reservation.mkdir(parents=True)
+        (reservation / 'preparation.json').write_text('{}')
+        self._roster({'failed': {'display': 'Failed', 'command': ['runner', '--config', str(config)], 'identity': 'failed', 'kind': 'lane'}})
+        started = self._stamp(timedelta(minutes=2))
+        errored = self._stamp(timedelta(minutes=1))
+        self._ledger('failed', f'{started} START identity=failed kind=lane budget_secs=1500\n{started} CANDIDATE ticket=foo/bar\n{errored} ERROR reason="agent exit" rc=1\n')
+        manifest = self.root / 'product/.protocolcity/desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': 'product', 'prefix': 'pc', 'display': 'product'}))
+        import sqlite3
+        data = self.root / 'worklane/worklane/local/data'
+        data.mkdir(parents=True)
+        with sqlite3.connect(data / 'product.db') as conn:
+            conn.executescript('CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);')
+            conn.execute("INSERT INTO tasks VALUES(9,'foo/bar','work','in_progress',1,'2026-09-12','[\"worker:failed\"]',NULL,NULL)")
+        row = next(a for a in operations_snapshot(self.root)['agents'] if a['id'] == 'failed')
+        self.assertFalse(row['preserved_reservation'])
+        self.assertEqual(row['action'], 'dispatch')
+
     # ---- Supervisor panel ----------------------------------------------------
 
     def test_supervisor_absent_when_not_on_roster(self):
@@ -178,11 +206,26 @@ class AgentsSurfaceTests(unittest.TestCase):
         deployment.parent.mkdir(parents=True)
         deployment.write_text(json.dumps({'api_origin': 'http://127.0.0.1:9999'}))
         payload = {'ok': True, 'passes': [{'generated_at': '2026-09-13T03:41:00Z', 'pass_outcome': 'dispatched'}], 'unreadable': 0}
-        with patch('server.operations.urlopen') as urlopen:
-            urlopen.return_value.__enter__.return_value = _FakeResponse(payload)
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.return_value.__enter__.return_value = _FakeResponse(payload)
             supervisor = operations_snapshot(self.root)['supervisor']
         self.assertEqual(supervisor['passes']['state'], 'available')
         self.assertEqual(supervisor['passes']['passes'][0]['pass_outcome'], 'dispatched')
+
+    def test_supervisor_redirect_refused_as_unavailable(self):
+        self._daemon(fresh=True)
+        self._roster({'bp-supervisor': {'display': 'Supervisor', 'command': ['runner'], 'identity': 'bp-supervisor', 'kind': 'job'}})
+        deployment = self.root / 'local/workforce/deployment.json'
+        deployment.parent.mkdir(parents=True)
+        deployment.write_text(json.dumps({'api_origin': 'http://127.0.0.1:9999'}))
+        from urllib.error import HTTPError
+        import io
+        error = HTTPError('http://evil.example/api/supervisor', 302, 'Found', {}, io.BytesIO(b''))
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect = error
+            supervisor = operations_snapshot(self.root)['supervisor']
+        self.assertEqual(supervisor['passes']['state'], 'unavailable')
+        self.assertEqual(supervisor['passes']['passes'], [])
 
     def test_supervisor_endpoint_absent_on_older_engine(self):
         self._daemon(fresh=True)
@@ -193,7 +236,8 @@ class AgentsSurfaceTests(unittest.TestCase):
         from urllib.error import HTTPError
         import io
         error = HTTPError('http://127.0.0.1:9999/api/supervisor', 404, 'Not Found', {}, io.BytesIO(b'{}'))
-        with patch('server.operations.urlopen', side_effect=error):
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect = error
             supervisor = operations_snapshot(self.root)['supervisor']
         self.assertEqual(supervisor['passes']['state'], 'not_configured')
 
