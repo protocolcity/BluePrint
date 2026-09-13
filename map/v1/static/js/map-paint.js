@@ -13,6 +13,21 @@
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+// Reduce-motion check for the branch-item fan entrance (FOCUSED_PROJECT
+// §Rules: "honor reduced motion"). The CSS opacity-0 start is scoped to
+// `@media (prefers-reduced-motion: no-preference)`, so the app's own
+// `body.bp-reduce-motion` toggle (Reduce motion "off" in Preferences) only
+// disables the transition, not that opacity — it never becomes visible
+// again on its own. Skip the entrance class here instead, under either
+// signal, so the content itself is never hidden, only its animation.
+function prefersReducedMotion() {
+  if (typeof document !== 'undefined' && document.body && document.body.classList.contains('bp-reduce-motion')) return true;
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
+  }
+  return false;
+}
+
 const LAYER_IDS = Object.freeze([
   'lots', 'hub', 'dig-in-layer', 'project-focus-layer', 'md-viewer-layer', 'chrome-layer',
 ]);
@@ -359,6 +374,7 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
   center.appendChild(el('text', { x: 0, y: 6, class: 'map-hub-label', 'text-anchor': 'middle' }, truncateLotLabel(project.name || project.relPath, 18)));
   layer.appendChild(center);
 
+  const reduceMotion = prefersReducedMotion();
   const positions = ringPositions(branches.length, BRANCH_RADIUS);
   branches.forEach((branch, i) => {
     const { x, y } = positions[i];
@@ -389,7 +405,7 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
         const ix = Math.cos(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
         const iy = Math.sin(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
         const node = el('g', {
-          class: 'map-hit map-branch-item map-branch-item-enter',
+          class: `map-hit map-branch-item${reduceMotion ? '' : ' map-branch-item-enter'}`,
           transform: `translate(${ix.toFixed(2)},${iy.toFixed(2)})`,
           tabindex: '0', role: 'button',
           'aria-label': `${item.label}${item.detail ? ', ' + item.detail : ''}`,
@@ -404,7 +420,7 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
         const ix = Math.cos(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
         const iy = Math.sin(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
         const node = el('g', {
-          class: 'map-hit map-branch-item map-branch-item-more map-branch-item-enter',
+          class: `map-hit map-branch-item map-branch-item-more${reduceMotion ? '' : ' map-branch-item-enter'}`,
           transform: `translate(${ix.toFixed(2)},${iy.toFixed(2)})`,
           tabindex: '0', role: 'button',
           'aria-label': `${extra} more in ${branch.label} — see the sidebar list`,

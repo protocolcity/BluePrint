@@ -101,7 +101,7 @@ export function createViewState(initial = {}) {
     },
     selectProject(node) {
       if (!node || typeof node.relPath !== 'string') return;
-      state.project = { relPath: node.relPath, name: node.name || node.relPath };
+      state.project = { relPath: node.relPath, name: node.name || node.relPath, hasMd: Boolean(node.hasMd) };
       state.branch = null;
       state.item = null;
       state.dig = null;
