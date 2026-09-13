@@ -94,3 +94,16 @@ class CoverageTests(unittest.TestCase):
             result = subprocess.run([engine, str(script), str(root)], check=True, capture_output=True, text=True, cwd=temporary)
             self.assertIn('demo', json.loads(result.stdout)['errors'])
             self.assertFalse(database.exists())
+
+    def test_deferred_count_matches_full_lane_scope(self):
+        row = self.lane()
+        row['queue_url'] += '&label=env:prod'
+        task = dict(status='backlog', gate_type='deferred', labels=['worker:builder'])
+        data = {'demo': {'ready': [], 'all': [task]}}
+        result = snapshot_process(data, {'builder': row}, 'selected')
+        self.assertEqual(result['lanes'][0]['deferred_n'], 0)
+        self.assertTrue(result['ok'])
+        task['labels'].append('env:prod')
+        result = snapshot_process(data, {'builder': row}, 'selected')
+        self.assertEqual(result['lanes'][0]['deferred_n'], 1)
+        self.assertFalse(result['ok'])
