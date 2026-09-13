@@ -1123,7 +1123,8 @@ def operations_snapshot(binder):
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
             group = 'supervisor' if identity == 'bp-supervisor' else ('seat' if kind == 'lane' else 'job')
             held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
-            verified = bool(held and held['id'] in last_shift_candidates(daemon_path, root, identity))
+            last_candidates = last_shift_candidates(daemon_path, root, identity)
+            verified = bool(held and held['id'] in last_candidates)
             reservation = bool(held and state == 'last_run_failed' and preserved_reservation(root, command, held['id']))
             project_slug = _row_project_slug(row)
             project_name = registry.get(project_slug, {}).get('name') if project_slug else None
@@ -1149,8 +1150,9 @@ def operations_snapshot(binder):
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
                 'model': _seat_model_text(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'project': project_slug, 'project_name': project_name,
-                'held': {'id': held['id'], 'project': held['project_name']} if held else None,
-                'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
+                'held': {'id': held['id'], 'project': held['project'], 'project_name': held['project_name'], 'title': held['title']} if held else None,
+                'held_verified': verified, 'last_candidates': last_candidates,
+                'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}
             if group == 'supervisor':
                 result['supervisor'] = {**agent_row, 'passes': passes_payload}
