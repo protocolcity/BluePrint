@@ -754,5 +754,24 @@ class ConnectionsEngineTests(unittest.TestCase):
         self.assertIn("Observed ", _SRC)
 
 
+class SeatParkedClaimRowTests(unittest.TestCase):
+    """pc-1495: seat rows show finishing and parked handoff copy."""
+
+    def test_held_link_prefers_live_claim_then_finishing_then_parked(self):
+        fn = _SRC.split('function heldLink(agent)')[1].split('function elapsedText')[0]
+        compact = fn.replace(' ', '')
+        self.assertLess(compact.index('currentOrderFor(agent)'), compact.index('agent.finishing'))
+        self.assertLess(compact.index('agent.finishing'), compact.index('parkedIds.length'))
+        self.assertIn('Finishing·parked', compact.replace(' ', ''))
+        self.assertIn('Parked:', fn)
+        self.assertIn('awaiting integration', fn)
+
+    def test_timeline_uses_parked_time_when_no_live_claim(self):
+        fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
+        self.assertIn('agent.parked', fn)
+        self.assertIn('agent.parked_verified', fn)
+        self.assertIn('Verified: parked', fn)
+
+
 if __name__ == '__main__':
     unittest.main()

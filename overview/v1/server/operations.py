@@ -181,6 +181,16 @@ def last_shift_candidates(daemon_path, root, identity):
     return candidates
 
 
+def _seat_parked_orders(orders, identity):
+    """in_review orders this seat parked (Owner marker), for Agents rows."""
+    return [
+        {'id': o['id'], 'project': o['project'], 'project_name': o['project_name'],
+         'title': o['title'], 'since': o.get('since')}
+        for o in orders
+        if o['status'] == 'in_review' and o.get('parked_by') == identity
+    ]
+
+
 def recovery_attempts(daemon_path, root, identity):
     """Count START rows tagged recovery=1 in this identity's ledger tail."""
     lines = _ledger_tail_lines(daemon_path, root, identity)
@@ -1181,8 +1191,11 @@ def operations_snapshot(binder):
             report = read_json(root / '.blueprint/job-reports' / (identity + '.json'), root) if identity in ('chief-of-staff','health-patrol','workspace-efficiency') else None
             group = 'supervisor' if identity == 'bp-supervisor' else ('seat' if kind == 'lane' else 'job')
             held = next((o for o in result['orders'] if o['status'] == 'in_progress' and identity in o['workers']), None) if group == 'seat' else None
+            parked = _seat_parked_orders(result['orders'], identity) if group == 'seat' else []
             last_candidates = last_shift_candidates(daemon_path, root, identity)
             verified = bool(held and held['id'] in last_candidates)
+            parked_verified = bool(parked and all(p['id'] in last_candidates for p in parked))
+            finishing = bool(group == 'seat' and open_shift and not held and parked)
             reservation = bool(held and state == 'last_run_failed' and preserved_reservation(root, command, held['id']))
             project_slug = _row_project_slug(row)
             project_name = registry.get(project_slug, {}).get('name') if project_slug else None
@@ -1209,6 +1222,7 @@ def operations_snapshot(binder):
                 'model': _seat_model_text(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'project': project_slug, 'project_name': project_name,
                 'held': {'id': held['id'], 'project': held['project'], 'project_name': held['project_name'], 'title': held['title']} if held else None,
+                'parked': parked or None, 'parked_verified': parked_verified, 'finishing': finishing,
                 'held_verified': verified, 'last_candidates': last_candidates,
                 'recovery_attempts': recovery_attempts(daemon_path, root, identity),
                 'preserved_reservation': reservation, 'action': action}

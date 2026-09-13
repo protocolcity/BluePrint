@@ -124,3 +124,15 @@ current task failure. Jobs keep a compact schedule/report line (schedule,
 next run, badge, last report or last run) with no timeline, since a job
 never claims a work order to verify. The supervisor panel keeps its
 previously held placement and shape; this order does not revisit it.
+
+## Parked handoffs while a shift is still open (pc-1495, 2026-09-13)
+
+A seat's current-work cell follows fixed precedence: an in_progress claim
+(title · id link); else parked in_review orders it owns (`Parked: … ·
+awaiting integration`); else "No current work". When the engine shift is
+still open but the seat no longer holds anything in_progress and has parked
+during that shift, the badge stays **WORKING** and the cell reads
+**Finishing · parked pc-…** instead of going blank. After the shift closes,
+the row returns to **IDLE** (or another terminal badge) but still lists
+parked orders awaiting integration. The inspector's Verified claim step uses
+the parked order's park time when that is the terminal claim state.
