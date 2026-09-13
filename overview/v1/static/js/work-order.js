@@ -1,7 +1,7 @@
 /* Work-order content is untrusted text, never executable markup. */
 (async () => {
   const {safeReturnTo} = await import('/js/reader-navigation.mjs');
-  const {backLabel, date, paintOutline, setTrustedHtml} = await import('/js/nav-shell.mjs');
+  const {backLabel, date, paintOutline, setTrustedHtml, bindHashReveal} = await import('/js/nav-shell.mjs');
 
   function gateLabel(order) {
     if (order.gate_type === 'deferred') return 'Deferred';

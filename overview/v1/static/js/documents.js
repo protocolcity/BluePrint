@@ -1,6 +1,6 @@
 (async () => {
   const {safeReturnTo} = await import('/js/reader-navigation.mjs');
-  const {backLabel, paintOutline, setTrustedHtml} = await import('/js/nav-shell.mjs');
+  const {backLabel, paintOutline, setTrustedHtml, bindHashReveal} = await import('/js/nav-shell.mjs');
 
   const $ = id => document.getElementById(id);
   const params = new URLSearchParams(location.search);
