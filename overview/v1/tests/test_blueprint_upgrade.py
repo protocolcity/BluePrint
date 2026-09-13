@@ -15,6 +15,8 @@ from protocolcity import deploy as deploy_mod
 from protocolcity import service as service_mod
 
 FAKE_LAUNCHCTL = "#!/bin/sh\ncase \"$1\" in\n  print) exit 1 ;;\n  bootout) exit 0 ;;\n  *) exit 0 ;;\nesac\n"
+LOADED_FAILING_BOOTOUT_LAUNCHCTL = "#!/bin/sh\ncase \"$1\" in\n  print) exit 0 ;;\n  bootout) exit 1 ;;\n  *) exit 0 ;;\nesac\n"
+NOT_LOADED_FAILING_BOOTOUT_LAUNCHCTL = "#!/bin/sh\ncase \"$1\" in\n  print) exit 1 ;;\n  bootout) exit 1 ;;\n  *) exit 0 ;;\nesac\n"
 
 
 class LegacyAgentFixture(unittest.TestCase):
@@ -45,6 +47,11 @@ class LegacyAgentFixture(unittest.TestCase):
 
     def _write_plist(self, label):
         (self.agents_dir / ('%s.plist' % label)).write_bytes(b'<plist/>')
+
+    def _use_launchctl(self, script):
+        launchctl = self.root / 'bin' / 'launchctl'
+        launchctl.write_text(script)
+        launchctl.chmod(0o755)
 
 
 class RetireLegacyAgentsTests(LegacyAgentFixture):
@@ -88,10 +95,30 @@ class RetireLegacyAgentsTests(LegacyAgentFixture):
         self.assertTrue((self.agents_dir / 'com.protocolcity.suite.plist').is_file())
         self.assertFalse((self.workspace / 'local/blueprint/retired-services').exists())
 
+    def test_loaded_agent_with_failed_bootout_stops_before_moving(self):
+        self._write_plist('com.protocolcity.suite')
+        self._use_launchctl(LOADED_FAILING_BOOTOUT_LAUNCHCTL)
+        with self.assertRaisesRegex(RuntimeError, 'com.protocolcity.suite'):
+            service_mod.retire_legacy_agents(workspace=self.workspace, quiet=True)
+        self.assertTrue((self.agents_dir / 'com.protocolcity.suite.plist').is_file())
+        self.assertFalse((self.workspace / 'local/blueprint/retired-services').exists())
+
+    def test_not_loaded_agent_with_failed_bootout_still_retires(self):
+        self._write_plist('com.protocolcity.suite')
+        self._use_launchctl(NOT_LOADED_FAILING_BOOTOUT_LAUNCHCTL)
+        result = service_mod.retire_legacy_agents(workspace=self.workspace, quiet=True)
+        entry = next(e for e in result['agents'] if e['label'] == 'com.protocolcity.suite')
+        self.assertTrue(entry['found'])
+        self.assertFalse(entry['loaded'])
+        self.assertEqual(entry['bootout_rc'], 1)
+        retire_dir = Path(result['retired_dir'])
+        self.assertTrue((retire_dir / 'com.protocolcity.suite.plist').is_file())
+
 
 class UpgradeTests(LegacyAgentFixture):
     def setUp(self):
         super().setUp()
+        (self.workspace / '.blueprint').mkdir(exist_ok=True)
         home_patch = patch('pathlib.Path.home', return_value=self.root)
         home_patch.start()
         self.addCleanup(home_patch.stop)
@@ -170,7 +197,7 @@ class UpgradeTests(LegacyAgentFixture):
 
     def test_engine_files_untouched(self):
         blueprint_dir = self.workspace / '.blueprint'
-        blueprint_dir.mkdir(parents=True)
+        blueprint_dir.mkdir(parents=True, exist_ok=True)
         connections = blueprint_dir / 'connections.json'
         connections.write_text('{}')
         desk_join_dir = self.workspace / 'project/.protocolcity'
@@ -192,6 +219,55 @@ class UpgradeTests(LegacyAgentFixture):
         with patch.object(service_mod, 'is_macos', return_value=False):
             with self.assertRaisesRegex(RuntimeError, 'macOS'):
                 deploy_mod.upgrade(self.workspace, quiet=True)
+
+    def test_missing_workspace_marker_refuses(self):
+        (self.workspace / '.blueprint').rmdir()
+        with self.assertRaisesRegex(RuntimeError, 'workspace'):
+            deploy_mod.upgrade(self.workspace, quiet=True)
+        self.assertEqual(self.activate_calls, [])
+        self.assertFalse((self.workspace / 'local/blueprint/retired-services').exists())
+
+    def test_workspace_marker_via_project_desk_join(self):
+        (self.workspace / '.blueprint').rmdir()
+        desk_join_dir = self.workspace / 'project/.protocolcity'
+        desk_join_dir.mkdir(parents=True)
+        (desk_join_dir / 'desk-join.json').write_text('{}')
+        result = deploy_mod.upgrade(self.workspace, quiet=True)
+        self.assertEqual(result['action'], 'activated')
+
+    def test_second_run_on_consolidated_host_writes_nothing(self):
+        deploy_mod.upgrade(self.workspace, quiet=True)
+        deployment_path = self.workspace / '.blueprint/deployment.json'
+        before_mtime = deployment_path.stat().st_mtime
+        before_bytes = deployment_path.read_bytes()
+        retired_services = self.workspace / 'local/blueprint/retired-services'
+        before_backups = sorted(retired_services.rglob('*')) if retired_services.exists() else []
+        result = deploy_mod.upgrade(self.workspace, quiet=True)
+        self.assertEqual(result['action'], 'no-op')
+        self.assertEqual(len(self.activate_calls), 1)
+        self.assertEqual(deployment_path.stat().st_mtime, before_mtime)
+        self.assertEqual(deployment_path.read_bytes(), before_bytes)
+        after_backups = sorted(retired_services.rglob('*')) if retired_services.exists() else []
+        self.assertEqual(before_backups, after_backups)
+
+    def test_activation_failure_restores_previous_deployment_receipt(self):
+        deploy_mod.upgrade(self.workspace, quiet=True)
+        deployment_path = self.workspace / '.blueprint/deployment.json'
+        original = deployment_path.read_bytes()
+
+        def failing_activate_agent(executable, receipt, workspace, port, legacy_ports=None, backup_dir=None):
+            target = workspace / '.blueprint/deployment.json'
+            if backup_dir is not None and target.is_file():
+                (backup_dir / 'previous-deployment.json').write_bytes(target.read_bytes())
+            deploy_mod.write_json(target, {'version': 'broken'})
+            raise RuntimeError('simulated activation failure')
+
+        with patch.object(deploy_mod, 'installed_version', return_value='10.0.0-test'), \
+                patch.object(deploy_mod, 'activate_agent', side_effect=failing_activate_agent):
+            with self.assertRaisesRegex(RuntimeError, 'simulated activation failure'):
+                deploy_mod.upgrade(self.workspace, quiet=True)
+
+        self.assertEqual(deployment_path.read_bytes(), original)
 
 
 if __name__ == '__main__':

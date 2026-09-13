@@ -208,6 +208,17 @@ def deployment_matches(agent_path, deployment_path, executable, version, port, l
             and existing.get('entrypoint')==str(executable) and existing_legacy==list(legacy_ports))
 
 
+def _looks_like_workspace(workspace):
+    """True when ``workspace`` has a BluePrint marker to write against.
+
+    Refuses arbitrary directories: requires ``.blueprint/``, ``.protocolcity/``,
+    or at least one project's ``.protocolcity/desk-join.json``.
+    """
+    if (workspace/'.blueprint').is_dir() or (workspace/'.protocolcity').is_dir():
+        return True
+    return any(workspace.glob('*/.protocolcity/desk-join.json'))
+
+
 def upgrade(workspace, *, port=8803, legacy_ports=(8801,8802), python=None, quiet=False, dry_run=False):
     """Convert an existing three-lane install to the single consolidated app.
 
@@ -221,6 +232,11 @@ def upgrade(workspace, *, port=8803, legacy_ports=(8801,8802), python=None, quie
         raise RuntimeError('Workspace must already exist.')
     if not service_mod.is_macos():
         raise RuntimeError('blueprint upgrade manages launchd agents and is macOS-only today.')
+    if not _looks_like_workspace(workspace):
+        raise RuntimeError(
+            f"'{workspace}' does not look like a BluePrint workspace (expected "
+            ".blueprint/, .protocolcity/, or a project's .protocolcity/desk-join.json)."
+        )
     legacy_ports = list(legacy_ports)
     legacy = service_mod.retire_legacy_agents(workspace=workspace, quiet=quiet, dry_run=dry_run)
     executable = resolve_installed_executable(python)
@@ -243,7 +259,19 @@ def upgrade(workspace, *, port=8803, legacy_ports=(8801,8802), python=None, quie
         return plan
     receipt = {'version':version, 'source':'installed-package', 'entrypoint':str(executable),
                'built_at':datetime.now(timezone.utc).isoformat()}
-    activate_agent(executable, receipt, workspace, port, legacy_ports)
+    backup_dir = workspace/'local/blueprint/retired-services'/datetime.now(timezone.utc).strftime('%Y-%m-%d')/'upgrade-backup'
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        activate_agent(executable, receipt, workspace, port, legacy_ports, backup_dir=backup_dir)
+    except Exception:
+        # activate_agent already restores the previous launch agent plist from
+        # memory on failure; restore the deployment receipt from the snapshot
+        # taken just above so :8803's on-disk record does not point at a build
+        # that never went live.
+        backup_receipt = backup_dir/'previous-deployment.json'
+        if backup_receipt.is_file():
+            deployment_path.write_bytes(backup_receipt.read_bytes())
+        raise
     plan['action']='activated'
     if not quiet:
         print(json.dumps({'active':version, 'url':f'http://127.0.0.1:{port}'}))
