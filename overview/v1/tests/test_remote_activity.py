@@ -158,3 +158,14 @@ class RemoteTests(unittest.TestCase):
                 second=remote.remote_snapshot(root)
         self.assertIn('cache_age_seconds', second)
         self.assertGreaterEqual(second['cache_age_seconds'], 0)
+
+class DeployStateShaMatchTests(unittest.TestCase):
+    """pc-1487 second pass: an abbreviated receipt head must match a full group sha."""
+
+    def test_short_source_head_matches_full_sha(self):
+        from server.remote_activity import _deploy_state
+        items = [{'kind': 'pull_request', 'sha': 'a7a1c60f0e2b4c1d9e8f7a6b5c4d3e2f1a0b9c8d'}]
+        self.assertEqual(_deploy_state(items, {'source_head': 'a7a1c60'}), 'deployed')
+        self.assertEqual(_deploy_state(items, {'source_head': 'a7a1c6'}), 'unknown')
+        self.assertEqual(_deploy_state(items, {'source_head': 'ffffffff'}), 'unknown')
+

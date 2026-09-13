@@ -103,8 +103,11 @@ function deliveryPullEvent(item) {
 }
 function deliveryBadgeState(group, deployment) {
   if(group.deploy_state==='deployed') {
+    // Activated only with a real activation time; a receipt without one is
+    // Installed (pc-1487 second pass: never overclaim activation).
     const when=deployment?.activated_at ? date(deployment.activated_at) : '';
-    const label=when ? `Activated ${when}` : 'Activated';
+    const version=deployment?.version ? ` · ${deployment.version}` : '';
+    const label=when ? `Activated ${when}` : `Installed${version}`;
     return ['deployed', label];
   }
   if(group.deploy_state==='version_note') {
@@ -137,9 +140,13 @@ function deliverySummaryLine(repo) {
   if(summary.recent_merges) parts.push(`${summary.recent_merges} merged`);
   if(summary.recent_releases) parts.push(`${summary.recent_releases} release${summary.recent_releases===1?'':'s'}`);
   if(repo.deployment?.version) {
+    // Same rule as the group badges: the receipt counts as running only when a
+    // group carries the sha match (deploy_state deployed), and Activated only
+    // with an activation time (pc-1487 second pass).
     const activated=repo.deployment.activated_at ? date(repo.deployment.activated_at) : '';
-    if(repo.deployment.state==='verified') {
-      const bit=activated ? `Activated ${activated}` : 'Activated';
+    const shaMatched=(repo.groups || []).some(g=>g.deploy_state==='deployed');
+    if(shaMatched) {
+      const bit=activated ? `Activated ${activated}` : 'Installed';
       parts.push(`${bit} · ${repo.deployment.version}`);
     } else parts.push(`Version note ${repo.deployment.version}`);
   }

@@ -178,13 +178,29 @@ def _group_key(item):
     return f'{item.get("kind")}:{item.get("url")}'
 
 
+def _sha_matches(head, shas):
+    """A receipt head matches a group sha when the two are equal or one is a
+    prefix of the other and the shorter is at least seven characters (receipts
+    may carry an abbreviated head; pc-1487 second-pass finding)."""
+    head = head.strip().lower()
+    if len(head) < 7:
+        return False
+    for sha in shas:
+        sha = str(sha).strip().lower()
+        if len(sha) < 7:
+            continue
+        if sha == head or sha.startswith(head) or head.startswith(sha):
+            return True
+    return False
+
+
 def _deploy_state(items, receipt):
     if not receipt:
         return 'unknown'
     source_head = receipt.get('source_head')
     version = str(receipt.get('version') or '').strip()
     shas = {str(item.get('sha') or '') for item in items if item.get('sha')}
-    if source_head and str(source_head) in shas:
+    if source_head and _sha_matches(str(source_head), shas):
         return 'deployed'
     for item in items:
         if item.get('kind') != 'release':
