@@ -86,7 +86,8 @@ def snapshot_process(task_data, workers, roster_path, error=''):
             labels = parse_qs(urlparse(url).query).get('label', [])
             ready_n = sum(set(labels).issubset(t.get('labels') or []) for t in data['ready'])
             deferred_n = sum(t.get('status') == 'backlog' and t.get('gate_type') == 'deferred'
-                             and 'worker:' + worker in (t.get('labels') or []) for t in data['all'])
+                             and 'worker:' + worker in (t.get('labels') or [])
+                             and set(labels).issubset(t.get('labels') or []) for t in data['all'])
             if ready_n == 0 and deferred_n:
                 findings.append('Empty ready feed with deferred work; inspect gate, do not auto-thaw')
         lanes.append(dict(worker=worker, product=project, schedule=row.get('schedule'), queue_url=url,
