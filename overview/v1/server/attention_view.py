@@ -41,6 +41,23 @@ def _duration_words(seconds):
     return f'{minutes}m'
 
 
+def persona_text(order, labels):
+    """You-qualifier chip text (you:todo / you:remind / you:note); '' when none apply."""
+    if 'you:todo' in labels:
+        return 'Your todo'
+    if 'you:remind' in labels:
+        reminder = next((label for label in labels if isinstance(label, str) and label.startswith('reminder:')), None)
+        if reminder:
+            return 'Reminder ' + reminder.split(':', 1)[1]
+        gate_until = str(order.get('gate_until') or '').strip()
+        if gate_until:
+            return 'Reminder ' + gate_until.split('T', 1)[0]
+        return 'Reminder (no date)'
+    if 'you:note' in labels:
+        return 'Your note'
+    return ''
+
+
 def face_reason(order, labels, computed_face, now):
     """Name the rule that produced ``computed_face`` (STATES_AND_TERMS.md §1.4).
 
@@ -64,6 +81,9 @@ def face_reason(order, labels, computed_face, now):
             return f'No update for {_duration_words((now - updated).total_seconds())}'
         return 'No recent update'
     if computed_face == 'note':
+        persona = persona_text(order, labels)
+        if persona:
+            return persona
         reminder = next((label for label in labels if isinstance(label, str) and label.startswith('reminder:')), None)
         if reminder:
             return 'Reminder set for ' + reminder.split(':', 1)[1]
