@@ -318,6 +318,41 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(result['agents'][0]['state'],'not_configured')
         self.assertFalse(result['agents'][0]['configured'])
         self.assertTrue(any(s['name']=='Agent/job configuration' for s in result['sources']))
+
+    def test_seat_whose_provider_executable_is_missing_on_disk_reads_the_missing_text(self):
+        """pc-1476: a seat naming an absolute provider executable that no
+        longer exists on disk reads 'provider missing on disk', not the
+        generic placeholder text, and counts not configured."""
+        runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
+        (runtime/'roster.json').write_text(json.dumps({'workers':{'seat':{
+            'display':'Seat','identity':'seat','kind':'lane','command':['/nowhere/claude','-p','x']}}}))
+        (runtime/'daemon.json').write_text(json.dumps({'last_tick':datetime.now(timezone.utc).isoformat(),'in_flight':[]}))
+        result=operations_snapshot(self.root)
+        agent=result['agents'][0]
+        self.assertEqual(agent['state'],'not_configured')
+        self.assertFalse(agent['configured'])
+        self.assertEqual(agent['configuration'],'provider missing on disk')
+
+    def test_seat_whose_provider_executable_is_outside_trusted_locations_reads_the_untrusted_text(self):
+        """review finding pc-1476: a seat naming an absolute executable that
+        exists but resolves outside the trusted install roots (home,
+        /opt/homebrew, /usr/local, the Codex app) reads 'provider outside
+        trusted locations', not 'Command configured', and counts not
+        configured."""
+        runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
+        with tempfile.TemporaryDirectory(dir='/tmp') as outside:
+            exe=Path(outside)/'claude'
+            exe.write_text('#!/bin/sh\n')
+            exe.chmod(0o755)
+            (runtime/'roster.json').write_text(json.dumps({'workers':{'seat':{
+                'display':'Seat','identity':'seat','kind':'lane','command':[str(exe),'-p','x']}}}))
+            (runtime/'daemon.json').write_text(json.dumps({'last_tick':datetime.now(timezone.utc).isoformat(),'in_flight':[]}))
+            result=operations_snapshot(self.root)
+        agent=result['agents'][0]
+        self.assertEqual(agent['state'],'not_configured')
+        self.assertFalse(agent['configured'])
+        self.assertEqual(agent['configuration'],'provider outside trusted locations')
+
     def test_work_order_deadlines_project_without_a_second_date_store(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:

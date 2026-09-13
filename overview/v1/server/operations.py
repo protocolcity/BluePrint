@@ -270,12 +270,15 @@ def _provider_model_flag(provider, command):
 def resolve_provider_model(row, root, config_cache=None):
     """Provider/model display text, in the order AGENTS_INTENT.md fixes:
 
-    the roster's own ``model``; else the seat's runner config (the actual
-    provider command it names, read via the roster command's ``--config``
-    path, or the sibling ``runner.json`` next to a thin launcher script when
-    no ``--config`` is named); else the roster command's own executable, with
-    the model left blank at that tier. Never returns the literal "Not
-    specified".
+    the roster's own ``model``, prefixed with the provider name resolved
+    from the seat's own command when the pin is a bare token like
+    ``claude-sonnet-5`` (pc-1476: a bare first token such as ``claude``
+    still names its provider, so the pin alone is never the whole story);
+    else the seat's runner config (the actual provider command it names,
+    read via the roster command's ``--config`` path, or the sibling
+    ``runner.json`` next to a thin launcher script when no ``--config`` is
+    named); else the roster command's own executable, with the model left
+    blank at that tier. Never returns the literal "Not specified".
 
     ``config_cache`` is an optional dict shared across one snapshot's rows,
     keyed by resolved config path, so a runner file shared by several seats
@@ -284,7 +287,15 @@ def resolve_provider_model(row, root, config_cache=None):
     command = row.get('command')
     roster_model = row.get('model')
     if isinstance(roster_model, str) and roster_model.strip():
-        return roster_model.strip()
+        pin = roster_model.strip()
+        provider = _seat_executable_provider(row, root, config_cache)
+        if provider:
+            first_token, _, rest = pin.partition(' ')
+            if first_token.lower() == provider.lower():
+                pin = rest.strip()
+                return f'{provider} {pin}' if pin else provider
+            return f'{provider} {pin}'
+        return pin
     config_path = _config_argument(command) or _launcher_config_fallback(command)
     resolved_path = _resolved_config_path(config_path, root)
     if resolved_path is not None:
@@ -520,24 +531,109 @@ _PROVIDER_INSTALL_HINT = {
 _CODEX_APP_PATH = '/Applications/ChatGPT.app/Contents/Resources/codex'
 
 
-def detect_providers(env=None, app_path_exists=None):
+def _well_known_candidates(command, home):
+    candidates = [home / '.local' / 'bin' / command,
+                  Path('/opt/homebrew/bin') / command,
+                  Path('/usr/local/bin') / command]
+    if command == 'grok':
+        candidates.insert(1, home / '.grok' / 'bin' / 'grok')
+    return candidates
+
+
+# Roots an executable path must resolve under to count as proof of an
+# installed provider (review finding pc-1476): the running user's home,
+# the two Homebrew/local prefixes the well-known bins live under, or the
+# Codex app bundle. A path outside all four — even one a roster seat names
+# directly, or one a well-known bin symlinks to — proves nothing; it is
+# not a location this host trusts as an install site.
+def _trusted_executable_roots(home_dir):
+    try:
+        home_dir = home_dir.resolve()
+    except OSError:
+        pass
+    return (home_dir, Path('/opt/homebrew').resolve(), Path('/usr/local').resolve())
+
+
+def _is_trusted_path(resolved, home_dir):
+    codex_app = Path(_CODEX_APP_PATH).resolve()
+    if resolved == codex_app or resolved.is_relative_to(codex_app):
+        return True
+    return any(resolved.is_relative_to(root) for root in _trusted_executable_roots(home_dir))
+
+
+def _resolved_trusted_file(path, home_dir):
+    """``path`` accepted only when it is a file whose target — after
+    resolving any symlink — still lies under a trusted install root; a
+    symlink pointing outside those locations proves nothing (review
+    finding pc-1476)."""
+    if not path.is_file():
+        return False
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    return _is_trusted_path(resolved, home_dir)
+
+
+def _seat_proof(provider, workers, root, config_cache, home_dir):
+    """The absolute executable path a roster seat's resolved command names
+    for ``provider``, when that path resolves to a file under a trusted
+    install root — proof the provider is installed even though its own
+    binary sits outside the well-known checked locations (pc-1476). A
+    seat naming a path outside the trusted roots proves nothing."""
+    if not isinstance(workers, dict):
+        return None
+    for row in workers.values():
+        if not isinstance(row, dict):
+            continue
+        seat_provider, token = _seat_resolved_executable(row, root, config_cache)
+        if seat_provider != provider or not token:
+            continue
+        path = Path(token)
+        if path.is_absolute() and _resolved_trusted_file(path, home_dir):
+            return str(path)
+    return None
+
+
+def detect_providers(env=None, app_path_exists=None, home=None, workers=None, root=None,
+                      config_cache=None, sources=None):
     """``{display name: executable path or None}`` for the four providers.
 
-    Checks ``PATH`` (``env`` overrides ``os.environ`` for tests — a fake
-    PATH), plus the Codex app path this host ships when ``codex`` is not on
-    PATH. A provider absent from both reads ``None`` — the caller shows
-    NOT CONFIGURED with the install hint (AGENT_ADOPTION.md D15).
+    Proof is checked in order: the process ``PATH`` (``env`` overrides
+    ``os.environ`` for tests — a fake PATH); a well-known install location
+    (``~/.local/bin/<name>``, ``~/.grok/bin/grok``, ``/opt/homebrew/bin/<name>``,
+    ``/usr/local/bin/<name>``, or the Codex app path this host ships — ``home``
+    overrides ``Path.home()`` for tests); or any roster seat's resolved
+    command naming an absolute executable that exists on disk (``workers``
+    plus ``root``/``config_cache`` to resolve it). A provider absent from all
+    three reads ``None`` — the caller shows NOT CONFIGURED with the install
+    hint (AGENT_ADOPTION.md D15). When ``sources`` is a dict it is filled in
+    place with ``{display name: 'PATH'|'well-known location'|'seat command'}``
+    for each provider found, so the caller can name which proof won.
     """
     search_env = env if env is not None else os.environ
+    home_dir = home if home is not None else Path.home()
     found = {}
     for provider, command in _PROVIDER_COMMAND.items():
         path = shutil.which(command, path=search_env.get('PATH'))
+        source = 'PATH' if path else None
+        if not path:
+            for candidate in _well_known_candidates(command, home_dir):
+                if _resolved_trusted_file(candidate, home_dir):
+                    path, source = str(candidate), 'well-known location'
+                    break
         if not path and provider == 'Codex':
             app_present = (Path(_CODEX_APP_PATH).is_file() if app_path_exists is None
                            else app_path_exists)
             if app_present:
-                path = _CODEX_APP_PATH
+                path, source = _CODEX_APP_PATH, 'well-known location'
+        if not path:
+            seat_path = _seat_proof(provider, workers, root, config_cache, home_dir)
+            if seat_path:
+                path, source = seat_path, 'seat command'
         found[provider] = path
+        if sources is not None:
+            sources[provider] = source
     return found
 
 
@@ -605,20 +701,22 @@ def _provider_from_pin(pin):
     return None
 
 
-def _seat_executable_provider(row, root, config_cache):
-    """The provider display name from the seat's actually resolved
-    executable — its own roster command, or the runner config it names via
-    ``--config``/the launcher fallback — independent of what the roster's
-    ``model`` field says (review finding pc-1474: a bare pin in ``model``
-    should not block resolving the real command)."""
+def _seat_resolved_executable(row, root, config_cache):
+    """``(provider display name, first command token)`` from the seat's
+    actually resolved executable — its own roster command, or the runner
+    config it names via ``--config``/the launcher fallback — independent of
+    what the roster's ``model`` field says (review finding pc-1474: a bare
+    pin in ``model`` should not block resolving the real command). Both are
+    ``None`` when no known provider resolves."""
     command = row.get('command')
     provider = _PROVIDER_DISPLAY.get(_executable_name(command))
     if provider:
-        return provider
+        token = command[0] if isinstance(command, list) and command and isinstance(command[0], str) else None
+        return provider, token
     config_path = _config_argument(command) or _launcher_config_fallback(command)
     resolved_path = _resolved_config_path(config_path, root)
     if resolved_path is None:
-        return None
+        return None, None
     if config_cache is not None and resolved_path in config_cache:
         config = config_cache[resolved_path]
     else:
@@ -626,7 +724,49 @@ def _seat_executable_provider(row, root, config_cache):
         if config_cache is not None:
             config_cache[resolved_path] = config
     inner_command = (config or {}).get('command')
-    return _PROVIDER_DISPLAY.get(_executable_name(inner_command))
+    provider = _PROVIDER_DISPLAY.get(_executable_name(inner_command))
+    token = inner_command[0] if provider and isinstance(inner_command, list) and inner_command \
+        and isinstance(inner_command[0], str) else None
+    return provider, token
+
+
+def _seat_executable_provider(row, root, config_cache):
+    """The provider display name from the seat's actually resolved
+    executable (see ``_seat_resolved_executable``)."""
+    provider, _token = _seat_resolved_executable(row, root, config_cache)
+    return provider
+
+
+def _seat_executable_status(row, root, config_cache, home_dir=None):
+    """The trust status of the seat's resolved absolute executable —
+    ``'missing'`` when the path does not exist, ``'untrusted'`` when it
+    exists but resolves outside the trusted install roots (neither proves
+    nor stages the provider — review finding pc-1476), ``'ok'`` when it
+    exists and is trusted, or ``None`` when the seat names no absolute
+    executable at all."""
+    _provider, token = _seat_resolved_executable(row, root, config_cache)
+    if not token:
+        return None
+    path = Path(token)
+    if not path.is_absolute():
+        return None
+    if not path.is_file():
+        return 'missing'
+    home_dir = home_dir if home_dir is not None else Path.home()
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return 'missing'
+    return 'ok' if _is_trusted_path(resolved, home_dir) else 'untrusted'
+
+
+def _seat_executable_missing(row, root, config_cache):
+    """``True`` when the seat's resolved command names an absolute
+    executable that neither exists on disk nor resolves to a trusted
+    install root (pc-1476: a seat that once proved a provider present
+    should not silently keep counting once its binary is gone or is
+    proven to sit outside a trusted location)."""
+    return _seat_executable_status(row, root, config_cache) in ('missing', 'untrusted')
 
 
 def _project_seat_providers(workers, project_slug, root, config_cache):
@@ -655,16 +795,26 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             provider = _provider_from_pin(model_text)
         if not provider:
             continue
+        if _seat_executable_missing(row, root, config_cache):
+            continue
         result[provider] = 'held' if row.get('enabled') is False else 'present'
     return result
 
 
-def provider_coverage(root, registry, workers, config_cache, host_providers=None):
+def provider_coverage(root, registry, workers, config_cache, host_providers=None, host_provider_sources=None):
     """One coverage row per registered project (AGENT_ADOPTION.md D15):
     present/held providers, missing ones (installed but no seat), and
-    providers this host does not have installed at all."""
+    providers this host does not have installed at all. Each row's
+    ``sources`` names, for every provider, which proof (PATH, well-known
+    location, or a seat's own command) established it, or 'not detected'
+    when the host has no proof for it at all — the payload always names a
+    source for all four providers, not just present/held ones (pc-1476).
+    """
     if host_providers is None:
-        host_providers = detect_providers()
+        host_provider_sources = {}
+        host_providers = detect_providers(workers=workers, root=root, config_cache=config_cache,
+                                           sources=host_provider_sources)
+    host_provider_sources = host_provider_sources or {}
     rows = []
     for slug, project in sorted(registry.items(), key=lambda kv: kv[1].get('name') or kv[0]):
         seats = _project_seat_providers(workers, slug, root, config_cache)
@@ -692,6 +842,7 @@ def provider_coverage(root, registry, workers, config_cache, host_providers=None
         rows.append({
             'project': slug, 'name': name, 'present': present, 'held': held,
             'missing': missing, 'not_configured': not_configured, 'text': text,
+            'sources': {p: host_provider_sources.get(p) or 'not detected' for p in _PROVIDER_ORDER},
             'install_hints': {p: _PROVIDER_INSTALL_HINT[p] for p in not_configured},
             'hire_commands': {p: hire_command(p, project_slug=slug, project_path=project_path,
                                                prefix=project.get('prefix') or slug, remote=remote)
@@ -849,6 +1000,8 @@ def operations_snapshot(binder):
                 state = 'idle'
             command = row.get('command')
             configured = isinstance(command, list) and bool(command) and command not in (['true'], ['/usr/bin/true'], ['/bin/true'], ['sh','-c','true'], ['bash','-c','true'])
+            executable_status = _seat_executable_status(row, root, runner_config_cache) if configured else None
+            if executable_status in ('missing', 'untrusted'): configured = False
             if not configured: state = 'not_configured'
             if row.get('enabled') is False: state = 'off'
             live = runtime.get(identity, {})
@@ -873,7 +1026,12 @@ def operations_snapshot(binder):
                 'report': {k:report.get(k) for k in ('title','observed_at','state','summary','detail','mode')} if report else None,
                 'state': state, 'badge': BADGE_TEXT[state],
                 'badge_source': 'daemon' if (state == 'working' and not shift) else BADGE_SOURCE[state],
-                'group': group, 'configured':configured, 'configuration': 'Command configured' if configured else 'Placeholder command — no operational work runs', 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
+                'group': group, 'configured':configured,
+                'configuration': ('Command configured' if configured else
+                                  'provider missing on disk' if executable_status == 'missing' else
+                                  'provider outside trusted locations' if executable_status == 'untrusted' else
+                                  'Placeholder command — no operational work runs'),
+                'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
                 'model': resolve_provider_model(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'project': project_slug, 'project_name': project_name,
