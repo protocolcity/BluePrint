@@ -4,7 +4,7 @@ BluePrint is the operations interface for a selected workspace. WorkLane owns wo
 
 ## Current application
 
-`overview/v1/serve.py` serves one origin for Overview, Work, Projects and project papers, Agents, Activity, Map, Calendar, Connections, and Settings. `map/v1` provides the spatial document browser and keyboard-accessible folder list. Shared recovered `protocolcity` utilities support installation, workspace bridges, and audits; `suite/api` retains compatible calendar and routing helpers. Historical suite UI specifications describe earlier implementations and do not override this application or the accepted [operations design](docs/specs/OPERATIONS_EVOLUTION_2026_09.md).
+`overview/v1/serve.py` serves one origin for Overview, Work, Projects and project papers, Agents, Delivery, Map, Calendar, Connections, and Settings. `/activity` redirects to `/delivery`. `map/v1` provides the spatial document browser and keyboard-accessible folder list. Shared recovered `protocolcity` utilities support installation, workspace bridges, and audits; `suite/api` retains compatible calendar and routing helpers. Historical suite UI specifications describe earlier implementations and do not override this application or the accepted [operations design](docs/specs/OPERATIONS_EVOLUTION_2026_09.md).
 
 ## Data and authority
 

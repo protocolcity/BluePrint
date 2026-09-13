@@ -308,7 +308,16 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/changes":
             self._serve_changes()
             return
-        if route in ("/", "/overview", "/overview/", "/work", "/agents", "/activity", "/projects", "/connections", "/calendar", "/calendar/", "/settings", "/settings/"):
+        if route in ("/activity", "/activity/"):
+            location = "/delivery"
+            if parsed.query:
+                location += "?" + parsed.query
+            self.send_response(307)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if route in ("/", "/overview", "/overview/", "/work", "/agents", "/delivery", "/delivery/", "/projects", "/connections", "/calendar", "/calendar/", "/settings", "/settings/"):
             self._serve_static(_OV_STATIC_DIR, "operations.html")
             return
 
