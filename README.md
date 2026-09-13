@@ -27,6 +27,10 @@ That installs the **BluePrint** suite (CLI + Map) and pulls WorkLane + WorkForce
 from PyPI. The taught CLI is **`blueprint` only** (no `protocolcity` command
 alias). Product source repos stay separate; install does not require cloning them.
 
+### Upgrading from the three-lane install
+
+Already running the older three-service setup (separate suite :8801 and Map :8802 launch agents)? `blueprint upgrade --root ~/my-workspace` retires those agents (plists moved, never deleted) and activates the single consolidated app on :8803, which keeps :8801 and :8802 alive only as redirects for old bookmarks. See [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md#upgrading-from-the-three-lane-install).
+
 ### Windows — first time (nothing installed)
 
 **1. Install Python once** from [python.org/downloads/windows](https://www.python.org/downloads/windows/)  

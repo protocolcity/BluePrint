@@ -34,6 +34,17 @@ For rollback, activate a previously verified release directory. Rollback does no
 
 Homebrew can remain installed for Python and other tools. BP's application lifecycle must use this release path while source consolidation is active; do not use a Homebrew upgrade as a second BP deployment path. Independent engines retain their own upgrade procedures.
 
+## Upgrading from the three-lane install
+
+Older Homebrew installs ran three separate launch agents: `com.protocolcity.suite` on :8801, `com.protocolcity.blueprint-map` on :8802, and the single-page `com.protocolcity.blueprint-overview` on :8803, plus possibly the older `com.protocolcity.citylens`. `blueprint upgrade` converts a host still running any of these to the single consolidated app:
+
+```sh
+blueprint upgrade --root /path/to/workspace --dry-run   # print the plan only, write nothing
+blueprint upgrade --root /path/to/workspace              # boot out legacy agents, activate the single app
+```
+
+It detects each legacy agent by plist presence and by `launchctl print`, boots out any that are found, and moves their plists to `<workspace>/local/blueprint/retired-services/<date>/` — it never deletes them. It then writes and bootstraps the single `com.protocolcity.blueprint-overview` agent for the *installed* package (no build/stage step) with `--legacy-port 8801 --legacy-port 8802`, and verifies the responding build on :8803 and the 307 redirects on :8801 and :8802. `--quiet` suppresses output for scripted/post-install use. A second run with nothing to change reports a no-op. `<workspace>/.blueprint/` (connections, job reports) and every project's `.protocolcity/desk-join.json` are left untouched; no WorkLane store, WorkForce roster, ledger, or daemon is touched. This is macOS-only today; on other platforms it fails with a clear error instead of doing nothing silently.
+
 ## Read-only staffing audit
 
 Run `python -m protocolcity.open_work_audit --workspace /path/to/workspace --json --feeds --process --decay` with the installed BP interpreter. An explicitly selected workspace uses its registered stores and installed WorkLane readiness policy on temporary SQLite snapshots; original stores are opened read-only. It does not fall back to another host's default desk. The current adapter supports the workspace's standard local WorkLane layout; an unavailable engine or store is reported as unknown.

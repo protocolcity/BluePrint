@@ -13,6 +13,8 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +24,11 @@ ISOLATED_DEFAULT_PORT = 18801
 PRODUCTION_PORTS = frozenset((8797, 8799, 8801))
 # Legacy pre-fold-C agent (pc-575): census is in-process; unload on stop/heal.
 CITYLENS_LABEL = "com.protocolcity.citylens"
+# Legacy three-lane install (pc-1469): standalone Map lane, folded into the
+# single consolidated blueprint-overview process on :8803.
+BLUEPRINT_MAP_LABEL = "com.protocolcity.blueprint-map"
+# Every launch agent a pre-consolidation host may still have running.
+LEGACY_AGENT_LABELS = (LABEL, BLUEPRINT_MAP_LABEL, CITYLENS_LABEL)
 AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 PLIST_NAME = "%s.plist" % LABEL
 CITYLENS_PLIST_NAME = "%s.plist" % CITYLENS_LABEL
@@ -397,6 +404,66 @@ def citylens_agent_status() -> Dict[str, Any]:
         "plist_exists": path.is_file(),
         "loaded": loaded,
     }
+
+
+def retire_legacy_agents(
+    *,
+    workspace: Path,
+    quiet: bool = False,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """Boot out and retire pre-consolidation launch agents (pc-1469).
+
+    Detects each of ``LEGACY_AGENT_LABELS`` by plist presence and by
+    ``launchctl print``, boots each found agent out, and moves its plist to
+    ``<workspace>/local/blueprint/retired-services/<date>/`` — never deletes.
+    Idempotent: nothing found on a second run. ``dry_run`` only reports what
+    would happen; it boots nothing out and moves nothing.
+    """
+    workspace = Path(workspace)
+    domain = _gui_domain()
+    retire_dir: Optional[Path] = None
+    agents: List[Dict[str, Any]] = []
+    for label in LEGACY_AGENT_LABELS:
+        path = AGENTS_DIR / ("%s.plist" % label)
+        plist_present = path.is_file()
+        loaded = False
+        if is_macos():
+            loaded = launchctl("print", "%s/%s" % (domain, label)).returncode == 0
+        found = plist_present or loaded
+        entry: Dict[str, Any] = {
+            "label": label,
+            "plist_present": plist_present,
+            "loaded": loaded,
+            "found": found,
+        }
+        if found and not dry_run:
+            if is_macos():
+                entry["bootout_rc"] = launchctl(
+                    "bootout", "%s/%s" % (domain, label)
+                ).returncode
+            if plist_present:
+                if retire_dir is None:
+                    retire_dir = (
+                        workspace
+                        / "local/blueprint/retired-services"
+                        / datetime.now().strftime("%Y-%m-%d")
+                    )
+                    retire_dir.mkdir(parents=True, exist_ok=True)
+                destination = retire_dir / path.name
+                if destination.exists():
+                    destination = retire_dir / (
+                        "%s-%d%s" % (path.stem, int(time.time()), path.suffix)
+                    )
+                shutil.move(str(path), str(destination))
+                entry["retired_to"] = str(destination)
+        agents.append(entry)
+        if not quiet and found:
+            print(
+                "Legacy agent %s: %s"
+                % (label, "would retire" if dry_run else "retired")
+            )
+    return {"retired_dir": str(retire_dir) if retire_dir else None, "agents": agents}
 
 
 def is_ephemeral_root(root: Path) -> bool:
