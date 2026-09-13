@@ -160,6 +160,8 @@ const fixture = {
       last_change: {at: '2026-09-13T14:58:00Z', actor: 'bp-cursor-implementer', order_id: 'pc-1480', verb: 'claim', text: 'claim pc-1480'}},
     {id: 'workforce', name: 'WorkForce', folder: 'workforce', open: 6, attention: 1, deferred: 2,
       claimed: 0, parked: 0, running: 0, state: 'available', partial: false, last_change: null},
+    {id: 'comms', name: 'Comms', folder: 'comms', open: 7, attention: 5, deferred: 1,
+      claimed: 1, parked: 0, running: 0, state: 'available', partial: true, last_change: null},
     {id: 'tradeos', name: 'tradeOS', folder: 'tradeos', open: 0, attention: 0, deferred: 0,
       claimed: 0, parked: 0, running: 0, state: 'unavailable', partial: false, last_change: null},
     {id: 'gridfinity', name: 'Gridfinity', folder: 'gridfinity', open: 0, attention: 0, deferred: 0,
@@ -170,10 +172,14 @@ const fixture = {
   agents: [
     {id: 'bp-cursor-implementer', name: 'Cursor implementer', group: 'seat', state: 'working', badge: 'WORKING',
       project: 'blueprint', last_run: null, shift: null},
+    {id: 'bp-claude-implementer', name: 'Claude implementer', group: 'seat', state: 'idle', badge: 'IDLE',
+      project: 'workforce', last_run: null, shift: null},
   ],
   orders: [
     {id: 'pc-1480', project: 'blueprint', status_word: 'Live', status: 'in_progress', gate_type: '', updated_at: '2026-09-13T14:58:00Z',
       live_with: 'bp-cursor-implementer', parked_by: null},
+    {id: 'comms-28', project: 'comms', status_word: 'Live', status: 'in_progress', gate_type: '', updated_at: '2026-09-13T07:24:00Z',
+      live_with: 'you', parked_by: null},
   ],
   sources: [{name: 'WorkForce heartbeat', state: 'fresh', last_at: new Date().toISOString()}],
   coverage: [],
@@ -273,14 +279,30 @@ assert.ok(!domText(unavailableRow).includes('0 open'), 'unavailable store must n
 const blueprintRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domText(row).includes('BluePrint'));
 assert.ok(blueprintRow, 'active project row must exist');
 const links = blueprintRow.querySelectorAll('a');
-assert.ok(links.length >= 3, 'go links must be present');
+assert.ok(links.length >= 5, 'go links must include Agents and Delivery');
 assert.ok(links.some(a => (a.href || '').includes('project=blueprint')), 'links must carry project id');
+const agentsLink = links.find(a => a.textContent === 'Agents');
+const deliveryLink = links.find(a => a.textContent === 'Delivery');
+assert.ok(agentsLink && deliveryLink, 'Agents and Delivery go links must exist');
+assert.ok((agentsLink.href || '').includes('return_to=%2Fprojects'), 'Agents link must reader-return to Projects');
+assert.ok((deliveryLink.href || '').includes('return_to=%2Fprojects'), 'Delivery link must reader-return to Projects');
 assert.ok(blueprintRow.querySelectorAll('details').length >= 1, 'breakdown disclosure must be present');
+
+const workforceRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domText(row).includes('WorkForce'));
+assert.ok(workforceRow, 'WorkForce row must exist');
+assert.ok(domText(workforceRow).includes('none staffed'), 'roster seat without live order must read none staffed');
+
+const commsRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domText(row).includes('Comms'));
+assert.ok(commsRow, 'partial project row must exist');
+assert.ok(domText(commsRow).includes('partial (limited to 2,000)'), 'partial scan-derived counts must carry the limit marker');
 
 console.log(JSON.stringify({
   active_row_count: activeRows.length,
   quiet_summary: collapsed.querySelector('summary').textContent,
   unavailable_honest: domText(unavailableRow).includes('Store unavailable'),
   links_carry_project: links.some(a => (a.href || '').includes('project=blueprint')),
+  agents_delivery_return: Boolean(agentsLink && deliveryLink),
+  roster_not_staffed: domText(workforceRow).includes('none staffed'),
+  partial_counts_marked: domText(commsRow).includes('partial (limited to 2,000)'),
   breakdown_present: blueprintRow.querySelectorAll('details').length >= 1,
 }));
