@@ -81,6 +81,26 @@ class OperationsTests(unittest.TestCase):
         self.assertIsNone(order['live_with'])
         self.assertEqual(order['since'], '2026-09-12T05:00:00Z')
         self.assertEqual(order['last_note'], 'Parked: done for now')
+    def test_watch_exempts_a_seat_parked_handoff_but_not_a_you_parked_one(self):
+        """PROTOCOL 7a / review finding (pc-1494 recovery): a parked order
+        held by a registered seat is the host integrator's queue, not a
+        person's Watch; the same order parked by You still earns Watch."""
+        self.seed()
+        runtime = self.root/'workforce/local'; runtime.mkdir(parents=True)
+        (runtime/'roster.json').write_text(json.dumps(
+            {'workers': {'bp-claude-implementer': {'display': 'Seat', 'kind': 'lane'}}}))
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='in_review', gate_type=NULL, updated_at='2020-01-01T00:00:00Z' WHERE id=1")
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: bp-claude-implementer\nStart: t','bp-claude-implementer','2020-01-01T00:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['parked_by'], 'bp-claude-implementer')
+        self.assertEqual(order['attention_face'], '')
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('DELETE FROM task_comments')
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Owner: you\nStart: t','you','2020-01-01T00:00:00Z')")
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['parked_by'], 'you')
+        self.assertEqual(order['attention_face'], 'watch')
     def test_release_comment_clears_prior_owner_marker(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
@@ -147,35 +167,42 @@ class OperationsTests(unittest.TestCase):
                          ('backlog', json.dumps(['worker:you', 'you:todo'])))
         order = operations_snapshot(self.root)['orders'][0]
         self.assertFalse(order['needs_routing'])
-        self.assertEqual(order['face_reason'], 'Your todo')
+        self.assertEqual(order['persona'], 'Your todo')
+        self.assertEqual(order['kind'], 'todo')
+        # D16: an undated personal item is Kind only; it never enters For You.
+        self.assertEqual(order['attention_face'], '')
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute('UPDATE tasks SET labels=? WHERE id=1',
-                         (json.dumps(['worker:you', 'you:remind', 'reminder:2026-12-20']),))
+                         (json.dumps(['worker:you', 'you:remind', 'reminder:2026-09-01']),))
         order = operations_snapshot(self.root)['orders'][0]
         self.assertFalse(order['needs_routing'])
-        self.assertEqual(order['face_reason'], 'Reminder 2026-12-20')
+        self.assertEqual(order['persona'], 'Reminder 2026-09-01')
+        self.assertEqual(order['kind'], 'reminder')
+        self.assertEqual(order['attention_face'], 'due')
+        self.assertEqual(order['face_reason'], 'Reminder due 2026-09-01')
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute('UPDATE tasks SET labels=? WHERE id=1',
                          (json.dumps(['worker:you', 'you:note']),))
         order = operations_snapshot(self.root)['orders'][0]
         self.assertFalse(order['needs_routing'])
-        self.assertEqual(order['face_reason'], 'Your note')
-    def test_persona_remind_falls_back_to_gate_until_then_no_date(self):
+        self.assertEqual(order['persona'], 'Your note')
+        self.assertEqual(order['kind'], 'note')
+        self.assertEqual(order['attention_face'], '')
+    def test_persona_remind_without_a_date_reads_as_kind_todo(self):
+        """STATES_AND_TERMS.md §6 (D16): you:remind carries no date of its
+        own; without a reminder:<date> label it is an undated personal item
+        and reads as Kind todo. 'Reminder (no date)' must never appear."""
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
-            conn.execute('ALTER TABLE tasks ADD COLUMN gate_until TEXT')
-            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL, gate_until=? WHERE id=1',
-                         ('backlog', json.dumps(['worker:you', 'you:remind']), '2026-12-20T00:00:00Z'))
+            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                         ('backlog', json.dumps(['worker:you', 'you:remind'])))
         order = operations_snapshot(self.root)['orders'][0]
         self.assertFalse(order['needs_routing'])
-        self.assertEqual(order['face_reason'], 'Reminder 2026-12-20')
-        self.assertEqual(order['persona'], 'Reminder 2026-12-20')
-        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
-            conn.execute('UPDATE tasks SET gate_until=NULL WHERE id=1')
-        order = operations_snapshot(self.root)['orders'][0]
-        self.assertEqual(order['face_reason'], 'Reminder (no date)')
-        self.assertEqual(order['persona'], 'Reminder (no date)')
-    def test_persona_field_matches_face_reason_for_qualifier_rows_and_is_empty_otherwise(self):
+        self.assertEqual(order['persona'], 'Your todo')
+        self.assertEqual(order['kind'], 'todo')
+        self.assertEqual(order['attention_face'], '')
+        self.assertNotIn('no date', order['persona'])
+    def test_persona_field_matches_kind_for_qualifier_rows_and_is_empty_otherwise(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
             conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
@@ -186,6 +213,7 @@ class OperationsTests(unittest.TestCase):
             conn.execute('UPDATE tasks SET labels=? WHERE id=1', (json.dumps(['worker:you']),))
         order = operations_snapshot(self.root)['orders'][0]
         self.assertEqual(order['persona'], '')
+        self.assertEqual(order['kind'], 'work')
     def test_worker_you_with_host_qualifier_is_assigned_to_you(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
@@ -261,6 +289,38 @@ class OperationsTests(unittest.TestCase):
         order = operations_snapshot(self.root)['orders'][0]
         self.assertTrue(order['assigned_you'])
         self.assertEqual(order['owner'], 'You')
+    def test_d16_for_you_fixtures(self):
+        """STATES_AND_TERMS.md §1.4/§5 (D16): an undated todo has Kind todo
+        and no face; a reminder dated today is Due; a reminder dated
+        tomorrow is Kind reminder with no face; an open inbox-report is
+        Read. All four fixtures are assigned to You (§5 fixture list)."""
+        today = datetime.now(timezone.utc).date()
+        tomorrow = today + timedelta(days=1)
+        self.seed()
+        cases = [
+            (['worker:you', 'you:todo'], '', 'todo', True),
+            (['worker:you', 'you:remind', 'reminder:' + today.isoformat()], 'due', 'reminder', True),
+            (['worker:you', 'you:remind', 'reminder:' + tomorrow.isoformat()], '', 'reminder', True),
+            (['worker:you', 'inbox-report'], 'read', 'report', True),
+        ]
+        for labels, expected_face, expected_kind, expected_assigned_you in cases:
+            with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+                conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                             ('backlog', json.dumps(labels)))
+            order = operations_snapshot(self.root)['orders'][0]
+            with self.subTest(labels=labels):
+                self.assertEqual(order['assigned_you'], expected_assigned_you)
+                self.assertEqual(order['attention_face'], expected_face)
+                self.assertEqual(order['kind'], expected_kind)
+    def test_deadline_only_order_reads_kind_reminder_not_work(self):
+        """Review finding (pc-1494 recovery): a deadline:-only order is Kind
+        reminder (§6), not Kind work."""
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET status=?, labels=?, gate_type=NULL WHERE id=1',
+                         ('backlog', json.dumps(['deadline:2026-12-20'])))
+        order = operations_snapshot(self.root)['orders'][0]
+        self.assertEqual(order['kind'], 'reminder')
     def test_agent_owned_human_gate_stays_assigned_to_the_agent_in_for_you(self):
         """STATES_AND_TERMS.md §5 fixture 2: an agent-owned human gate is
         visible in For You (attention_face='decide') but still assigned to
