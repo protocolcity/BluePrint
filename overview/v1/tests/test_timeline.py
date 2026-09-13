@@ -156,7 +156,12 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(worklane[0]['event'], 'claimed')
         self.assertEqual(worklane[0]['title'], 'Owner: seat')
         self.assertEqual(worklane[1]['event'], 'claimed')
-        self.assertEqual(worklane[1]['title'], 'Owner: seat\nAlso parked context')
+        # The extra same-second comment never pairs with an event, but it
+        # must still get the same first-line title / full-body detail split
+        # as a merged row — never the whole multiline body as the bold
+        # headline (pc-1488 cursor-reviewer finding #1).
+        self.assertEqual(worklane[1]['title'], 'Owner: seat')
+        self.assertEqual(worklane[1]['detail'], 'Owner: seat\nAlso parked context')
 
     def test_merged_row_keeps_full_comment_behind_detail(self):
         self._register()
@@ -176,6 +181,33 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(worklane[0]['title'], 'Released by seat returning to backlog')
         self.assertEqual(worklane[0]['detail'],
                           'Released by seat returning to backlog\nWaiting on credentials from ops.')
+
+    def test_unmerged_long_parked_comment_gets_title_and_detail(self):
+        """No same-second event exists to pair with (e.g. a background sweep
+        wrote the comment without a matching status_change row): the comment
+        must still split into a short first-line title with the full body
+        reachable behind detail, not one giant bold headline (pc-1488
+        cursor-reviewer finding #1)."""
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-13", "Parked task")')
+            conn.execute(
+                'INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                ('Parked: Implementation complete; both suites green.\nOwner: seat', _RECENT),
+            )
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['title'], 'Parked: Implementation complete; both suites green.')
+        self.assertEqual(
+            worklane[0]['detail'],
+            'Parked: Implementation complete; both suites green.\nOwner: seat',
+        )
 
     def test_release_event_and_released_comment_collapse_to_one_row(self):
         self._register()
@@ -294,6 +326,33 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(len(supervisor_rows), 1)
         self.assertEqual(supervisor_rows[0]['event'], 'dispatched')
         self.assertEqual(supervisor_rows[0]['at'], _RECENT)
+
+    def test_supervisor_row_title_is_outcome_only_not_source_repeated(self):
+        """The source badge already reads "Supervisor"; the title must not
+        repeat it (pc-1488 cursor-reviewer finding #3: headline read
+        "Passed · Supervisor pass · passed")."""
+        runtime = self.root / 'workforce/local'
+        runtime.mkdir(parents=True)
+        (runtime / 'roster.json').write_text(json.dumps({'workers': {'bp-supervisor': {'kind': 'job'}}}))
+        deployment = self.root / 'local/workforce/deployment.json'
+        deployment.parent.mkdir(parents=True)
+        deployment.write_text(json.dumps({'api_origin': 'http://127.0.0.1:9999'}))
+        payload = {'ok': True, 'passes': [
+            {'generated_at': _RECENT, 'pass_outcome': 'passed', 'evidence_file': 'pass.json'},
+            {'generated_at': _RECENT, 'pass_outcome': 'provider_failed', 'evidence_file': 'fail.json'},
+        ]}
+        class _FakeResponse:
+            def read(self):
+                return json.dumps(payload).encode('utf-8')
+        with patch('server.timeline.build_opener') as build_opener:
+            build_opener.return_value.open.return_value.__enter__.return_value = _FakeResponse()
+            result = timeline_snapshot(self.root)
+        supervisor_rows = [r for r in result['rows'] if r['source'] == 'supervisor']
+        self.assertEqual(len(supervisor_rows), 2)
+        for row in supervisor_rows:
+            self.assertNotIn('Supervisor', row['title'])
+        titles = {row['title'] for row in supervisor_rows}
+        self.assertEqual(titles, {'Passed', 'Provider failed'})
 
     def test_github_source_unavailable_when_not_configured(self):
         result = timeline_snapshot(self.root)
