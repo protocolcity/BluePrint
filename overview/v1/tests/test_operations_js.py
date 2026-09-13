@@ -261,7 +261,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-view', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
+        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
@@ -780,6 +780,114 @@ class NewEventsAffordanceTests(unittest.TestCase):
         self.assertIn('timelineExpanded=true', _SRC.replace(' ', ''))
 
 
+class ProjectsSurfaceTests(unittest.TestCase):
+    """pc-1486 / PROJECTS_INTENT: comparison rows, activity ordering,
+    quiet collapse, unavailable/partial honesty, and scoped go links."""
+
+    def test_projects_page_uses_a_comparison_table_not_card_grid(self):
+        self.assertIn('id="projects-list"', _HTML)
+        self.assertIn('bp-projects-row', _HTML)
+        self.assertIn("function projects()", _SRC)
+        self.assertIn("function projectComparisonRow(", _SRC)
+
+    def test_activity_ordering_prefers_running_then_attention_then_open(self):
+        self.assertIn('function projectActivitySort(a,b)', _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn('if(project.running)return0', compact)
+        self.assertIn('if(project.claimed)return1', compact)
+        self.assertIn('if(project.attention)return2', compact)
+
+    def test_quiet_projects_collapse_into_one_disclosure(self):
+        self.assertIn('bp-projects-collapsed', _SRC)
+        self.assertIn('Quiet projects (no open work, no seats)', _SRC)
+
+    def test_unavailable_store_never_paints_zero_open(self):
+        self.assertIn("project.state!=='available'", _SRC)
+        self.assertIn("'Store unavailable'", _SRC)
+        self.assertIn('partial (limited to 2,000)', _SRC)
+
+    def test_last_change_reads_from_server_not_read_time(self):
+        self.assertIn('project.last_change', _SRC)
+        self.assertIn("'no activity recorded'", _SRC)
+
+    def test_go_links_carry_the_project_id(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn('params=id=>newURLSearchParams({project:id})', compact)
+        self.assertIn("newURLSearchParams({project:project.id,attention:'any'})", compact)
+        self.assertIn("'/map?project='+encodeURIComponent(project.id)", compact)
+
+    def test_go_links_include_scoped_agents_and_delivery_with_reader_return(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn("link('Agents','/agents?'+retained)", compact)
+        self.assertIn("link('Delivery','/delivery?'+retained)", compact)
+        self.assertIn('return_to:projectReturnTo()', compact)
+
+    def test_agents_now_counts_only_verified_live_orders_not_roster_labels(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn('functionprojectLiveSeats(project)', compact)
+        self.assertIn("order.status!=='in_progress'", compact)
+        self.assertIn('!order.live_with', compact)
+        agents_fn = _SRC.split('function projectAgentsNowText(project)')[1].split('function projectReturnTo')[0]
+        self.assertNotIn("a.group==='seat'", agents_fn)
+        quiet_fn = _SRC.split('function projectIsQuiet(project)')[1].split('function projectActivityRank')[0]
+        self.assertIn('projectLiveSeats(project)', quiet_fn)
+        self.assertNotIn("a.group==='seat'", quiet_fn)
+
+    def test_scan_derived_counts_carry_partial_marker_when_store_is_truncated(self):
+        self.assertIn("projectCountCell(project,'deferred')", _SRC)
+        live_fn = _SRC.split('function projectLiveParkedText(project)')[1].split('function projectLiveSeats')[0]
+        self.assertIn('project.partial', live_fn)
+        self.assertIn('partial (limited to 2,000)', live_fn)
+
+    def test_breakdown_is_keyboard_reachable(self):
+        self.assertIn('bp-projects-detail', _SRC)
+        self.assertIn("el('summary','Breakdown')", _SRC)
+
+
+class ProjectsSurfaceHarnessTests(unittest.TestCase):
+    """pc-1486: live-shaped fixture proves comparison rows, quiet collapse,
+    unavailable honesty, and project-scoped links."""
+
+    _HARNESS = Path(__file__).resolve().parent / 'harness' / 'projects_surface_check.mjs'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping projects surface harness')
+        proc = subprocess.run([node, str(cls._HARNESS)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'projects surface harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        cls.result = json.loads(proc.stdout)
+
+    def test_comparison_rows_render_for_active_projects(self) -> None:
+        self.assertGreater(self.result['active_row_count'], 0)
+
+    def test_quiet_projects_collapse_to_one_line(self) -> None:
+        self.assertRegex(self.result['quiet_summary'], r'Quiet projects')
+
+    def test_unavailable_store_is_not_zero_open(self) -> None:
+        self.assertTrue(self.result['unavailable_honest'])
+
+    def test_go_links_include_project_query(self) -> None:
+        self.assertTrue(self.result['links_carry_project'])
+
+    def test_agents_and_delivery_links_reader_return_to_projects(self) -> None:
+        self.assertTrue(self.result['agents_delivery_return'])
+
+    def test_roster_seat_without_live_order_reads_none_staffed(self) -> None:
+        self.assertTrue(self.result['roster_not_staffed'])
+
+    def test_partial_scan_counts_carry_limit_marker(self) -> None:
+        self.assertTrue(self.result['partial_counts_marked'])
+
+    def test_breakdown_disclosure_is_present(self) -> None:
+        self.assertTrue(self.result['breakdown_present'])
+
+
 class ConnectionsEngineTests(unittest.TestCase):
     def test_engine_list_paints_versions_reachability_and_supervisor(self):
         self.assertIn('id="engine-list"', _HTML)
@@ -856,6 +964,22 @@ class TimelineClearResetsPeriodTests(unittest.TestCase):
         body = source[start:source.index('\n}\n', start)]
         self.assertIn("timelinePeriod = ''", body)
         self.assertLess(body.index("timelinePeriod = ''"), body.index('updateTimelineFilters()'))
+
+class ProjectsReturnAndFinishingTests(unittest.TestCase):
+    """pc-1486 second pass: /projects is a valid reader return, and a seat
+    finishing parked work in a project keeps that project out of Quiet."""
+
+    def test_projects_is_an_allowed_reader_return(self):
+        source = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'reader-navigation.mjs').read_text()
+        self.assertIn("'/projects'", source)
+        self.assertRegex(source, r"work\|map\|calendar\|timeline\|projects")
+
+    def test_finishing_seat_counts_as_live_for_the_project(self):
+        source = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'operations.js').read_text()
+        start = source.index('function projectLiveSeats(')
+        body = source[start:source.index('\n}\n', start)]
+        self.assertIn('agent.finishing', body)
+        self.assertIn("p.project===project.id", body)
 
 
 class DeliverySurfaceTests(unittest.TestCase):
