@@ -84,15 +84,41 @@ export async function boot(opts = {}) {
   let latestOperations = null;
   let latestRemote = null;
   let lastBranches = [];
+  // A deep-linked ?item= can arrive before the branch it names has real
+  // data (operations/remote snapshots load async, independently of the
+  // boot sequence) — applyDeepLinkItem() re-tries against the always-fresh
+  // currentBranches() (never the stale, repaint-only `lastBranches`) each
+  // time either source updates, instead of only once at boot.
+  let pendingDeepLinkItem = null;
+  function applyDeepLinkItem(branch, itemId) {
+    const found = currentBranches(viewState.snapshot()).find(b => b.key === branch);
+    const item = found && found.items.find(it => String(it.id) === itemId);
+    if (item) {
+      viewState.setItem(item);
+      pendingDeepLinkItem = null;
+      scheduleRepaint();
+      return true;
+    }
+    pendingDeepLinkItem = { branch, itemId };
+    return false;
+  }
+  function retryPendingDeepLinkItem() {
+    if (!pendingDeepLinkItem) return;
+    const snap = viewState.snapshot();
+    if (snap.branch !== pendingDeepLinkItem.branch || snap.item) { pendingDeepLinkItem = null; return; }
+    applyDeepLinkItem(pendingDeepLinkItem.branch, pendingDeepLinkItem.itemId);
+  }
   async function refreshRemote() {
     try {
       const res = await fetchImpl(remoteEndpoint, { headers: { accept: 'application/json' } });
       latestRemote = res && res.ok ? await res.json() : null;
     } catch (_) { latestRemote = null; }
+    retryPendingDeepLinkItem();
     scheduleRepaint();
   }
   document.addEventListener('bp:map-operations', event => {
     latestOperations = event.detail || null;
+    retryPendingDeepLinkItem();
     refreshRemote();
   });
   const viewer = createMdViewer({
@@ -102,6 +128,15 @@ export async function boot(opts = {}) {
   });
   viewer.mount();
 
+  // FOCUSED_PROJECT §Rules — "browser back/forward … restore it": a change
+  // to the focused project/branch/item is a real navigation and needs its
+  // own history entry; everything else syncUrl also carries (dig path, the
+  // reader) keeps using replaceState as before, so paging/panning doesn't
+  // spam the history stack.
+  function projectNavKey(snap) {
+    return JSON.stringify([snap.project ? snap.project.relPath : null, snap.branch || null, snap.item ? String(snap.item.id) : null]);
+  }
+  let lastNavKey = null;
   function syncUrl() {
     if (restoring) return;
     const url = new URL(location.href);
@@ -119,7 +154,14 @@ export async function boot(opts = {}) {
     }
     if (snap.branch) url.searchParams.set('branch', snap.branch); else url.searchParams.delete('branch');
     if (snap.item) url.searchParams.set('item', String(snap.item.id)); else url.searchParams.delete('item');
-    history.replaceState(history.state, '', '/map' + url.search + url.hash);
+    const dest = '/map' + url.search + url.hash;
+    const navKey = projectNavKey(snap);
+    if (navKey !== lastNavKey) {
+      history.pushState(history.state, '', dest);
+    } else {
+      history.replaceState(history.state, '', dest);
+    }
+    lastNavKey = navKey;
   }
   function currentMapUrl() { return '/map' + location.search; }
   function withReturnTo(href) {
@@ -185,7 +227,12 @@ export async function boot(opts = {}) {
   function withFocusPreserved(fn) {
     const key = captureFocusKey();
     fn();
-    restoreFocus(key, world);
+    // repaintInner() rebuilds both the SVG canvas (#world) and the
+    // project-focus sidebar panel (#map-project-panel, outside #world) in
+    // the same pass — restore against the whole document so keyboard focus
+    // on a branch/item button survives an operations-driven repaint too,
+    // not only a canvas hit (primary at ≤400px where the canvas is hidden).
+    restoreFocus(key, document);
   }
 
   function currentBranches(snap) {
@@ -640,9 +687,15 @@ export async function boot(opts = {}) {
     });
   }
 
-  // Reset button.
+  // Reset button — "Workspace" must always return to the workspace hub,
+  // including out of a focused project (mirrors the hub-click handler
+  // above); resetView() alone only clears a Papers dig, leaving the
+  // focused canvas/breadcrumb/panel active.
   const resetBtn = document.getElementById(cfg.chromeIds.reset);
-  if (resetBtn) resetBtn.addEventListener('click', resetView);
+  if (resetBtn) resetBtn.addEventListener('click', () => {
+    if (viewState.snapshot().project) { clearProjectFocusView(); return; }
+    resetView();
+  });
 
   const projectBackBtn = document.getElementById('map-project-back');
   if (projectBackBtn) projectBackBtn.addEventListener('click', clearProjectFocusView);
@@ -677,15 +730,17 @@ export async function boot(opts = {}) {
       ev.preventDefault(); ev.target.dispatchEvent(new MouseEvent('click', {bubbles:true}));
     }
   });
-  window.addEventListener('resize', applyCamera);
-  await tree.load();
-  await refreshRemote();
-  repaint();
-  if (initial.get('project')) {
+  // Deep-link boot only carries the project relPath in the URL — resolve
+  // hasMd from the already-loaded tree so papersBranch reports correctly on
+  // first paint instead of always reading "empty" (no state.project.hasMd).
+  // Shared with the popstate handler below so back/forward across a focused
+  // project restores the same way a fresh deep link does.
+  async function applyProjectParams(initial) {
     const projectPath = initial.get('project');
-    // Deep-link boot only carries the relPath in the URL — resolve hasMd
-    // from the already-loaded tree so papersBranch reports correctly on
-    // first paint instead of always reading "empty" (no state.project.hasMd).
+    if (!projectPath) {
+      if (viewState.snapshot().project) clearProjectFocusView();
+      return;
+    }
     const treeLot = tree.snapshot().lots.find(lot => lot.relPath === projectPath);
     selectProjectView({
       relPath: projectPath,
@@ -696,12 +751,22 @@ export async function boot(opts = {}) {
     if (branch) {
       await toggleBranchView(branch);
       const itemId = initial.get('item');
-      if (itemId) {
-        const found = lastBranches.find(b => b.key === branch);
-        const item = found && found.items.find(it => String(it.id) === itemId);
-        if (item) { viewState.setItem(item); scheduleRepaint(); }
-      }
+      if (itemId) applyDeepLinkItem(branch, itemId);
     }
+  }
+
+  window.addEventListener('resize', applyCamera);
+  window.addEventListener('popstate', async () => {
+    restoring = true;
+    await applyProjectParams(new URLSearchParams(location.search));
+    restoring = false;
+    lastNavKey = projectNavKey(viewState.snapshot());
+  });
+  await tree.load();
+  await refreshRemote();
+  repaint();
+  if (initial.get('project')) {
+    await applyProjectParams(initial);
   } else if(initial.get('path')) {
     let relative='';
     for(const part of initial.get('path').split('/').filter(Boolean)) {
@@ -710,6 +775,10 @@ export async function boot(opts = {}) {
     }
   }
   if(initial.get('md'))await openPaper(initial.get('md'),{label:initial.get('md').split('/').pop()});
+  // The restored state is not a fresh navigation — sync it with
+  // replaceState (matching pre-existing boot behavior) rather than pushing
+  // a duplicate history entry on top of the page load.
+  lastNavKey = projectNavKey(viewState.snapshot());
   restoring = false;
   syncUrl();
 

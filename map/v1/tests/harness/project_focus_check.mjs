@@ -97,6 +97,25 @@ assert.equal(deliveryBranch(project, {}, null).state, 'unavailable');
   ] };
   assert.equal(deliveryBranch(project, operations, remote).state, 'stale');
 }
+// Delivery — item ids are stable across reorder/truncation of the cache
+// (integrator pass, pc-1492): a list-index id would change the id of every
+// item shifted by a reorder or a dropped entry, breaking `?item=` deep
+// links and selection across a refresh or an operations poll.
+{
+  const operations = { projects: [{ id: 'pc', folder: 'blueprint' }] };
+  const makeRemote = items => ({
+    state: 'connected',
+    repositories: [{ repo: 'org/repo', project: 'pc', state: 'connected', observed_at: 't1', items }],
+  });
+  const pr7 = { kind: 'pull_request', number: 7, title: 'PR seven', state: 'opened', url: 'https://github.com/org/repo/pull/7' };
+  const pr3 = { kind: 'pull_request', number: 3, title: 'PR three', state: 'opened', url: 'https://github.com/org/repo/pull/3' };
+  const before = deliveryBranch(project, operations, makeRemote([pr3, pr7]));
+  const afterReorderAndTruncate = deliveryBranch(project, operations, makeRemote([pr7]));
+  const pr7Before = before.items.find(it => it.label === 'PR seven');
+  const pr7After = afterReorderAndTruncate.items.find(it => it.label === 'PR seven');
+  assert.equal(pr7Before.id, pr7After.id, 'a PR keeps the same item id after a sibling drops out and it shifts index');
+  assert.equal(pr7Before.id, 'org/repo-pull_request-n7');
+}
 
 // --- buildBranches — fixed order, always four ------------------------------
 {

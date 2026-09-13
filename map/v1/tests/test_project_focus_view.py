@@ -169,6 +169,55 @@ class HostFocusWiringTests(unittest.TestCase):
         self.assertIn("const focusKey = captureFocusKey();", body)
         self.assertIn("restoreFocus(focusKey, list);", body)
 
+    def test_deep_link_item_is_resolved_against_fresh_branches_and_retried(self) -> None:
+        # integrator pass on 66bbed0: the boot's ?item= lookup read
+        # `lastBranches`, which is only assigned inside the deferred
+        # repaint() — a branch+item deep link could resolve before that
+        # repaint ran (or before operations/remote data arrived) and land on
+        # the branch with no item selected. applyDeepLinkItem() must read
+        # currentBranches() fresh and retry once operations/remote update.
+        self.assertIn("function applyDeepLinkItem(branch, itemId)", self.host)
+        self.assertIn("currentBranches(viewState.snapshot())", self.host)
+        self.assertIn("function retryPendingDeepLinkItem", self.host)
+        self.assertIn("retryPendingDeepLinkItem();", self.host)
+        # Boot and popstate both resolve item via the shared helper, not the
+        # stale lastBranches array.
+        self.assertNotIn("lastBranches.find(b => b.key === branch)", self.host)
+
+    def test_project_panel_rebuild_preserves_focus_via_the_document(self) -> None:
+        # integrator pass: renderProjectPanel() (branch buttons/items) runs
+        # inside the same repaintInner() pass as the canvas, but
+        # withFocusPreserved only restored focus inside #world — a keyboard
+        # user on a branch/item button in the sidebar (the only surface at
+        # ≤400px) lost focus on every operations-driven repaint.
+        match = re.search(r"function withFocusPreserved\(fn\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(match)
+        self.assertIn("restoreFocus(key, document);", match.group(1))
+
+    def test_workspace_reset_clears_a_focused_project(self) -> None:
+        # integrator pass: #map-reset ("Workspace") only ever called
+        # resetView() (clearDig), so clicking it while a project was focused
+        # left the focused canvas/breadcrumb/panel active despite the
+        # control's label implying a return to the workspace hub.
+        match = re.search(r"resetBtn\.addEventListener\('click', \(\) => \{([\s\S]*?)\n  \}\);", self.host)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("if (viewState.snapshot().project) { clearProjectFocusView(); return; }", body)
+        self.assertIn("resetView();", body)
+
+    def test_project_branch_item_navigation_pushes_history(self) -> None:
+        # integrator pass: syncUrl() only ever called history.replaceState,
+        # so MAP_FOCUSED_PROJECT's "browser back/forward … restore it" rule
+        # had no history entries to go back to for project/branch/item
+        # navigation. A change in the project-focus selection now pushes a
+        # new entry (other syncUrl-carried state, e.g. paging, still
+        # replaces); a popstate listener restores it symmetrically.
+        self.assertIn("function projectNavKey(snap)", self.host)
+        self.assertIn("history.pushState(history.state, '', dest);", self.host)
+        self.assertIn("history.replaceState(history.state, '', dest);", self.host)
+        self.assertIn("window.addEventListener('popstate'", self.host)
+        self.assertIn("async function applyProjectParams(initial)", self.host)
+
 
 class HitRouterFocusRowsTests(unittest.TestCase):
     def setUp(self) -> None:

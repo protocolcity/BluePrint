@@ -136,12 +136,22 @@ export function deliveryBranch(project, operations, remote) {
   }
   const allItems = repos.flatMap(r => (r.items || []).map(item => ({ ...item, repo: r.repo, observedAt: r.observed_at })));
   const observedAt = repos.map(r => r.observed_at).filter(Boolean).sort().pop();
-  const items = allItems.slice(0, 20).map((item, idx) => ({
-    id: `${item.repo}-${item.kind}-${idx}`,
-    label: item.title || item.workflow_name || item.kind || 'activity',
-    detail: `${item.state || 'unknown'}${item.updated_at ? ' · ' + item.updated_at : ''}`,
-    href: item.url || `https://github.com/${item.repo}`,
-  }));
+  // Stable across reorder/truncation of the remote-activity cache: keyed on
+  // the item's own identity (PR number, commit sha, or URL) rather than its
+  // position in the list — a list-index id breaks `?item=` deep links and
+  // selection whenever the cache reorders or truncates between polls.
+  const items = allItems.slice(0, 20).map(item => {
+    const stableKey = item.number != null ? `n${item.number}`
+      : item.sha ? `s${item.sha}`
+        : item.url ? `u${item.url}`
+          : `t${item.observedAt || ''}-${item.title || item.workflow_name || ''}`;
+    return {
+      id: `${item.repo}-${item.kind}-${stableKey}`,
+      label: item.title || item.workflow_name || item.kind || 'activity',
+      detail: `${item.state || 'unknown'}${item.updated_at ? ' · ' + item.updated_at : ''}`,
+      href: item.url || `https://github.com/${item.repo}`,
+    };
+  });
   const anyUnavailable = repos.some(r => r.state === 'unavailable');
   return {
     key, label,
