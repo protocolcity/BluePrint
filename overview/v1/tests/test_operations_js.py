@@ -809,8 +809,9 @@ class SeatParkedClaimRowTests(unittest.TestCase):
     def test_timeline_uses_parked_time_when_no_live_claim(self):
         fn = _SRC.split('function agentTimelineValues(agent)')[1].split('function agentTimeline(agent)')[0]
         self.assertIn('agent.parked', fn)
-        self.assertIn('agent.parked_verified', fn)
-        self.assertIn('Verified: parked', fn)
+        self.assertIn('p.verified', fn)
+        self.assertIn('latestParkedSince(agent)', fn)
+        self.assertIn('currentShiftParkedIds(agent)', _SRC)
 
 
 if __name__ == '__main__':

@@ -79,7 +79,7 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(order['status_word'], 'Parked')
         self.assertEqual(order['parked_by'], 'bp-claude-implementer')
         self.assertIsNone(order['live_with'])
-        self.assertEqual(order['since'], '2026-09-12T05:00:00Z')
+        self.assertEqual(order['since'], '2026-09-12T06:00:00Z')
         self.assertEqual(order['last_note'], 'Parked: done for now')
     def test_watch_exempts_a_seat_parked_handoff_but_not_a_you_parked_one(self):
         """PROTOCOL 7a / review finding (pc-1494 recovery): a parked order
