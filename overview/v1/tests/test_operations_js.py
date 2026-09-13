@@ -26,14 +26,24 @@ class MetricDefinitionTests(unittest.TestCase):
 
 
 class DefaultFilterTests(unittest.TestCase):
-    def test_deferred_and_tracking_are_hidden_by_default(self):
-        self.assertIn('hideParked', _SRC)
-        self.assertIn("!showDeferred", _SRC)
-    def test_toggle_persists_choice_in_the_url(self):
-        self.assertIn("params.set('deferred','1')", _SRC.replace(' ', ''))
-        self.assertIn("query.get('deferred')", _SRC)
-    def test_toggle_control_exists_in_the_markup(self):
-        self.assertIn('id="show-deferred"', _HTML)
+    """STATES_AND_TERMS.md §5 (pc-1482): All open is complete by default;
+    deferred/tracking are never hidden behind a second checkbox, and Gate
+    is its own filter with no default exclusion."""
+    def test_deferred_and_tracking_are_never_hidden_by_default(self):
+        self.assertNotIn('hideParked', _SRC)
+        self.assertNotIn('showDeferred', _SRC)
+    def test_show_deferred_toggle_control_is_removed_from_the_markup(self):
+        self.assertNotIn('id="show-deferred"', _HTML)
+        self.assertNotIn('id="deferred-toggle"', _HTML)
+    def test_gate_is_its_own_filter_with_no_default_exclusion(self):
+        self.assertIn('id="gate-filter"', _HTML)
+        self.assertIn("gate=$('gate-filter').value", _SRC.replace(' ', ''))
+    def test_old_deferred_and_gate_status_links_map_to_the_gate_filter(self):
+        self.assertIn("statusParam.startsWith('gate:')", _SRC)
+        self.assertIn("statusParam === 'deferred'", _SRC)
+    def test_old_attention_status_links_map_to_the_attention_filter(self):
+        self.assertIn("statusParam === 'attention'", _SRC)
+        self.assertIn("statusParam.startsWith('face:')", _SRC)
 
 
 class ClaimPresentationTests(unittest.TestCase):
@@ -45,17 +55,66 @@ class ClaimPresentationTests(unittest.TestCase):
 
 
 class AssignmentFilterTests(unittest.TestCase):
+    """STATES_AND_TERMS.md §5 (pc-1482): You returns to Assignment beside the
+    registered seats and Unassigned; persona items and human-owned decisions
+    match You, never Unassigned."""
     def test_assignment_options_come_from_the_roster_not_the_data(self):
         self.assertIn("snapshot.agents.filter(a=>a.group==='seat')", _SRC)
-    def test_you_never_appears_as_an_assignment_option(self):
-        self.assertNotIn("new Option('You'", _SRC)
-    def test_unassigned_filter_excludes_you_like_the_owner_label_does(self):
-        self.assertIn("o.workers.filter(w=>w!=='you').length", _SRC.replace(' ', ''))
+    def test_you_is_an_assignment_option(self):
+        self.assertIn("newOption('You','you')", _SRC.replace(' ', ''))
+    def test_unassigned_filter_excludes_you_and_persona_items(self):
+        self.assertIn("if(value==='unassigned')return!order.assigned_you&&!order.workers.filter(w=>w!=='you').length", _SRC.replace(' ', ''))
+    def test_you_filter_matches_the_assigned_you_fact(self):
+        self.assertIn("if(value==='you')returnorder.assigned_you", _SRC.replace(' ', ''))
 
 
 class BlockedFilterTests(unittest.TestCase):
-    def test_blocked_status_option_matches_declared_blockers_not_a_task_status(self):
-        self.assertIn("status==='blocked'?o.blockers&&o.blockers.length", _SRC.replace(' ', ''))
+    """Blocked is a secondary filter on declared blockers, not a Status
+    lifecycle word (STATES_AND_TERMS.md §5: Status holds lifecycle only)."""
+    def test_blocked_filter_matches_declared_blockers_not_a_task_status(self):
+        self.assertIn("!blockedOnly||(o.blockers&&o.blockers.length)", _SRC.replace(' ', ''))
+    def test_blocked_is_not_a_status_option(self):
+        self.assertNotIn('<option value="blocked">', _HTML)
+    def test_blocked_filter_control_exists_in_the_markup(self):
+        self.assertIn('id="blocked-filter"', _HTML)
+
+
+class FiveAxisFilterTests(unittest.TestCase):
+    """STATES_AND_TERMS.md §5 (pc-1482): Assignment, Status, Gate, Kind and
+    For You are five orthogonal axes; Work composes them with search and
+    project, and states the filtered/total count with a clear-all."""
+    def test_status_filter_holds_only_lifecycle_words(self):
+        self.assertIn('<option value="backlog">Open</option>', _HTML)
+        self.assertIn('<option value="in_progress">Live</option>', _HTML)
+        self.assertIn('<option value="in_review">Parked</option>', _HTML)
+        self.assertNotIn('For You (any face)', _HTML.split('id="gate-filter"')[0].split('id="status-filter"')[1])
+    def test_gate_filter_offers_the_five_gate_values(self):
+        for value in ('none', 'human', 'timer', 'deferred', 'tracking'):
+            self.assertIn(f'value="{value}"', _HTML)
+    def test_attention_filter_offers_the_four_faces_and_any(self):
+        for value in ('any', 'decide', 'read', 'watch', 'note'):
+            self.assertIn(f'<option value="{value}">', _HTML)
+    def test_filters_compose_with_and_not_or(self):
+        fn = _SRC.split('function work()')[1]
+        compact = fn.replace(' ', '')
+        self.assertIn('selectedProject||o.project===selectedProject', compact)
+        self.assertIn('selectedAssignment||matchesAssignment', compact)
+        self.assertIn('status||o.status===status', compact)
+        self.assertIn("gate||(gate==='none'?!o.gate_type:o.gate_type===gate)", compact)
+        self.assertIn("attention||(attention==='any'?o.attention:o.attention_face===attention)", compact)
+        self.assertIn('blockedOnly||(o.blockers&&o.blockers.length)', compact)
+    def test_results_state_filtered_of_total(self):
+        self.assertIn("`${orders.length} of ${total} matching work order", _SRC)
+    def test_clear_all_resets_every_filter(self):
+        fn = _SRC.split("$('clear-filters').addEventListener('click',()=>{")[1].split('});')[0]
+        for control in ("$('search').value=''", "$('project-filter').value=''", "$('assignment-filter').value=''",
+                        "$('status-filter').value=''", "$('gate-filter').value=''", "$('attention-filter').value=''",
+                        "$('blocked-filter').checked=false"):
+            self.assertIn(control, fn.replace(' ', ''))
+    def test_active_filters_render_as_dismissable_chips(self):
+        self.assertIn("function renderActiveFilters()", _SRC)
+        self.assertIn("'bp-filter-chip'", _SRC)
+        self.assertIn("$('clear-filters').hidden=!chips.length", _SRC.replace(' ', ''))
 
 
 class LiveIndicatorTests(unittest.TestCase):
