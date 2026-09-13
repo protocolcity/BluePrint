@@ -111,6 +111,41 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(result['sources'][0]['name'], 'worklane')
         self.assertEqual(result['sources'][0]['state'], 'available')
 
+    def test_claim_event_and_owner_comment_collapse_to_one_row(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-9", "Claim task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","in_progress","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                         ('Owner: seat\nStart: now', _RECENT))
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['event'], 'claimed')
+        self.assertEqual(worklane[0]['title'], 'Owner: seat')
+
+    def test_release_event_and_released_comment_collapse_to_one_row(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-10", "Release task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","backlog","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,"Released by seat returning to backlog","seat",?)', (_RECENT,))
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['event'], 'released')
+        self.assertEqual(worklane[0]['title'], 'Released by seat returning to backlog')
+
     def test_workforce_ledger_maps_shift_rows(self):
         runtime = self.root / 'workforce/local'
         (runtime / 'ledger').mkdir(parents=True)
@@ -187,6 +222,38 @@ class TimelineProjectionTests(unittest.TestCase):
         result = timeline_snapshot(self.root)
         github = next(s for s in result['sources'] if s['name'] == 'github')
         self.assertEqual(github['state'], 'not_configured')
+
+    def test_github_source_available_when_remote_cache_has_rows(self):
+        config = self.root / '.blueprint/connections.json'
+        config.parent.mkdir(parents=True)
+        config.write_text(json.dumps({'github': {'repositories': [{'repo': 'org/repo', 'project': 'product'}]}}))
+        cached = {
+            'state': 'loading',
+            'repositories': [{
+                'repo': 'org/repo',
+                'project': 'product',
+                'state': 'connected',
+                'items': [{
+                    'kind': 'pull_request',
+                    'repo': 'org/repo',
+                    'project': 'product',
+                    'title': 'Ship it',
+                    'url': 'https://github.com/org/repo/pull/1',
+                    'state': 'open',
+                    'pr_event': 'opened',
+                    'updated_at': _RECENT,
+                    'number': 1,
+                }],
+            }],
+            'refreshing': True,
+        }
+        with patch('server.timeline.remote_snapshot', return_value=cached):
+            result = timeline_snapshot(self.root)
+        github = next(s for s in result['sources'] if s['name'] == 'github')
+        self.assertEqual(github['state'], 'connected')
+        rows = [r for r in result['rows'] if r['source'] == 'github']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['title'], 'Ship it')
 
     def test_project_filter(self):
         self._register('alpha', 'aa')
