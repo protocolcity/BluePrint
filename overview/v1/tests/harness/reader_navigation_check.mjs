@@ -63,7 +63,7 @@ for(const target of [work,map,...unsafe.filter(x=>typeof x==='string')]) {
   // Expose only the existing URL factory for assertion; the full script runs.
   const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace("await import('/js/dom-reconcile.mjs')",'reconcile').replace('function orderRow(order)', 'window.testWorkUrl = workUrl;\nfunction orderRow(order)');
   env.context.fetch=async()=>({ok:false});
-  vm.runInContext(source,env.context);await settle();
+  await vm.runInContext(source,env.context);await settle();
   const href=env.context.window.testWorkUrl({project:'example',id:'ex-1'});
   assert.equal(new URL(href,'https://desk.example').searchParams.get('return_to'),work);
   env.get('search').value='new & query';
