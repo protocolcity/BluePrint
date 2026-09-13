@@ -964,6 +964,22 @@ class TimelineClearResetsPeriodTests(unittest.TestCase):
         self.assertIn("timelinePeriod = ''", body)
         self.assertLess(body.index("timelinePeriod = ''"), body.index('updateTimelineFilters()'))
 
+class ProjectsReturnAndFinishingTests(unittest.TestCase):
+    """pc-1486 second pass: /projects is a valid reader return, and a seat
+    finishing parked work in a project keeps that project out of Quiet."""
+
+    def test_projects_is_an_allowed_reader_return(self):
+        source = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'reader-navigation.mjs').read_text()
+        self.assertIn("'/projects'", source)
+        self.assertRegex(source, r"work\|map\|calendar\|timeline\|projects")
+
+    def test_finishing_seat_counts_as_live_for_the_project(self):
+        source = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'operations.js').read_text()
+        start = source.index('function projectLiveSeats(')
+        body = source[start:source.index('\n}\n', start)]
+        self.assertIn('agent.finishing', body)
+        self.assertIn("p.project===project.id", body)
+
 
 if __name__ == '__main__':
     unittest.main()
