@@ -214,6 +214,46 @@ def _task_public_id(prefix: str, ext_id, numeric_id) -> str:
     return f'{prefix}-{numeric_id}'
 
 
+def _collapse_worklane_pairs(rows: list[dict]) -> list[dict]:
+    """One row per action when an event and its marker comment describe the same thing."""
+    comment_index: dict[tuple, list[dict]] = {}
+    merged_comment_ids: set[str] = set()
+    collapsed: list[dict] = []
+    for row in rows:
+        if row.get('_kind') != 'comment':
+            continue
+        event_key = row.get('_event_key')
+        if event_key == 'note':
+            continue
+        key = (row['project'], row['_task_id'], row['at'], row['actor'], event_key)
+        comment_index.setdefault(key, []).insert(0, row)
+    for row in rows:
+        if row.get('_kind') != 'event':
+            continue
+        event_key = row.get('_event_key')
+        key = (row['project'], row['_task_id'], row['at'], row['actor'], event_key)
+        comments = comment_index.get(key)
+        if comments:
+            comment = comments.pop(0)
+            merged_comment_ids.add(comment['id'])
+            body = (comment.get('_body') or '').strip()
+            detail = body.splitlines()[0] if body else row['title']
+            collapsed.append({k: v for k, v in row.items() if not k.startswith('_')} | {'title': detail})
+        else:
+            collapsed.append({k: v for k, v in row.items() if not k.startswith('_')})
+    for row in rows:
+        if row.get('_kind') != 'comment':
+            continue
+        if row['id'] in merged_comment_ids:
+            continue
+        out = {k: v for k, v in row.items() if not k.startswith('_')}
+        body = (row.get('_body') or '').strip()
+        if body:
+            out['title'] = body
+        collapsed.append(out)
+    return collapsed
+
+
 def _worklane_rows(root: Path) -> tuple[list[dict], dict]:
     observed = _now_iso()
     rows: list[dict] = []
@@ -258,32 +298,42 @@ def _worklane_rows(root: Path) -> tuple[list[dict], dict]:
                 if not _in_window(row['created_at']):
                     continue
                 task_id = _task_public_id(prefix, row['ext_id'], row['task_id'])
+                mapped = _event_word(row['event_type'], row['status'])
                 rows.append({
                     'id': f'worklane:{project}:evt:{row["id"]}',
                     'at': _normalize_at(row['created_at']),
                     'source': 'worklane',
                     'project': project,
                     'actor': _display_actor(row['actor'] or ''),
-                    **_event_word(row['event_type'], row['status']),
+                    **mapped,
                     'title': str(row['title'] or task_id),
                     'link': _work_order_link(project, task_id),
+                    '_kind': 'event',
+                    '_task_id': row['task_id'],
+                    '_event_key': mapped['event'],
                 })
             for row in comment_rows:
                 if not _in_window(row['created_at']):
                     continue
                 task_id = _task_public_id(prefix, row['ext_id'], row['task_id'])
+                word = _comment_event_word(row['body'] or '')
                 rows.append({
                     'id': f'worklane:{project}:cmt:{row["id"]}',
                     'at': _normalize_at(row['created_at']),
                     'source': 'worklane',
                     'project': project,
                     'actor': _display_actor(row['author'] or ''),
-                    **_event_fields(_comment_event_word(row['body'] or ''), ''),
+                    **_event_fields(word, ''),
                     'title': str(row['title'] or task_id),
                     'link': _work_order_link(project, task_id),
+                    '_kind': 'comment',
+                    '_task_id': row['task_id'],
+                    '_event_key': word,
+                    '_body': row['body'] or '',
                 })
         finally:
             conn.close()
+    rows = _collapse_worklane_pairs(rows)
     if not _registered_dbs(root):
         state = 'empty' if not (worklane_data_dir(root).is_dir()) else 'available'
     elif unreadable and not rows:
@@ -428,20 +478,51 @@ def _github_kind_key(item: dict) -> str:
     return f"{item.get('kind')}:{item.get('number') or item.get('sha') or item.get('workflow_name')}"
 
 
+def _github_cache_observed(snapshot: dict) -> str:
+    """Most recent cache fill time from remote_activity repositories."""
+    stamps = [_parse_time(repo.get('observed_at'))
+              for repo in (snapshot.get('repositories') or []) if isinstance(repo, dict)]
+    stamps = [stamp for stamp in stamps if stamp is not None]
+    if not stamps:
+        return _now_iso()
+    return max(stamps).isoformat()
+
+
+def _github_source_state(snapshot: dict, rows: list[dict]) -> str:
+    """Mirror /api/remote-activity: unavailable only with no cache or a failed client."""
+    state = snapshot.get('state', 'not_configured')
+    repositories = snapshot.get('repositories') or []
+    if state in ('not_configured', 'invalid_config'):
+        return state
+    if state == 'unavailable' and not repositories:
+        return 'unavailable'
+    if rows:
+        if state in ('connected', 'loading'):
+            return 'connected'
+        return 'partial'
+    if repositories:
+        if state in ('connected', 'partial', 'loading'):
+            return 'connected' if state in ('connected', 'loading') else 'partial'
+        return 'empty'
+    if state == 'unavailable':
+        return 'unavailable'
+    return 'empty'
+
+
 def _github_rows(root: Path) -> tuple[list[dict], dict]:
     snapshot = remote_snapshot(root)
     state = snapshot.get('state', 'not_configured')
-    observed = _now_iso()
+    repositories = [repo for repo in (snapshot.get('repositories') or []) if isinstance(repo, dict)]
+    observed = _github_cache_observed(snapshot) if repositories else _now_iso()
+    detail = str(snapshot.get('error') or '')
     if state in ('not_configured', 'invalid_config'):
         return [], {'name': 'github', 'state': state, 'observed_at': observed,
-                    'detail': snapshot.get('error', 'GitHub delivery is not configured.')}
-    if state == 'unavailable':
+                    'detail': detail or 'GitHub delivery is not configured.'}
+    if state == 'unavailable' and not repositories:
         return [], {'name': 'github', 'state': 'unavailable', 'observed_at': observed,
-                    'detail': snapshot.get('error', 'GitHub delivery is unavailable.')}
+                    'detail': detail or 'GitHub delivery is unavailable.'}
     rows = []
-    for repo in snapshot.get('repositories') or []:
-        if not isinstance(repo, dict):
-            continue
+    for repo in repositories:
         project = str(repo.get('project') or '')
         for item in repo.get('items') or []:
             if not isinstance(item, dict):
@@ -460,8 +541,8 @@ def _github_rows(root: Path) -> tuple[list[dict], dict]:
                 'title': str(item.get('title') or repo.get('repo') or 'Repository event'),
                 'link': {'href': url, 'label': str(item.get('repo') or repo.get('repo') or 'PR'), 'external': True},
             })
-    repo_state = state if state in ('connected', 'partial') else 'unavailable'
-    return rows, {'name': 'github', 'state': repo_state, 'observed_at': observed, 'detail': ''}
+    repo_state = _github_source_state(snapshot, rows)
+    return rows, {'name': 'github', 'state': repo_state, 'observed_at': observed, 'detail': detail}
 
 
 def _sort_key(row: dict) -> tuple:

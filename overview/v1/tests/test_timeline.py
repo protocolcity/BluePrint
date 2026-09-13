@@ -111,6 +111,62 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual(result['sources'][0]['name'], 'worklane')
         self.assertEqual(result['sources'][0]['state'], 'available')
 
+    def test_claim_event_and_owner_comment_collapse_to_one_row(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-9", "Claim task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","in_progress","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                         ('Owner: seat\nStart: now', _RECENT))
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['event'], 'claimed')
+        self.assertEqual(worklane[0]['title'], 'Owner: seat')
+
+    def test_extra_same_second_comment_is_not_dropped(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-11", "Claim task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","in_progress","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                         ('Owner: seat\nStart: now', _RECENT))
+            conn.execute('INSERT INTO task_comments VALUES(2,1,"Owner: seat\nAlso parked context","seat",?)', (_RECENT,))
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 2)
+        self.assertEqual(worklane[0]['event'], 'claimed')
+        self.assertEqual(worklane[0]['title'], 'Owner: seat')
+        self.assertEqual(worklane[1]['event'], 'claimed')
+        self.assertEqual(worklane[1]['title'], 'Owner: seat\nAlso parked context')
+
+    def test_release_event_and_released_comment_collapse_to_one_row(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-10", "Release task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","backlog","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,"Released by seat returning to backlog","seat",?)', (_RECENT,))
+        result = timeline_snapshot(self.root)
+        worklane = [r for r in result['rows'] if r['source'] == 'worklane']
+        self.assertEqual(len(worklane), 1)
+        self.assertEqual(worklane[0]['event'], 'released')
+        self.assertEqual(worklane[0]['title'], 'Released by seat returning to backlog')
+
     def test_workforce_ledger_maps_shift_rows(self):
         runtime = self.root / 'workforce/local'
         (runtime / 'ledger').mkdir(parents=True)
@@ -187,6 +243,73 @@ class TimelineProjectionTests(unittest.TestCase):
         result = timeline_snapshot(self.root)
         github = next(s for s in result['sources'] if s['name'] == 'github')
         self.assertEqual(github['state'], 'not_configured')
+
+    def test_github_source_available_when_remote_cache_has_rows(self):
+        config = self.root / '.blueprint/connections.json'
+        config.parent.mkdir(parents=True)
+        config.write_text(json.dumps({'github': {'repositories': [{'repo': 'org/repo', 'project': 'product'}]}}))
+        cache_fill = '2026-09-13T08:15:00+00:00'
+        cached = {
+            'state': 'loading',
+            'repositories': [{
+                'repo': 'org/repo',
+                'project': 'product',
+                'state': 'connected',
+                'observed_at': cache_fill,
+                'items': [{
+                    'kind': 'pull_request',
+                    'repo': 'org/repo',
+                    'project': 'product',
+                    'title': 'Ship it',
+                    'url': 'https://github.com/org/repo/pull/1',
+                    'state': 'open',
+                    'pr_event': 'opened',
+                    'updated_at': _RECENT,
+                    'number': 1,
+                }],
+            }],
+            'refreshing': True,
+        }
+        with patch('server.timeline.remote_snapshot', return_value=cached), \
+                patch('server.timeline._now_iso', return_value='2026-09-13T12:00:00+00:00'):
+            result = timeline_snapshot(self.root)
+        github = next(s for s in result['sources'] if s['name'] == 'github')
+        self.assertEqual(github['state'], 'connected')
+        self.assertEqual(github['observed_at'], cache_fill)
+        rows = [r for r in result['rows'] if r['source'] == 'github']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['title'], 'Ship it')
+
+    def test_github_observed_at_uses_stale_cache_fill_on_failed_refresh(self):
+        cache_fill = '2026-09-13T07:00:00+00:00'
+        cached = {
+            'state': 'partial',
+            'repositories': [{
+                'repo': 'org/repo',
+                'project': 'product',
+                'state': 'unavailable',
+                'observed_at': cache_fill,
+                'items': [{
+                    'kind': 'pull_request',
+                    'repo': 'org/repo',
+                    'project': 'product',
+                    'title': 'Stale PR',
+                    'url': 'https://github.com/org/repo/pull/2',
+                    'state': 'open',
+                    'pr_event': 'opened',
+                    'updated_at': _RECENT,
+                    'number': 2,
+                }],
+            }],
+            'refreshing': False,
+            'error': 'Unable to read GitHub.',
+        }
+        with patch('server.timeline.remote_snapshot', return_value=cached), \
+                patch('server.timeline._now_iso', return_value='2026-09-13T12:00:00+00:00'):
+            result = timeline_snapshot(self.root)
+        github = next(s for s in result['sources'] if s['name'] == 'github')
+        self.assertEqual(github['state'], 'partial')
+        self.assertEqual(github['observed_at'], cache_fill)
 
     def test_project_filter(self):
         self._register('alpha', 'aa')
