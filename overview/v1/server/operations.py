@@ -821,6 +821,25 @@ def _row_is_held(row, kind):
     return row.get('enabled') is False or (_row_is_seat_kind(kind) and row.get('schedule') == '')
 
 
+def _seat_model_text(row, root, config_cache):
+    """The provider/model display text for one seat's own row — extends
+    ``resolve_provider_model`` with the same executable/pin fallbacks
+    coverage uses (pc-1479: a seat's own Agents row must never disagree
+    with what provider coverage counts it as; both call this one helper
+    rather than resolving the provider through separate paths). A pin
+    ``resolve_provider_model`` returned bare (unresolved command) gets its
+    provider name prefixed when the executable or the pin family resolves
+    one; otherwise the bare text is returned unchanged."""
+    model_text = resolve_provider_model(row, root, config_cache)
+    if any(model_text == p or model_text.startswith(p + ' ') for p in _PROVIDER_ORDER):
+        return model_text
+    provider = _seat_executable_provider(row, root, config_cache) or _provider_from_pin(model_text)
+    if not provider:
+        return model_text
+    pin = model_text if model_text and model_text != provider else None
+    return f'{provider} {pin}' if pin else provider
+
+
 def _project_seat_providers(workers, project_slug, root, config_cache):
     """``{provider display: 'present'|'held'}`` for one project's implementer
     seats — a seat's ``queue_url`` names its project (AGENT_ADOPTION.md D12:
@@ -844,13 +863,9 @@ def _project_seat_providers(workers, project_slug, root, config_cache):
             continue
         if _row_project_slug(row) != project_slug:
             continue
-        model_text = resolve_provider_model(row, root, config_cache)
+        model_text = _seat_model_text(row, root, config_cache)
         provider = next((p for p in _PROVIDER_ORDER
                           if model_text == p or model_text.startswith(p + ' ')), None)
-        if not provider:
-            provider = _seat_executable_provider(row, root, config_cache)
-        if not provider:
-            provider = _provider_from_pin(model_text)
         if not provider:
             continue
         if _seat_executable_missing(row, root, config_cache):
@@ -1097,7 +1112,7 @@ def operations_snapshot(binder):
                                   'Placeholder command — no operational work runs'),
                 'kind': kind, 'schedule': row.get('schedule') or 'Not scheduled',
                 'next_fire': live.get('next_fire') if isinstance(live, dict) else None,
-                'model': resolve_provider_model(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
+                'model': _seat_model_text(row, root, runner_config_cache), 'last_at': tick, 'source': 'Local WorkForce',
                 'project': project_slug, 'project_name': project_name,
                 'held': {'id': held['id'], 'project': held['project_name']} if held else None,
                 'held_verified': verified, 'recovery_attempts': recovery_attempts(daemon_path, root, identity),

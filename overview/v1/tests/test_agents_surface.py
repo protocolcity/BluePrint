@@ -462,6 +462,17 @@ class ProviderModelResolutionTests(unittest.TestCase):
                                  'model': 'claude-sonnet-5'}})
         self.assertEqual(self._agent()['model'], 'Claude claude-sonnet-5')
 
+    def test_bare_pin_with_unresolvable_command_still_names_the_provider(self):
+        """pc-1479: the row's own model text must agree with what
+        provider_coverage counts it as — a roster row whose id differs
+        from its ``identity`` field, with a command that resolves no
+        executable/config, still gets its provider prefixed from the pin
+        family (same fallback ``_project_seat_providers`` already used for
+        coverage), instead of showing the bare pin or 'Local job'."""
+        self._roster({'demo': {'display': 'Demo Worker', 'identity': 'demo-worker', 'kind': 'lane',
+                                'command': ['python', 'launch.py'], 'model': 'claude-sonnet-5'}})
+        self.assertEqual(self._agent('demo')['model'], 'Claude claude-sonnet-5')
+
 
 class SeatProjectFieldTests(unittest.TestCase):
     """pc-1474 scope addition: every seat names its project from the queue,
