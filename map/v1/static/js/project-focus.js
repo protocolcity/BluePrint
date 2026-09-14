@@ -72,10 +72,12 @@ export function workBranch(project, operations) {
   const claimed = Number(opProject.claimed) || 0;
   const running = Number(opProject.running) || 0;
   const orders = (operations.orders || []).filter(o => o && o.project === opProject.id);
-  const items = orders
+  // itemsAll is the full mapped list (never sliced) — a deep-linked ?item=
+  // must be findable even when it falls outside the sidebar/canvas display
+  // cap (BRANCH_ITEM_LIMIT); `items` stays the capped, sorted preview.
+  const itemsAll = orders
     .slice()
     .sort((a, b) => (Number(a.priority) || 9) - (Number(b.priority) || 9))
-    .slice(0, BRANCH_ITEM_LIMIT)
     .map(o => ({
       id: o.id,
       label: o.title || o.id,
@@ -86,7 +88,8 @@ export function workBranch(project, operations) {
     key, label,
     state: open === 0 ? 'empty' : 'available',
     summary: `${open} open · ${attention} For You · ${claimed} claimed · ${running} working`,
-    items,
+    items: itemsAll.slice(0, BRANCH_ITEM_LIMIT),
+    itemsAll,
     itemCount: orders.length,
   };
 }
@@ -107,7 +110,7 @@ export function agentsBranch(project, operations) {
     return { key, label, state: 'empty', summary: 'No seats hold this project', items: [] };
   }
   const working = rows.filter(a => a.state === 'working').length;
-  const items = rows.slice(0, BRANCH_ITEM_LIMIT).map(a => ({
+  const itemsAll = rows.map(a => ({
     id: a.id,
     label: a.name || a.id,
     detail: a.state === 'working' ? 'working' : (a.held ? `live with ${a.held.id}` : (a.badge || a.state)),
@@ -116,7 +119,8 @@ export function agentsBranch(project, operations) {
   return {
     key, label, state: 'available',
     summary: `${rows.length} seat${rows.length === 1 ? '' : 's'} · ${working} working`,
-    items,
+    items: itemsAll.slice(0, BRANCH_ITEM_LIMIT),
+    itemsAll,
     itemCount: rows.length,
   };
 }
@@ -159,7 +163,7 @@ export function deliveryBranch(project, operations, remote) {
   // the item's own identity (PR number, commit sha, or URL) rather than its
   // position in the list — a list-index id breaks `?item=` deep links and
   // selection whenever the cache reorders or truncates between polls.
-  const items = allItems.slice(0, BRANCH_ITEM_LIMIT).map(item => {
+  const itemsAll = allItems.map(item => {
     const stableKey = item.number != null ? `n${item.number}`
       : item.sha ? `s${item.sha}`
         : item.url ? `u${item.url}`
@@ -176,7 +180,8 @@ export function deliveryBranch(project, operations, remote) {
     key, label,
     state: allItems.length === 0 ? 'empty' : (anyUnavailable ? 'stale' : 'available'),
     summary: `${allItems.length} item${allItems.length === 1 ? '' : 's'}${observedAt ? ' · observed ' + observedAt : ''}`,
-    items,
+    items: itemsAll.slice(0, BRANCH_ITEM_LIMIT),
+    itemsAll,
     itemCount: allItems.length,
   };
 }

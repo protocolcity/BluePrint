@@ -67,6 +67,19 @@ assert.equal(workBranch(project, null).state, 'unavailable');
   assert.equal(branch.items.length, BRANCH_ITEM_LIMIT, 'sidebar items are capped');
   assert.equal(branch.itemCount, many.length, 'the true total is still reported for the "+N more" note');
   assert.equal(branch.summary, `${many.length} open · 0 For You · 0 claimed · 0 working`, 'the summary keeps reporting real totals, independent of the capped item list');
+  // integrator pass (pc-1492): a `?item=` deep link naming an order outside
+  // the capped preview must still be findable — itemsAll carries the full,
+  // uncapped mapped list so a deep-link lookup never has to search `items`.
+  assert.equal(branch.itemsAll.length, many.length, 'itemsAll is never capped');
+  const beyondCap = many[many.length - 1];
+  assert.ok(
+    branch.itemsAll.some(it => it.id === beyondCap.id),
+    'an order outside the capped preview is still present in itemsAll',
+  );
+  assert.ok(
+    !branch.items.some(it => it.id === beyondCap.id),
+    'sanity: that same order is indeed outside the capped preview',
+  );
 }
 
 // --- Agents -------------------------------------------------------------
@@ -84,6 +97,7 @@ assert.equal(workBranch(project, null).state, 'unavailable');
   assert.equal(branch.summary, '2 seats · 1 working');
   assert.equal(branch.items.length, 2);
   assert.equal(branch.items[0].detail, 'working');
+  assert.equal(branch.itemsAll.length, 2, 'agents also exposes the uncapped list for deep-link lookup');
 }
 assert.equal(agentsBranch(project, { agents: [] , projects: [{id:'pc', folder:'blueprint'}]}).state, 'empty');
 assert.equal(agentsBranch(project, {}).state, 'unavailable');
@@ -109,6 +123,7 @@ assert.equal(papersBranch(null).state, 'unavailable');
   assert.equal(branch.state, 'available');
   assert.match(branch.summary, /1 item.*observed 2026-09-13T00:00:00Z/);
   assert.equal(branch.items[0].href, 'https://github.com/org/repo/pull/1');
+  assert.equal(branch.itemsAll.length, 1, 'delivery also exposes the uncapped list for deep-link lookup');
 }
 // Delivery — not configured is explicit, not empty.
 assert.equal(deliveryBranch(project, {}, { state: 'not_configured', repositories: [] }).state, 'unavailable');

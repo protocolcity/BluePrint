@@ -100,7 +100,12 @@ export async function boot(opts = {}) {
   let pendingDeepLinkItem = null;
   function applyDeepLinkItem(branch, itemId) {
     const found = currentBranches(viewState.snapshot()).find(b => b.key === branch);
-    const item = found && found.items.find(it => String(it.id) === itemId);
+    // Search the branch's full uncapped list (itemsAll), not the
+    // BRANCH_ITEM_LIMIT-capped preview (items) — a shared/refreshed/back-
+    // forward URL naming an item outside the sidebar/canvas preview must
+    // still resolve, or pendingDeepLinkItem retries forever against the same
+    // truncated slice.
+    const item = found && (found.itemsAll || found.items).find(it => String(it.id) === itemId);
     if (item) {
       viewState.setItem(item);
       pendingDeepLinkItem = null;
@@ -235,7 +240,14 @@ export async function boot(opts = {}) {
   function captureFocusKey() {
     const active = document.activeElement;
     const ds = active && active.dataset;
-    if (ds && ds.itemId) return `[data-branch="${ds.branch}"][data-item-id="${ds.itemId}"]`;
+    // The branch-item chip/button and the detail box's Open link share the
+    // same branch+item-id (they name the same item); data-role disambiguates
+    // which of them was actually focused so restoreFocus doesn't snap focus
+    // from the Open link back onto the item chip/button after a repaint.
+    if (ds && ds.itemId) {
+      const role = ds.role ? `[data-role="${ds.role}"]` : '';
+      return `[data-branch="${ds.branch}"][data-item-id="${ds.itemId}"]${role}`;
+    }
     if (ds && ds.branch) return `[data-branch="${ds.branch}"]`;
     if (ds && ds.relPath) return `[data-rel-path="${ds.relPath}"]`;
     if (active && active.getAttribute) {
@@ -429,6 +441,14 @@ export async function boot(opts = {}) {
       const external = /^https?:\/\//.test(snap.item.href);
       a.href = external ? snap.item.href : withReturnTo(snap.item.href);
       if (external) { a.target = '_blank'; a.rel = 'noopener'; }
+      // captureFocusKey()/withFocusPreserved() need dataset identity to
+      // restore focus here across an operations-driven repaint (every poll
+      // replaceChildren()s this box) — data-role distinguishes this link
+      // from the branch-item chip/button that names the same item.
+      a.dataset.branch = snap.item.branch;
+      a.dataset.itemId = String(snap.item.id);
+      a.dataset.role = 'open-link';
+      a.setAttribute('aria-label', `Open ${snap.item.label}`);
       box.append(a);
     }
   }
