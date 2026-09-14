@@ -14,7 +14,7 @@ const project = { relPath: 'blueprint', name: 'BluePrint', hasMd: true };
     sources: [{ name: 'WorkLane', state: 'available' }],
     projects: [{ id: 'pc', folder: 'blueprint', open: 4, attention: 1, claimed: 2, running: 1, state: 'available' }],
     orders: [
-      { id: 'pc-1', project: 'pc', title: 'Fix map', status: 'in_progress', status_word: 'In progress', priority: 2, attention: false },
+      { id: 'pc-1', project: 'pc', title: 'Fix map', status: 'in_progress', status_word: 'In progress', live_with: 'bp-claude-implementer', priority: 2, attention: false },
       { id: 'pc-2', project: 'pc', title: 'Add tests', status: 'in_review', status_word: 'In review', priority: 1, attention: true },
       { id: 'pc-9', project: 'other', title: 'Not this project', status: 'backlog', status_word: 'Backlog', priority: 3 },
     ],
@@ -26,6 +26,12 @@ const project = { relPath: 'blueprint', name: 'BluePrint', hasMd: true };
   assert.equal(branch.items[0].id, 'pc-2', 'higher-priority order sorts first');
   assert.ok(branch.items[0].detail.includes('For You'));
   assert.equal(branch.items[0].href, '/work-order?project=pc&id=pc-2');
+  const claimedItem = branch.items.find(item => item.id === 'pc-1');
+  assert.equal(
+    claimedItem.detail,
+    'Live · bp-claude-implementer',
+    'a claimed in-progress order names its owning seat (STATES_AND_TERMS §5), not status_word',
+  );
 }
 
 // Work — no linked project (empty, not silently zero-with-no-explanation).

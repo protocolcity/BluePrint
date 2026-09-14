@@ -155,7 +155,13 @@ export async function boot(opts = {}) {
   // reader) keeps using replaceState as before, so paging/panning doesn't
   // spam the history stack.
   function projectNavKey(snap) {
-    return JSON.stringify([snap.project ? snap.project.relPath : null, snap.branch || null, snap.item ? String(snap.item.id) : null]);
+    // Papers keeps digging deeper while the project stays focused/branch
+    // stays 'papers' — without the dig path here each nested folder step
+    // would only ever replaceState (nav key unchanged), so Back/Forward
+    // would jump straight past every intermediate folder depth instead of
+    // walking back up one segment at a time.
+    const papersPath = snap.branch === 'papers' ? (snap.dig?.relPath || null) : null;
+    return JSON.stringify([snap.project ? snap.project.relPath : null, snap.branch || null, snap.item ? String(snap.item.id) : null, papersPath]);
   }
   let lastNavKey = null;
   function syncUrl() {
@@ -428,7 +434,11 @@ export async function boot(opts = {}) {
     // cleared, project still selected) repaints the list instead of
     // silently going stale for the whole focus session.
     const stateFingerprint = snap.dig ? '' : JSON.stringify(nodeState);
-    const key = JSON.stringify([snap.dig?.relPath || '', snap.filters, page, stateFingerprint]);
+    // snap.project must be in the key: focusing a project from the canvas can
+    // leave the dig path unchanged (usually empty), so without it the click
+    // handlers below would keep closing over a stale snap with project:null
+    // and dig into a sibling's children instead of switching focus to it.
+    const key = JSON.stringify([snap.dig?.relPath || '', snap.project?.relPath || '', snap.filters, page, stateFingerprint]);
     if (key === browserKey) return;
     const focusKey = captureFocusKey();
     const version = ++browseVersion;

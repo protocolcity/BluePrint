@@ -316,6 +316,33 @@ class HostFocusWiringTests(unittest.TestCase):
         # The no-project branch also restores a plain (non-Papers) dig path.
         self.assertIn("if (path) await digToPath(path);", body)
 
+    def test_browser_key_includes_the_focused_project(self) -> None:
+        # integrator pass: browserKey covered dig path/filters/page/state but
+        # not snap.project, so focusing a project from the canvas (dig path
+        # usually unchanged) left the key untouched — renderBrowser() would
+        # return early and the list's click handlers kept closing over a
+        # stale snap with project: null, digging into a sibling's children
+        # instead of switching focus to it.
+        render_browser = re.search(r"async function renderBrowser\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(render_browser)
+        body = render_browser.group(1)
+        self.assertIn(
+            "const key = JSON.stringify([snap.dig?.relPath || '', snap.project?.relPath || '', snap.filters, page, stateFingerprint]);",
+            body,
+        )
+
+    def test_project_nav_key_includes_the_papers_dig_path(self) -> None:
+        # integrator pass: projectNavKey only covered project/branch/item, so
+        # stepping deeper into a focused project's Papers branch kept
+        # replaceState-ing (nav key unchanged) instead of pushing a history
+        # entry per folder — Back/Forward jumped past every intermediate
+        # depth despite the URL carrying `path`.
+        match = re.search(r"function projectNavKey\(snap\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("snap.branch === 'papers' ? (snap.dig?.relPath || null) : null", body)
+        self.assertIn("papersPath", body)
+
 
 class HitRouterFocusRowsTests(unittest.TestCase):
     def setUp(self) -> None:
