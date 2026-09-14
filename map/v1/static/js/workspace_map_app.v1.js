@@ -585,12 +585,15 @@ export async function boot(opts = {}) {
         button.addEventListener('click', async () => {
           try {
             if (node.isDir) {
-              // A project is focused and this is a top-level lot (dig is
-              // cleared) — tapping a sibling must switch focus to it, not
-              // dig into its children behind the still-focused canvas/
-              // breadcrumb (that leaves canvas/breadcrumb on the old
-              // project while the list shows the new one's children).
-              if (snap.project && !snap.dig) {
+              // A top-level lot (dig cleared) that is a registered/linked
+              // project must always focus the canvas the same way a canvas
+              // lot click or a deep link does — from the workspace hub too,
+              // not only when a sibling project is already focused. Plain
+              // (unmanaged) top-level folders have no project to focus, so
+              // they keep the legacy dig-in browse; folder depth beyond the
+              // hub is otherwise only reached through the focused project's
+              // own Papers branch.
+              if (!snap.dig && node.managed) {
                 selectProjectView({ relPath: node.relPath, name: node.name, hasMd: Boolean(node.hasMd) });
                 return;
               }
