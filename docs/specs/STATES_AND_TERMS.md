@@ -157,7 +157,7 @@ Inventory taken 2026-09-13 across all twelve registered stores (133 open orders)
 | `gate:founder` · `needs:founder-decision` · `needs:founder-present` | Only the person can pass this (publication, money, physical presence) | **For You** = Decide when the gate is human; otherwise a reader chip | filer | Needs you badge; chip |
 | `needs:routing` | WorkLane's stamp: no seat carried it when routing was last computed | none on the desk since .50; the desk computes Needs routing from ungated plus unassigned | WorkLane (engine) | Needs routing chip only when ungated and unassigned |
 | `execution:bounded` | Eligibility for the bounded implementation seats | Readiness (seat eligibility) | filer | Ready for seat |
-| `seat:cloud` | Historical: routed to a cloud/citizen executor that no longer exists | none; awaiting wf-258 | historical | nothing (search only) |
+| `seat:cloud` | Historical: routed to a cloud/citizen executor that no longer exists. Decided 2026-09-14 (wf-258, option A): cloud sessions are never roster seats; they appear only as GitHub evidence on Delivery and as WorkLane claims they sign themselves on Work | none | historical | nothing (search only) |
 | `epic` · `epic:tracking` · `epic:citizen-park` · `goal` | Structural umbrella markers | none; the **Gate** value tracking is the fact | filer | Tracking badge comes from gate_type, not the label |
 | `parent:<id>` · `slice-of:<id>` | Hierarchy | reader (Part of …) | filer | Part of link |
 | `adr:<n>` · `sys:<x>` · `area:<x>` · `phase:<x>` · `host:<x>` | Project taxonomy | none | project | search only |
