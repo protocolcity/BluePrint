@@ -154,14 +154,25 @@ class HostFocusWiringTests(unittest.TestCase):
         # must call selectProjectView so canvas/breadcrumb/list all switch
         # together — digInto alone would leave the canvas/breadcrumb on the
         # old project while only the list moved to the new one's children.
+        #
+        # Installed check (you, pc-1492): the same tap from the workspace hub
+        # (no project focused yet) must also focus a linked/managed lot —
+        # the gate is "is this lot a registered project" (node.managed), not
+        # "is some other project already focused". Plain/unmanaged top-level
+        # folders keep the legacy dig-in browse either way.
         match = re.search(r"button\.addEventListener\('click', async \(\) => \{([\s\S]*?)\n        \}\);\n        list\.append\(button\);", self.host)
         self.assertIsNotNone(match)
         body = match.group(1)
-        self.assertIn("if (snap.project && !snap.dig)", body)
+        self.assertIn("if (!snap.dig && node.managed)", body)
+        self.assertNotIn("if (snap.project && !snap.dig)", body)
         self.assertIn(
             "selectProjectView({ relPath: node.relPath, name: node.name, hasMd: Boolean(node.hasMd) });",
             body,
         )
+        # A plain (unmanaged) top-level folder falls through the managed
+        # gate above and still reaches the legacy dig-in browse — folder
+        # depth without a linked project stays reachable this way.
+        self.assertIn("await digInto(node, {mode:snap.dig ? 'nest' : 'root'});", body)
 
     def test_browser_key_includes_a_node_state_fingerprint(self) -> None:
         # cursor-reviewer second pass: browserKey only covered dig path,
