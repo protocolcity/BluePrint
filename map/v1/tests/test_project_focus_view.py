@@ -558,5 +558,89 @@ class ItemDetailOpenLinkFocusTests(unittest.TestCase):
         self.assertIn('data-role="${ds.role}"', body)
 
 
+class SidebarBoundedNavigationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_sidebar_more_button_grows_the_revealed_page(self) -> None:
+        # integrator pass: the sidebar's "+N more" was static <p> text with
+        # no click handler — a project with >20 items had no way to actually
+        # see the rest (FOCUSED_PROJECT §Rules: "large levels … offer bounded
+        # navigation"). It must be a real button that reveals more.
+        self.assertIn("let sidebarRevealCount = null;", self.host)
+        self.assertIn("sidebarRevealCount = BRANCH_ITEM_LIMIT;", self.host)
+        self.assertIn("more.type = 'button';", self.host)
+        self.assertIn("more.addEventListener('click', () => { sidebarRevealCount += BRANCH_ITEM_LIMIT; scheduleRepaint(); });", self.host)
+
+    def test_canvas_more_chip_is_not_a_dead_click(self) -> None:
+        # integrator pass: the canvas fan's "+N more" chip carried no item
+        # id, so the branch-item click case returned without doing anything,
+        # even though its own aria-label told the person to use the sidebar.
+        match = re.search(r"case 'branch-item': \{([\s\S]*?)\n      \}", self.host)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("if (!itemId) {", body)
+        self.assertIn("sidebarRevealCount += BRANCH_ITEM_LIMIT;", body)
+
+
+class DeepLinkAndPopstateNavKeyRegressionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_apply_project_params_does_not_reselect_an_unchanged_project(self) -> None:
+        # integrator pass: applyProjectParams() called selectProjectView()
+        # unconditionally on every popstate, including an md-only change,
+        # which reset branch/item/dig and re-triggered the branch-item enter
+        # animation even when the popped URL matched the current selection.
+        params_fn = re.search(r"async function applyProjectParams\(initial\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(params_fn)
+        body = params_fn.group(1)
+        self.assertIn("const projectChanged = !viewState.snapshot().project || viewState.snapshot().project.relPath !== projectPath;", body)
+        self.assertIn("if (projectChanged) {", body)
+        self.assertIn("if (projectChanged || viewState.snapshot().branch !== branch) await toggleBranchView(branch);", body)
+
+    def test_apply_project_params_treats_a_bare_path_as_papers(self) -> None:
+        # integrator pass: ?project=…&path=… was ignored unless branch=papers
+        # was also present — a shared/restored URL naming folder depth but no
+        # branch could never reopen Papers at that depth.
+        params_fn = re.search(r"async function applyProjectParams\(initial\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(params_fn)
+        self.assertIn("const branch = initial.get('branch') || (path ? 'papers' : null);", params_fn.group(1))
+
+
+class SelectedItemStaysVisibleAfterRefreshTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_selected_item_is_pinned_back_into_its_branchs_preview(self) -> None:
+        # integrator pass: after an operations/remote refresh re-sorted and
+        # re-sliced a branch's preview, a selected item that fell outside the
+        # new cap stayed selected (detail box/breadcrumb) but vanished from
+        # the capped sidebar list and canvas fan — breaking "sidebar, canvas
+        # and breadcrumb share one selection".
+        self.assertIn("function ensureSelectedItemVisible(branches, item)", self.host)
+        fn = re.search(r"function ensureSelectedItemVisible\(branches, item\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(fn)
+        self.assertIn("branch.itemsAll || items", fn.group(1))
+        self.assertIn("lastBranches = ensureSelectedItemVisible(currentBranches(snap), snap.item);", self.host)
+
+
+class BrowserPathNamesTheFocusedProjectTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_browser_path_label_names_the_focused_project_with_dig_cleared(self) -> None:
+        # integrator pass: #map-browser-path kept the binder/workspace label
+        # while a project was focused with dig cleared (Work/Agents/
+        # Delivery), even though bp:map-location already named the focused
+        # project — the primary path label at ≤400px never matched.
+        render_browser = re.search(r"async function renderBrowser\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(render_browser)
+        self.assertIn(
+            "document.getElementById('map-browser-path').textContent = snap.dig?.relPath || (snap.project ? snap.project.name : null) || tree.binder?.name || 'Workspace';",
+            render_browser.group(1),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
