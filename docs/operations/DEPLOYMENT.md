@@ -22,7 +22,7 @@ PYTHONPATH=map/v1 .venv/bin/python -m unittest discover -s map/v1/tests
 .venv/bin/python tools/deploy.py activate --workspace /path/to/workspace --release /path/to/workspace/local/blueprint/releases/VERSION
 ```
 
-Activation checks the installed app on a temporary port, replaces only BluePrint's launch agent, and verifies the running version and workspace. A failed activation restores the previous launch-agent configuration. The active receipt is `<workspace>/.blueprint/deployment.json`.
+Activation checks the installed app on a temporary port, replaces only BluePrint's launch agent, and verifies the running version and workspace. After restart it waits up to 60 seconds (override with `--probe-timeout`) for the service to report the expected build, distinguishing a slow start from a wrong build. Re-activating the release that is already live is a fast no-op. A failed activation restores the previous launch-agent configuration. The active receipt is `<workspace>/.blueprint/deployment.json`.
 
 For a workspace retiring older UI ports, specify `--legacy-port 8801 --legacy-port 8802` during the first activation, after stopping their prior listeners. Subsequent activations preserve these options. The single BP process owns the redirect listeners; they do not run additional UIs or engines. GET links redirect to the current origin; legacy writes are refused. `/desk`, `/roster`, and `/workspace-map` resolve to Work, Agents, and Map.
 
