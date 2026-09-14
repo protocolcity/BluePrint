@@ -81,17 +81,30 @@ claims a work order under its own identity):
 
 | Job | Cadence | May | May not |
 |---|---|---|---|
-| **bp-supervisor** | `10,30,50 * * * *`, budget 35m | Collect fresh readiness/lock/ledger state; stop without a model call when the operator stop file exists, no eligible seat has fresh ready work, or provider failures are escalated; otherwise propose and re-validate work and dispatch it onto a seat within its configured cap | Claim, sign, or close a WorkLane order itself; recover a reservation; merge, deploy or change host configuration |
-| **integrator** | `*/20 * * * *`, budget 50m, deterministic script, no model call | Drain orders parked in_review by a registered implementation seat: suites on the seat checkout, PR open/update, reviewer dispatch, findings handling, bounded recovery rounds, merge only on green CI with no findings and a clean checkout, version bump on main, stage, activate only when no seat is in flight, installed-version verification, and the §5 close | Use a bypass-permission flag; act while a fresh `COORDINATOR.lock` exists (see stand-down rule below) |
+| **bp-supervisor** | `10,30,50 * * * *`, budget 35m | Collect fresh readiness/lock/ledger state; stop without a model call when the operator stop file exists, no eligible seat has fresh ready work, or provider failures are escalated; otherwise propose and re-validate work and dispatch it onto a seat within its configured cap | Claim, sign, or close a WorkLane order itself; recover a reservation; merge, deploy or change host configuration; it does not consult `COORDINATOR.lock` and keeps firing on schedule regardless of a live coordinator session |
+| **integrator** | `*/20 * * * *`, budget 50m, deterministic script, no model call | For each of its two configured stores (protocolcity and workforce), drain orders parked in_review by a registered implementation seat: suites on the seat checkout, PR open/update, reviewer dispatch, findings handling, bounded recovery rounds, merge only on green CI with no findings and a clean checkout, version bump on main, stage, activate only when no seat is in flight, installed-version verification, and the PROTOCOL §5 close | Use a bypass-permission flag; act while a fresh `COORDINATOR.lock` exists (see stand-down rule below) |
 | **loop-health** | `5,35 * * * *`, budget 2m, deterministic report, no model call | Read the daemon receipt, the integrator ledger and last pass output, seat locks, the coordinator lock, and the BluePrint/WorkLane HTTP endpoints; write one report line and exit non-zero on a defect so the ledger row reads ERROR and Agents shows a failed job | Dispatch, claim, merge or install anything |
 
-**Stand-down rule.** A live coordinator session keeps `COORDINATOR.lock`
-fresh by rewriting its `updated_at` field, not merely by touching the file;
-while that timestamp is within its TTL, the integrator skips its pass
-entirely (logged as `skipped_coordinator_active`) so the automated loop and
-a live human/coordinator session never act on the same checkout at once.
-loop-health treats a stand-down without a fresh lock as a defect, since that
-would mean the integrator silently stopped working for no honest reason.
+The worker-config contract and README text for `bp-supervisor` still say
+"a `manual` schedule means nothing runs unattended" — that prose predates
+the 2026-09-14 cron registration above and is superseded by this record,
+not the other way around; a future edit to those files should drop the
+manual-only claim rather than restore it here.
+
+**Stand-down rule.** Only **integrator** stands down. A live coordinator
+session keeps the lock file at
+`local/reports/parallel-plan-pass/uplift/COORDINATOR.lock` fresh by
+rewriting its `updated_at` field (not merely by touching the file); while
+`now - updated_at` is under the configured TTL (2400s / 40 minutes by
+default), the integrator skips its pass entirely (logged as
+`skipped_coordinator_active`) so it never acts on a checkout a live
+coordinator session is using. **bp-supervisor** and **loop-health** do not
+check this lock and keep firing on their own schedules even while a
+coordinator session is live; a coordinator working a live implementation
+checkout must rely on the reservation/lock it already holds, not on the
+scheduled loop standing down around it. loop-health treats a stand-down
+without a fresh lock as a defect, since that would mean the integrator
+silently stopped working for no honest reason.
 
 **What a person still does.** Hire or retire a seat; clear an exhausted
 recovery round or an operator stop file; resolve an escalated or failed
