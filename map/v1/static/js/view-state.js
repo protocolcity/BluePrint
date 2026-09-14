@@ -21,10 +21,18 @@
 //   state.setFilter(k, v)         // one of: managed | unmanaged | hidden
 //   state.selectProject({relPath, name}) // focus a project; clears branch/item/dig
 //   state.clearProject()          // return to the workspace (no project in focus)
-//   state.setBranch(key)          // expand a branch; same key again collapses it
+//   state.setBranch(key)          // expand a known branch key; same key again
+//                                 // collapses it; an unknown key is a no-op
 //   state.setItem(item)           // select a detail item inside the open branch
 //   state.clearItem()             // drop the selected detail, keep the branch open
 //   state.snapshot()              // frozen plain object
+
+// The only four virtual sections a project can expose (kept in lockstep
+// with project-focus.js's own BRANCH_KEYS — this module stays import-free,
+// as some harnesses load it standalone via a data: URL). A `?branch=` deep
+// link or a stale click handler naming anything else must be a no-op, not
+// orphan URL/UI state with no expanded branch to show for it.
+const BRANCH_KEYS = Object.freeze(['work', 'agents', 'papers', 'delivery']);
 
 export function createViewState(initial = {}) {
   const listeners = new Set();
@@ -118,6 +126,7 @@ export function createViewState(initial = {}) {
     },
     setBranch(key) {
       if (!state.project) return;
+      if (!BRANCH_KEYS.includes(key)) return;
       state.branch = state.branch === key ? null : key;
       state.item = null;
       if (state.branch !== 'papers') { state.dig = null; state.trail = []; }

@@ -19,6 +19,14 @@ const BRANCH_LABELS = Object.freeze({
 
 export function branchLabel(key) { return BRANCH_LABELS[key] || key; }
 
+// Bounded-navigation guidance for large levels applies to the sidebar list
+// too, not only the canvas fan (map-paint.js's own, smaller
+// BRANCH_ITEM_MAX_SHOWN cap) — an open-ended project (thousands of orders)
+// must not turn #map-branch-items into an unbounded scroll list. Each
+// branch's `summary` already reports the true totals from operations'
+// server-side counts, independent of how many items this array carries.
+export const BRANCH_ITEM_LIMIT = 20;
+
 // The sidebar itself (the existing map-tree-driven project/paper browser)
 // keeps every project reachable while one is in focus (FOCUSED_PROJECT rule:
 // "the other projects stay reachable in a stable sidebar"); this module only
@@ -67,6 +75,7 @@ export function workBranch(project, operations) {
   const items = orders
     .slice()
     .sort((a, b) => (Number(a.priority) || 9) - (Number(b.priority) || 9))
+    .slice(0, BRANCH_ITEM_LIMIT)
     .map(o => ({
       id: o.id,
       label: o.title || o.id,
@@ -78,6 +87,7 @@ export function workBranch(project, operations) {
     state: open === 0 ? 'empty' : 'available',
     summary: `${open} open · ${attention} For You · ${claimed} claimed · ${running} working`,
     items,
+    itemCount: orders.length,
   };
 }
 
@@ -97,7 +107,7 @@ export function agentsBranch(project, operations) {
     return { key, label, state: 'empty', summary: 'No seats hold this project', items: [] };
   }
   const working = rows.filter(a => a.state === 'working').length;
-  const items = rows.map(a => ({
+  const items = rows.slice(0, BRANCH_ITEM_LIMIT).map(a => ({
     id: a.id,
     label: a.name || a.id,
     detail: a.state === 'working' ? 'working' : (a.held ? `live with ${a.held.id}` : (a.badge || a.state)),
@@ -107,6 +117,7 @@ export function agentsBranch(project, operations) {
     key, label, state: 'available',
     summary: `${rows.length} seat${rows.length === 1 ? '' : 's'} · ${working} working`,
     items,
+    itemCount: rows.length,
   };
 }
 
@@ -148,7 +159,7 @@ export function deliveryBranch(project, operations, remote) {
   // the item's own identity (PR number, commit sha, or URL) rather than its
   // position in the list — a list-index id breaks `?item=` deep links and
   // selection whenever the cache reorders or truncates between polls.
-  const items = allItems.slice(0, 20).map(item => {
+  const items = allItems.slice(0, BRANCH_ITEM_LIMIT).map(item => {
     const stableKey = item.number != null ? `n${item.number}`
       : item.sha ? `s${item.sha}`
         : item.url ? `u${item.url}`
@@ -166,6 +177,7 @@ export function deliveryBranch(project, operations, remote) {
     state: allItems.length === 0 ? 'empty' : (anyUnavailable ? 'stale' : 'available'),
     summary: `${allItems.length} item${allItems.length === 1 ? '' : 's'}${observedAt ? ' · observed ' + observedAt : ''}`,
     items,
+    itemCount: allItems.length,
   };
 }
 

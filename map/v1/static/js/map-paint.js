@@ -363,7 +363,7 @@ const BRANCH_ITEM_RADIUS = 130;
 const BRANCH_ITEM_MAX_SHOWN = 8;
 const BRANCH_ANGLE_SPAN = Math.PI / 2.4; // items fan within this arc of the chip
 
-export function paintProjectFocus(world, { project, branches = [], expandedBranch = null } = {}) {
+export function paintProjectFocus(world, { project, branches = [], expandedBranch = null, selectedItem = null } = {}) {
   const layer = world.querySelector('#project-focus-layer');
   if (!layer) return;
   layer.replaceChildren();
@@ -411,11 +411,16 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
         const a = count > 1 ? start + step * idx : angle;
         const ix = Math.cos(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
         const iy = Math.sin(a) * (BRANCH_RADIUS + BRANCH_ITEM_RADIUS);
+        // Canvas and sidebar share one selection (FOCUSED_PROJECT §Rules) —
+        // the chip for the item named by MapViewState.item carries the same
+        // is-selected/aria-current the sidebar list marks it with.
+        const isSelected = Boolean(selectedItem) && selectedItem.branch === branch.key && String(selectedItem.id) === String(item.id);
         const node = el('g', {
-          class: `map-hit map-branch-item${reduceMotion ? '' : ' map-branch-item-enter'}`,
+          class: `map-hit map-branch-item${isSelected ? ' is-selected' : ''}${reduceMotion ? '' : ' map-branch-item-enter'}`,
           transform: `translate(${ix.toFixed(2)},${iy.toFixed(2)})`,
           tabindex: '0', role: 'button',
-          'aria-label': `${item.label}${item.detail ? ', ' + item.detail : ''}`,
+          'aria-label': `${item.label}${item.detail ? ', ' + item.detail : ''}${isSelected ? ', selected' : ''}`,
+          'aria-current': isSelected ? 'true' : null,
           'data-hit-layer': 'branch-item', 'data-branch': branch.key, 'data-item-id': String(item.id),
         });
         node.appendChild(el('rect', { x: -50, y: -16, width: 100, height: 32, rx: 6, class: 'map-branch-item-plate' }));

@@ -275,7 +275,7 @@ export async function boot(opts = {}) {
       world.querySelector('#hub').style.display = 'none';
       world.querySelector('#lots').style.display = 'none';
       if (snap.branch !== 'papers') clearDigIn(world);
-      paintProjectFocus(world, { project: snap.project, branches: lastBranches, expandedBranch: snap.branch });
+      paintProjectFocus(world, { project: snap.project, branches: lastBranches, expandedBranch: snap.branch, selectedItem: snap.item });
       currentOuterRadius = cfg.projectFocusRadius;
       applyCamera();
       renderTrail();
@@ -377,6 +377,8 @@ export async function boot(opts = {}) {
             btn.type = 'button';
             btn.dataset.branch = snap.branch;
             btn.dataset.itemId = String(item.id);
+            const isSelected = Boolean(snap.item) && snap.item.branch === snap.branch && String(snap.item.id) === String(item.id);
+            if (isSelected) { btn.setAttribute('aria-current', 'true'); btn.classList.add('is-selected'); }
             const label = document.createElement('span');
             label.textContent = item.label;
             btn.appendChild(label);
@@ -388,6 +390,18 @@ export async function boot(opts = {}) {
             }
             btn.addEventListener('click', () => { viewState.setItem(item); scheduleRepaint(); });
             itemsHost.appendChild(btn);
+          }
+          // The canvas fan already caps at BRANCH_ITEM_MAX_SHOWN with a "+N
+          // more" chip (map-paint.js) — the sidebar list is wider than that
+          // but still bounded (project-focus.js's BRANCH_ITEM_LIMIT), so a
+          // large project (thousands of open orders) gets the same labelled
+          // count here instead of an ever-taller scroll list with no signal
+          // that it was truncated.
+          if (branch && Number(branch.itemCount) > items.length) {
+            const more = document.createElement('p');
+            more.className = 'map-branch-items-more';
+            more.textContent = `+${branch.itemCount - items.length} more`;
+            itemsHost.appendChild(more);
           }
         }
       }
@@ -427,7 +441,14 @@ export async function boot(opts = {}) {
     const list = document.getElementById('map-browser-list');
     if (!list) return;
     const snap = viewState.snapshot();
-    document.dispatchEvent(new CustomEvent('bp:map-location', {detail:{path:snap.dig?.relPath || ''}}));
+    // map-shell.js's #map-project-context strip matches this path against
+    // operations.projects[].folder — while a project is focused it must
+    // always name that project, even with dig cleared (Work/Agents/Delivery
+    // branches carry no dig path), or the legacy strip keeps showing
+    // workspace-wide totals next to a sidebar/canvas that already switched
+    // to a specific project.
+    const locationPath = snap.project ? snap.project.relPath : (snap.dig?.relPath || '');
+    document.dispatchEvent(new CustomEvent('bp:map-location', {detail:{path:locationPath}}));
     // Sibling badges (open/attention/working) only ever render for top-level
     // lots (see `state` below), and refresh on every 'bp:map-operations'
     // poll — fold nodeState into the key so a poll during focus (dig
@@ -537,9 +558,16 @@ export async function boot(opts = {}) {
     const kids = visibleChildren(await tree.childrenAt(node.relPath));
     if (viewState.snapshot().dig?.relPath !== node.relPath) return;
     // Belt-and-braces: clear the fan layer before every paint so a racing
-    // second click cannot leave A's ring layered under B's.
+    // second click cannot leave A's ring layered under B's. While a project
+    // is focused (Papers folder navigation reuses this same dig machinery),
+    // the exploded canvas already owns the visual and the sidebar list is
+    // the only way to browse — painting the legacy fan here too would leave
+    // stray, clickable folder chips in the gaps around it, and the hit
+    // router ranks dig-in above branch items so they could steal input.
     clearDigIn(world);
-    paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220 });
+    if (!viewState.snapshot().project) {
+      paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220 });
+    }
     renderTrail();
   }
 
@@ -554,38 +582,76 @@ export async function boot(opts = {}) {
     scheduleRepaint();
   }
 
+  // Shared by every crumb model below (plain workspace dig, focused-project
+  // branch/item, and focused-project Papers) so the DOM building/attachment
+  // rules — home styling, separators, disabled = current position — live in
+  // one place.
+  function renderCrumbs(el, crumbs) {
+    el.hidden = false;
+    el.replaceChildren();
+    crumbs.forEach((crumb, i) => {
+      if (i > 0) {
+        const sep = document.createElement('span');
+        sep.className = 'map-trail-sep';
+        sep.textContent = '›';
+        el.appendChild(sep);
+      }
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'map-trail-crumb' + (i === 0 ? ' map-trail-home' : '');
+      btn.textContent = crumb.label;
+      if (crumb.onClick) btn.addEventListener('click', crumb.onClick); else btn.disabled = true;
+      el.appendChild(btn);
+    });
+  }
+
+  // Papers reuses the plain dig/trail machinery while a project is focused
+  // (toggleBranchView), so trail[0] is always the project root itself —
+  // "nested" is only the folder depth beyond that root. Collapsing the
+  // crumb at `depth` pops back to that many nested segments (0 = project
+  // root). No paintDigIn here: the exploded canvas owns the visual while a
+  // project is focused (see digInto()'s matching guard); renderBrowser()
+  // picks up the new dig path on its own key change.
+  function collapsePapersTrailTo(depth) {
+    page = 0;
+    while (viewState.snapshot().trail.length > depth + 1) viewState.popDig();
+    clearDigIn(world);
+    renderTrail();
+    scheduleRepaint();
+  }
+
   function renderTrail() {
     syncUrl();
     const el = document.getElementById(cfg.chromeIds.trail);
     if (!el) return;
     const snap = viewState.snapshot();
     // FOCUSED_PROJECT §Rules — "Sidebar, canvas and breadcrumb share one
-    // selection." A focused project always shows Home › Project [› Branch
-    // [› Item]], not the raw Papers dig trail (that only surfaces once the
-    // Papers branch is the expanded one, as its own nested crumbs below).
+    // selection." A focused project always shows Home › Project › … — the
+    // raw Papers dig trail never appears on its own; once Papers is the
+    // expanded branch its nested folder depth extends this same crumb model
+    // instead of replacing it, so the focused project/branch is never
+    // dropped from the breadcrumb during the primary Papers browse flow.
     if (snap.project && snap.branch !== 'papers') {
-      el.hidden = false;
-      el.replaceChildren();
       const crumbs = [
         { label: tree.binder?.name || 'hub', onClick: clearProjectFocusView },
         { label: snap.project.name, onClick: () => { viewState.clearBranch(); scheduleRepaint(); } },
       ];
       if (snap.branch) crumbs.push({ label: branchLabel(snap.branch), onClick: () => { viewState.clearItem(); scheduleRepaint(); } });
       if (snap.item) crumbs.push({ label: snap.item.label, onClick: null });
-      crumbs.forEach((crumb, i) => {
-        if (i > 0) {
-          const sep = document.createElement('span');
-          sep.className = 'map-trail-sep';
-          sep.textContent = '›';
-          el.appendChild(sep);
-        }
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'map-trail-crumb' + (i === 0 ? ' map-trail-home' : '');
-        btn.textContent = crumb.label;
-        if (crumb.onClick) btn.addEventListener('click', crumb.onClick); else btn.disabled = true;
-        el.appendChild(btn);
+      renderCrumbs(el, crumbs);
+      return;
+    }
+    if (snap.project && snap.branch === 'papers') {
+      const nested = snap.trail.slice(1); // trail[0] is the project root itself
+      const crumbs = [
+        { label: tree.binder?.name || 'hub', onClick: clearProjectFocusView },
+        { label: snap.project.name, onClick: () => { viewState.clearBranch(); scheduleRepaint(); } },
+        { label: branchLabel('papers'), onClick: nested.length > 0 ? () => collapsePapersTrailTo(0) : null },
+      ];
+      nested.forEach((entry, idx) => {
+        crumbs.push({ label: entry.name, onClick: idx < nested.length - 1 ? () => collapsePapersTrailTo(idx + 1) : null });
       });
+      renderCrumbs(el, crumbs);
       return;
     }
     const trail = viewState.snapshot().trail;
@@ -747,7 +813,10 @@ export async function boot(opts = {}) {
     page = 0;
     const popped = viewState.popDig();
     clearDigIn(world);
-    if (popped) {
+    // Same fan-under-focused-canvas guard as digInto() — Papers folder
+    // navigation shares this dig machinery while a project is focused, and
+    // the legacy fan must never paint over/under the exploded canvas.
+    if (popped && !viewState.snapshot().project) {
       const kids = visibleChildren(await tree.childrenAt(popped.relPath));
       clearDigIn(world);
       paintDigIn(world, popped, kids.slice(0, pageSize), { radius: 220 });

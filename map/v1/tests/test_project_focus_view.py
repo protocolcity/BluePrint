@@ -19,6 +19,7 @@ _HOST = _HERE.parent / "static" / "js" / "workspace_map_app.v1.js"
 _CSS = _HERE.parent / "static" / "css" / "workspace_map.css"
 _HTML = _HERE.parent / "static" / "workspace_map.html"
 _ROUTER = _HERE.parent / "static" / "js" / "map-hit-router.js"
+_FOCUS = _HERE.parent / "static" / "js" / "project-focus.js"
 
 
 class ProjectFocusPaintTests(unittest.TestCase):
@@ -370,6 +371,141 @@ class ResponsiveAndMotionTests(unittest.TestCase):
     def test_branch_item_motion_honors_reduced_motion(self) -> None:
         self.assertIn(".map-branch-item-enter", self.css)
         self.assertIn(".bp-reduce-motion .map-branch-item", self.css)
+
+
+class DigInFanUnderFocusTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_dig_into_does_not_paint_the_legacy_fan_while_a_project_is_focused(self) -> None:
+        # integrator pass: digInto() (shared by Papers folder navigation,
+        # toggleBranchView, and digToPath) always called paintDigIn() after
+        # its fetch resolved, even while a project was focused — leaving
+        # stray, clickable dig-in chips in the gaps around the exploded
+        # canvas that the hit router ranks above branch items.
+        match = re.search(r"async function digInto\(node, \{ mode = 'root' \} = \{\}\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("if (!viewState.snapshot().project) {\n      paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220 });\n    }", body)
+
+    def test_backspace_does_not_paint_the_legacy_fan_while_a_project_is_focused(self) -> None:
+        match = re.search(r"if \(ev\.key !== 'Backspace'\) return;([\s\S]*?)\n  \}\);", self.host)
+        self.assertIsNotNone(match)
+        self.assertIn("if (popped && !viewState.snapshot().project)", match.group(1))
+
+
+class PapersBreadcrumbUnderFocusTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_papers_breadcrumb_extends_the_focused_project_crumb_model(self) -> None:
+        # integrator pass: renderTrail() fell back to the raw Papers dig
+        # trail whenever branch === 'papers', dropping the focused project
+        # and Papers branch from the breadcrumb during the primary browse
+        # flow — sidebar, canvas and breadcrumb must share one selection.
+        match = re.search(r"if \(snap\.project && snap\.branch === 'papers'\)\s*\{([\s\S]*?)\n      return;\n    \}", self.host)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("nested = snap.trail.slice(1)", body)
+        self.assertIn("snap.project.name", body)
+        self.assertIn("branchLabel('papers')", body)
+
+    def test_papers_breadcrumb_collapse_does_not_paint_the_legacy_fan(self) -> None:
+        match = re.search(r"function collapsePapersTrailTo\(depth\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(match)
+        self.assertNotIn("paintDigIn", match.group(1))
+
+
+class ProjectContextStripUnderFocusTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_map_location_names_the_focused_project_even_with_dig_cleared(self) -> None:
+        # integrator pass: renderBrowser() always dispatched bp:map-location
+        # with only the dig path — while a project was focused with dig
+        # cleared (Work/Agents/Delivery), that path was '', so the legacy
+        # #map-project-context strip (map-shell.js) kept showing
+        # workspace-wide totals instead of the focused project's.
+        match = re.search(r"async function renderBrowser\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("const locationPath = snap.project ? snap.project.relPath : (snap.dig?.relPath || '');", body)
+        self.assertIn("detail:{path:locationPath}", body)
+
+
+class ItemSelectionSyncTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.paint = _PAINT.read_text(encoding="utf-8")
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_paint_project_focus_receives_the_selected_item(self) -> None:
+        # integrator pass: paintProjectFocus() never received snap.item, so
+        # the canvas had no way to mark the same item selected in the
+        # sidebar — canvas/sidebar selection was not fully synchronized.
+        self.assertIn("selectedItem = null", self.paint)
+        self.assertIn("isSelected = Boolean(selectedItem) && selectedItem.branch === branch.key", self.paint)
+        self.assertIn("paintProjectFocus(world, { project: snap.project, branches: lastBranches, expandedBranch: snap.branch, selectedItem: snap.item });", self.host)
+
+    def test_project_panel_marks_the_active_item_row(self) -> None:
+        panel = re.search(r"function renderProjectPanel\(snap\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(panel)
+        self.assertIn("btn.setAttribute('aria-current', 'true')", panel.group(1))
+
+
+class ProjectPanelGridPlacementTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.css = _CSS.read_text(encoding="utf-8")
+        self.html = _HTML.read_text(encoding="utf-8")
+
+    def test_sidebar_wrapper_carries_the_grid_placement(self) -> None:
+        # integrator pass: #map-project-panel had no grid-column/grid-row of
+        # its own (only .map-browser did), so it auto-placed into column 2
+        # of .map-chrome and could overlap the SVG canvas instead of
+        # stacking with the browser in column 1.
+        self.assertIn('id="map-sidebar"', self.html)
+        self.assertIn("#map-sidebar { grid-column: 1; grid-row: 2;", self.css)
+
+    def test_project_panel_and_browser_are_both_inside_the_sidebar_wrapper(self) -> None:
+        sidebar = re.search(r'<div id="map-sidebar"[^>]*>([\s\S]*?)\n        </div>', self.html)
+        self.assertIsNotNone(sidebar)
+        self.assertIn('class="map-chrome-hit map-chrome-panel map-browser"', sidebar.group(1))
+        self.assertIn('id="map-project-panel"', sidebar.group(1))
+
+
+class BranchKeyValidationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.view = _VIEW.read_text(encoding="utf-8")
+
+    def test_set_branch_rejects_an_unknown_key(self) -> None:
+        # integrator pass: setBranch()/applyProjectParams() accepted any
+        # branch query value, so a deep link like ?branch=foo could leave
+        # orphan URL state with no expanded branch UI to match it.
+        self.assertIn("const BRANCH_KEYS = Object.freeze(['work', 'agents', 'papers', 'delivery']);", self.view)
+        block = re.search(r"setBranch\(key\)\s*\{([\s\S]*?)\n\s*\},", self.view).group(1)
+        self.assertIn("if (!BRANCH_KEYS.includes(key)) return;", block)
+
+
+class BoundedSidebarBranchItemsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.focus = _FOCUS.read_text(encoding="utf-8")
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_work_and_agents_branches_cap_their_item_lists(self) -> None:
+        # integrator pass: work-branch sidebar items were uncapped (operations
+        # may return thousands of open orders) while the canvas already caps
+        # at BRANCH_ITEM_MAX_SHOWN — long projects got an unbounded scroll
+        # list in the sidebar.
+        self.assertIn("export const BRANCH_ITEM_LIMIT", self.focus)
+        self.assertIn(".slice(0, BRANCH_ITEM_LIMIT)\n    .map(o => ({", self.focus)
+        self.assertIn("rows.slice(0, BRANCH_ITEM_LIMIT).map(a => ({", self.focus)
+        self.assertIn("allItems.slice(0, BRANCH_ITEM_LIMIT).map(item => {", self.focus)
+        self.assertIn("itemCount: orders.length", self.focus)
+        self.assertIn("itemCount: rows.length", self.focus)
+        self.assertIn("itemCount: allItems.length", self.focus)
+
+    def test_sidebar_shows_a_labelled_count_for_the_truncated_remainder(self) -> None:
+        self.assertIn("Number(branch.itemCount) > items.length", self.host)
+        self.assertIn("map-branch-items-more", self.host)
 
 
 if __name__ == "__main__":
