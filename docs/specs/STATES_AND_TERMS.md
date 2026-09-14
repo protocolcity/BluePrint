@@ -108,8 +108,13 @@ PROTOCOL §5 close — see `worklane/PROTOCOL.md`; stands down while a fresh
 `local/reports/parallel-plan-pass/uplift/COORDINATOR.lock`, TTL 2400s/40
 minutes against the lock's `updated_at`, so it never races a live
 coordinator session), and **loop-health** (cron 5 and 35 past the hour,
-deterministic report; checks the daemon, integrator ledger, locks and the
-BluePrint/WorkLane endpoints; never dispatches, claims, merges or installs).
+deterministic report; checks the daemon, the integrator ledger and its last
+recorded pass outcome, seat locks, the coordinator lock, and the
+BluePrint/WorkLane HTTP endpoints; never dispatches, claims, merges or
+installs). loop-health reads only the last recorded integrator outcome, so
+after a legitimate coordinator handoff it can read a stand-down as a defect
+for up to one integrator cadence (~20 minutes) until the next pass
+overwrites that line — see OPERATIONS_EVOLUTION_2026_09.md.
 Only integrator honors the coordinator lock; bp-supervisor and loop-health
 keep firing on schedule regardless of a live coordinator session. All three
 are **jobs**, never seats, so the Running-is-seats-only rule above still
