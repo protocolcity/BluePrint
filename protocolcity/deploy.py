@@ -20,6 +20,8 @@ import venv
 import zipfile
 
 LABEL = 'com.protocolcity.blueprint-overview'
+DEFAULT_PROBE_TIMEOUT = 60.0
+DEFAULT_PROBE_INTERVAL = 0.3
 
 
 def run(args, **kwargs):
@@ -40,17 +42,34 @@ def metadata(wheel):
     return next(line[9:] for line in values if line.startswith('Version: '))
 
 
-def probe(port, expected, attempts=30, workspace=None):
-    for _ in range(attempts):
+def probe(port, expected, workspace=None, timeout=DEFAULT_PROBE_TIMEOUT, interval=DEFAULT_PROBE_INTERVAL):
+    """Poll /api/operations until the expected build is live or the budget expires."""
+    deadline = time.monotonic() + float(timeout)
+    last_build = None
+    saw_response = False
+    while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(f'http://127.0.0.1:{port}/api/operations', timeout=2) as response:
                 value = json.load(response)
-            if value.get('build') == expected and value.get('workspace') and (workspace is None or value['workspace'].get('path') == str(workspace)):
+            saw_response = True
+            build = value.get('build')
+            workspace_ok = value.get('workspace') and (
+                workspace is None or value['workspace'].get('path') == str(workspace)
+            )
+            if build == expected and workspace_ok:
                 return value
-        except (OSError, ValueError):
+            if build is not None:
+                last_build = build
+        except (OSError, ValueError, json.JSONDecodeError):
             pass
-        time.sleep(.3)
-    raise RuntimeError(f'BluePrint on port {port} did not report build {expected}.')
+        time.sleep(interval)
+    if saw_response and last_build is not None and last_build != expected:
+        raise RuntimeError(
+            f'BluePrint on port {port} reported build {last_build}, expected {expected}.'
+        )
+    if saw_response:
+        raise RuntimeError(f'BluePrint on port {port} did not report build {expected}.')
+    raise RuntimeError(f'BluePrint on port {port} did not respond within {timeout:g}s.')
 
 
 def stage(source, workspace, python):
@@ -88,7 +107,22 @@ def register_agent(domain, agent, label):
     raise RuntimeError('Service registration did not settle: '+result.stderr.strip())
 
 
-def activate_agent(executable, receipt, workspace, port, legacy_ports=None, backup_dir=None):
+def deployment_matches(agent_path, deployment_path, executable, version, port, legacy_ports):
+    """True when the launch agent and deployment receipt already match *version*."""
+    if not agent_path.is_file() or not deployment_path.is_file():
+        return False
+    try:
+        existing = json.loads(deployment_path.read_text())
+        config = plistlib.loads(agent_path.read_bytes())
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return False
+    args = config.get('ProgramArguments', [])
+    existing_legacy = [int(args[i+1]) for i,value in enumerate(args[:-1]) if value=='--legacy-port']
+    return (existing.get('version')==version and existing.get('port')==port
+            and existing.get('entrypoint')==str(executable) and existing_legacy==list(legacy_ports))
+
+
+def activate_agent(executable, receipt, workspace, port, legacy_ports=None, backup_dir=None, probe_timeout=DEFAULT_PROBE_TIMEOUT):
     """Write and bootstrap the single blueprint-overview launch agent.
 
     Shared by ``activate`` (source-built release) and ``upgrade`` (installed
@@ -107,7 +141,7 @@ def activate_agent(executable, receipt, workspace, port, legacy_ports=None, back
     with tempfile.TemporaryFile() as log:
         process = subprocess.Popen([str(executable),'--binder',str(workspace),'--port',str(candidate_port)], stdout=log, stderr=log)
         try:
-            probe(candidate_port, receipt['version'], workspace=workspace)
+            probe(candidate_port, receipt['version'], workspace=workspace, timeout=min(probe_timeout, 30))
         finally:
             process.terminate()
             try: process.wait(timeout=10)
@@ -134,7 +168,7 @@ def activate_agent(executable, receipt, workspace, port, legacy_ports=None, back
         subprocess.run(['launchctl','bootout',domain+'/'+LABEL], capture_output=True, timeout=30)
         agent.write_bytes(plistlib.dumps(config))
         register_agent(domain,agent,LABEL)
-        snapshot = probe(port, receipt['version'], workspace=workspace)
+        snapshot = probe(port, receipt['version'], workspace=workspace, timeout=probe_timeout)
     except Exception:
         subprocess.run(['launchctl','bootout',domain+'/'+LABEL], capture_output=True, timeout=30)
         if previous:
@@ -148,7 +182,7 @@ def activate_agent(executable, receipt, workspace, port, legacy_ports=None, back
     return snapshot
 
 
-def activate(release, workspace, port, legacy_ports=None):
+def activate(release, workspace, port, legacy_ports=None, probe_timeout=DEFAULT_PROBE_TIMEOUT):
     current=workspace/'local/blueprint/current'
     if current.exists() and not current.is_symlink():
         raise RuntimeError('Current release path is not a symlink; inspect before activation.')
@@ -156,7 +190,26 @@ def activate(release, workspace, port, legacy_ports=None):
     executable = Path(receipt['entrypoint'])
     if not executable.is_file() or not executable.resolve().is_relative_to(release):
         raise RuntimeError('Invalid release entrypoint.')
-    snapshot = activate_agent(executable, receipt, workspace, port, legacy_ports, backup_dir=release)
+    agent_path = Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist'
+    deployment_path = workspace/'.blueprint/deployment.json'
+    resolved_legacy = list(legacy_ports) if legacy_ports is not None else None
+    if resolved_legacy is None and agent_path.is_file():
+        prior_args = plistlib.loads(agent_path.read_bytes()).get('ProgramArguments', [])
+        resolved_legacy = [int(prior_args[i+1]) for i,value in enumerate(prior_args[:-1]) if value=='--legacy-port']
+    if resolved_legacy is None:
+        resolved_legacy = []
+    if (current.is_symlink() and current.resolve() == release.resolve()
+            and deployment_matches(agent_path, deployment_path, executable, receipt['version'], port, resolved_legacy)):
+        try:
+            snapshot = probe(port, receipt['version'], workspace=workspace, timeout=probe_timeout)
+            print('Release '+receipt['version']+' is already active at http://127.0.0.1:'+str(port)+'.')
+            print(json.dumps({'active':receipt['version'], 'url':f'http://127.0.0.1:{port}',
+                              'projects':len(snapshot['projects']), 'no_op':True}))
+            return
+        except RuntimeError:
+            pass
+    snapshot = activate_agent(executable, receipt, workspace, port, resolved_legacy, backup_dir=release,
+                              probe_timeout=probe_timeout)
     current=workspace/'local/blueprint/current'
     if current.exists() and not current.is_symlink():
         raise RuntimeError('App activated, but current release path is not a symlink; inspect it before changing commands.')
@@ -192,20 +245,6 @@ def url_map(port, legacy_ports):
     aliases = {'/desk':'/work', '/roster':'/agents', '/workspace-map':'/map', '/overview':'/'}
     lines += [f'http://127.0.0.1:{port}{old}  ->  http://127.0.0.1:{port}{new}' for old, new in aliases.items()]
     return lines
-
-
-def deployment_matches(agent_path, deployment_path, executable, version, port, legacy_ports):
-    if not agent_path.is_file() or not deployment_path.is_file():
-        return False
-    try:
-        existing = json.loads(deployment_path.read_text())
-        config = plistlib.loads(agent_path.read_bytes())
-    except (OSError, ValueError, plistlib.InvalidFileException):
-        return False
-    args = config.get('ProgramArguments', [])
-    existing_legacy = [int(args[i+1]) for i,value in enumerate(args[:-1]) if value=='--legacy-port']
-    return (existing.get('version')==version and existing.get('port')==port
-            and existing.get('entrypoint')==str(executable) and existing_legacy==list(legacy_ports))
 
 
 def _looks_like_workspace(workspace):
@@ -288,6 +327,8 @@ def main():
     parser.add_argument('--release', type=Path)
     parser.add_argument('--port', type=int, default=8803)
     parser.add_argument('--legacy-port', action='append', type=int)
+    parser.add_argument('--probe-timeout', type=float, default=DEFAULT_PROBE_TIMEOUT,
+                        help='Seconds to wait for the service to report the expected build after restart.')
     args=parser.parse_args()
     workspace=args.workspace.expanduser().resolve()
     if not workspace.is_dir(): parser.error('Workspace must already exist.')
@@ -296,6 +337,7 @@ def main():
         stage(args.source.expanduser().resolve(),workspace,args.python)
     else:
         if not args.release: parser.error('--release is required for activation or rollback.')
-        activate(args.release.expanduser().resolve(),workspace,args.port,args.legacy_port)
+        activate(args.release.expanduser().resolve(),workspace,args.port,args.legacy_port,
+                 probe_timeout=args.probe_timeout)
 
 if __name__=='__main__': main()
