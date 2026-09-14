@@ -294,7 +294,11 @@ class OperationsTests(unittest.TestCase):
         and no face; a reminder dated today is Due; a reminder dated
         tomorrow is Kind reminder with no face; an open inbox-report is
         Read. All four fixtures are assigned to You (§5 fixture list)."""
-        today = datetime.now(timezone.utc).date()
+        # Due compares against the host's local calendar day (attention_view.local_today),
+        # so the fixture must use the same clock; the UTC date differs after local
+        # evening and made this test fail at 00:00Z (2026-09-14).
+        from server.attention_view import local_today
+        today = local_today(datetime.now(timezone.utc))
         tomorrow = today + timedelta(days=1)
         self.seed()
         cases = [
