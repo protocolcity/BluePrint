@@ -16,7 +16,7 @@ import {
 } from './map-paint.js';
 import { createHitRouter } from './map-hit-router.js';
 import { createMdViewer } from './md-viewer.js';
-import { buildBranches, branchLabel } from './project-focus.js';
+import { buildBranches, branchLabel, BRANCH_ITEM_LIMIT } from './project-focus.js';
 
 const CONFIG = {
   worldId: 'world',
@@ -278,12 +278,32 @@ export async function boot(opts = {}) {
     return snap.project ? buildBranches(snap.project, latestOperations, latestRemote) : [];
   }
 
+  // A refresh (operations/remote poll) re-sorts and re-slices each branch's
+  // preview independently of the current selection — a selected work/agent/
+  // delivery item can fall outside the new BRANCH_ITEM_LIMIT/BRANCH_ITEM_MAX_
+  // SHOWN cap even though it is still the selected item (viewState.item is
+  // untouched by a repaint). Pin it back into its branch's preview list so
+  // the sidebar/canvas fan keep showing the same selection the detail box
+  // and breadcrumb already show (Rule: "share one selection").
+  function ensureSelectedItemVisible(branches, item) {
+    if (!item) return branches;
+    return branches.map(branch => {
+      if (branch.key !== item.branch) return branch;
+      const items = branch.items || [];
+      if (items.some(it => String(it.id) === String(item.id))) return branch;
+      const full = branch.itemsAll || items;
+      const match = full.find(it => String(it.id) === String(item.id));
+      if (!match) return branch;
+      return { ...branch, items: [match, ...items].slice(0, BRANCH_ITEM_LIMIT) };
+    });
+  }
+
   function repaint() { withFocusPreserved(repaintInner); }
 
   function repaintInner() {
     const snap = viewState.snapshot();
     if (snap.project) {
-      lastBranches = currentBranches(snap);
+      lastBranches = ensureSelectedItemVisible(currentBranches(snap), snap.item);
       world.querySelector('#hub').style.display = 'none';
       world.querySelector('#lots').style.display = 'none';
       if (snap.branch !== 'papers') clearDigIn(world);
@@ -335,12 +355,25 @@ export async function boot(opts = {}) {
     scheduleRepaint();
   }
 
+  // Sidebar-only progressive reveal for a branch's item list — the canvas
+  // fan is fixed-size (map-paint.js BRANCH_ITEM_MAX_SHOWN) so "large levels
+  // disclose counts and offer bounded navigation" (FOCUSED_PROJECT §Rules)
+  // has to happen here: "+N more" grows this by another page instead of
+  // being static, unreachable text. Resets whenever the expanded branch
+  // changes so a fresh branch always opens on the same first page. Starts
+  // null (set the first time a branch is expanded) rather than reading
+  // BRANCH_ITEM_LIMIT eagerly here — some test harnesses run this module
+  // with its imports stripped and never focus a project, so the constant
+  // must only ever be touched from project-focus code paths.
+  let sidebarRevealCount = null;
+
   // One branch open at a time (FOCUSED_PROJECT §Rules: "Opening a branch
   // collapses the previously open one"). Papers keeps the real folder tree,
   // so opening it reuses the existing dig machinery scoped to the project's
   // own folder; the other three branches are flat, already-fetched lists.
   async function toggleBranchView(key) {
     const wasExpanded = viewState.snapshot().branch === key;
+    sidebarRevealCount = BRANCH_ITEM_LIMIT;
     viewState.setBranch(key);
     if (!wasExpanded && key === 'papers') {
       const project = viewState.snapshot().project;
@@ -380,7 +413,16 @@ export async function boot(opts = {}) {
         itemsHost.textContent = 'Browse the folder list below.';
       } else if (snap.branch) {
         const branch = lastBranches.find(b => b.key === snap.branch);
-        const items = (branch && branch.items) || [];
+        // Reveal beyond the base BRANCH_ITEM_LIMIT preview as sidebarRevealCount
+        // grows (the "+N more" button below) — itemsAll is the full, never-
+        // sliced list (project-focus.js); the sidebar is the one surface with
+        // room to page through it (the canvas fan stays fixed-size).
+        const full = (branch && (branch.itemsAll || branch.items)) || [];
+        const items = full.slice(0, sidebarRevealCount);
+        if (snap.item && snap.item.branch === snap.branch && !items.some(it => String(it.id) === String(snap.item.id))) {
+          const selected = full.find(it => String(it.id) === String(snap.item.id));
+          if (selected) items.push(selected);
+        }
         if (items.length === 0) {
           itemsHost.textContent = branch ? branch.summary : '';
         } else {
@@ -407,12 +449,16 @@ export async function boot(opts = {}) {
           // more" chip (map-paint.js) — the sidebar list is wider than that
           // but still bounded (project-focus.js's BRANCH_ITEM_LIMIT), so a
           // large project (thousands of open orders) gets the same labelled
-          // count here instead of an ever-taller scroll list with no signal
-          // that it was truncated.
+          // count here. A real button — not static text — grows
+          // sidebarRevealCount by another page, so "large levels … offer
+          // bounded navigation" (FOCUSED_PROJECT §Rules) is an actual verb,
+          // not just a truncation note.
           if (branch && Number(branch.itemCount) > items.length) {
-            const more = document.createElement('p');
+            const more = document.createElement('button');
+            more.type = 'button';
             more.className = 'map-branch-items-more';
             more.textContent = `+${branch.itemCount - items.length} more`;
+            more.addEventListener('click', () => { sidebarRevealCount += BRANCH_ITEM_LIMIT; scheduleRepaint(); });
             itemsHost.appendChild(more);
           }
         }
@@ -483,7 +529,12 @@ export async function boot(opts = {}) {
     if (key === browserKey) return;
     const focusKey = captureFocusKey();
     const version = ++browseVersion;
-    document.getElementById('map-browser-path').textContent = snap.dig?.relPath || tree.binder?.name || 'Workspace';
+    // While a project is focused with dig cleared (Work/Agents/Delivery),
+    // the sidebar list still shows the top-level lots — but the primary path
+    // label at ≤400px (where the canvas is hidden) must name the focused
+    // project, matching the bp:map-location dispatch above, not fall back to
+    // the workspace-wide binder label.
+    document.getElementById('map-browser-path').textContent = snap.dig?.relPath || (snap.project ? snap.project.name : null) || tree.binder?.name || 'Workspace';
     try {
       const nodes = snap.dig ? visibleChildren(await tree.childrenAt(snap.dig.relPath)) : tree.topLots(snap.filters);
       if (version !== browseVersion) return;
@@ -732,11 +783,19 @@ export async function boot(opts = {}) {
       case 'branch-item': {
         const key = hit.root.getAttribute('data-branch');
         const itemId = hit.root.getAttribute('data-item-id');
+        if (!itemId) {
+          // The canvas "+N more" chip: the fan is fixed-size (map-paint.js
+          // BRANCH_ITEM_MAX_SHOWN), so bounded navigation for the rest of a
+          // large branch happens in the sidebar — grow its revealed page and
+          // bring it into view instead of leaving the chip a dead click.
+          sidebarRevealCount += BRANCH_ITEM_LIMIT;
+          scheduleRepaint();
+          document.getElementById('map-branch-items')?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
         const branch = lastBranches.find(b => b.key === key);
-        const item = itemId && branch ? branch.items.find(it => String(it.id) === itemId) : null;
+        const item = branch ? (branch.itemsAll || branch.items).find(it => String(it.id) === itemId) : null;
         if (item) { viewState.setItem(item); scheduleRepaint(); }
-        // The "+N more" chip carries no item id — the sidebar already lists
-        // every item, so there is nothing further to do here.
         return;
       }
       case 'lots':
@@ -896,28 +955,48 @@ export async function boot(opts = {}) {
   // project root.
   async function applyProjectParams(initial) {
     const projectPath = initial.get('project');
+    const path = initial.get('path');
     if (!projectPath) {
       if (viewState.snapshot().project) clearProjectFocusView();
-      const path = initial.get('path');
       if (path) await digToPath(path);
       else if (viewState.snapshot().dig) resetView();
       return;
     }
-    const treeLot = tree.snapshot().lots.find(lot => lot.relPath === projectPath);
-    selectProjectView({
-      relPath: projectPath,
-      name: (treeLot && treeLot.name) || projectPath.split('/').pop(),
-      hasMd: treeLot ? treeLot.hasMd : false,
-    });
-    const branch = initial.get('branch');
+    // A popstate can re-apply the exact same project/branch/item/path already
+    // in view (e.g. a Back/Forward step that only added or dropped `md`) —
+    // selectProjectView()/toggleBranchView() always reset branch/item/dig, so
+    // calling them unconditionally would collapse and re-expand the whole
+    // focused view (and re-trigger the branch-item enter animation) for a
+    // navigation that never actually changed the project-focus selection.
+    const projectChanged = !viewState.snapshot().project || viewState.snapshot().project.relPath !== projectPath;
+    if (projectChanged) {
+      const treeLot = tree.snapshot().lots.find(lot => lot.relPath === projectPath);
+      selectProjectView({
+        relPath: projectPath,
+        name: (treeLot && treeLot.name) || projectPath.split('/').pop(),
+        hasMd: treeLot ? treeLot.hasMd : false,
+      });
+    }
+    // `path` with no `branch` still names a Papers folder depth — a shared/
+    // restored URL like `?project=…&path=docs/specs` must reopen Papers at
+    // that depth rather than being silently ignored for lacking `branch`.
+    const branch = initial.get('branch') || (path ? 'papers' : null);
     if (branch) {
-      await toggleBranchView(branch);
+      if (projectChanged || viewState.snapshot().branch !== branch) await toggleBranchView(branch);
       if (branch === 'papers') {
-        const path = initial.get('path');
         if (path && path !== viewState.snapshot().dig?.relPath) await digToPath(path);
       }
       const itemId = initial.get('item');
-      if (itemId) applyDeepLinkItem(branch, itemId);
+      if (itemId) {
+        const currentItem = viewState.snapshot().item;
+        if (!currentItem || currentItem.branch !== branch || String(currentItem.id) !== itemId) {
+          applyDeepLinkItem(branch, itemId);
+        }
+      } else if (!projectChanged && viewState.snapshot().item) {
+        viewState.clearItem();
+      }
+    } else if (!projectChanged && viewState.snapshot().branch) {
+      viewState.clearBranch();
     }
   }
 
