@@ -35,6 +35,14 @@ function sourceAvailable(operations, name) {
   return !source || source.state === 'available';
 }
 
+// Matches operations.js/work-order.js: a claimed in-progress order is named
+// by its owning seat ("Live · <seat>"), never by status_word alone — a
+// stored claim is not the same fact as a running agent (STATES_AND_TERMS §5).
+function lifecycleDetail(o) {
+  if (o.status === 'in_progress' && o.live_with) return `Live · ${o.live_with}`;
+  return o.status_word || o.status;
+}
+
 // Work: STATES_AND_TERMS §5 — "All open" already includes every gate; the
 // server-side count (operations.py) is the single source, this module never
 // recomputes it. A WorkLane claim is reported as "claimed", never "working".
@@ -62,7 +70,7 @@ export function workBranch(project, operations) {
     .map(o => ({
       id: o.id,
       label: o.title || o.id,
-      detail: o.attention ? `${o.status_word || o.status} · For You` : (o.status_word || o.status),
+      detail: o.attention ? `${lifecycleDetail(o)} · For You` : lifecycleDetail(o),
       href: `/work-order?project=${encodeURIComponent(opProject.id)}&id=${encodeURIComponent(o.id)}`,
     }));
   return {
