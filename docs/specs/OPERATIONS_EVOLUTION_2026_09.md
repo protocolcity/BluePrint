@@ -82,7 +82,7 @@ claims a work order under its own identity):
 | Job | Cadence | May | May not |
 |---|---|---|---|
 | **bp-supervisor** | `10,30,50 * * * *`, budget 35m | Collect fresh readiness/lock/ledger state; stop without a model call when the operator stop file exists, no eligible seat has fresh ready work, or provider failures are escalated; otherwise propose and re-validate work and dispatch it onto a seat within its configured cap | Claim, sign, or close a WorkLane order itself; recover a reservation; merge, deploy or change host configuration; it does not consult `COORDINATOR.lock` and keeps firing on schedule regardless of a live coordinator session |
-| **integrator** | `*/20 * * * *`, budget 50m, deterministic script, no model call | For each of its two configured stores (protocolcity and workforce), drain orders parked in_review by a registered implementation seat: suites on the seat checkout, PR open/update, reviewer dispatch, findings handling, bounded recovery rounds, merge only on green CI with no findings and a clean checkout, version bump on main, stage, activate only when no seat is in flight, installed-version verification, and the PROTOCOL §5 close | Use a bypass-permission flag; act while a fresh `COORDINATOR.lock` exists (see stand-down rule below) |
+| **integrator** | `*/20 * * * *`, budget 50m, deterministic script, no model call | For each of its two configured stores (protocolcity and workforce), drain orders parked in_review by a registered implementation seat: suites on the seat checkout, PR open/update, reviewer dispatch, findings handling, bounded recovery rounds, merge only on green CI with no findings and a clean checkout, version bump on main, stage, then activate only when no other seat is in flight (staging always runs; a seat in flight skips only the activate step, recorded as `activate_skipped`), installed-version verification, and the PROTOCOL §5 close | Use a bypass-permission flag; act while a fresh `COORDINATOR.lock` exists (see stand-down rule below) |
 | **loop-health** | `5,35 * * * *`, budget 2m, deterministic report, no model call | Read the daemon receipt, the integrator ledger and last pass output, seat locks, the coordinator lock, and the BluePrint/WorkLane HTTP endpoints; write one report line and exit non-zero on a defect so the ledger row reads ERROR and Agents shows a failed job | Dispatch, claim, merge or install anything |
 
 The worker-config contract and README text for `bp-supervisor` still say
@@ -90,6 +90,11 @@ The worker-config contract and README text for `bp-supervisor` still say
 the 2026-09-14 cron registration above and is superseded by this record,
 not the other way around; a future edit to those files should drop the
 manual-only claim rather than restore it here.
+[AGENTS_INTENT.md](AGENTS_INTENT.md)'s 2026-09-13 mockup (§"Information
+hierarchy", `SUPERVISOR (bp-supervisor · manual · budget 35m)`) and its
+JOBS list are earlier art from before this record and likewise predate
+the cron registration; they are superseded by the table above, which
+should govern a future edit to that mockup rather than the reverse.
 
 **Stand-down rule.** Only **integrator** stands down. A live coordinator
 session keeps the lock file at
