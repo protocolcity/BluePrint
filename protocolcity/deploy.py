@@ -107,6 +107,21 @@ def register_agent(domain, agent, label):
     raise RuntimeError('Service registration did not settle: '+result.stderr.strip())
 
 
+def deployment_matches(agent_path, deployment_path, executable, version, port, legacy_ports):
+    """True when the launch agent and deployment receipt already match *version*."""
+    if not agent_path.is_file() or not deployment_path.is_file():
+        return False
+    try:
+        existing = json.loads(deployment_path.read_text())
+        config = plistlib.loads(agent_path.read_bytes())
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return False
+    args = config.get('ProgramArguments', [])
+    existing_legacy = [int(args[i+1]) for i,value in enumerate(args[:-1]) if value=='--legacy-port']
+    return (existing.get('version')==version and existing.get('port')==port
+            and existing.get('entrypoint')==str(executable) and existing_legacy==list(legacy_ports))
+
+
 def activate_agent(executable, receipt, workspace, port, legacy_ports=None, backup_dir=None, probe_timeout=DEFAULT_PROBE_TIMEOUT):
     """Write and bootstrap the single blueprint-overview launch agent.
 
@@ -230,20 +245,6 @@ def url_map(port, legacy_ports):
     aliases = {'/desk':'/work', '/roster':'/agents', '/workspace-map':'/map', '/overview':'/'}
     lines += [f'http://127.0.0.1:{port}{old}  ->  http://127.0.0.1:{port}{new}' for old, new in aliases.items()]
     return lines
-
-
-def deployment_matches(agent_path, deployment_path, executable, version, port, legacy_ports):
-    if not agent_path.is_file() or not deployment_path.is_file():
-        return False
-    try:
-        existing = json.loads(deployment_path.read_text())
-        config = plistlib.loads(agent_path.read_bytes())
-    except (OSError, ValueError, plistlib.InvalidFileException):
-        return False
-    args = config.get('ProgramArguments', [])
-    existing_legacy = [int(args[i+1]) for i,value in enumerate(args[:-1]) if value=='--legacy-port']
-    return (existing.get('version')==version and existing.get('port')==port
-            and existing.get('entrypoint')==str(executable) and existing_legacy==list(legacy_ports))
 
 
 def _looks_like_workspace(workspace):
