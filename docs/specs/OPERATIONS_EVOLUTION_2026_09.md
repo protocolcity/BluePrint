@@ -68,8 +68,36 @@ Keyboard users can activate spatial nodes with Enter or Space.
 MCP mirror verification checks existing Cursor entries as well as Grok/Codex
 mirrors. Synchronization updates only Cursor servers already configured there;
 it does not enroll additional servers or infer session approval/authentication.
-A passing mirror check and successful server handshake do not prove an
-unattended worker has been configured.
+A passing mirror check and successful server handshake are evidence about MCP
+server configuration only; they say nothing about whether a scheduled job is
+enabled or running. The unattended local loop's own evidence is the scheduled
+jobs described below.
+
+## Scheduled local loop
+
+Since 2026-09-14 the local loop runs unattended from three daemon-owned
+WorkForce roster jobs (`kind: job`; none of the three is a seat and none
+claims a work order under its own identity):
+
+| Job | Cadence | May | May not |
+|---|---|---|---|
+| **bp-supervisor** | `10,30,50 * * * *`, budget 35m | Collect fresh readiness/lock/ledger state; stop without a model call when the operator stop file exists, no eligible seat has fresh ready work, or provider failures are escalated; otherwise propose and re-validate work and dispatch it onto a seat within its configured cap | Claim, sign, or close a WorkLane order itself; recover a reservation; merge, deploy or change host configuration |
+| **integrator** | `*/20 * * * *`, budget 50m, deterministic script, no model call | Drain orders parked in_review by a registered implementation seat: suites on the seat checkout, PR open/update, reviewer dispatch, findings handling, bounded recovery rounds, merge only on green CI with no findings and a clean checkout, version bump on main, stage, activate only when no seat is in flight, installed-version verification, and the §5 close | Use a bypass-permission flag; act while a fresh `COORDINATOR.lock` exists (see stand-down rule below) |
+| **loop-health** | `5,35 * * * *`, budget 2m, deterministic report, no model call | Read the daemon receipt, the integrator ledger and last pass output, seat locks, the coordinator lock, and the BluePrint/WorkLane HTTP endpoints; write one report line and exit non-zero on a defect so the ledger row reads ERROR and Agents shows a failed job | Dispatch, claim, merge or install anything |
+
+**Stand-down rule.** A live coordinator session keeps `COORDINATOR.lock`
+fresh by rewriting its `updated_at` field, not merely by touching the file;
+while that timestamp is within its TTL, the integrator skips its pass
+entirely (logged as `skipped_coordinator_active`) so the automated loop and
+a live human/coordinator session never act on the same checkout at once.
+loop-health treats a stand-down without a fresh lock as a defect, since that
+would mean the integrator silently stopped working for no honest reason.
+
+**What a person still does.** Hire or retire a seat; clear an exhausted
+recovery round or an operator stop file; resolve an escalated or failed
+supervisor/integrator pass through the preserved-reservation recovery
+protocol, never a blind retry; and any decision, credential, publication or
+host-configuration change none of the three jobs is authorized to make.
 
 ## Map context and prior FAST implementation
 

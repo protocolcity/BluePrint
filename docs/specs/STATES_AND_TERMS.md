@@ -90,6 +90,24 @@ Badge vocabulary and one-action-per-row rules are in AGENTS_INTENT.
 
 **Running is seats only (pc-1483).** A project's Running count — Overview's `Running` metric and the per-project `running` field the Map reads — counts a fresh heartbeat plus an open shift or in-flight ticket for a **seat** row only. A job (chief-of-staff, health-patrol and the like) shows `working` on its own Agents card while its shift is open, but it never claims a work order and must not add to a project's execution count; the two surfaces apply the identical `group === 'seat'` filter so a working job cannot make Map say a project is running while Overview says it is not.
 
+**The scheduled local loop (pc-1496).** Since 2026-09-14 three daemon-owned
+jobs run the local loop unattended, replacing the earlier claim that a
+passing MCP mirror check does not prove an unattended worker: **bp-supervisor**
+(cron 10, 30, 50 past the hour; proposes and re-validates work and dispatches
+it onto a seat within its configured cap; never claims, signs, closes,
+merges or deploys itself), **integrator** (cron every 20 minutes, deterministic
+script; drains parked orders through suites, review, bounded recovery, PR,
+CI, merge, version bump, stage, activate and the §5 close; stands down while
+a fresh `COORDINATOR.lock` exists so it never races a live coordinator
+session), and **loop-health** (cron 5 and 35 past the hour, deterministic
+report; checks the daemon, integrator ledger, locks and the BluePrint/WorkLane
+endpoints; never dispatches, claims, merges or installs). All three are
+**jobs**, never seats, so the Running-is-seats-only rule above still applies
+to them and a working job never inflates a project's execution count. A
+person still hires or retires a seat, clears an exhausted recovery round or
+an operator stop file, and resolves an escalated or failed pass through the
+preserved-reservation recovery protocol, never a blind retry.
+
 ## 3. What each surface must show per item
 
 Legend: ✓ shown today · ○ missing · — not needed there.
