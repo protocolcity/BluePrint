@@ -205,7 +205,16 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 
 /* Keep navigation outside the scene's hit area and labels readable at rest. */
 .map-chrome { grid-template-columns: 280px 1fr auto; grid-template-rows: auto minmax(0, 1fr) auto; }
-.map-browser { grid-column: 1; grid-row: 2; width: 100%; align-self: start; max-height: 100%; overflow: auto; }
+/* #map-sidebar carries the grid placement for both the folder browser and
+ * the project-focus panel — they are siblings that can both be visible at
+ * once (the browser stays reachable while a project is focused), so they
+ * must stack in normal document flow inside one grid cell rather than each
+ * claim column 1 / row 2 on its own and overlap. Without this wrapper
+ * #map-project-panel had no grid placement at all and auto-flowed into
+ * column 2, overlapping the SVG canvas instead of stacking under the
+ * browser. */
+#map-sidebar { grid-column: 1; grid-row: 2; width: 100%; display: flex; flex-direction: column; gap: 8px; overflow: auto; min-height: 0; }
+.map-browser { width: 100%; }
 #map-browser-list { max-height: none; }
 #map-reset { grid-column: 3; }
 #map-view-options { grid-column: 1; }
@@ -219,7 +228,7 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-hit:hover .map-lot-plate, .map-hit:hover .map-dig-plate { stroke: var(--map-lot-focus); }
 @media (max-width: 700px) {
   .map-chrome { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0,1fr) auto; }
-  .map-browser, .map-project-panel { grid-column: 1 / -1; width: 100%; }
+  #map-sidebar { grid-column: 1 / -1; width: 100%; }
   #map-reset { grid-column: 2; }
   #map-page-controls { grid-column: 2; }
 }
@@ -262,6 +271,7 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-branch-summary { fill: var(--map-muted); font-size: 10px; pointer-events: none; }
 .map-branch-item-plate { fill: var(--map-dig); stroke: #1e2128; stroke-width: 1; }
 .map-branch-item-more .map-branch-item-plate { fill: transparent; stroke: var(--map-chrome-border); stroke-dasharray: 3 3; }
+.map-branch-item.is-selected .map-branch-item-plate { stroke: var(--map-lot-focus); stroke-width: 2; }
 .map-branch-item-label { fill: var(--map-fg); font-size: 10px; pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) {
   .map-branch-item { transition: transform 160ms ease-out, opacity 160ms ease-out; }
@@ -288,7 +298,9 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
   color: var(--map-chrome-fg); font: inherit; cursor: pointer;
 }
 #map-branch-items button:hover, #map-branch-items button:focus-visible { background: #273347; outline: 2px solid #789bce; outline-offset: -2px; }
+#map-branch-items button.is-selected { border: 1px solid var(--map-lot-focus); background: #1c2636; }
 #map-branch-items .map-branch-item-detail { display: block; color: var(--map-muted); font-size: 11px; }
+.map-branch-items-more { margin: 4px 2px 0; color: var(--map-muted); font-size: 11px; }
 #map-item-detail {
   border: 1px solid var(--map-chrome-border); border-radius: 6px; padding: 8px 10px;
   background: rgba(255,255,255,0.03);

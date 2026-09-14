@@ -3,7 +3,7 @@
    (busy, empty, unavailable, stale project data). */
 import assert from 'node:assert/strict';
 import {
-  workBranch, agentsBranch, papersBranch, deliveryBranch, buildBranches, branchLabel,
+  workBranch, agentsBranch, papersBranch, deliveryBranch, buildBranches, branchLabel, BRANCH_ITEM_LIMIT,
 } from '../../static/js/project-focus.js';
 
 const project = { relPath: 'blueprint', name: 'BluePrint', hasMd: true };
@@ -49,6 +49,25 @@ const project = { relPath: 'blueprint', name: 'BluePrint', hasMd: true };
   assert.equal(branch.summary, 'Work source unavailable');
 }
 assert.equal(workBranch(project, null).state, 'unavailable');
+
+// Work — a large project's sidebar list is bounded, matching the canvas's
+// own smaller cap (map-paint.js BRANCH_ITEM_MAX_SHOWN) — the summary still
+// reports the true totals from operations' server-side counts (integrator
+// pass, pc-1492): "bounded-navigation guidance for large levels".
+{
+  const many = Array.from({ length: BRANCH_ITEM_LIMIT + 15 }, (_, i) => ({
+    id: `pc-${i}`, project: 'pc', title: `Order ${i}`, status: 'backlog', status_word: 'Backlog', priority: 3,
+  }));
+  const operations = {
+    sources: [{ name: 'WorkLane', state: 'available' }],
+    projects: [{ id: 'pc', folder: 'blueprint', open: many.length, attention: 0, claimed: 0, running: 0, state: 'available' }],
+    orders: many,
+  };
+  const branch = workBranch(project, operations);
+  assert.equal(branch.items.length, BRANCH_ITEM_LIMIT, 'sidebar items are capped');
+  assert.equal(branch.itemCount, many.length, 'the true total is still reported for the "+N more" note');
+  assert.equal(branch.summary, `${many.length} open · 0 For You · 0 claimed · 0 working`, 'the summary keeps reporting real totals, independent of the capped item list');
+}
 
 // --- Agents -------------------------------------------------------------
 {
