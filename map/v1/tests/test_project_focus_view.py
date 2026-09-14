@@ -496,16 +496,66 @@ class BoundedSidebarBranchItemsTests(unittest.TestCase):
         # at BRANCH_ITEM_MAX_SHOWN — long projects got an unbounded scroll
         # list in the sidebar.
         self.assertIn("export const BRANCH_ITEM_LIMIT", self.focus)
-        self.assertIn(".slice(0, BRANCH_ITEM_LIMIT)\n    .map(o => ({", self.focus)
-        self.assertIn("rows.slice(0, BRANCH_ITEM_LIMIT).map(a => ({", self.focus)
-        self.assertIn("allItems.slice(0, BRANCH_ITEM_LIMIT).map(item => {", self.focus)
+        self.assertIn("items: itemsAll.slice(0, BRANCH_ITEM_LIMIT),", self.focus)
         self.assertIn("itemCount: orders.length", self.focus)
         self.assertIn("itemCount: rows.length", self.focus)
         self.assertIn("itemCount: allItems.length", self.focus)
 
+    def test_branches_also_expose_the_uncapped_list_for_deep_link_lookup(self) -> None:
+        # integrator pass: a `?item=` deep link naming an item outside the
+        # BRANCH_ITEM_LIMIT-capped preview never matched, so refresh/back/
+        # forward to a shared URL opened the branch with no item selected.
+        # itemsAll carries the full, never-sliced mapped list for lookup.
+        self.assertIn("itemsAll,", self.focus)
+        self.assertEqual(self.focus.count("items: itemsAll.slice(0, BRANCH_ITEM_LIMIT),"), 3)
+
     def test_sidebar_shows_a_labelled_count_for_the_truncated_remainder(self) -> None:
         self.assertIn("Number(branch.itemCount) > items.length", self.host)
         self.assertIn("map-branch-items-more", self.host)
+
+
+class DeepLinkItemBeyondCapTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_apply_deep_link_item_searches_the_uncapped_list(self) -> None:
+        # integrator pass: applyDeepLinkItem() only searched found.items
+        # (the BRANCH_ITEM_LIMIT-capped preview), so an item that exists for
+        # the project but falls outside that slice never matched, and
+        # pendingDeepLinkItem retried forever against the same truncation.
+        block = re.search(r"function applyDeepLinkItem\(branch, itemId\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(block)
+        self.assertIn("(found.itemsAll || found.items).find", block.group(1))
+
+
+class ItemDetailOpenLinkFocusTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+
+    def test_open_link_carries_dataset_and_aria_label_for_focus_restoration(self) -> None:
+        # integrator pass: every operations-driven repaint calls
+        # replaceChildren() on #map-item-detail while an item is selected;
+        # the Open link had no dataset.branch/relPath/itemId (and no
+        # aria-label), so captureFocusKey()/withFocusPreserved() could not
+        # restore it and keyboard focus dropped to <body> on each poll.
+        block = re.search(r"function renderItemDetail\(snap\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(block)
+        body = block.group(1)
+        self.assertIn("a.dataset.branch = snap.item.branch;", body)
+        self.assertIn("a.dataset.itemId = String(snap.item.id);", body)
+        self.assertIn("a.dataset.role = 'open-link';", body)
+        self.assertIn("a.setAttribute('aria-label',", body)
+
+    def test_capture_focus_key_disambiguates_the_open_link_from_the_item_button(self) -> None:
+        # The branch-item chip/button and the detail box's Open link now
+        # share the same branch+item-id (they name the same item) — without
+        # a role qualifier, restoreFocus() would snap focus from the Open
+        # link back onto the chip/button after a repaint.
+        block = re.search(r"function captureFocusKey\(\)\s*\{([\s\S]*?)\n  \}", self.host)
+        self.assertIsNotNone(block)
+        body = block.group(1)
+        self.assertIn("ds.role", body)
+        self.assertIn('data-role="${ds.role}"', body)
 
 
 if __name__ == "__main__":
