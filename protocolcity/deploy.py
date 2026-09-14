@@ -186,14 +186,14 @@ def activate(release, workspace, port, legacy_ports=None, probe_timeout=DEFAULT_
     if (current.is_symlink() and current.resolve() == release.resolve()
             and deployment_matches(agent_path, deployment_path, executable, receipt['version'], port, resolved_legacy)):
         try:
-            snapshot = probe(port, receipt['version'], workspace=workspace, timeout=5)
+            snapshot = probe(port, receipt['version'], workspace=workspace, timeout=probe_timeout)
             print('Release '+receipt['version']+' is already active at http://127.0.0.1:'+str(port)+'.')
             print(json.dumps({'active':receipt['version'], 'url':f'http://127.0.0.1:{port}',
                               'projects':len(snapshot['projects']), 'no_op':True}))
             return
         except RuntimeError:
             pass
-    snapshot = activate_agent(executable, receipt, workspace, port, legacy_ports, backup_dir=release,
+    snapshot = activate_agent(executable, receipt, workspace, port, resolved_legacy, backup_dir=release,
                               probe_timeout=probe_timeout)
     current=workspace/'local/blueprint/current'
     if current.exists() and not current.is_symlink():
