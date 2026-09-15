@@ -1,9 +1,12 @@
 # Map V1 Glass — Greenfield Spec
 
-**Status:** DRAFT · Eli / CoS review · design-first · code follows after GO.
-Companion to [`suite/map/INTENT.md`](../workspace/ProtocolCity-src/suite/map/INTENT.md)
-(V1 lock · Hit-Layer SoT · DoD peel order). Written against a **product-thesis
-reframe** — the earlier stack drifted; this doc names what V1 actually is.
+**Status:** HISTORICAL (2026-09-10). Superseded by
+[`MAP_FOCUSED_PROJECT.md`](MAP_FOCUSED_PROJECT.md) and the Map sections of
+[`OPERATIONS_EVOLUTION_2026_09.md`](OPERATIONS_EVOLUTION_2026_09.md).
+Kept as the folder-glass thesis (tree + dig + reader) that focused-exploded
+still sits on. **Do not implement this paper as a competing Map.**
+
+Live code: `map/v1/`.
 
 ## One sentence
 

@@ -125,6 +125,9 @@
 #desk-scope { position: relative; }.bp-scope { position: absolute; right: 0; top: calc(100% + 10px); width: min(360px,80vw); z-index: 3; padding: 20px; background: var(--ov-tile-bg); border: 1px solid var(--ov-tile-border-strong); border-radius: 8px; box-shadow: 0 12px 30px #0005; }.bp-scope p { color: #a3a8b1; font-size: 13px; margin: 12px 0; overflow-wrap: anywhere; }
 .bp-empty { padding: 24px 0; color: var(--ov-muted); }.bp-skip { position: fixed; top: -100px; left: 20px; z-index: 5; padding: 12px; background: var(--ov-tile-bg); }.bp-skip:focus { top: 10px; }
 @keyframes bp-row-changed { from { background-color: var(--ov-tile-border-strong); } to { background-color: transparent; } }.bp-row-changed { animation: bp-row-changed 900ms ease-out; }
+@keyframes bp-row-enter { from { opacity: .4; transform: translateY(4px); } to { opacity: 1; transform: none; } }.bp-row-enter { animation: bp-row-enter 220ms ease-out; }
+@keyframes bp-live-flash { from { box-shadow: inset 0 0 0 1px var(--ov-tile-border-strong); } to { box-shadow: none; } }
+.bp-live-flash { animation: bp-live-flash 400ms ease-out; }
 @media(prefers-reduced-motion:reduce) { .bp-operations * { animation: none !important; transition: none !important; } }
 .bp-new-events { display: block; width: 100%; margin-bottom: 12px; text-align: center; color: var(--ov-link); border-color: var(--ov-link); }
 /* Subtle activity cue on a seat card whose shift is currently open on

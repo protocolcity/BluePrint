@@ -276,8 +276,26 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 @media (prefers-reduced-motion: no-preference) {
   .map-branch-item { transition: transform 160ms ease-out, opacity 160ms ease-out; }
   .map-branch-item.map-branch-item-enter { opacity: 0; transform-origin: center; }
+  .map-branch-chip.is-flash .map-branch-plate { animation: map-branch-flash 280ms ease-out; }
+  .map-branch-summary.is-tick { animation: map-count-tick 220ms ease-out; }
+  #map-branch-buttons button.is-flash { animation: map-branch-flash 280ms ease-out; }
+  #map-branch-buttons button.is-tick { animation: map-count-tick 220ms ease-out; }
+}
+@keyframes map-branch-flash {
+  from { filter: brightness(1.45); }
+  to { filter: brightness(1); }
+}
+@keyframes map-count-tick {
+  from { opacity: .55; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .bp-reduce-motion .map-branch-item { transition: none !important; }
+.bp-reduce-motion .map-branch-chip.is-flash .map-branch-plate,
+.bp-reduce-motion .map-branch-summary.is-tick,
+.bp-reduce-motion #map-branch-buttons button.is-flash,
+.bp-reduce-motion #map-branch-buttons button.is-tick {
+  animation: none !important;
+}
 
 /* The sidebar's project-focus panel — same selection the canvas paints,
  * so keyboard/touch/narrow users get identical actions (Rule: "narrow
@@ -309,4 +327,4 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 @media (prefers-reduced-motion: no-preference) {
   #map-branch-items > button { animation: map-content-arrive 130ms ease-out both; }
 }
-.bp-reduce-motion #map-branch-items *, .bp-reduce-motion .map-branch-item { animation: none !important; transition: none !important; }
+.bp-reduce-motion #map-branch-items *, .bp-reduce-motion .map-branch-item, .bp-reduce-motion .map-branch-chip, .bp-reduce-motion .map-branch-summary, .bp-reduce-motion #map-branch-buttons button { animation: none !important; transition: none !important; }
