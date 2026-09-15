@@ -14,7 +14,7 @@ Map shows one project in focus with its four direct context branches (Work, Agen
 - One selected detail area. Selecting an item (work order, seat, paper, PR) shows its summary there with the same words the owning surface uses and a link to the original evidence; the reader opens from it and returns to the same branch and selection.
 - Sidebar, canvas and breadcrumb share one selection; browser back/forward, refresh and reader return restore it (URL carries project, branch and item).
 - Work counts follow STATES_AND_TERMS §5 (All open includes every gate). A WorkLane claim is "live with", never "working"; only WorkForce shift evidence paints a seat as working (pc-1483).
-- Motion explains what opened and where it came from: a short expansion from the parent node, stable positions for everything else. No force or orbit layout, no ambient movement, no agents moving around. Reduced motion switches to immediate state changes.
+- Motion explains what opened and where it came from: a short expansion from the parent node, stable positions for everything else. A real change-feed event (WorkLane / WorkForce / supervisor file move) may flash the matching branch and tick a changed count once. No force or orbit layout, no ambient movement, no agents moving around. Reduced motion switches to immediate state changes.
 - Narrow widths render the same hierarchy as an expandable list with the same selection model, not a miniature canvas.
 - Text stays legible at the default zoom; large levels disclose counts and offer bounded navigation instead of shrinking labels.
 

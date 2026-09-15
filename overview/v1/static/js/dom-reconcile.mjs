@@ -52,7 +52,7 @@ function syncChildren(oldParent, newParent) {
 }
 
 function flash(node, highlightClass) {
-  if (!highlightClass) return;
+  if (!node || !highlightClass || !node.classList) return;
   node.classList.remove(highlightClass);
   void node.offsetWidth;
   node.classList.add(highlightClass);
@@ -62,7 +62,7 @@ function flash(node, highlightClass) {
    since it runs on every reconcile to know what the row should look
    like now, whether or not that node ends up touched. */
 export function reconcileList(container, items, keyOf, buildRow, options = {}) {
-  const { emptyText, highlightClass = 'bp-row-changed' } = options;
+  const { emptyText, highlightClass = 'bp-row-changed', enterClass = 'bp-row-enter' } = options;
   if (!items.length) {
     const alreadyEmpty = container.dataset.emptyText === (emptyText || '') && container.childNodes.length <= 1;
     if (alreadyEmpty) return;
@@ -99,6 +99,7 @@ export function reconcileList(container, items, keyOf, buildRow, options = {}) {
       cursor = node.nextSibling;
     } else {
       container.insertBefore(rendered, cursor);
+      flash(rendered, enterClass);
       cursor = rendered.nextSibling;
     }
   }

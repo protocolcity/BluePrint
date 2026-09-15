@@ -48,7 +48,10 @@
     }
   }
   document.addEventListener('bp:map-location',event=>{locationPath=event.detail.path;render();});
-  connectChanges(()=>{if(!document.hidden)load();});
+  connectChanges((payload)=>{
+    try { document.dispatchEvent(new CustomEvent('bp:map-changed',{detail:payload||{}})); } catch (_) { /* Map host subscribes when present. */ }
+    if(!document.hidden)load();
+  });
   setInterval(()=>{if(!document.hidden && Date.now()-lastLoad>=60000)load();},1000);
   await load();
 })();
