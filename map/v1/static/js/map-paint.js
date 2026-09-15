@@ -363,7 +363,7 @@ const BRANCH_ITEM_RADIUS = 130;
 const BRANCH_ITEM_MAX_SHOWN = 8;
 const BRANCH_ANGLE_SPAN = Math.PI / 2.4; // items fan within this arc of the chip
 
-export function paintProjectFocus(world, { project, branches = [], expandedBranch = null, selectedItem = null } = {}) {
+export function paintProjectFocus(world, { project, branches = [], expandedBranch = null, selectedItem = null, flashBranches = [], tickBranches = [] } = {}) {
   const layer = world.querySelector('#project-focus-layer');
   if (!layer) return;
   layer.replaceChildren();
@@ -387,8 +387,10 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
     const { x, y } = positions[i];
     const angle = Math.atan2(y, x);
     const isExpanded = expandedBranch === branch.key;
+    const flashing = !reduceMotion && flashBranches.includes(branch.key);
+    const ticking = !reduceMotion && tickBranches.includes(branch.key);
     const chip = el('g', {
-      class: `map-hit map-branch-chip map-branch-${branch.key}${isExpanded ? ' is-expanded' : ''} is-${branch.state}`,
+      class: `map-hit map-branch-chip map-branch-${branch.key}${isExpanded ? ' is-expanded' : ''} is-${branch.state}${flashing ? ' is-flash' : ''}`,
       transform: `translate(${x.toFixed(2)},${y.toFixed(2)})`,
       tabindex: '0', role: 'button',
       'aria-label': `${branch.label}, ${branch.summary}${isExpanded ? ', expanded' : ''}`,
@@ -398,7 +400,7 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
     });
     chip.appendChild(el('rect', { x: -60, y: -22, width: 120, height: 44, rx: 8, class: 'map-branch-plate' }));
     chip.appendChild(el('text', { x: 0, y: -3, class: 'map-branch-label', 'text-anchor': 'middle' }, branch.label));
-    chip.appendChild(el('text', { x: 0, y: 14, class: 'map-branch-summary', 'text-anchor': 'middle' }, truncateLotLabel(branch.summary, 22)));
+    chip.appendChild(el('text', { x: 0, y: 14, class: `map-branch-summary${ticking ? ' is-tick' : ''}`, 'text-anchor': 'middle' }, truncateLotLabel(branch.summary, 22)));
     layer.appendChild(chip);
 
     if (isExpanded && branch.items && branch.items.length > 0) {
