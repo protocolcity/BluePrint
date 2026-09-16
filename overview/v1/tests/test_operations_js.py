@@ -824,13 +824,15 @@ class ProjectsSurfaceTests(unittest.TestCase):
         self.assertIn("link('Delivery','/delivery?'+retained)", compact)
         self.assertIn('return_to:projectReturnTo()', compact)
 
-    def test_agents_now_prefers_live_seats_then_coverage_not_roster_labels(self):
+    def test_agents_now_merges_live_seats_with_coverage_not_roster_labels(self):
         compact = _SRC.replace(' ', '')
         self.assertIn('functionprojectLiveSeats(project)', compact)
         self.assertIn("order.status!=='in_progress'", compact)
         self.assertIn('!order.live_with', compact)
+        self.assertIn('functionprojectCoverageLists(row)', compact)
         agents_fn = _SRC.split('function projectAgentsNowText(project)')[1].split('function projectReturnTo')[0]
-        self.assertIn('projectCoverageStaffedText(project)', agents_fn)
+        self.assertIn('projectCoverageStaffedText(project,{skipProviders:liveProviders})', compact.replace(' ', ''))
+        self.assertIn('seatProviderFromId(id)', agents_fn)
         self.assertNotIn("a.group==='seat'", agents_fn)
         quiet_fn = _SRC.split('function projectIsQuiet(project)')[1].split('function projectActivityRank')[0]
         self.assertIn('projectHasRegisteredSeats(project)', quiet_fn)
@@ -880,6 +882,9 @@ class ProjectsSurfaceHarnessTests(unittest.TestCase):
 
     def test_agents_and_delivery_links_reader_return_to_projects(self) -> None:
         self.assertTrue(self.result['agents_delivery_return'])
+
+    def test_live_claim_still_shows_idle_hired_coverage(self) -> None:
+        self.assertTrue(self.result['live_merges_idle_coverage'])
 
     def test_roster_seat_without_live_order_reads_hired_coverage(self) -> None:
         self.assertTrue(self.result['roster_reads_coverage'])
