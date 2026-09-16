@@ -465,15 +465,49 @@ function projectLiveSeats(project) {
   }
   return seats;
 }
+function projectCoverageRow(project) {
+  return (snapshot.coverage || []).find(item=>item.project===project.id);
+}
+function projectCoverageLists(row) {
+  const present=Array.isArray(row?.present) ? row.present : [];
+  const held=Array.isArray(row?.held) ? row.held : [];
+  return {present, held};
+}
+function projectHasRegisteredSeats(project) {
+  const {present, held}=projectCoverageLists(projectCoverageRow(project));
+  return present.length || held.length;
+}
+function seatProviderFromId(seatId) {
+  if(seatId==='you') return null;
+  const slug=seatId.replace(/^bp-/,'').replace(/-implementer$/,'');
+  if(!slug) return null;
+  return slug.charAt(0).toUpperCase()+slug.slice(1);
+}
+function projectCoverageStaffedText(project, {skipProviders=new Set()}={}) {
+  const row=projectCoverageRow(project);
+  const {present, held}=projectCoverageLists(row);
+  if(!row || (!present.length && !held.length)) return '';
+  const bits=[];
+  const idlePresent=present.filter(provider=>!skipProviders.has(provider));
+  if(idlePresent.length===1) bits.push(`${idlePresent[0]} idle`);
+  else if(idlePresent.length>1) bits.push(`${idlePresent.join(', ')} idle`);
+  for(const provider of held) bits.push(`${provider} off`);
+  return bits.join(', ');
+}
 function projectAgentsNowText(project) {
   if(workforceHeartbeatState()==='unknown') return 'unknown';
   const live=projectLiveSeats(project);
-  if(!live.length) return 'none staffed';
-  return live.map(({id, agent})=>{
-    const name=id.replace(/^bp-/,'').replace(/-implementer$/,'');
-    const badge=agent ? (agent.state==='working' ? 'working' : agent.badge.toLowerCase()) : 'live';
+  const liveBits=live.map(({id, agent, finishing})=>{
+    const name=id==='you' ? 'you' : id.replace(/^bp-/,'').replace(/-implementer$/,'');
+    const badge=agent ? (finishing ? 'finishing' : (agent.state==='working' ? 'working' : agent.badge.toLowerCase())) : 'live';
     return `${name} · ${badge}`;
-  }).join(', ');
+  });
+  const liveProviders=new Set(live.map(({id})=>seatProviderFromId(id)).filter(Boolean));
+  const coverageBits=projectCoverageStaffedText(project, {skipProviders: liveProviders});
+  const parts=[...liveBits];
+  if(coverageBits) parts.push(coverageBits);
+  if(parts.length) return parts.join(', ');
+  return 'none staffed';
 }
 function projectReturnTo() {
   const params=new URLSearchParams();
@@ -549,7 +583,8 @@ function projectComparisonRow(project) {
 }
 function projectIsQuiet(project) {
   if(project.state!=='available') return false;
-  return !project.open && !project.running && !project.claimed && !project.attention && !projectLiveSeats(project).length;
+  return !project.open && !project.running && !project.claimed && !project.attention
+    && !projectLiveSeats(project).length && !projectHasRegisteredSeats(project);
 }
 function projectActivityRank(project) {
   if(project.running) return 0;
