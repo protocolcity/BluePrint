@@ -673,6 +673,12 @@ function overview() {
   reconcileList($('overview-executions'), running, a=>a.id, executionRow, running.length ? {} : {emptyText:overviewExecutionEmpty()});
   const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
+  const unrouted=orders.filter(isUnrouted), unroutedHost=$('overview-unrouted');
+  if(unroutedHost) {
+    unroutedHost.replaceChildren();
+    unroutedHost.append(document.createTextNode('Unrouted '), link(String(unrouted.length), UNROUTED_WORK_HREF));
+    unroutedHost.append(el('span', unrouted.length ? ' — open, ungated orders with no seat' : ' — none right now'));
+  }
   const faceLimit={decide:6,read:6,watch:4,note:4};
   let mutedCount=0;
   for(const face of ['decide','read','watch','due']) {
@@ -719,6 +725,10 @@ function matchesAssignment(order, value) {
   if(value==='you') return order.assigned_you;
   if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
   return order.workers.includes(value.slice(7));
+}
+const UNROUTED_WORK_HREF = '/work?gate=none&assignment=unassigned';
+function isUnrouted(order) {
+  return matchesAssignment(order, 'unassigned') && matchesGate(order, 'none');
 }
 function matchesGate(order, value) {
   if(value==='none') return !order.gate_type && order.blocked_on==='clear';
