@@ -294,7 +294,13 @@ class AgentCardBodyTests(unittest.TestCase):
         self.assertNotIn('Runtime state is unknown when the heartbeat', _HTML)
 
     def test_intro_copy_matches_agents_intent_ruling(self):
-        self.assertIn('Seats claim work orders; jobs run duties. State comes from the WorkForce ledger.', _HTML)
+        legend = _HTML.split('id="agents-legend"')[1].split('</p>')[0]
+        self.assertIn('Seats claim work orders', legend)
+        self.assertIn('Jobs never claim', legend)
+        self.assertIn('Supervisor dispatches seats', legend)
+        self.assertIn('Coverage shows hired vs missing', legend)
+        self.assertIn('2 implementation seats', legend)
+        self.assertIn('WorkForce ledger', legend)
 
     def test_group_headings_drop_the_parenthetical(self):
         self.assertIn('<h2>Seats</h2>', _HTML)
@@ -571,6 +577,8 @@ class SeatCoverageTests(unittest.TestCase):
 
     def test_hiring_footnote_is_present(self):
         self.assertIn('Hiring runs on this Mac through WorkForce; the desk never writes the roster.', _HTML)
+        self.assertIn('not a hire-now list', _HTML)
+        self.assertIn('not For You work', _HTML)
 
     def test_old_agents_subtitle_is_removed(self):
         self.assertNotIn('Registered local agents, schedules, and reported runtime state.', _HTML)
