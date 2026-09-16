@@ -465,15 +465,34 @@ function projectLiveSeats(project) {
   }
   return seats;
 }
+function projectCoverageRow(project) {
+  return (snapshot.coverage || []).find(item=>item.project===project.id);
+}
+function projectHasRegisteredSeats(project) {
+  const row=projectCoverageRow(project);
+  return row && (row.present.length || row.held.length);
+}
+function projectCoverageStaffedText(project) {
+  const row=projectCoverageRow(project);
+  if(!row || (!row.present.length && !row.held.length)) return '';
+  const bits=[];
+  if(row.present.length===1) bits.push(`${row.present[0]} idle`);
+  else if(row.present.length>1) bits.push(`${row.present.join(', ')} idle`);
+  for(const provider of row.held) bits.push(`${provider} off`);
+  return bits.join(', ');
+}
 function projectAgentsNowText(project) {
   if(workforceHeartbeatState()==='unknown') return 'unknown';
   const live=projectLiveSeats(project);
-  if(!live.length) return 'none staffed';
-  return live.map(({id, agent})=>{
-    const name=id.replace(/^bp-/,'').replace(/-implementer$/,'');
-    const badge=agent ? (agent.state==='working' ? 'working' : agent.badge.toLowerCase()) : 'live';
-    return `${name} · ${badge}`;
-  }).join(', ');
+  if(live.length) {
+    return live.map(({id, agent, finishing})=>{
+      const name=id==='you' ? 'you' : id.replace(/^bp-/,'').replace(/-implementer$/,'');
+      const badge=agent ? (finishing ? 'finishing' : (agent.state==='working' ? 'working' : agent.badge.toLowerCase())) : 'live';
+      return `${name} · ${badge}`;
+    }).join(', ');
+  }
+  const staffed=projectCoverageStaffedText(project);
+  return staffed || 'none staffed';
 }
 function projectReturnTo() {
   const params=new URLSearchParams();
@@ -549,7 +568,8 @@ function projectComparisonRow(project) {
 }
 function projectIsQuiet(project) {
   if(project.state!=='available') return false;
-  return !project.open && !project.running && !project.claimed && !project.attention && !projectLiveSeats(project).length;
+  return !project.open && !project.running && !project.claimed && !project.attention
+    && !projectLiveSeats(project).length && !projectHasRegisteredSeats(project);
 }
 function projectActivityRank(project) {
   if(project.running) return 0;

@@ -824,15 +824,16 @@ class ProjectsSurfaceTests(unittest.TestCase):
         self.assertIn("link('Delivery','/delivery?'+retained)", compact)
         self.assertIn('return_to:projectReturnTo()', compact)
 
-    def test_agents_now_counts_only_verified_live_orders_not_roster_labels(self):
+    def test_agents_now_prefers_live_seats_then_coverage_not_roster_labels(self):
         compact = _SRC.replace(' ', '')
         self.assertIn('functionprojectLiveSeats(project)', compact)
         self.assertIn("order.status!=='in_progress'", compact)
         self.assertIn('!order.live_with', compact)
         agents_fn = _SRC.split('function projectAgentsNowText(project)')[1].split('function projectReturnTo')[0]
+        self.assertIn('projectCoverageStaffedText(project)', agents_fn)
         self.assertNotIn("a.group==='seat'", agents_fn)
         quiet_fn = _SRC.split('function projectIsQuiet(project)')[1].split('function projectActivityRank')[0]
-        self.assertIn('projectLiveSeats(project)', quiet_fn)
+        self.assertIn('projectHasRegisteredSeats(project)', quiet_fn)
         self.assertNotIn("a.group==='seat'", quiet_fn)
 
     def test_scan_derived_counts_carry_partial_marker_when_store_is_truncated(self):
@@ -880,8 +881,11 @@ class ProjectsSurfaceHarnessTests(unittest.TestCase):
     def test_agents_and_delivery_links_reader_return_to_projects(self) -> None:
         self.assertTrue(self.result['agents_delivery_return'])
 
-    def test_roster_seat_without_live_order_reads_none_staffed(self) -> None:
-        self.assertTrue(self.result['roster_not_staffed'])
+    def test_roster_seat_without_live_order_reads_hired_coverage(self) -> None:
+        self.assertTrue(self.result['roster_reads_coverage'])
+
+    def test_unregistered_project_reads_none_staffed(self) -> None:
+        self.assertTrue(self.result['unregistered_none_staffed'])
 
     def test_partial_scan_counts_carry_limit_marker(self) -> None:
         self.assertTrue(self.result['partial_counts_marked'])
