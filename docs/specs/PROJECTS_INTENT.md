@@ -38,11 +38,19 @@ Rows are ordered by activity: projects with an agent working first, then by For 
 | Project name, folder, instructions present | project registry (`desk-join.json`, `AGENTS.md`) | file read time |
 | Open, For You, Deferred/Tracking | operations projection of that store; counts follow STATES_AND_TERMS §5 (All open includes every gate) | "Store unavailable" or "partial (limited to 2,000)" replaces the number, never zero |
 | Live / Parked | WorkLane Owner markers (in_progress / in_review) | a claim is a claim; it is never painted as execution |
-| Agents now | WorkForce coverage for the project plus the seat's current badge from AGENTS_INTENT | "none staffed" when no seat is registered for the project; a seat's WORKING badge needs an open shift in the ledger |
+| Agents now | WorkForce coverage for the project plus a working/idle read of its seats | "none staffed" when no seat is registered for the project; "working" needs an open shift in the ledger or daemon in-flight |
 | Last change | most recent WorkLane event or comment in that store (from the change feed / timeline projection), with actor and order id | "no activity recorded" when the store has no events; never the read time |
 | Go links | `/work?project=`, `/work?project=&status=attention`, `/agents` (project filter when available), `/documents?project=`, `/map` project node | links, not buttons; they carry the project id |
 
 Every number opens the surface that explains it. A count with no explanation reachable in one click is a defect.
+
+**Known mismatch:** the running Projects table reads a simpler working/idle
+state per seat (open ledger shift or daemon in-flight), not the full
+WORKING/IDLE/STALE SHIFT/LAST RUN FAILED/UNKNOWN/NOT CONFIGURED/OFF badge
+vocabulary from [AGENTS_INTENT.md](AGENTS_INTENT.md). Agents (the surface)
+remains the source of truth for a seat's exact badge; Projects' "Agents now"
+column is a coarser at-a-glance read, not a duplicate of it. Closing this gap
+is JS/backend work for a future order, not this paper.
 
 ## Interactions
 
@@ -61,6 +69,8 @@ Every number opens the surface that explains it. A count with no explanation rea
 | Engine unavailable (WorkForce) | Agents now: "unknown", never idle |
 
 Held (not in pc-1486): editing project registration; project-level settings; per-project cost meters; any cross-workspace view.
+
+How the desk's own vocabulary maps onto this page (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works-in-one-breath) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
 
 ## Acceptance for pc-1486
 
