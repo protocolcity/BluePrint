@@ -249,7 +249,34 @@ const cases = {};
   };
 }
 
-// 9. syncNote: a fixed-identity note sibling is created once and patched
+// 9. Empty -> non-empty drops the placeholder paragraph so a working seat
+// and "No seats report an open shift" never share one panel (pc-1504).
+{
+  const container = root();
+  const build = (item) => el("div", item.label, "row");
+  reconcileList(container, [], (i) => i.id, build, { emptyText: "No seats report an open shift right now." });
+  reconcileList(container, [{ id: "seat-a", label: "BluePrint · Claude" }], (i) => i.id, build, { emptyText: "No seats report an open shift right now." });
+  cases.empty_to_nonempty_clears_placeholder = {
+    childCount: container.childNodes.length,
+    keys: container.childNodes.map((n) => n.getAttribute("data-key")),
+    emptyParagraphGone: !container.childNodes.some((n) => n.className === "bp-empty"),
+  };
+}
+
+// 10. Non-empty -> empty paints only the honest empty line.
+{
+  const container = root();
+  const build = (item) => el("div", item.label, "row");
+  reconcileList(container, [{ id: "seat-a", label: "BluePrint · Claude" }], (i) => i.id, build, { emptyText: "No seats report an open shift right now." });
+  reconcileList(container, [], (i) => i.id, build, { emptyText: "No seats report an open shift right now." });
+  cases.nonempty_to_empty_shows_only_placeholder = {
+    childCount: container.childNodes.length,
+    text: container.childNodes[0] ? container.childNodes[0].textContent : "",
+    isEmptyClass: container.childNodes[0] ? container.childNodes[0].className === "bp-empty" : false,
+  };
+}
+
+// 11. syncNote: a fixed-identity note sibling is created once and patched
 // in place on repeated calls, never appended again; passing a falsy text
 // removes it.
 {

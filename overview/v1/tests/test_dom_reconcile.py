@@ -97,6 +97,18 @@ class ReconcileListTests(unittest.TestCase):
         self.assertEqual(c["order"], ["p:1", "p:2"])
         self.assertTrue(c["firstNodeReused"])
 
+    def test_empty_to_nonempty_clears_placeholder(self) -> None:
+        c = self.cases["empty_to_nonempty_clears_placeholder"]
+        self.assertEqual(c["childCount"], 1)
+        self.assertEqual(c["keys"], ["seat-a"])
+        self.assertTrue(c["emptyParagraphGone"])
+
+    def test_nonempty_to_empty_shows_only_placeholder(self) -> None:
+        c = self.cases["nonempty_to_empty_shows_only_placeholder"]
+        self.assertEqual(c["childCount"], 1)
+        self.assertEqual(c["text"], "No seats report an open shift right now.")
+        self.assertTrue(c["isEmptyClass"])
+
     def test_sync_note_patches_a_fixed_note_in_place(self) -> None:
         c = self.cases["sync_note_stable"]
         self.assertEqual(c["countBeforeRemoval"], 1)
