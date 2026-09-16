@@ -70,7 +70,6 @@ export function workBranch(project, operations) {
   const open = Number(opProject.open) || 0;
   const attention = Number(opProject.attention) || 0;
   const claimed = Number(opProject.claimed) || 0;
-  const running = Number(opProject.running) || 0;
   const orders = (operations.orders || []).filter(o => o && o.project === opProject.id);
   // itemsAll is the full mapped list (never sliced) — a deep-linked ?item=
   // must be findable even when it falls outside the sidebar/canvas display
@@ -87,7 +86,7 @@ export function workBranch(project, operations) {
   return {
     key, label,
     state: open === 0 ? 'empty' : 'available',
-    summary: `${open} open · ${attention} For You · ${claimed} claimed · ${running} working`,
+    summary: `${open} open · ${attention} For You · ${claimed} live with`,
     items: itemsAll.slice(0, BRANCH_ITEM_LIMIT),
     itemsAll,
     itemCount: orders.length,

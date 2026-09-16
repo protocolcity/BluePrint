@@ -21,7 +21,7 @@ const project = { relPath: 'blueprint', name: 'BluePrint', hasMd: true };
   };
   const branch = workBranch(project, operations);
   assert.equal(branch.state, 'available');
-  assert.equal(branch.summary, '4 open · 1 For You · 2 claimed · 1 working');
+  assert.equal(branch.summary, '4 open · 1 For You · 2 live with');
   assert.equal(branch.items.length, 2, 'only items for the focused project');
   assert.equal(branch.items[0].id, 'pc-2', 'higher-priority order sorts first');
   assert.ok(branch.items[0].detail.includes('For You'));
@@ -66,7 +66,7 @@ assert.equal(workBranch(project, null).state, 'unavailable');
   const branch = workBranch(project, operations);
   assert.equal(branch.items.length, BRANCH_ITEM_LIMIT, 'sidebar items are capped');
   assert.equal(branch.itemCount, many.length, 'the true total is still reported for the "+N more" note');
-  assert.equal(branch.summary, `${many.length} open · 0 For You · 0 claimed · 0 working`, 'the summary keeps reporting real totals, independent of the capped item list');
+  assert.equal(branch.summary, `${many.length} open · 0 For You · 0 live with`, 'the summary keeps reporting real totals, independent of the capped item list');
   // integrator pass (pc-1492): a `?item=` deep link naming an order outside
   // the capped preview must still be findable — itemsAll carries the full,
   // uncapped mapped list so a deep-link lookup never has to search `items`.
