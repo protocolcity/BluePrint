@@ -1,4 +1,9 @@
-> Historical suite design. The current application authority is [../ARCHITECTURE.md](../ARCHITECTURE.md); retained rules below apply only where compatible with the current architecture.
+**Status:** HISTORICAL. The independent `suite/` UI on `:8801` is retired —
+superseded by the single consolidated app on `:8803` (`overview/v1/` +
+`map/v1/`), documented in [../ARCHITECTURE.md](../ARCHITECTURE.md). `:8801`
+survives only as a redirect from that same `:8803` process (see
+[docs/operations/DEPLOYMENT.md](../docs/operations/DEPLOYMENT.md)). Retained
+rules below apply only where compatible with the current architecture.
 
 # suite/ — Client Architecture (L2 binding law)
 
@@ -18,10 +23,12 @@ The suite is a **thin client** over disk-truth engines. Three layers, one direct
 |---|---|---|
 | **Truth** | Files + WorkLane SQLite + WorkForce roster/ledger | No browser source-of-truth |
 | **Projection** | Engines — citylens :8796, WorkLane :8799, WorkForce :8797 | APIs, scene models, generation tokens |
-| **View** | Suite :8801 — `serve.py` BFF + `suite/` JS | Thin client: compose + cache + pulse only |
+| **View** | Suite :8801 (historical) — `serve.py` BFF + `suite/` JS | Thin client: compose + cache + pulse only |
 
-Citizen entry is **:8801 only** (ONE DOOR — pc-277). Engines are API-only from the
-citizen's perspective; their own HTML surfaces are lumber.
+Citizen entry was **:8801 only** (ONE DOOR — pc-277) when this paper was
+binding law. Live citizen entry is now **:8803** — see the status note above.
+Engines are API-only from the citizen's perspective; their own HTML surfaces
+are lumber.
 
 ---
 
