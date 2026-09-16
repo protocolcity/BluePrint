@@ -489,6 +489,16 @@ class CompactRowTests(unittest.TestCase):
         self.assertIn("'Running'", _SRC)
         self.assertIn("'Claimed'", _SRC)
 
+    def test_overview_execution_uses_running_seats_only(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("snapshot.agents.filter(a=>a.group==='seat'&&a.state==='working')", compact)
+        self.assertIn("reconcileList($('overview-executions'),running,", compact)
+
+    def test_overview_execution_empty_is_honest_when_no_running_seats(self):
+        self.assertIn('function overviewExecutionEmpty()', _SRC)
+        self.assertIn('No seats report an open shift right now.', _SRC)
+
 
 class CompactRowReviewFixTests(unittest.TestCase):
     """pc-1484 review recovery 1: recent changes sort, More outside the link,
