@@ -160,6 +160,8 @@ const fixture = {
       last_change: {at: '2026-09-13T14:58:00Z', actor: 'bp-cursor-implementer', order_id: 'pc-1480', verb: 'claim', text: 'claim pc-1480'}},
     {id: 'workforce', name: 'WorkForce', folder: 'workforce', open: 6, attention: 1, deferred: 2,
       claimed: 0, parked: 0, running: 0, state: 'available', partial: false, last_change: null},
+    {id: 'worklane', name: 'WorkLane', folder: 'worklane', open: 3, attention: 0, deferred: 0,
+      claimed: 0, parked: 0, running: 0, state: 'available', partial: false, last_change: null},
     {id: 'comms', name: 'Comms', folder: 'comms', open: 7, attention: 5, deferred: 1,
       claimed: 1, parked: 0, running: 0, state: 'available', partial: true, last_change: null},
     {id: 'tradeos', name: 'tradeOS', folder: 'tradeos', open: 0, attention: 0, deferred: 0,
@@ -182,7 +184,20 @@ const fixture = {
       live_with: 'you', parked_by: null},
   ],
   sources: [{name: 'WorkForce heartbeat', state: 'fresh', last_at: new Date().toISOString()}],
-  coverage: [],
+  coverage: [
+    {project: 'blueprint', name: 'BluePrint', present: ['Claude', 'Cursor'], held: [], missing: [], not_configured: [],
+      text: 'BluePrint: Claude, Cursor', sources: {}, install_hints: {}, hire_commands: {}},
+    {project: 'workforce', name: 'WorkForce', present: ['Claude'], held: [], missing: ['Cursor'], not_configured: ['Grok', 'Codex'],
+      text: 'WorkForce: Claude · missing Cursor · not configured: Grok, Codex', sources: {}, install_hints: {}, hire_commands: {}},
+    {project: 'worklane', name: 'WorkLane', present: [], held: [], missing: [], not_configured: ['Claude', 'Cursor', 'Grok', 'Codex'],
+      text: 'WorkLane: none staffed · not configured: Claude, Cursor, Grok, Codex', sources: {}, install_hints: {}, hire_commands: {}},
+    {project: 'comms', name: 'Comms', present: [], held: [], missing: [], not_configured: ['Claude', 'Cursor', 'Grok', 'Codex'],
+      text: 'Comms: none staffed · not configured: Claude, Cursor, Grok, Codex', sources: {}, install_hints: {}, hire_commands: {}},
+    {project: 'gridfinity', name: 'Gridfinity', present: [], held: [], missing: [], not_configured: ['Claude', 'Cursor', 'Grok', 'Codex'],
+      text: 'Gridfinity: none staffed · not configured: Claude, Cursor, Grok, Codex', sources: {}, install_hints: {}, hire_commands: {}},
+    {project: 'recipes', name: 'Recipes', present: [], held: [], missing: [], not_configured: ['Claude', 'Cursor', 'Grok', 'Codex'],
+      text: 'Recipes: none staffed · not configured: Claude, Cursor, Grok, Codex', sources: {}, install_hints: {}, hire_commands: {}},
+  ],
   truncated: false,
   observed_at: new Date().toISOString(),
 };
@@ -290,10 +305,16 @@ assert.ok(blueprintRow.querySelectorAll('details').length >= 1, 'breakdown discl
 
 const workforceRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domText(row).includes('WorkForce'));
 assert.ok(workforceRow, 'WorkForce row must exist');
-assert.ok(domText(workforceRow).includes('none staffed'), 'roster seat without live order must read none staffed');
+assert.ok(domText(workforceRow).includes('Claude idle'), 'registered seat without live order must read hired coverage');
+
+const worklaneRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domText(row).includes('WorkLane'));
+assert.ok(worklaneRow, 'WorkLane row must exist');
+assert.ok(domText(worklaneRow).includes('none staffed'), 'project with no registered seats must read none staffed');
 
 const commsRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domText(row).includes('Comms'));
-assert.ok(commsRow, 'partial project row must exist');
+assert.ok(commsRow, 'Comms row must exist');
+assert.ok(domText(commsRow).includes('you · live'), 'human live claim must still show in Agents now');
+
 assert.ok(domText(commsRow).includes('partial (limited to 2,000)'), 'partial scan-derived counts must carry the limit marker');
 
 console.log(JSON.stringify({
@@ -302,7 +323,9 @@ console.log(JSON.stringify({
   unavailable_honest: domText(unavailableRow).includes('Store unavailable'),
   links_carry_project: links.some(a => (a.href || '').includes('project=blueprint')),
   agents_delivery_return: Boolean(agentsLink && deliveryLink),
-  roster_not_staffed: domText(workforceRow).includes('none staffed'),
+  roster_reads_coverage: domText(workforceRow).includes('Claude idle'),
+  unregistered_none_staffed: domText(worklaneRow).includes('none staffed'),
+  human_live_claim: domText(commsRow).includes('you · live'),
   partial_counts_marked: domText(commsRow).includes('partial (limited to 2,000)'),
   breakdown_present: blueprintRow.querySelectorAll('details').length >= 1,
 }));
