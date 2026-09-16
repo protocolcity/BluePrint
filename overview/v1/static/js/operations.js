@@ -612,6 +612,9 @@ function overviewExecutionEmpty() {
 }
 function noteLiveSource(change) {
   if (!change || !change.source) return;
+  // Current execution is WorkForce shift evidence only — WorkLane claim
+  // activity must not stamp or flash this panel (pc-1504).
+  if (change.source !== 'workforce') return;
   const host=$('overview-executions');
   if (!host) return;
   host.dataset.liveSource=change.source;
@@ -632,7 +635,7 @@ function overview() {
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
   const running=snapshot.agents.filter(a=>a.group==='seat' && a.state==='working');
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
-  reconcileList($('overview-executions'), running, a=>a.id, executionRow, {emptyText:overviewExecutionEmpty()});
+  reconcileList($('overview-executions'), running, a=>a.id, executionRow, running.length ? {} : {emptyText:overviewExecutionEmpty()});
   const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
   const faceLimit={decide:6,read:6,watch:4,note:4};
