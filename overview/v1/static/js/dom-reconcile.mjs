@@ -77,6 +77,9 @@ export function reconcileList(container, items, keyOf, buildRow, options = {}) {
     return;
   }
   if (container.dataset.emptyText !== undefined) delete container.dataset.emptyText;
+  for (const node of Array.from(container.childNodes)) {
+    if (!node.dataset || node.dataset.key === undefined) container.removeChild(node);
+  }
   const existing = new Map();
   for (const node of Array.from(container.childNodes)) {
     if (!node.dataset || node.dataset.key === undefined) continue;
