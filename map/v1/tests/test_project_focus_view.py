@@ -455,7 +455,7 @@ class ItemSelectionSyncTests(unittest.TestCase):
         # sidebar — canvas/sidebar selection was not fully synchronized.
         self.assertIn("selectedItem = null", self.paint)
         self.assertIn("isSelected = Boolean(selectedItem) && selectedItem.branch === branch.key", self.paint)
-        self.assertIn("paintProjectFocus(world, { project: snap.project, branches: lastBranches, expandedBranch: snap.branch, selectedItem: snap.item });", self.host)
+        self.assertIn("paintProjectFocus(world, {\n        project: snap.project,\n        branches: lastBranches,\n        expandedBranch: snap.branch,\n        selectedItem: snap.item,\n        flashBranches: liveFlashBranches(),\n        tickBranches,\n      });", self.host)
 
     def test_project_panel_marks_the_active_item_row(self) -> None:
         panel = re.search(r"function renderProjectPanel\(snap\)\s*\{([\s\S]*?)\n  \}", self.host)
@@ -651,6 +651,61 @@ class BrowserPathNamesTheFocusedProjectTests(unittest.TestCase):
             "document.getElementById('map-browser-path').textContent = snap.dig?.relPath || (snap.project ? snap.project.name : null) || tree.binder?.name || 'Workspace';",
             render_browser.group(1),
         )
+
+
+class LiveChangeFeedMotionTests(unittest.TestCase):
+    """MAP_FOCUSED_PROJECT motion: one-shot flash on a real change-feed
+    event, named Work counts as 'live with', reduced-motion is instant.
+    Never ambient/orbit/FAST."""
+
+    def setUp(self) -> None:
+        self.host = _HOST.read_text(encoding="utf-8")
+        self.paint = _PAINT.read_text(encoding="utf-8")
+        self.focus = _FOCUS.read_text(encoding="utf-8")
+        self.css = _CSS.read_text(encoding="utf-8")
+
+    def test_work_summary_names_live_with_not_working(self) -> None:
+        work = self.focus.split('export function workBranch')[1].split('export function agentsBranch')[0]
+        self.assertIn("summary: `${open} open · ${attention} For You · ${claimed} live with`", work)
+        self.assertNotIn('${running}', work)
+        self.assertNotIn(' working`', work)
+
+    def test_agents_summary_reserves_working_for_shift_evidence(self) -> None:
+        agents = self.focus.split('export function agentsBranch')[1].split('export function papersBranch')[0]
+        self.assertIn('${working} working', agents)
+        self.assertIn("a.state === 'working'", agents)
+
+    def test_paint_accepts_flash_and_tick_branches(self) -> None:
+        self.assertIn('flashBranches = []', self.paint)
+        self.assertIn('tickBranches = []', self.paint)
+        self.assertIn("flashing ? ' is-flash' : ''", self.paint)
+        self.assertIn("ticking ? ' is-tick' : ''", self.paint)
+
+    def test_flash_and_tick_are_skipped_under_reduced_motion(self) -> None:
+        self.assertIn('const reduceMotion = prefersReducedMotion();', self.paint)
+        self.assertIn('const flashing = !reduceMotion && flashBranches.includes(branch.key);', self.paint)
+        self.assertIn('const ticking = !reduceMotion && tickBranches.includes(branch.key);', self.paint)
+
+    def test_host_flashes_the_branch_named_by_the_change_feed(self) -> None:
+        self.assertIn("document.addEventListener('bp:map-changed'", self.host)
+        self.assertIn("const SOURCE_TO_BRANCH = { worklane: 'work', workforce: 'agents', supervisor: 'agents' };", self.host)
+        self.assertIn('function applyLiveFlash()', self.host)
+        self.assertIn('Date.now() + 400', self.host)
+        self.assertIn('flashBranches: liveFlashBranches()', self.host)
+        self.assertIn('function scheduleCountTickClear()', self.host)
+
+    def test_css_flash_is_one_shot_inside_no_preference(self) -> None:
+        self.assertIn('@keyframes map-branch-flash', self.css)
+        self.assertIn('@keyframes map-count-tick', self.css)
+        self.assertIn('.map-branch-chip.is-flash .map-branch-plate { animation: map-branch-flash 280ms ease-out; }', self.css)
+        self.assertIn('.map-branch-summary.is-tick { animation: map-count-tick 220ms ease-out; }', self.css)
+        flash_rule = self.css.split('@keyframes map-branch-flash')[1].split('@keyframes')[0]
+        self.assertNotIn('infinite', flash_rule)
+
+    def test_reduced_motion_class_kills_flash_and_tick(self) -> None:
+        self.assertIn('.bp-reduce-motion .map-branch-chip.is-flash .map-branch-plate', self.css)
+        self.assertIn('.bp-reduce-motion .map-branch-summary.is-tick', self.css)
+        self.assertIn('animation: none !important;', self.css)
 
 
 if __name__ == "__main__":
