@@ -47,9 +47,9 @@ SEATS (implementation lanes)                                   [what they can cl
 │   Ready for it: 0 · Last run: single-pass complete · 03:12 · 106s                     │
 │   Action: Dispatch now (nothing ready: will stop cleanly)                             │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ ! pos-claude-implementer  OneSeoPOS · Claude · manual                     LAST RUN FAILED
-│   Last run: agent exit rc 1 · Sep 12 19:41 · evidence run/pos-claude-implementer.out  │
-│   Action: Recover preserved reservation (osp-1371) or clear the stale flag            │
+│ ! shop-claude-implementer  Shop · Claude · manual                     LAST RUN FAILED
+│   Last run: agent exit rc 1 · Sep 12 19:41 · evidence run/shop-claude-implementer.out  │
+│   Action: Recover preserved reservation (shop-12) or clear the stale flag            │
 └──────────────────────────────────────────────────────────────────────────────────────┘
 
 JOBS (scheduled duties)                                          next run · last report

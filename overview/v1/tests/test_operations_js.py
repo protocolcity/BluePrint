@@ -1068,5 +1068,50 @@ class DeliverySurfaceTests(unittest.TestCase):
         self.assertIn("deliveryRepo=''", body)
 
 
+class ChangeFeedLiveCueTests(unittest.TestCase):
+    """Change-feed events flash Current execution once (MAP_FOCUSED_PROJECT
+    / OPERATIONS_EVOLUTION: one-shot on a real source event, never ambient).
+    connectChanges() keeps the harness bootMarker shape — payload is read
+    from the document event change-feed.mjs already dispatches."""
+
+    def test_note_live_source_writes_the_cue_and_flashes(self):
+        self.assertIn('function noteLiveSource(change)', _SRC)
+        fn = _SRC.split('function noteLiveSource(change)')[1].split('function overview()')[0]
+        self.assertIn("host.dataset.liveSource=change.source", fn.replace(' ', ''))
+        self.assertIn("$('overview-exec-cue')", fn)
+        self.assertIn('bp-live-flash', fn)
+
+    def test_reduced_motion_skips_the_flash(self):
+        fn = _SRC.split('function noteLiveSource(change)')[1].split('function overview()')[0]
+        self.assertIn("document.body.classList.contains('bp-reduce-motion')", fn)
+        self.assertIn('return;', fn)
+
+    def test_desk_changed_listener_feeds_note_live_source(self):
+        self.assertIn("document.addEventListener('bp:desk-changed',event=>{noteLiveSource(event.detail);});", _SRC)
+
+    def test_exec_cue_exists_in_markup(self):
+        self.assertIn('id="overview-exec-cue"', _HTML)
+
+    def test_connect_changes_callback_keeps_the_harness_boot_marker(self):
+        self.assertIn('connectChanges(()=>{if(!document.hidden){refresh();', _SRC)
+
+    def test_change_feed_parses_the_payload_and_dispatches_desk_changed(self):
+        feed = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'change-feed.mjs').read_text(encoding='utf-8')
+        self.assertIn('JSON.parse(ev.data)', feed)
+        self.assertIn("new CustomEvent('bp:desk-changed'", feed)
+        self.assertIn('onChanged(payload || {})', feed)
+
+    def test_new_rows_enter_with_a_one_shot_class(self):
+        reconcile = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'dom-reconcile.mjs').read_text(encoding='utf-8')
+        self.assertIn("enterClass = 'bp-row-enter'", reconcile)
+
+    def test_live_flash_css_is_one_shot_not_infinite(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('@keyframes bp-live-flash', css)
+        self.assertIn('.bp-live-flash { animation: bp-live-flash 400ms ease-out; }', css)
+        self.assertNotIn('infinite', css.split('@keyframes bp-live-flash')[1].split('@keyframes')[0])
+        self.assertIn('.bp-reduce-motion * { animation: none !important;', css)
+
+
 if __name__ == '__main__':
     unittest.main()

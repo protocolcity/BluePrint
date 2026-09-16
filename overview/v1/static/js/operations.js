@@ -630,6 +630,19 @@ function overviewExecutionEmpty() {
   if(heartbeat.state==='stale') return 'WorkForce heartbeat is stale; running seats may not be reported.';
   return 'No seats report an open shift right now.';
 }
+function noteLiveSource(change) {
+  if (!change || !change.source) return;
+  const host=$('overview-executions');
+  if (!host) return;
+  host.dataset.liveSource=change.source;
+  const observed=change.observed_at ? ` · ${change.source} ${change.observed_at}` : ` · ${change.source}`;
+  const cue=$('overview-exec-cue');
+  if (cue) cue.textContent=observed.replace(/^ · /,'');
+  if (document.body.classList.contains('bp-reduce-motion')) return;
+  host.classList.remove('bp-live-flash');
+  void host.offsetWidth;
+  host.classList.add('bp-live-flash');
+}
 function overview() {
   const orders=snapshot.orders, forYou=orders.filter(o=>o.attention_face);
   // Two independent facts, never merged into one 'Live': Claimed is a
@@ -1711,6 +1724,7 @@ document.addEventListener('keydown',event=>{
 });
 document.addEventListener('click',event=>{if(!$('desk-scope').contains(event.target))$('desk-scope').open=false;});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();freshness();});
+document.addEventListener('bp:desk-changed',event=>{noteLiveSource(event.detail);});
 $('preferences').addEventListener('submit',event=>event.preventDefault());
 $('preferences').addEventListener('change',()=>{interval=Number($('refresh-preference').value);motion=$('motion-preference').value;document.body.classList.toggle('bp-reduce-motion',motion==='off');try{localStorage.setItem('bp-display',JSON.stringify({interval,motion}));$('preference-status').textContent='Saved in this browser.';}catch(error){$('preference-status').textContent='Applied for this page; browser storage is unavailable.';}});
 connectChanges(()=>{if(!document.hidden){refresh();if(page==='timeline')refreshTimeline(false);}},state=>{streamState=state;if(state==='open'){everOpened=true;consecutiveErrors=0;}else if(state==='error'){consecutiveErrors++;}freshness();});
