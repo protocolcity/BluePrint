@@ -31,9 +31,16 @@ come from host capacity policy. A provider that is installed but disabled
 (credits, cost) is still hired and marked **held** in the roster, so the
 desk shows it as OFF rather than missing.
 
-Cloud sessions are **not** part of the standard set. They appear only
-through the evidence they leave (Delivery, Work). See STATES_AND_TERMS
-(cloud sessions are evidence, never seats).
+Cloud sessions (Cursor cloud agents on GitHub, Claude cloud, Grok Bot) are
+**not** part of the standard set. wf-258 decided option A (evidence only,
+2026-09-14): cloud sessions stay off the WorkForce roster permanently — they
+are not seats-in-waiting for a later option B. They appear only through the
+evidence they leave: GitHub pull requests, checks and merges on Delivery by
+author, and, if a cloud session signs a claim or comment through WorkLane
+under its own identity, that hand-off on Work. No remote dispatch adapter, no
+remote liveness on Agents. See [STATES_AND_TERMS.md](STATES_AND_TERMS.md),
+section 6 label matrix, `seat:cloud` row (cloud sessions are evidence, never
+seats).
 
 ## Decision D13: one seat shape, generated, never copied
 
@@ -94,4 +101,6 @@ the install hint; a held one reads OFF.
 | Coverage stated per project on the desk | Guessing from the roster file |
 | Providers detected, missing ones named | A hard-coded four |
 | Hire generated from adapters | A coordinator working around a permission denial |
-| Cloud sessions as evidence | Cloud rows on the roster |
+| Cloud sessions as evidence, permanently (wf-258 option A) | Cloud rows on the roster, now or later |
+
+How the desk's own vocabulary maps onto seats and jobs (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works-in-one-breath) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
