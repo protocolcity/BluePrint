@@ -489,6 +489,21 @@ class CompactRowTests(unittest.TestCase):
         self.assertIn("'Running'", _SRC)
         self.assertIn("'Claimed'", _SRC)
 
+    def test_overview_execution_uses_running_seats_only(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("snapshot.agents.filter(a=>a.group==='seat'&&a.state==='working')", compact)
+        self.assertIn("reconcileList($('overview-executions'),running,", compact)
+
+    def test_overview_execution_empty_is_honest_when_no_running_seats(self):
+        self.assertIn('function overviewExecutionEmpty()', _SRC)
+        self.assertIn('No seats report an open shift right now.', _SRC)
+
+    def test_overview_execution_empty_text_only_when_no_running_seats(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('running.length?{}:{emptyText:overviewExecutionEmpty()}', compact)
+
 
 class CompactRowReviewFixTests(unittest.TestCase):
     """pc-1484 review recovery 1: recent changes sort, More outside the link,
@@ -1073,6 +1088,7 @@ class ChangeFeedLiveCueTests(unittest.TestCase):
     def test_note_live_source_writes_the_cue_and_flashes(self):
         self.assertIn('function noteLiveSource(change)', _SRC)
         fn = _SRC.split('function noteLiveSource(change)')[1].split('function overview()')[0]
+        self.assertIn("change.source!=='workforce'", fn.replace(' ', ''))
         self.assertIn("host.dataset.liveSource=change.source", fn.replace(' ', ''))
         self.assertIn("$('overview-exec-cue')", fn)
         self.assertIn('bp-live-flash', fn)
