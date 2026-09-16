@@ -128,6 +128,36 @@ export async function boot(opts = {}) {
   // repaintInner()/paintProjectFocus() or re-trigger the branch-item enter
   // animation). Gate scheduleRepaint() on a fingerprint of the combined data.
   let lastAppliedDataKey = null;
+  let lastSummaries = {};
+  let lastTickBranches = [];
+  let liveFlash = { branches: [], until: 0 };
+  let tickClearTimer = 0;
+  const SOURCE_TO_BRANCH = { worklane: 'work', workforce: 'agents', supervisor: 'agents' };
+  function liveFlashBranches() {
+    if (Date.now() >= liveFlash.until) return [];
+    return liveFlash.branches;
+  }
+  function applyLiveFlash() {
+    const keys = liveFlashBranches();
+    const reduce = document.body && document.body.classList.contains('bp-reduce-motion');
+    for (const key of ['work', 'agents', 'papers', 'delivery']) {
+      const on = !reduce && keys.includes(key);
+      document.getElementById(`map-branch-${key}`)?.classList.toggle('is-flash', on);
+      document.getElementById(`map-branch-btn-${key}`)?.classList.toggle('is-flash', on);
+    }
+  }
+  function clearCountTicks() {
+    lastTickBranches = [];
+    tickClearTimer = 0;
+    for (const key of ['work', 'agents', 'papers', 'delivery']) {
+      document.getElementById(`map-branch-${key}`)?.querySelector('.map-branch-summary')?.classList.remove('is-tick');
+      document.getElementById(`map-branch-btn-${key}`)?.classList.remove('is-tick');
+    }
+  }
+  function scheduleCountTickClear() {
+    if (tickClearTimer) clearTimeout(tickClearTimer);
+    tickClearTimer = setTimeout(clearCountTicks, 250);
+  }
   function applyDataUpdate() {
     const key = JSON.stringify([latestOperations, latestRemote]);
     if (key === lastAppliedDataKey) return;
@@ -146,6 +176,14 @@ export async function boot(opts = {}) {
     latestOperations = event.detail || null;
     retryPendingDeepLinkItem();
     refreshRemote();
+  });
+  document.addEventListener('bp:map-changed', event => {
+    const source = event.detail && event.detail.source;
+    const branch = SOURCE_TO_BRANCH[source];
+    if (!branch) return;
+    liveFlash = { branches: [branch], until: Date.now() + 400 };
+    applyLiveFlash();
+    if (liveFlash.until) setTimeout(applyLiveFlash, 420);
   });
   const viewer = createMdViewer({
     fetcher: opts.fetcher || fetch,
@@ -304,10 +342,25 @@ export async function boot(opts = {}) {
     const snap = viewState.snapshot();
     if (snap.project) {
       lastBranches = ensureSelectedItemVisible(currentBranches(snap), snap.item);
+      const tickBranches = [];
+      for (const branch of lastBranches) {
+        if (lastSummaries[branch.key] && lastSummaries[branch.key] !== branch.summary) tickBranches.push(branch.key);
+        lastSummaries[branch.key] = branch.summary;
+      }
+      lastTickBranches = tickBranches;
       world.querySelector('#hub').style.display = 'none';
       world.querySelector('#lots').style.display = 'none';
       if (snap.branch !== 'papers') clearDigIn(world);
-      paintProjectFocus(world, { project: snap.project, branches: lastBranches, expandedBranch: snap.branch, selectedItem: snap.item });
+      paintProjectFocus(world, {
+        project: snap.project,
+        branches: lastBranches,
+        expandedBranch: snap.branch,
+        selectedItem: snap.item,
+        flashBranches: liveFlashBranches(),
+        tickBranches,
+      });
+      applyLiveFlash();
+      if (tickBranches.length) scheduleCountTickClear();
       currentOuterRadius = cfg.projectFocusRadius;
       applyCamera();
       renderTrail();
@@ -320,6 +373,7 @@ export async function boot(opts = {}) {
       return;
     }
     lastBranches = [];
+    lastTickBranches = [];
     world.querySelector('#project-focus-layer')?.replaceChildren();
     world.querySelector('#hub').style.display = '';
     // Selected top-level lot = the root of the current dig trail. Passing
@@ -400,6 +454,8 @@ export async function boot(opts = {}) {
         btn.id = `map-branch-btn-${branch.key}`;
         btn.className = `is-${branch.state}`;
         btn.dataset.branch = branch.key;
+        if (liveFlashBranches().includes(branch.key)) btn.classList.add('is-flash');
+        if (lastTickBranches.includes(branch.key)) btn.classList.add('is-tick');
         btn.setAttribute('aria-expanded', snap.branch === branch.key ? 'true' : 'false');
         btn.textContent = `${branch.label} — ${branch.summary}`;
         btn.addEventListener('click', () => toggleBranchView(branch.key));
