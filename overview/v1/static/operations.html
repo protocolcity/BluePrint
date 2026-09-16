@@ -20,11 +20,11 @@
   <section id="overview-view" hidden>
     <section class="bp-panel bp-panel-compact"><div class="bp-section-head"><div><h2>Current execution</h2><p class="bp-muted">Seats with an open WorkForce shift — not the same as a WorkLane claim. <span id="overview-exec-cue"></span></p></div><a href="/agents">All agents</a></div><div id="overview-executions"></div></section>
     <div id="metrics" class="bp-metrics bp-metrics-compact" aria-label="Open work summary"></div>
-    <div class="bp-overview-grid"><section class="bp-panel bp-panel-compact"><div class="bp-section-head"><div><h2>For You</h2><p class="bp-muted">Decide and read first; watch and due stay collapsed.</p></div><a href="/work?attention=any">View all</a></div>
-      <h3 id="for-you-decide-heading">Decide</h3><div id="for-you-decide"></div>
-      <h3 id="for-you-read-heading">Read</h3><div id="for-you-read"></div>
-      <details id="for-you-watch-details"><summary id="for-you-watch-summary">Watch</summary><div id="for-you-watch"></div></details>
-      <details id="for-you-due-details"><summary id="for-you-due-summary">Due</summary><div id="for-you-due"></div></details>
+    <div class="bp-overview-grid"><section class="bp-panel bp-panel-compact"><div class="bp-section-head"><div><h2>For You</h2><p class="bp-muted">Each face can collapse. Watch and Due open when they have items.</p></div><a href="/work?attention=any">View all</a></div>
+      <details id="for-you-decide-details" class="bp-for-you-face" open><summary id="for-you-decide-summary">Decide</summary><div id="for-you-decide"></div></details>
+      <details id="for-you-read-details" class="bp-for-you-face" open><summary id="for-you-read-summary">Read</summary><div id="for-you-read"></div></details>
+      <details id="for-you-watch-details" class="bp-for-you-face"><summary id="for-you-watch-summary">Watch</summary><div id="for-you-watch"></div></details>
+      <details id="for-you-due-details" class="bp-for-you-face"><summary id="for-you-due-summary">Due</summary><div id="for-you-due"></div></details>
       <p id="mute-status" class="bp-muted"></p><button id="restore-muted" type="button" hidden>Restore muted items</button><p class="bp-muted"><a href="/calendar">Calendar</a> · <a href="/calendar.ics">Subscribe / export</a></p></section><aside class="bp-panel bp-panel-compact"><div class="bp-section-head"><h2>Source status</h2><a href="/connections">Details</a></div><div id="source-list"></div><p class="bp-muted bp-note">A fresh read is not proof that every service is healthy.</p></aside></div>
     <section class="bp-panel bp-panel-compact"><div class="bp-section-head"><div><h2>Recent changes</h2><p class="bp-muted">Last meaningful updates across readable stores.</p></div><a href="/work">All work</a></div><div id="overview-recent"></div></section>
     <section class="bp-panel bp-panel-compact"><div class="bp-section-head"><div><h2>Across your projects</h2><p class="bp-muted">Open work by local project store.</p></div><a href="/projects">All projects</a></div><div id="project-summary" class="bp-project-grid"></div></section>
