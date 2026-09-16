@@ -32,14 +32,15 @@ come from host capacity policy. A provider that is installed but disabled
 desk shows it as OFF rather than missing.
 
 Cloud sessions (Cursor cloud agents on GitHub, Claude cloud, Grok Bot) are
-**not** part of the standard set. [wf-258](../../../workforce) decided
-option A (evidence only, 2026-09-14): cloud sessions stay off the WorkForce
-roster permanently — they are not seats-in-waiting for a later option B.
-They appear only through the evidence they leave: GitHub pull requests,
-checks and merges on Delivery by author, and, if a cloud session signs a
-claim or comment through WorkLane under its own identity, that hand-off on
-Work. No remote dispatch adapter, no remote liveness on Agents. See
-STATES_AND_TERMS (cloud sessions are evidence, never seats).
+**not** part of the standard set. wf-258 decided option A (evidence only,
+2026-09-14): cloud sessions stay off the WorkForce roster permanently — they
+are not seats-in-waiting for a later option B. They appear only through the
+evidence they leave: GitHub pull requests, checks and merges on Delivery by
+author, and, if a cloud session signs a claim or comment through WorkLane
+under its own identity, that hand-off on Work. No remote dispatch adapter, no
+remote liveness on Agents. See [STATES_AND_TERMS.md](STATES_AND_TERMS.md),
+section 6 label matrix, `seat:cloud` row (cloud sessions are evidence, never
+seats).
 
 ## Decision D13: one seat shape, generated, never copied
 

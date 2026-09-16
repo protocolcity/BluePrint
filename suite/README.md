@@ -1,4 +1,13 @@
-# suite/ — BluePrint citizen glass (`:8801`)
+# suite/ — BluePrint citizen glass (`:8801`, historical)
+
+**Status:** HISTORICAL. The independent `suite/` UI on `:8801` is retired —
+superseded by the single consolidated app on `:8803` (`overview/v1/` +
+`map/v1/`), documented in [../ARCHITECTURE.md](../ARCHITECTURE.md) and
+[../README.md](../README.md). `:8801` survives only as a redirect from that
+same `:8803` process (see
+[docs/operations/DEPLOYMENT.md](../docs/operations/DEPLOYMENT.md)). Retained
+below as design history; do not re-port or launch this folder as a second
+door.
 
 **Law (founder, 2026-07-28 · pc-581):** this folder **is** the ship face —
 Map glass over WorkLane + WorkForce. Port-era peers (`desk_v1`, `roster_v1`,

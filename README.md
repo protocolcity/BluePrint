@@ -19,9 +19,12 @@ supposed to follow, who is hired, and which work orders are still open.
 brew install protocolcity/tap/blueprint
 blueprint setup                 # soft default ~/BluePrint — or use an existing folder
 # blueprint setup ~/my-workspace --create --yes
-blueprint serve --root ~/BluePrint --with-engines
+blueprint serve --foreground --root ~/BluePrint
 # → http://127.0.0.1:8803/  (Overview; Map digs in at /workspace-map)
 ```
+
+Want it to stay up after you close the terminal? `blueprint service start --root ~/BluePrint`
+installs a macOS login service instead of running in the foreground.
 
 That installs the **BluePrint** suite (CLI + Map) and pulls WorkLane + WorkForce
 from PyPI. The taught CLI is **`blueprint` only** (no `protocolcity` command
@@ -43,7 +46,7 @@ py -3 -m pip install --upgrade pip
 py -3 -m pip install --upgrade "protocolcity-blueprint[engines]"
 # Forever-compat alias: py -3 -m pip install --upgrade "protocolcity[engines]"
 blueprint setup "$env:USERPROFILE\ProtocolCity" --create --yes
-blueprint serve --root "$env:USERPROFILE\ProtocolCity"
+blueprint serve --foreground --root "$env:USERPROFILE\ProtocolCity"
 # If blueprint is not on PATH: py -3 -m protocolcity setup … / serve …
 ```
 
