@@ -33,7 +33,7 @@ A project is fully staffed when it has, **for each provider present on the host*
 
 Providers, in the order the desk lists them: **Claude** (`claude`, pin `claude-sonnet-5`), **Cursor** (`cursor-agent`, pin `composer-2.5`), **Grok** (`grok`, pin `grok-4.6`), **Codex** (`codex`, pin per host policy). A provider that is installed but disabled by the founder (credits, cost) is still hired and marked **held** in the roster, so the desk shows it as OFF rather than missing.
 
-Cloud sessions (Cursor cloud agents on GitHub, Claude cloud, Grok Bot) are **not** part of the standard set until [wf-258](../../../workforce) is decided; they appear only through the evidence they leave (Delivery, Work).
+Cloud sessions (Cursor cloud agents on GitHub, Claude cloud, Grok Bot) are **not** part of the standard set. [wf-258](../../../workforce) decided option A (evidence only, 2026-09-14): cloud sessions stay off the WorkForce roster permanently — they are not seats-in-waiting for a later option B. They appear only through the evidence they leave: GitHub pull requests, checks and merges on Delivery by author, and, if a cloud session signs a claim or comment through WorkLane under its own identity, that hand-off on Work. No remote dispatch adapter, no remote liveness on Agents.
 
 ## Decision D13: one seat shape, generated, never copied
 
@@ -65,4 +65,6 @@ Agents (AGENTS_INTENT) gains one line per project under the Seats group: "BluePr
 | Coverage stated per project on the desk | Guessing from the roster file |
 | Providers detected, missing ones named | A hard-coded four |
 | Founder-run hire while the classifier refuses, with the script generated | The coordinator working around a permission denial |
-| Cloud sessions as evidence until wf-258 decides | Cloud rows on the roster today |
+| Cloud sessions as evidence, permanently (wf-258 option A) | Cloud rows on the roster, now or later |
+
+How the desk's own vocabulary maps onto seats and jobs (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works-in-one-breath) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).

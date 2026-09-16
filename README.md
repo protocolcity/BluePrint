@@ -20,7 +20,7 @@ brew install protocolcity/tap/blueprint
 blueprint setup                 # soft default ~/BluePrint — or use an existing folder
 # blueprint setup ~/my-workspace --create --yes
 blueprint serve --root ~/BluePrint --with-engines
-# → http://127.0.0.1:8801/  (Overview; Map digs in at /workspace-map)
+# → http://127.0.0.1:8803/  (Overview; Map digs in at /workspace-map)
 ```
 
 That installs the **BluePrint** suite (CLI + Map) and pulls WorkLane + WorkForce
@@ -47,7 +47,7 @@ blueprint serve --root "$env:USERPROFILE\ProtocolCity"
 # If blueprint is not on PATH: py -3 -m protocolcity setup … / serve …
 ```
 
-**3. Open** [http://127.0.0.1:8801/](http://127.0.0.1:8801/) in your browser.  
+**3. Open** [http://127.0.0.1:8803/](http://127.0.0.1:8803/) in your browser.  
 Leave PowerShell open while you use the suite. Stop with **Ctrl+C**.
 
 Stuck? [WINDOWS_FIRST_USER.md](WINDOWS_FIRST_USER.md) — PATH fixes, firewall, next-day restart.
@@ -73,7 +73,7 @@ Cloning BluePrint alone does **not** install a runnable suite.
 ## What you see
 
 Open the suite → **Overview** (system summary). Click **Map**
-(`http://127.0.0.1:8801/workspace-map`) to dig in — then click a project
+(`http://127.0.0.1:8803/workspace-map`) to dig in — then click a project
 folder to see:
 
 | Layer | What it is | Typical files |
@@ -88,6 +88,15 @@ folder to see:
 
 Nobody has to learn a “city” metaphor to run the system. Optional deeper docs
 (Charter, Manifesto) keep the brand story for people who want it.
+
+### How the desk works, in one breath
+
+**Projects** are registered stores, one per app or repo. **Agents** are hired
+seats with live shifts — a roster row, not proof a process is running.
+**Delivery** is GitHub evidence, collected separately from execution.
+**WorkLane** (work orders) and **WorkForce** (execution) stay separate
+packages; BluePrint only maps what they report. Full vocabulary:
+[docs/specs/SUITE_VOCABULARY.md](docs/specs/SUITE_VOCABULARY.md).
 
 ## Why
 
