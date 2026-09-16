@@ -468,31 +468,46 @@ function projectLiveSeats(project) {
 function projectCoverageRow(project) {
   return (snapshot.coverage || []).find(item=>item.project===project.id);
 }
-function projectHasRegisteredSeats(project) {
-  const row=projectCoverageRow(project);
-  return row && (row.present.length || row.held.length);
+function projectCoverageLists(row) {
+  const present=Array.isArray(row?.present) ? row.present : [];
+  const held=Array.isArray(row?.held) ? row.held : [];
+  return {present, held};
 }
-function projectCoverageStaffedText(project) {
+function projectHasRegisteredSeats(project) {
+  const {present, held}=projectCoverageLists(projectCoverageRow(project));
+  return present.length || held.length;
+}
+function seatProviderFromId(seatId) {
+  if(seatId==='you') return null;
+  const slug=seatId.replace(/^bp-/,'').replace(/-implementer$/,'');
+  if(!slug) return null;
+  return slug.charAt(0).toUpperCase()+slug.slice(1);
+}
+function projectCoverageStaffedText(project, {skipProviders=new Set()}={}) {
   const row=projectCoverageRow(project);
-  if(!row || (!row.present.length && !row.held.length)) return '';
+  const {present, held}=projectCoverageLists(row);
+  if(!row || (!present.length && !held.length)) return '';
   const bits=[];
-  if(row.present.length===1) bits.push(`${row.present[0]} idle`);
-  else if(row.present.length>1) bits.push(`${row.present.join(', ')} idle`);
-  for(const provider of row.held) bits.push(`${provider} off`);
+  const idlePresent=present.filter(provider=>!skipProviders.has(provider));
+  if(idlePresent.length===1) bits.push(`${idlePresent[0]} idle`);
+  else if(idlePresent.length>1) bits.push(`${idlePresent.join(', ')} idle`);
+  for(const provider of held) bits.push(`${provider} off`);
   return bits.join(', ');
 }
 function projectAgentsNowText(project) {
   if(workforceHeartbeatState()==='unknown') return 'unknown';
   const live=projectLiveSeats(project);
-  if(live.length) {
-    return live.map(({id, agent, finishing})=>{
-      const name=id==='you' ? 'you' : id.replace(/^bp-/,'').replace(/-implementer$/,'');
-      const badge=agent ? (finishing ? 'finishing' : (agent.state==='working' ? 'working' : agent.badge.toLowerCase())) : 'live';
-      return `${name} · ${badge}`;
-    }).join(', ');
-  }
-  const staffed=projectCoverageStaffedText(project);
-  return staffed || 'none staffed';
+  const liveBits=live.map(({id, agent, finishing})=>{
+    const name=id==='you' ? 'you' : id.replace(/^bp-/,'').replace(/-implementer$/,'');
+    const badge=agent ? (finishing ? 'finishing' : (agent.state==='working' ? 'working' : agent.badge.toLowerCase())) : 'live';
+    return `${name} · ${badge}`;
+  });
+  const liveProviders=new Set(live.map(({id})=>seatProviderFromId(id)).filter(Boolean));
+  const coverageBits=projectCoverageStaffedText(project, {skipProviders: liveProviders});
+  const parts=[...liveBits];
+  if(coverageBits) parts.push(coverageBits);
+  if(parts.length) return parts.join(', ');
+  return 'none staffed';
 }
 function projectReturnTo() {
   const params=new URLSearchParams();

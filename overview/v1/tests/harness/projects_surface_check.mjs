@@ -293,6 +293,8 @@ assert.ok(!domText(unavailableRow).includes('0 open'), 'unavailable store must n
 
 const blueprintRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domText(row).includes('BluePrint'));
 assert.ok(blueprintRow, 'active project row must exist');
+assert.ok(domText(blueprintRow).includes('cursor · working'), 'live seat badge must show in Agents now');
+assert.ok(domText(blueprintRow).includes('Claude idle'), 'idle hired providers must remain visible with a live claim');
 const links = blueprintRow.querySelectorAll('a');
 assert.ok(links.length >= 5, 'go links must include Agents and Delivery');
 assert.ok(links.some(a => (a.href || '').includes('project=blueprint')), 'links must carry project id');
@@ -323,6 +325,7 @@ console.log(JSON.stringify({
   unavailable_honest: domText(unavailableRow).includes('Store unavailable'),
   links_carry_project: links.some(a => (a.href || '').includes('project=blueprint')),
   agents_delivery_return: Boolean(agentsLink && deliveryLink),
+  live_merges_idle_coverage: domText(blueprintRow).includes('cursor · working') && domText(blueprintRow).includes('Claude idle'),
   roster_reads_coverage: domText(workforceRow).includes('Claude idle'),
   unregistered_none_staffed: domText(worklaneRow).includes('none staffed'),
   human_live_claim: domText(commsRow).includes('you · live'),
