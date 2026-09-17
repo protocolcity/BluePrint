@@ -2473,6 +2473,106 @@ function clearDeliveryFilters() {
   deliveryFilters();
   if(remoteData) paintDelivery(remoteData);
 }
+function emptyDeliverySpark() {
+  return {days:Array(14).fill(0), fails:Array(14).fill(0), merges:Array(14).fill(0), checks:0, failures:0, merges_total:0, href:'/delivery?type=workflow', merge_href:'/delivery?type=pull_request', out_href:'', state:'empty'};
+}
+function deliverySparkWindowLabel() {
+  if(deliveryPeriod==='1') return 'last day';
+  if(deliveryPeriod==='3') return 'last 3 days';
+  if(deliveryPeriod==='7') return 'last 7 days';
+  return 'last 14 days';
+}
+function deliverySparkSlice(spark) {
+  const days=Number(deliveryPeriod);
+  const width=Number.isFinite(days) && days>0 ? Math.min(14, days) : 14;
+  const series=(spark.days || []).slice(-width);
+  const fails=(spark.fails || []).slice(-width);
+  const merges=(spark.merges || []).slice(-width);
+  const sum=values=>values.reduce((total,n)=>total+(Number(n)||0),0);
+  return {
+    ...spark,
+    days:series,
+    fails,
+    merges,
+    checks:sum(series),
+    failures:sum(fails),
+    merges_total:sum(merges),
+  };
+}
+function deliverySparkFromRemote(data) {
+  if(!data) return emptyDeliverySpark();
+  if(deliveryRepo) {
+    const repo=(data.repositories || []).find(row=>row.repo===deliveryRepo);
+    if(repo && repo.ci_spark && Array.isArray(repo.ci_spark.days)) return deliverySparkSlice(repo.ci_spark);
+  }
+  if(data.ci_spark && Array.isArray(data.ci_spark.days)) return deliverySparkSlice(data.ci_spark);
+  return deliverySparkSlice({...emptyDeliverySpark(), state:data.state==='not_configured'?'not_configured':(data.state==='unavailable'||data.state==='invalid_config'?'unavailable':'empty')});
+}
+function deliverySparkHref(kind) {
+  const params=new URLSearchParams();
+  params.set('type', kind==='pull_request' ? 'pull_request' : 'workflow');
+  if(deliveryRepo) params.set('repo', deliveryRepo);
+  if(deliveryPeriod) params.set('period', deliveryPeriod);
+  return '/delivery?'+params;
+}
+function deliverySparkGlyphs(values) {
+  const series=Array.isArray(values) ? values.slice() : [];
+  const peak=Math.max(0, ...series);
+  if(!peak) return '';
+  return series.map(n=>SPARK_BLOCKS[Math.min(7, Math.round((n/peak)*7))]).join('');
+}
+function paintDeliverySpark(data) {
+  const host=$('delivery-ci-spark');
+  if(!host) return;
+  host.replaceChildren();
+  if(!data) {
+    host.append(document.createTextNode('CI unavailable'));
+    return;
+  }
+  if(data.state==='not_configured') {
+    host.append(document.createTextNode('CI not configured'));
+    return;
+  }
+  if(data.state==='unavailable' || data.state==='invalid_config') {
+    host.append(document.createTextNode('CI unavailable'));
+    return;
+  }
+  if(data.state==='loading' && !(data.repositories || []).length) return;
+  const spark=deliverySparkFromRemote(data);
+  if(spark.state==='unavailable') {
+    host.append(document.createTextNode('CI unavailable'));
+    return;
+  }
+  const window=deliverySparkWindowLabel();
+  if(!spark.checks && !spark.merges_total) {
+    host.append(document.createTextNode('No CI runs in the '+window));
+    return;
+  }
+  if(spark.checks) {
+    const count=spark.checks===1 ? '1 check · '+window : `${spark.checks} checks · ${window}`;
+    host.append(link(count, deliverySparkHref('workflow')));
+    if(spark.failures) host.append(el('span', spark.failures===1?' · 1 fail':` · ${spark.failures} fails`));
+    const glyphs=deliverySparkGlyphs(spark.days);
+    if(glyphs) {
+      const line=el('span',glyphs,'bp-delivery-ci-spark-line');
+      line.dataset.tone=spark.failures?'error':'working';
+      line.setAttribute('aria-hidden','true');
+      host.append(line);
+    }
+  } else {
+    host.append(document.createTextNode('No CI runs in the '+window));
+  }
+  if(spark.merges_total) {
+    const merges=spark.merges_total===1 ? '1 merge' : `${spark.merges_total} merges`;
+    host.append(link(merges, deliverySparkHref('pull_request')));
+  }
+  if(spark.out_href) {
+    const out=link(spark.failures?'Open failing check':'Open repository', spark.out_href);
+    out.target='_blank';
+    out.rel='noopener noreferrer';
+    host.append(out);
+  }
+}
 function paintDelivery(data) {
   const repos=(data.repositories || []).filter(repo=>!deliveryRepo || repo.repo===deliveryRepo);
   reconcileList($('remote-repositories'), repos, repo=>repo.repo, repoSection,
@@ -2484,6 +2584,7 @@ function paintDelivery(data) {
       {emptyText: repo.quiet ? 'Quiet in the last 14 days.' : 'No verified delivery available.'});
   }
   deliveryFilters();
+  paintDeliverySpark(data);
 }
 function remoteStatusText(data) {
   const parts=[];
