@@ -1849,6 +1849,7 @@ class ProjectsPortfolioSparkTests(unittest.TestCase):
         self.assertIn('paintProjectsCompare()', fn)
         paint = _SRC.split('function paintProjectsCompare()')[1].split('function projectComparisonRow')[0]
         self.assertIn("row.pulse!=='quiet'", paint.replace(' ', ''))
+        self.assertIn('pulseRank', paint)
         self.assertIn('For You', paint)
         self.assertIn('Map', paint)
         self.assertIn('/work?project=', paint)
