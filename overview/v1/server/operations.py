@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
+from .agents_floor import build_agents_floor, empty_agents_floor
 from .calendar_doors import build_calendar_doors, empty_calendar_doors
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
 
@@ -1226,6 +1227,7 @@ def operations_snapshot(binder):
               'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
               'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
               'calendar_doors': empty_calendar_doors(),
+              'agents_floor': empty_agents_floor(),
               'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
@@ -1544,4 +1546,5 @@ def operations_snapshot(binder):
     result['calendar_doors'] = build_calendar_doors(
         result.get('work_dates') or [], result.get('events') or [],
         result.get('agents') or [], now)
+    result['agents_floor'] = build_agents_floor(result.get('agents') or [])
     return result

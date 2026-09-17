@@ -136,3 +136,15 @@ during that shift, the badge stays **WORKING** and the cell reads
 the row returns to **IDLE** (or another terminal badge) but still lists
 parked orders awaiting integration. The inspector's Verified claim step uses
 the parked order's park time when that is the terminal claim state.
+
+## Live floor pulse (pc-1513, 2026-09-17)
+
+Agents opens on a Working / Idle / Error strip with counts from the same
+badge `state` the roster already publishes. Off, unknown, and not-configured
+rows never inflate Idle; they sit behind a Quiet disclosure so the floor is
+not a dead Off wall. Stale shift is named on a remainder line, not folded
+into Error — a failed run stays failed. Seat rows that are working or failed
+keep claim/state on the card (live cue on an open in-budget shift). Next fire
+stays the Calendar door from pc-1512 (`calendar_doors.next_fire_line`); this
+order does not invent a second countdown. The Map A ten-page nav is unchanged.
+When nothing is working the strip reads 0 and the empty line says so.
