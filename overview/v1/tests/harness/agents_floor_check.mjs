@@ -159,7 +159,7 @@ const fixture = {
       fails: Array.from({length: 24}, (_, i) => i === 22 ? 1 : 0),
       runs: 4, errors: 1, fail_rate: 0.25, state: 'healthy',
     },
-  },}
+  },
   coverage: [],
   supervisor: null,
   sources: [{name: 'WorkForce heartbeat', state: 'fresh', last_at: new Date().toISOString()}],
