@@ -167,6 +167,40 @@ assert.ok(!calendar.includes('wo-tile'));
 assert.ok(!calendar.includes('id="agents-pulse"'));
 assert.ok(!calendar.includes('id="work-band-act-now"'));
 
+// pc-1540 / Cap C2: reserved Hybrid source + outbound strips. WorkLane is
+// only ever live when its snapshot.sources state is 'available'; MCP/Connector
+// are always reserved (never a fake live), matching Apple/Outlook outbound.
+// Chip state is also carried in visible text (not color-only).
+const sourcesRoot = new El('section');
+const sourcesHost = new El('div');
+sourcesHost.setAttribute('data-role', 'cal-sources');
+const outboundHost = new El('div');
+outboundHost.setAttribute('data-role', 'cal-outbound');
+sourcesRoot.append(sourcesHost, outboundHost);
+
+cal.paintSourceStrip(sourcesRoot, {workLane: true});
+const sourceStates = sourcesHost.children.map((c) => c.dataset.state);
+assert.deepEqual(sourceStates, ['live', 'live', 'reserved', 'reserved']);
+assert.deepEqual(
+  sourcesHost.children.map((c) => c.textContent),
+  ['Local · Live', 'WorkLane · Live', 'MCP · Reserved', 'Connector · Reserved'],
+);
+assert.equal(sourcesHost.children[2].getAttribute('aria-disabled'), undefined);
+
+cal.paintSourceStrip(sourcesRoot, {workLane: false});
+const sourceStatesNoWorkLane = sourcesHost.children.map((c) => c.dataset.state);
+assert.deepEqual(sourceStatesNoWorkLane, ['live', 'unavailable', 'reserved', 'reserved']);
+assert.equal(sourcesHost.children[1].textContent, 'WorkLane · Unavailable');
+
+cal.paintOutboundStrip(sourcesRoot);
+const outboundStates = outboundHost.children.map((c) => c.dataset.state);
+assert.deepEqual(outboundStates, ['reserved', 'reserved']);
+assert.deepEqual(
+  outboundHost.children.map((c) => c.textContent),
+  ['Apple · Reserved', 'Outlook · Reserved'],
+);
+assert.equal(outboundHost.children[0].getAttribute('aria-disabled'), undefined);
+
 console.log(JSON.stringify({
   origin: load.origin,
   total: load.total,
@@ -177,4 +211,7 @@ console.log(JSON.stringify({
   unavailable: down.querySelector('[data-role="cal-load-summary"]').textContent,
   due_door: doors.children[0].textContent,
   fire_door: doors.children[2].href,
+  source_states: sourceStates,
+  source_states_no_worklane: sourceStatesNoWorkLane,
+  outbound_states: outboundStates,
 }));
