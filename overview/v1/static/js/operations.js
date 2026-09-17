@@ -639,6 +639,20 @@ function faceHeading(label, total, visible, href) {
   const linkWrap=heading && heading.parentElement && heading.parentElement.querySelector('a');
   if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
 }
+function bindForYouFaceToggle(face) {
+  const details=$(`for-you-${face}-details`);
+  if(!details || details.dataset.toggleBound) return;
+  details.dataset.toggleBound='1';
+  details.addEventListener('toggle',()=>{ details.dataset.userToggled='1'; });
+}
+function syncForYouFaceOpen(face, count) {
+  const details=$(`for-you-${face}-details`);
+  if(!details) return;
+  bindForYouFaceToggle(face);
+  if(details.dataset.userToggled) return;
+  if(face==='decide' || face==='read') details.open=true;
+  else details.open=count > 0;
+}
 function overviewExecutionEmpty() {
   const heartbeat=(snapshot.sources || []).find(s=>s.name==='WorkForce heartbeat');
   if(!heartbeat || heartbeat.state==='unknown') return 'WorkForce daemon not reachable — no shift evidence to show.';
@@ -687,11 +701,8 @@ function overview() {
     const visible=unmuted.slice(0,faceLimit[face]);
     mutedCount+=band.length-unmuted.length;
     reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
-    if(face==='decide' || face==='read') faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
-    else {
-      const summary=$(`for-you-${face}-summary`);
-      if(summary) summary.textContent=`${face.charAt(0).toUpperCase()+face.slice(1)} · ${band.length}${band.length>visible.length?` · showing ${visible.length}`:''}`;
-    }
+    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
+    syncForYouFaceOpen(face, band.length);
   }
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());

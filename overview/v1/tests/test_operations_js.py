@@ -1182,5 +1182,29 @@ class ChangeFeedLiveCueTests(unittest.TestCase):
         self.assertIn('.bp-reduce-motion * { animation: none !important;', css)
 
 
+class OverviewForYouChromeTests(unittest.TestCase):
+    """pc-1506: all For You faces collapsible; Watch/Due not missed; five KPI tiles."""
+
+    def test_all_four_faces_are_details(self):
+        for face in ('decide', 'read', 'watch', 'due'):
+            self.assertIn(f'id="for-you-{face}-details"', _HTML)
+            self.assertIn(f'id="for-you-{face}-summary"', _HTML)
+            self.assertIn(f'id="for-you-{face}"', _HTML)
+
+    def test_decide_and_read_default_open_in_markup(self):
+        self.assertIn('id="for-you-decide-details" class="bp-for-you-face" open', _HTML)
+        self.assertIn('id="for-you-read-details" class="bp-for-you-face" open', _HTML)
+
+    def test_watch_and_due_open_when_they_have_items_without_fighting_the_user(self):
+        self.assertIn('function syncForYouFaceOpen', _SRC)
+        self.assertIn("details.dataset.userToggled", _SRC)
+        self.assertIn("details.open=count>0", _SRC.replace(' ', ''))
+
+    def test_kpi_grid_is_five_columns_on_desktop(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('grid-template-columns: repeat(5,minmax(0,1fr))', css)
+        self.assertNotIn('grid-template-columns: repeat(4,1fr)', css)
+
+
 if __name__ == '__main__':
     unittest.main()
