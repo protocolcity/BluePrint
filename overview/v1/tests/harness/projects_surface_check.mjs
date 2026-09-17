@@ -381,6 +381,7 @@ const compare = get('projects-compare');
 assert.equal(compare.hidden, false, 'workspace compare bars must show for active stores');
 const compareRows = compare.querySelectorAll('.bp-projects-compare-row');
 assert.ok(compareRows.length >= 4, 'compare bars must list non-quiet stores');
+assert.equal(compareRows[0] && compareRows[0].dataset.project, 'blueprint', 'compare bars must lead with the hottest store');
 assert.ok(!compareRows.some(row => (row.dataset && row.dataset.project) === 'gridfinity'), 'quiet stores stay out of compare bars');
 const compareText = domText(compare);
 assert.ok(compareText.includes('open'), 'compare bars must door open work');

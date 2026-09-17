@@ -755,6 +755,14 @@ function paintProjectsCompare() {
     if(filter && !(row.name||'').toLowerCase().includes(filter) && !(row.id||'').toLowerCase().includes(filter)) return false;
     return row.pulse!=='quiet';
   });
+  const pulseRank={hot:0, blocked:1, unavailable:2};
+  rows.sort((a,b)=>{
+    const rank=(pulseRank[a.pulse] ?? 9)-(pulseRank[b.pulse] ?? 9);
+    if(rank) return rank;
+    if((b.open||0)!==(a.open||0)) return (b.open||0)-(a.open||0);
+    if((b.attention||0)!==(a.attention||0)) return (b.attention||0)-(a.attention||0);
+    return (a.name||'').localeCompare(b.name||'');
+  });
   if(summary) {
     if(data.state==='unavailable') summary.textContent='Portfolio unavailable';
     else {
