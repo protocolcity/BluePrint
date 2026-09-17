@@ -15,6 +15,10 @@ def main(argv=None):
     if not args or args == ['--help'] or args == ['-h']:
         print('BluePrint operations interface\n\n  status --root WORKSPACE\n  serve --foreground --root WORKSPACE [--port PORT]\n  service start|restart|stop --root WORKSPACE\n  stage --source CHECKOUT --workspace WORKSPACE\n  activate --release RELEASE --workspace WORKSPACE\n  upgrade --root WORKSPACE [--quiet] [--dry-run]\n\nWorkspace utilities: doctor, found, seed-ops, hire. Use COMMAND --help for details.\nStarting the interface never hires agents or starts other engines.')
         return 0
+    if args and args[0] in ('--version', '-V', 'version'):
+        from protocolcity.distro import distro_version
+        print(distro_version())
+        return 0
     if args and args[0] in ('stage','activate'):
         from .deploy import main as deploy
         original=sys.argv
@@ -72,7 +76,7 @@ def main(argv=None):
         except (OSError,ValueError):
             print('BluePrint is not responding. Use blueprint service start --root <workspace>, or blueprint serve --foreground --root <workspace>.',file=sys.stderr);return 1
     if args and args[0] in ('update','install','uninstall'):
-        print('Use blueprint stage --source <checkout> --workspace <workspace>, then blueprint activate --release <release> --workspace <workspace>. Engine and package changes are separate.',file=sys.stderr)
+        print('Upgrading an existing install (brew or pip)? Run: blueprint upgrade --root <workspace>. Building from a source checkout instead? Use blueprint stage --source <checkout> --workspace <workspace>, then blueprint activate --release <release> --workspace <workspace>. Engine and package changes are separate.',file=sys.stderr)
         return 2
     from .cli import main as legacy
     return legacy(args)

@@ -258,6 +258,42 @@ class Handler(BaseHTTPRequestHandler):
             message = str(exc) if isinstance(exc, RuntimeError) else "Work-order source is unavailable."
             self._send_json(503, {"error": message})
 
+    def do_HEAD(self) -> None:  # noqa: N802 — http.server contract
+        """GET headers without a body (pc-1536 / GH #170 HEAD hygiene).
+
+        The event-stream route stays open indefinitely on GET; HEAD there
+        would hang a request thread forever, so refuse it explicitly.
+        """
+        if urlparse(self.path).path == "/api/changes":
+            self.send_response(405)
+            self.send_header("Allow", "GET")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        real_wfile = self.wfile
+
+        class _HeadersOnlyWriter:
+            """Pass the first write (headers) through; drop the body write."""
+
+            def __init__(self, real):
+                self._real = real
+                self._sent = False
+
+            def write(self, data):
+                if not self._sent:
+                    self._sent = True
+                    return self._real.write(data)
+                return len(data)
+
+            def flush(self):
+                self._real.flush()
+
+        self.wfile = _HeadersOnlyWriter(real_wfile)
+        try:
+            self.do_GET()
+        finally:
+            self.wfile = real_wfile
+
     # ── router ─────────────────────────────────────────────────────────
     def do_GET(self) -> None:  # noqa: N802 — http.server contract
         parsed = urlparse(self.path)

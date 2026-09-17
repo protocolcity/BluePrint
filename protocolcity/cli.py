@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import importlib.util
 import json
 import os
@@ -154,6 +155,30 @@ def _desk_product_count(desk_url: str, timeout: float = 2.0) -> int:
             return len(json.loads(r.read().decode()).get("products") or [])
     except Exception:
         return 0
+
+
+def _write_worklane_deployment_receipt(city_root: Path, port: int) -> None:
+    """Write ``<city_root>/local/worklane/deployment.json`` (pc-1536 / GH #173).
+
+    Best-effort — a missing/stale receipt only degrades the Overview banner
+    to "unavailable"; it must never block engine start.
+    """
+    try:
+        version = "not-installed"
+        for name in ("protocolcity-worklane", "worklane"):
+            try:
+                version = importlib.metadata.version(name)
+                break
+            except Exception:
+                continue
+        path = city_root / "local" / "worklane" / "deployment.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"version": version, "port": int(port)}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 
 
 def _engine_log_open(city_root: Optional[Path], name: str):
@@ -898,9 +923,19 @@ def _start_engines(
                 base_env["TICKETING_PROTOCOL_RUNTIME_DIR"] = str(_wl_checkout)
                 print("── engines: WorkLane runtime → checkout %s ──" % _wl_checkout)
             else:
-                wl_runtime = city_root / ".protocolcity" / "worklane"
-                wl_runtime.mkdir(parents=True, exist_ok=True)
-                base_env["TICKETING_PROTOCOL_RUNTIME_DIR"] = str(wl_runtime)
+                # pc-1536 / GH #172: do not pin an empty city-scoped dir over an
+                # already-populated ~/.worklane home (WorkLane's own default,
+                # worklane.products.data_root) — that would hide existing data.
+                _home_data = Path.home() / ".worklane" / "data"
+                if _home_data.is_dir() and any(_home_data.glob("*.db")):
+                    print(
+                        "── engines: WorkLane runtime → default home %s ──"
+                        % _home_data.parent
+                    )
+                else:
+                    wl_runtime = city_root / ".protocolcity" / "worklane"
+                    wl_runtime.mkdir(parents=True, exist_ok=True)
+                    base_env["TICKETING_PROTOCOL_RUNTIME_DIR"] = str(wl_runtime)
         # WorkForce home under city so roster/local never depends on CWD.
         # Keep under .protocolcity/ so census does not treat it as a neighborhood.
         # Daemon writes local/daemon.json every tick — local/ must exist.
@@ -996,6 +1031,14 @@ def _start_engines(
             _engine_failed("WorkLane", desk_url, wl_log_path)
             _terminate_children(children)
             raise SystemExit(3)
+
+    # pc-1536 / GH #173: Overview's WorkLane banner reads a verified
+    # installation receipt (local/worklane/deployment.json), not a fixed
+    # port fallback (AGENTS.md). The bundled engine spawned above never
+    # writes one, so the banner always read "unavailable" even with a
+    # healthy desk at :desk_port. Record what BP itself just verified.
+    if city_root is not None:
+        _write_worklane_deployment_receipt(city_root, desk_port)
 
     # pc-314: desk answers — run store joins deferred while it was offline
     # (found/adopt with the desk down queue into .protocolcity/pending-desk.json).

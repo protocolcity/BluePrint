@@ -438,15 +438,37 @@ def restart_suite(workspace: Optional[Path] = None) -> dict:
         return code
 
     step(["stop", "--quiet"])
-    # Always reinstall LaunchAgent after upgrade so Cellar python argv0
-    # cannot point at a deleted path (GH #13 / pc-694 / pc-811).
-    if workspace is not None and root.is_dir():
-        code_svc = step(
-            ["service", "install", "--root", str(root), "--force"]
+    # pc-1536 / GH #170: `service install` is not a valid consolidated-app
+    # verb (blueprint service only takes status|start|restart|stop) — it
+    # always failed with a usage error, breaking `update --restart` across
+    # the 0.1.47→0.1.50 cut. `blueprint upgrade --root` is the taught bridge:
+    # it (re)writes and bootstraps the single blueprint-overview agent for
+    # the installed package so Cellar python argv0 cannot point at a deleted
+    # path (GH #13 / pc-694 / pc-811), for both the three-lane conversion
+    # and an ordinary reinstall.
+    if sys.platform != "darwin":
+        # No macOS login LaunchAgent on this platform — nothing to reinstall.
+        # `serve --foreground` never returns, so we only print the recipe
+        # rather than invoking it as a blocking step.
+        log.append(
+            "note: no login service on this platform — run:\n"
+            "  blueprint serve --foreground --root %s\n"
+            "  (or use Task Scheduler / a service manager for always-on)" % root
         )
+        return {
+            "ok": True,
+            "restarted": False,
+            "healthy": None,
+            "workspace": str(root),
+            "log": "\n".join(log),
+            "steps": steps,
+            "hint": "serve-foreground",
+        }
+    if workspace is not None and root.is_dir():
+        code_svc = step(["upgrade", "--root", str(root)])
     else:
-        # Heal: start already reinstalls when argv0 is stale; prefer force
-        # reinstall from state root when known.
+        # Heal: start already reinstalls when argv0 is stale; prefer a full
+        # upgrade from state root when known.
         state_root = ""
         try:
             from protocolcity import service as svc_mod
@@ -457,9 +479,7 @@ def restart_suite(workspace: Optional[Path] = None) -> dict:
         except Exception:
             state_root = ""
         if state_root and Path(state_root).is_dir():
-            code_svc = step(
-                ["service", "install", "--root", state_root, "--force"]
-            )
+            code_svc = step(["upgrade", "--root", state_root])
         else:
             code_svc = step(["service", "start"])
     if code_svc != 0:
@@ -467,7 +487,7 @@ def restart_suite(workspace: Optional[Path] = None) -> dict:
         log.append(
             "error: service start failed or not installed — run:\n"
             "  blueprint serve --root %s\n"
-            "  # or: blueprint service install --root %s" % (root, root)
+            "  # or: blueprint upgrade --root %s" % (root, root)
         )
         return {
             "ok": False,
@@ -574,8 +594,11 @@ def print_update_report(
         rr = restart_suite(workspace)
         if rr.get("log"):
             print(rr["log"])
-        # pc-1068: never exit 0 with Map dead after --restart
-        if not rr.get("ok") or not rr.get("healthy", False):
+        # pc-1068: never exit 0 with Map dead after --restart.
+        # healthy=None (e.g. no login service on this platform, pc-1536 /
+        # GH #171) is not the same as healthy=False — do not fail loud on
+        # a platform with no service to verify.
+        if not rr.get("ok") or rr.get("healthy") is False:
             print("")
             print(
                 "error: suite not healthy after restart — %s"
