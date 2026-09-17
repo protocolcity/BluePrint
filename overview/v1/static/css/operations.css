@@ -54,6 +54,11 @@
 .bp-for-you-face > summary::-webkit-details-marker { display: none; }
 .bp-for-you-face > summary::before { content: '▸ '; color: var(--ov-muted); }
 .bp-for-you-face[open] > summary::before { content: '▾ '; }
+.bp-overview-face-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-fg); }
+.bp-overview-decide { padding: 7px 0; }
+.bp-overview-decide .bp-order-link { min-width: 0; }
+.bp-overview-decide strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bp-section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 14px; }
 .bp-section-head a { white-space: nowrap; font-size: 12px; text-decoration: none; }
 .bp-order { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; padding: 15px 0; text-decoration: none; color: var(--ov-fg) !important; border-top: 1px solid var(--ov-tile-border); transition: background-color 150ms; }

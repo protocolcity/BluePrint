@@ -263,8 +263,10 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
+        for list_id in ('overview-executions', 'metrics', 'work-list', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
+        self.assertIn("recentHost=$('work-recent')", _SRC.replace(' ', ''))
+        self.assertIn('reconcileList(recentHost', _SRC.replace(' ', ''))
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
         """pc-1483/pc-1487: delivery painting must reconcile repository and
@@ -482,10 +484,12 @@ class CompactRowTests(unittest.TestCase):
         compact = fn.replace(' ', '')
         self.assertLess(compact.index("reconcileList($('overview-executions')"), compact.index("reconcileList($('metrics')"))
 
-    def test_overview_has_recent_changes_list(self):
+    def test_work_has_recent_changes_list(self):
         self.assertIn('id="overview-executions"', _HTML)
-        self.assertIn('id="overview-recent"', _HTML)
-        self.assertIn("reconcileList($('overview-recent')", _SRC)
+        self.assertIn('id="work-recent"', _HTML)
+        self.assertNotIn('id="overview-recent"', _HTML)
+        self.assertIn("recentHost=$('work-recent')", _SRC.replace(' ', ''))
+        self.assertIn('reconcileList(recentHost', _SRC.replace(' ', ''))
 
     def test_for_you_uses_overview_face_row_not_full_order_row(self):
         self.assertIn('function overviewFaceRow(order)', _SRC)
@@ -520,7 +524,7 @@ class UnroutedOverviewTests(unittest.TestCase):
         self.assertIn('id="overview-unrouted"', _HTML)
         metrics_pos = _HTML.index('id="metrics"')
         unrouted_pos = _HTML.index('id="overview-unrouted"')
-        for_you_pos = _HTML.index('id="for-you-decide-details"')
+        for_you_pos = _HTML.index('id="for-you-decide"')
         self.assertLess(metrics_pos, unrouted_pos)
         self.assertLess(unrouted_pos, for_you_pos)
 
@@ -532,7 +536,7 @@ class UnroutedOverviewTests(unittest.TestCase):
     def test_face_heading_updates_summary_not_retired_heading_ids(self):
         fn = _SRC.split('function faceHeading(')[1].split('function bindForYouFaceToggle')[0]
         compact = fn.replace(' ', '')
-        self.assertIn('for-you-${label.toLowerCase()}-summary', fn)
+        self.assertIn("faceHost(label.toLowerCase(),'summary')", compact)
         self.assertNotIn('-heading', fn)
         self.assertIn('summary.textContent=text', compact)
 
@@ -569,26 +573,40 @@ class SlimOverviewTests(unittest.TestCase):
         fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
         self.assertNotIn("reconcileList($('project-summary')", fn)
 
-    def test_decide_and_read_faces_show_at_most_three_rows(self):
-        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+    def test_decide_act_now_is_capped_at_five_one_line_rows(self):
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
         compact = fn.replace(' ', '').replace('\n', '')
-        self.assertIn('faceLimit={decide:3,read:3,watch:4,due:4}', compact)
+        self.assertIn('.slice(0,5)', compact)
+        self.assertIn('overviewDecideRow', compact)
+        self.assertIn("emptyText:'Nothing for You'", fn)
+        self.assertNotIn('faceEntry', compact)
 
-    def test_recent_changes_capped_at_four_rows(self):
-        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
-        self.assertIn('.slice(0,4)', fn)
+    def test_recent_changes_live_on_work_not_overview(self):
+        overview_fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        work_fn = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
+        self.assertNotIn("reconcileList($('overview-recent')", overview_fn)
+        self.assertNotIn('Recent changes', _HTML.split('id="overview-view"')[1].split('id="work-view"')[0])
+        self.assertIn("reconcileList(recentHost", work_fn.replace(' ', ''))
+        self.assertIn('.slice(0,8)', work_fn)
 
     def test_source_status_is_one_compact_line_not_a_source_list(self):
         self.assertIn('id="overview-source-line"', _HTML)
         self.assertNotIn('id="source-list"', _HTML.split('id="overview-view"')[1].split('id="work-view"')[0])
         self.assertIn('function overviewSourceLine()', _SRC)
-        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
         self.assertIn('overviewSourceLine()', fn)
         self.assertNotIn("sources($('source-list')", fn)
 
-    def test_face_heading_links_to_view_all_when_truncated(self):
-        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
-        self.assertIn("faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,visible.length,'/work?attention='+face)", fn.replace(' ', ''))
+    def test_read_and_watch_are_count_chips_to_work(self):
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("['Read','read'],['Watch','watch'],['Due','due']", compact)
+        self.assertIn('overviewFaceChip', compact)
+        self.assertIn("'/work?attention='+face", compact)
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        self.assertIn('id="overview-face-chips"', overview)
+        self.assertNotIn('id="for-you-read"', overview)
+        self.assertNotIn('id="for-you-watch"', overview)
 
 
 class SlimOverviewReviewFixTests(unittest.TestCase):
@@ -600,7 +618,7 @@ class SlimOverviewReviewFixTests(unittest.TestCase):
         self.assertNotIn('class="bp-overview-grid"', overview)
         self.assertNotIn('bp-overview-source-aside', overview)
         source_pos = overview.index('id="overview-source-line"')
-        for_you_pos = overview.index('id="for-you-decide-details"')
+        for_you_pos = overview.index('id="for-you-decide"')
         self.assertLess(source_pos, for_you_pos)
 
     def test_five_metric_tiles_have_a_mid_width_breakpoint(self):
@@ -615,7 +633,7 @@ class CompactRowReviewFixTests(unittest.TestCase):
     assignment summary from server owner."""
 
     def test_recent_changes_sort_by_parsed_time_and_exclude_closed(self):
-        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        fn = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
         compact = fn.replace(' ', '')
         self.assertIn('function orderUpdatedAt(order)', _SRC)
         self.assertIn('function isClosedOrder(order)', _SRC)
@@ -1242,32 +1260,125 @@ class ChangeFeedLiveCueTests(unittest.TestCase):
 
 
 class OverviewForYouChromeTests(unittest.TestCase):
-    """pc-1506: all For You faces collapsible; Watch/Due not missed; five KPI tiles."""
+    """pc-1506 / pc-1509: Work keeps full collapsible faces; Overview keeps
+    Decide rows plus Read/Watch count chips and five KPI tiles."""
 
-    def test_all_four_faces_are_details(self):
+    def test_work_keeps_all_four_faces_as_details(self):
         for face in ('decide', 'read', 'watch', 'due'):
-            self.assertIn(f'id="for-you-{face}-details"', _HTML)
-            self.assertIn(f'id="for-you-{face}-summary"', _HTML)
-            self.assertIn(f'id="for-you-{face}"', _HTML)
+            self.assertIn(f'id="work-for-you-{face}-details"', _HTML)
+            self.assertIn(f'id="work-for-you-{face}-summary"', _HTML)
+            self.assertIn(f'id="work-for-you-{face}"', _HTML)
 
-    def test_decide_and_read_default_open_in_markup(self):
-        self.assertIn('id="for-you-decide-details" class="bp-for-you-face" open', _HTML)
-        self.assertIn('id="for-you-read-details" class="bp-for-you-face" open', _HTML)
+    def test_work_decide_and_read_default_open_in_markup(self):
+        self.assertIn('id="work-for-you-decide-details" class="bp-for-you-face" open', _HTML)
+        self.assertIn('id="work-for-you-read-details" class="bp-for-you-face" open', _HTML)
 
     def test_watch_and_due_open_when_they_have_items_without_fighting_the_user(self):
         self.assertIn('function syncForYouFaceOpen', _SRC)
         self.assertIn("details.dataset.userToggled", _SRC)
         self.assertIn("details.open=count>0", _SRC.replace(' ', ''))
 
-    def test_all_faces_get_summary_counts_from_face_heading(self):
-        overview_fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
-        compact = overview_fn.replace(' ', '')
-        self.assertIn("faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,visible.length,'/work?attention='+face)", compact)
+    def test_work_faces_get_summary_counts_from_face_heading(self):
+        work_fn = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
+        compact = work_fn.replace(' ', '')
+        self.assertIn("faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,unmuted.length,'/work?attention='+face)", compact)
 
     def test_kpi_grid_is_five_columns_on_desktop(self):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
         self.assertIn('grid-template-columns: repeat(5,minmax(0,1fr))', css)
         self.assertNotIn('grid-template-columns: repeat(4,1fr)', css)
+
+
+class SlimOverviewHarnessTests(unittest.TestCase):
+    """pc-1509: live-shaped paint — Overview chips + five Decide rows; Work
+    keeps full For You, Mute, More, and Recent."""
+
+    _HARNESS = Path(__file__).resolve().parent / 'harness' / 'overview_slim_check.mjs'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping overview slim harness')
+        proc = subprocess.run([node, str(cls._HARNESS)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'overview slim harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        cls.result = json.loads(proc.stdout)
+
+    def test_overview_decide_is_five_one_line_rows_without_mute_or_more(self):
+        self.assertEqual(self.result['decide_rows'], 5)
+        self.assertFalse(self.result['overview_has_mute'])
+        self.assertFalse(self.result['overview_has_more'])
+
+    def test_read_watch_due_are_count_chips_to_work(self):
+        self.assertEqual(self.result['chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
+        self.assertEqual(self.result['chip_hrefs'], [
+            '/work?attention=read', '/work?attention=watch', '/work?attention=due',
+        ])
+
+    def test_work_keeps_full_for_you_mute_more_and_recent(self):
+        self.assertEqual(self.result['work_decide'], 6)
+        self.assertEqual(self.result['work_read'], 2)
+        self.assertEqual(self.result['work_mutes'], 6)
+        self.assertGreaterEqual(self.result['work_more'], 1)
+        self.assertGreaterEqual(self.result['recent_count'], 1)
+
+    def test_unrouted_kpis_and_source_line_still_paint(self):
+        self.assertIn('Unrouted', self.result['unrouted'])
+        self.assertIn('2 sources', self.result['source_line'])
+        self.assertEqual(self.result['kpis'], 5)
+
+
+class SlimOverviewFollowThroughTests(unittest.TestCase):
+    """pc-1509: Overview is Now — Decide Act-now only; Read/Watch chips;
+    Mute/More/Recent live on Work."""
+
+    def test_overview_does_not_paint_mute_or_more(self):
+        overview_html = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        overview_fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        self.assertNotIn('id="mute-status"', overview_html)
+        self.assertNotIn('id="restore-muted"', overview_html)
+        self.assertNotIn('Mute 24h', overview_fn)
+        self.assertNotIn('More', overview_fn)
+        self.assertNotIn('faceEntry', overview_fn)
+        decide = _SRC.split('function overviewDecideRow(order)')[1].split('function overviewFaceChip')[0]
+        self.assertNotIn("el('summary','More')", decide)
+        self.assertNotIn('Mute', decide)
+
+    def test_work_owns_mute_more_and_full_for_you(self):
+        work_html = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertIn('id="mute-status"', work_html)
+        self.assertIn('id="restore-muted"', work_html)
+        self.assertIn('id="work-recent"', work_html)
+        inbox = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
+        self.assertIn('faceEntry', inbox)
+        self.assertIn("reconcileList(recentHost", inbox.replace(' ', ''))
+        entry = _SRC.split('function faceEntry(order)')[1].split('function faceHeading')[0]
+        self.assertIn('Mute 24h', entry)
+        self.assertIn('overviewFaceRow(order)', entry)
+
+    def test_overview_keeps_unrouted_execution_kpis_and_source_line(self):
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        self.assertIn('id="overview-executions"', overview)
+        self.assertIn('id="metrics"', overview)
+        self.assertIn('id="overview-unrouted"', overview)
+        self.assertIn('id="overview-source-line"', overview)
+        self.assertNotIn('Across your projects', _HTML)
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        self.assertIn('orders.filter(isUnrouted)', fn)
+        self.assertIn('UNROUTED_WORK_HREF', fn)
+        self.assertIn('overviewSourceLine()', fn)
+
+    def test_face_chips_and_decide_rows_wrap_on_narrow_viewports(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        compact = css.replace(' ', '')
+        self.assertIn('.bp-overview-face-chips{display:flex;flex-wrap:wrap;', compact)
+        self.assertIn('@media(max-width:900px){.bp-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}', compact)
+        self.assertIn('@media(max-width:560px)', css)
+        self.assertIn('grid-template-columns:repeat(5,minmax(0,1fr))', compact)
 
 
 if __name__ == '__main__':
