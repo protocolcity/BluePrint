@@ -67,6 +67,11 @@
 .bp-agents-floor-spark a:hover { text-decoration: underline; }
 .bp-agents-floor-spark-line { letter-spacing: .02em; font-size: 12px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
 .bp-agents-floor-spark-line[data-tone="error"] { color: var(--ov-state-error); }
+.bp-delivery-ci-spark { margin: 2px 0 12px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.bp-delivery-ci-spark a { text-decoration: none; }
+.bp-delivery-ci-spark a:hover { text-decoration: underline; }
+.bp-delivery-ci-spark-line { letter-spacing: .02em; font-size: 12px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
+.bp-delivery-ci-spark-line[data-tone="error"] { color: var(--ov-state-error); }
 .bp-agents-pulse { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
 .bp-agents-pulse .bp-metric { cursor: default; }
 .bp-agents-pulse .bp-metric:hover { background: var(--ov-tile-bg); }
