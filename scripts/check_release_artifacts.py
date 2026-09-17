@@ -83,13 +83,11 @@ def _toml_version(text: str) -> str:
 
 
 def _toml_engines(text: str) -> List[str]:
-    block = re.search(
-        r"(?ms)^engines\s*=\s*\[(.*?)\]",
-        text,
-    )
-    if not block:
+    # Whole-file scan: a quoted extra like "pkg[engines]==ver" contains
+    # brackets, so a naive engines = [ ... ] slice stops too early.
+    if not re.search(r"(?m)^engines\s*=\s*\[", text):
         raise ValueError("engines extra missing")
-    return re.findall(r'"([^"]+)"', block.group(1))
+    return re.findall(r'"(protocolcity-[^"]+)"', text)
 
 
 def check_metadata() -> List[str]:
