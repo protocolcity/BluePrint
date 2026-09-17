@@ -3,15 +3,18 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
+# Preferred PyPI name. Forever-compat alias is packaging/pypi/protocolcity.
+# Bare PyPI name `blueprint` is taken by unrelated software.
 name = "protocolcity-blueprint"
-version = "0.1.47+consolidation.69"
-description = "BluePrint isolated runtime consolidation candidate"
+version = "0.1.50"
+description = "BluePrint suite — Overview and Map over WorkLane + WorkForce"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-engines = ["protocolcity-worklane==0.1.7", "protocolcity-workforce==0.1.7"]
+# Public cut 0.1.50 — engines already on PyPI. Pin exact; do not float.
+engines = ["protocolcity-worklane==0.1.9", "protocolcity-workforce==0.1.9"]
 
 [project.scripts]
 blueprint = "protocolcity.operations_cli:main"
@@ -21,7 +24,7 @@ blueprint-map = "protocolcity.desk_entry:map_view"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["protocolcity*", "suite*", "overview.v1*", "map.v1*"]
-exclude = ["*.tests", "*.tests.*"]
+exclude = ["*.tests", "*.tests.*", "overview.v1.tests*", "map.v1.tests*"]
 namespaces = true
 
 [tool.setuptools.package-data]
