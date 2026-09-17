@@ -14,7 +14,7 @@ const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
 function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
-$('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();overview();});
+$('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();work();});
 let remotePending = false, remoteLast = 0, remoteData = null;
 let deliveryRepo = '', deliveryType = '', deliveryPeriod = '';
 let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false, timelineFingerprint = '', timelineExpanded = false;
@@ -383,7 +383,7 @@ function overviewFaceRow(order) {
   const action=nextActionText(order);
   if(action && action !== why) content.append(el('span',action,'bp-order-note'));
   anchor.append(content);
-  const faceBadge={decide:'Needs you',read:'Read',watch:'Watch',note:'Note'}[order.attention_face] || 'For You';
+  const faceBadge={decide:'Needs you',read:'Read',watch:'Watch',due:'Due',note:'Note'}[order.attention_face] || 'For You';
   row.append(anchor,badge(order.attention_face==='decide' ? 'attention' : (order.attention_face || 'attention'), faceBadge));
   if(orderHasDetail(order)) {
     const details=el('details',undefined,'bp-order-detail');
@@ -641,29 +641,44 @@ function projects() {
     return projectComparisonRow(item);
   }, {emptyText:'No local project stores found. A folder needs .protocolcity/desk-join.json to register.'});
 }
+function overviewDecideRow(order) {
+  const row=el('div',undefined,'bp-order bp-order-compact bp-overview-decide');
+  const anchor=link('',workUrl(order),'bp-order-link');
+  const content=el('div');
+  content.append(el('strong',order.title));
+  anchor.append(content);
+  row.append(anchor,badge('attention','Needs you'));
+  return row;
+}
+function overviewFaceChip(label, count, href) {
+  return link(`${label} · ${count}`, href, 'bp-filter-chip bp-face-chip');
+}
+function faceHost(face, part) {
+  return $(`work-for-you-${face}-${part}`) || $(`for-you-${face}-${part}`);
+}
 function faceEntry(order) {
   const entry=el('div',undefined,'bp-face-entry');entry.append(overviewFaceRow(order));
   const mute=el('button','Mute 24h');mute.type='button';mute.className='bp-face-mute';
-  mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();overview();});
+  mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();work();});
   entry.append(mute);
   return entry;
 }
 function faceHeading(label, total, visible, href) {
   let text=`${label} · ${total}`;
   if(total > visible) text+=` · showing ${visible}`;
-  const summary=$(`for-you-${label.toLowerCase()}-summary`);
+  const summary=faceHost(label.toLowerCase(), 'summary');
   if(summary) summary.textContent=text;
   const linkWrap=summary && summary.parentElement && summary.parentElement.querySelector('a');
   if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
 }
 function bindForYouFaceToggle(face) {
-  const details=$(`for-you-${face}-details`);
+  const details=faceHost(face, 'details');
   if(!details || details.dataset.toggleBound) return;
   details.dataset.toggleBound='1';
   details.addEventListener('toggle',()=>{ details.dataset.userToggled='1'; });
 }
 function syncForYouFaceOpen(face, count) {
-  const details=$(`for-you-${face}-details`);
+  const details=faceHost(face, 'details');
   if(!details) return;
   bindForYouFaceToggle(face);
   if(details.dataset.userToggled) return;
@@ -710,22 +725,37 @@ function overview() {
     unroutedHost.append(document.createTextNode('Unrouted '), link(String(unrouted.length), UNROUTED_WORK_HREF));
     unroutedHost.append(el('span', unrouted.length ? ' — open, ungated orders with no seat' : ' — none right now'));
   }
-  const faceLimit={decide:3,read:3,watch:4,due:4};
+  const decide=forYou.filter(o=>o.attention_face==='decide');
+  const decideVisible=decide.filter(o=>!(Number(muted[muteKey(o)])>Date.now())).slice(0,5);
+  reconcileList($('for-you-decide'), decideVisible, o=>o.project+':'+o.id, overviewDecideRow, {emptyText:'Nothing for You'});
+  const chips=$('overview-face-chips');
+  if(chips) {
+    const faces=[['Read','read'],['Watch','watch'],['Due','due']];
+    reconcileList(chips, faces, face=>face[1], ([label,face])=>overviewFaceChip(label, forYou.filter(o=>o.attention_face===face).length, '/work?attention='+face));
+  }
+  overviewSourceLine();
+}
+function renderWorkInbox() {
+  const orders=snapshot.orders || [], forYou=orders.filter(o=>o.attention_face);
   let mutedCount=0;
   for(const face of ['decide','read','watch','due']) {
     const band=forYou.filter(o=>o.attention_face===face);
     const unmuted=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
-    const visible=unmuted.slice(0,faceLimit[face]);
     mutedCount+=band.length-unmuted.length;
-    reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
-    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
+    const host=$('work-for-you-'+face);
+    if(!host) continue;
+    reconcileList(host, unmuted, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
+    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, unmuted.length, '/work?attention='+face);
     syncForYouFaceOpen(face, band.length);
   }
-  $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
-  $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,4);
-  reconcileList($('overview-recent'), recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
-  overviewSourceLine();
+  const muteStatus=$('mute-status');
+  if(muteStatus) muteStatus.textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
+  const restore=$('restore-muted');
+  if(restore) restore.hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
+  const recentHost=$('work-recent');
+  if(!recentHost) return;
+  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,8);
+  reconcileList(recentHost, recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
 }
 function filterOptions() {
   const select=$('project-filter');
@@ -789,6 +819,7 @@ function renderActiveFilters() {
   $('clear-filters').hidden=!chips.length;
 }
 function work() {
+  renderWorkInbox();
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, kind=$('kind-filter').value, attention=$('attention-filter').value;
   const total=snapshot.orders.length;
   const orders=snapshot.orders.filter(o=>(!unroutedOnly || isUnrouted(o)) && (!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
