@@ -1608,10 +1608,84 @@ function timelineFilterChips() {
   if (timelinePeriod) chips.push($('timeline-period').selectedOptions[0].text);
   return chips;
 }
+function timelineActivitySeries() {
+  const activity = timelineData?.activity || {};
+  if (timelinePeriod === '1') {
+    return {label: 'last day', grain: 'hour', buckets: activity.day?.buckets || []};
+  }
+  if (timelinePeriod === '3') {
+    const days = activity.window?.buckets || [];
+    return {label: 'last 3 days', grain: 'day', buckets: days.slice(-3)};
+  }
+  if (timelinePeriod === '7') {
+    return {label: 'last 7 days', grain: 'day', buckets: activity.week?.buckets || []};
+  }
+  return {label: 'last 14 days', grain: 'day', buckets: activity.window?.buckets || []};
+}
+function timelineActivityLabel(bucket, grain, index, total) {
+  const stamp = Date.parse(bucket.start);
+  if (Number.isNaN(stamp)) return '';
+  const d = new Date(stamp);
+  if (grain === 'hour') {
+    if (index % 6 && index !== total - 1) return '';
+    return d.toLocaleTimeString([], {hour: 'numeric'});
+  }
+  if (total > 7 && index % 2 && index !== total - 1) return '';
+  return d.toLocaleDateString([], {month: 'short', day: 'numeric'});
+}
+function paintTimelineActivity() {
+  const summary = $('timeline-activity-summary');
+  const chart = $('timeline-activity-chart');
+  if (!summary || !chart) return;
+  if (!timelineData) {
+    summary.textContent = 'Timeline is unavailable right now.';
+    chart.hidden = true;
+    chart.replaceChildren();
+    return;
+  }
+  // Missing payload: do not claim quiet while the list may still have rows
+  // (harnesses and older responses). Server activity is the spine.
+  if (!timelineData.activity) {
+    summary.textContent = '';
+    chart.hidden = true;
+    chart.replaceChildren();
+    return;
+  }
+  const series = timelineActivitySeries();
+  const buckets = series.buckets;
+  const total = buckets.reduce((sum, bucket) => sum + (Number(bucket.count) || 0), 0);
+  if (!buckets.length || !total) {
+    summary.textContent = 'Quiet in this window.';
+    chart.hidden = true;
+    chart.replaceChildren();
+    return;
+  }
+  const peak = Math.max(...buckets.map(bucket => Number(bucket.count) || 0), 1);
+  summary.textContent = `${total} event${total === 1 ? '' : 's'} · ${series.label} · by ${series.grain}`;
+  chart.hidden = false;
+  chart.setAttribute('role', 'img');
+  chart.setAttribute('aria-label', summary.textContent);
+  chart.replaceChildren();
+  buckets.forEach((bucket, index) => {
+    const count = Number(bucket.count) || 0;
+    const col = el('div', undefined, 'bp-timeline-hist-col');
+    const track = el('div', undefined, 'bp-timeline-hist-track');
+    const bar = el('div', undefined, 'bp-timeline-hist-bar');
+    bar.style.height = `${Math.round((count / peak) * 100)}%`;
+    bar.dataset.empty = count ? 'false' : 'true';
+    bar.title = `${count} · ${date(bucket.start)}`;
+    track.append(bar);
+    col.append(track);
+    const label = timelineActivityLabel(bucket, series.grain, index, buckets.length);
+    if (label) col.append(el('span', label, 'bp-timeline-hist-label'));
+    chart.append(col);
+  });
+}
 function timeline() {
   const groups = buildTimelineGroups(timelineVisibleRows());
   reconcileList($('timeline-list'), groups, g => g.id, timelineGroupNode, {emptyText: 'No timeline rows in the readable window.'});
   timelineSources();
+  paintTimelineActivity();
   $('timeline-more').hidden = !timelineMore;
   $('timeline-clear-filters').hidden = !timelineFilterChips().length;
 }
@@ -1998,7 +2072,10 @@ async function refreshTimeline(append, opts = {}) {
     if (timelineKey !== timelineFingerprint) { timelineFingerprint = timelineKey; lastChangeAt = Date.now(); }
   } catch (error) {
     lastError = true;
-    if (!timelineData) empty($('timeline-list'), 'Timeline is unavailable right now.');
+    if (!timelineData) {
+      empty($('timeline-list'), 'Timeline is unavailable right now.');
+      paintTimelineActivity();
+    }
   } finally {
     timelinePending = false;
     freshness();

@@ -1123,6 +1123,56 @@ class TimelineClearResetsPeriodTests(unittest.TestCase):
         self.assertIn("timelinePeriod = ''", body)
         self.assertLess(body.index("timelinePeriod = ''"), body.index('updateTimelineFilters()'))
 
+
+class TimelineActivityChartTests(unittest.TestCase):
+    """Issue 142: day/week activity histogram lives on Timeline only."""
+
+    def test_timeline_view_hosts_the_activity_chart(self):
+        self.assertIn('id="timeline-activity"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+        self.assertIn('id="timeline-activity-summary"', _HTML)
+        view = _HTML.split('id="timeline-view"', 1)[1].split('id="connections-view"', 1)[0]
+        self.assertIn('id="timeline-activity"', view)
+        self.assertNotIn('id="timeline-activity"', _HTML.split('id="timeline-view"', 1)[0])
+
+    def test_timeline_paints_activity_from_the_spine(self):
+        fn = _SRC.split('function timeline()')[1].split('function timelineFilterParams')[0]
+        self.assertIn('paintTimelineActivity()', fn)
+        self.assertIn("'Quiet in this window.'", _SRC)
+        self.assertIn('timelineData.activity', _SRC)
+        self.assertIn('activity.day', _SRC)
+        self.assertIn('activity.week', _SRC)
+        self.assertIn('activity.window', _SRC)
+
+    def test_period_selects_day_or_week_grain(self):
+        fn = _SRC.split('function timelineActivitySeries()')[1].split('function timelineActivityLabel')[0]
+        self.assertIn("timelinePeriod === '1'", fn)
+        self.assertIn("timelinePeriod === '7'", fn)
+        self.assertIn("grain: 'hour'", fn)
+        self.assertIn("grain: 'day'", fn)
+
+    def test_activity_harness(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping timeline activity harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'timeline_activity_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'timeline activity harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['default_summary'], '5 events · last 14 days · by day')
+        self.assertEqual(result['default_bars'], 14)
+        self.assertEqual(result['day_summary'], '3 events · last day · by hour')
+        self.assertEqual(result['day_bars'], 24)
+        self.assertEqual(result['week_bars'], 7)
+        self.assertEqual(result['quiet_summary'], 'Quiet in this window.')
+        self.assertTrue(result['quiet_chart_hidden'])
+        self.assertTrue(result['unavailable_hidden'])
+
+
 class ProjectsReturnAndFinishingTests(unittest.TestCase):
     """pc-1486 second pass: /projects is a valid reader return, and a seat
     finishing parked work in a project keeps that project out of Quiet."""
@@ -1543,7 +1593,16 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertNotIn('WORKFLOWS', _HTML)
         self.assertNotIn('EXECUTIONS', _HTML)
         self.assertNotIn('n8n', _SRC.lower())
-        self.assertNotIn('histogram', _SRC.lower())
+        # Activity histogram is native on Timeline only (representation brief §6).
+        overview = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        work = _SRC.split('function work()')[1].split('function agentAction')[0]
+        agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]
+        self.assertNotIn('paintTimelineActivity', overview)
+        self.assertNotIn('paintTimelineActivity', work)
+        self.assertNotIn('paintTimelineActivity', agents)
+        self.assertNotIn('histogram', overview.lower())
+        self.assertNotIn('histogram', work.lower())
+        self.assertNotIn('histogram', agents.lower())
 
     def test_live_floor_harness(self):
         node = shutil.which('node')
