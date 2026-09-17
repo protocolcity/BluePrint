@@ -1,8 +1,12 @@
-"""pc-1534 Agents Canvas peel 1 — read-only spatial twin of the live floor.
+"""pc-1534/pc-1539 Agents Canvas — live spatial twin of the floor.
 
 Nodes are seats and jobs. Colors reuse ``floor_bucket``. Thin edges are
-seat→claimed work and/or next-fire ticks. This is not an editor: no
-rewire, no invented roster, no Overview/Work dump.
+seat→claimed work and/or next-fire ticks; the claim edge pulses so the
+canvas reads as a live twin of the floor, not a static diagram. The
+claimed work order is also surfaced directly on the seat node (not only
+via its edge target) so it stays visible without scrolling to the
+target column. This is not an editor: no rewire, no invented roster,
+no Overview/Work dump.
 """
 from __future__ import annotations
 
@@ -88,7 +92,7 @@ def _next_fire(agent: dict, now: datetime) -> dict | None:
     }
 
 
-def _actor_node(agent: dict, x: int, y: int) -> dict:
+def _actor_node(agent: dict, x: int, y: int, held: dict | None) -> dict:
     identity = _text(agent.get('id'))
     group = _text(agent.get('group'), 'job')
     bucket = floor_bucket(agent)
@@ -107,6 +111,11 @@ def _actor_node(agent: dict, x: int, y: int) -> dict:
     }
     if group == 'seat':
         node['work_href'] = _work_filter_href(identity)
+        if held is not None:
+            node['claim'] = {
+                'label': f'{held["title"]} · {held["order_id"]}',
+                'href': held['href'],
+            }
     return node
 
 
@@ -148,10 +157,10 @@ def build_agents_canvas(agents: list | None, now: datetime | None = None) -> dic
         if index and rows and nodes:
             y += 12
         for agent in rows:
-            actor = _actor_node(agent, COL_ACTOR, y)
+            held = _held_work(agent) if _band == 'seat' else None
+            actor = _actor_node(agent, COL_ACTOR, y, held)
             nodes.append(actor)
             targets: list[tuple[str, dict]] = []
-            held = _held_work(agent) if actor['kind'] == 'seat' else None
             fire = _next_fire(agent, stamp)
             if held is not None:
                 targets.append(('claim', held))

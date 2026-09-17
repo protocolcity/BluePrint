@@ -2017,10 +2017,13 @@ function buildAgentsCanvas(agents, now) {
         badge:agent.badge || agent.state, bucket:floorBucket(agent), group:agent.group,
         x:colActor, y, w:nodeW, h:nodeH, door:agent.group==='seat'?'person':'',
       };
-      if(agent.group==='seat') actor.work_href='/work?'+new URLSearchParams({assignment:'worker:'+agent.id});
+      const held=agent.group==='seat' && agent.held && agent.held.id && agent.held.project ? agent.held : null;
+      if(agent.group==='seat') {
+        actor.work_href='/work?'+new URLSearchParams({assignment:'worker:'+agent.id});
+        if(held) actor.claim={label:`${held.title || held.id} · ${held.id}`, href:'/work-order?'+new URLSearchParams({project:held.project,id:held.id})};
+      }
       nodes.push(actor);
       const targets=[];
-      const held=agent.group==='seat' && agent.held && agent.held.id && agent.held.project ? agent.held : null;
       if(held) {
         targets.push({
           kind:'claim',
@@ -2109,7 +2112,8 @@ function paintAgentsCanvasNode(node) {
     }
     const meta=el('div',undefined,'bp-agents-canvas-meta');
     if(node.badge) meta.append(badge(node.bucket==='error'?'last_run_failed':(node.bucket || 'idle'), node.badge));
-    if(node.work_href) meta.append(link('Work', node.work_href, 'bp-agents-canvas-chip'));
+    if(node.claim) meta.append(link(node.claim.label, readerHref(node.claim.href), 'bp-agents-canvas-chip bp-agents-canvas-claim'));
+    else if(node.work_href) meta.append(link('Work', node.work_href, 'bp-agents-canvas-chip'));
     card.append(meta);
     return card;
   }
