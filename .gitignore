@@ -11,6 +11,9 @@ __pycache__/
 # Workspace registration is host configuration, not product source.
 .protocolcity/
 
+# Generated host MCP mirror — never ship a live host file.
+.mcp.json
+
 # Generated host skill bridges and local credentials.
 .claude/skills/
 .env
