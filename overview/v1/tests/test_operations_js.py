@@ -141,13 +141,15 @@ class FiveAxisFilterTests(unittest.TestCase):
         self.assertIn("kind=$('kind-filter').value", _SRC.replace(' ', ''))
         self.assertIn("kind||o.kind===kind", _SRC.replace(' ', ''))
     def test_filters_compose_with_and_not_or(self):
-        fn = _SRC.split('function work()')[1]
+        fn = _SRC.split('function matchingWorkOrders()')[1].split('function workHasMatchingFilter')[0]
         compact = fn.replace(' ', '')
         self.assertIn('selectedProject||o.project===selectedProject', compact)
         self.assertIn('selectedAssignment||matchesAssignment', compact)
         self.assertIn('matchesStatusFacet(o,status)', compact)
         self.assertIn('gate||matchesGate(o,gate)', compact)
         self.assertIn('matchesAttentionFacet(o,attention)', compact)
+        work_fn = _SRC.split('function work()')[1].split('function agentAction')[0]
+        self.assertIn('matchingWorkOrders()', work_fn)
     def test_results_state_filtered_of_total(self):
         self.assertIn("`${orders.length} of ${total} matching work order", _SRC)
     def test_clear_all_resets_every_filter(self):
@@ -557,7 +559,7 @@ class UnroutedOverviewTests(unittest.TestCase):
         fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
         self.assertIn("orders.filter(isUnrouted)", fn)
         self.assertIn("link(String(unrouted.length),UNROUTED_WORK_HREF)", fn.replace(' ', ''))
-        work_fn = _SRC.split('function work()')[1].split('function agentAction')[0]
+        work_fn = _SRC.split('function matchingWorkOrders()')[1].split('function workHasMatchingFilter')[0]
         self.assertIn('(!unroutedOnly||isUnrouted(o))', work_fn.replace(' ', ''))
 
     def test_unrouted_zero_renders_quiet_text_not_hidden(self):
@@ -1429,7 +1431,7 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertEqual(self.result['throughput_unavailable'], 'Throughput unavailable')
         self.assertIn('pepper', self.result['work_flow'])
         self.assertIn('lili', self.result['work_flow'])
-        self.assertNotIn('Open 1 → Ready 1 → Live 2 → Done 0', self.result['work_flow'])
+        self.assertIn('Open 1 → Ready 1 → Live 2 → Done 0', self.result['work_flow'])
         self.assertEqual(self.result['work_flow_seats'], ['lili', 'pepper'])
         self.assertEqual(self.result['work_flow_empty'], 'No seat drain right now')
         self.assertEqual(self.result['work_flow_unavailable'], 'Seat load unavailable')
@@ -1791,7 +1793,7 @@ class WorkDensityTests(unittest.TestCase):
 
 
 class WorkFlowStripTests(unittest.TestCase):
-    """Issue #158: seat-load chips are the only Work hero. Flow bars held."""
+    """Issue #160: thin Open→Ready→Live→Done companion under seat-load chips."""
 
     def test_strip_host_sits_on_work_above_the_bands_only(self):
         work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
@@ -1806,11 +1808,12 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertNotIn('id="work-flow"', _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0])
         self.assertNotIn('id="work-flow"', _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0])
 
-    def test_paint_uses_ready_stalled_chips_and_honest_empty(self):
+    def test_paint_uses_ready_stalled_chips_and_flow_companion(self):
         self.assertIn('function paintWorkFlow()', _SRC)
         self.assertIn('function buildWorkFlow(', _SRC)
         work_fn = _SRC.split('function work()')[1].split('function agentAction')[0]
         self.assertIn('paintWorkFlow()', work_fn)
+        self.assertIn('matchingWorkOrders()', work_fn)
         paint = _SRC.split('function paintWorkFlow()')[1].split('function isUnrouted')[0]
         self.assertIn('Seat load unavailable', paint)
         self.assertIn('No seat drain right now', paint)
@@ -1818,27 +1821,26 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertIn(' ready', paint)
         self.assertIn(' stalled', paint)
         self.assertIn('scopeSeatLoad', paint)
+        self.assertIn('bp-work-flow-strip', paint)
+        self.assertIn('FLOW_STAGES', paint)
+        self.assertIn('data.flow', paint)
         self.assertNotIn('bp-work-flow-bar', paint)
-        self.assertNotIn('Open → Ready', paint)
-        self.assertNotIn('FLOW_STAGES', paint)
-        self.assertNotIn('data.flow', paint)
         self.assertNotIn('flow-pipeline', paint)
         self.assertNotIn('n8n', paint.lower())
         self.assertNotIn('histogram', paint.lower())
         self.assertNotIn('Needs you', paint)
 
-    def test_work_view_does_not_ship_the_held_flow_pipeline(self):
+    def test_work_view_keeps_seat_load_and_paints_flow_counts(self):
         work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
-        self.assertNotIn('Open → Ready → Live → Done', _SRC)
-        self.assertNotIn('FLOW_STAGES', _SRC)
-        self.assertNotIn('function flowStage', _SRC)
+        self.assertIn('function flowStage', _SRC)
+        self.assertIn("const FLOW_STAGES = ['Open','Ready','Live','Done']", _SRC)
         self.assertNotIn('bp-work-flow-pipeline', _SRC)
         self.assertNotIn('bp-work-flow-bar', _SRC)
         self.assertIn('aria-label="Seat load"', work)
         self.assertIn('bp-work-seat-chip', _SRC)
         paint = _SRC.split('function paintWorkFlow()')[1].split('function isUnrouted')[0]
-        self.assertIn('Held', paint)
-        self.assertNotIn('join(', paint)
+        self.assertIn("aria-label','Flow'", paint.replace(' ', ''))
+        self.assertNotIn('Held', paint)
 
     def test_strip_does_not_retouch_density_or_neighbor_doors(self):
         self.assertIn("dataset.kind='face'", _SRC)
@@ -1853,6 +1855,7 @@ class WorkFlowStripTests(unittest.TestCase):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
         self.assertIn('.bp-work-flow', css)
         self.assertIn('.bp-work-seat-load', css)
+        self.assertIn('.bp-work-flow-strip', css)
         self.assertNotIn('#fff', css.split('.bp-work-flow')[1].split('.bp-badge')[0])
         nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
@@ -1861,7 +1864,7 @@ class WorkFlowStripTests(unittest.TestCase):
 
 
 class WorkRepresentationV2Tests(unittest.TestCase):
-    """Issue #158: seat-load chips only, hard caps, +N doors, no 78 flat."""
+    """Issue #158 / #160: seat-load chips + thin flow companion, hard caps, +N doors."""
 
     def test_work_html_keeps_one_hero_host_above_the_bands(self):
         work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
@@ -1889,6 +1892,11 @@ class WorkRepresentationV2Tests(unittest.TestCase):
         self.assertEqual(result['seat_visible_default'], 9)
         self.assertEqual(result['seat_more'], '+69 more · filter by seat')
         self.assertFalse(result['hero_has_flow_bar'])
+        self.assertTrue(result['hero_has_flow_strip'])
+        self.assertIn('Open', result['hero_flow'])
+        self.assertIn('Ready', result['hero_flow'])
+        self.assertIn('Live', result['hero_flow'])
+        self.assertIn('Done', result['hero_flow'])
         self.assertIn('pepper', result['hero_chips'])
         self.assertEqual(result['mute_on_rows'], 0)
         self.assertEqual(result['more_on_rows'], 0)
