@@ -2290,6 +2290,10 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertNotIn('draggable', paint)
         self.assertNotIn('dragstart', paint)
         self.assertNotIn('rewire', paint)
+        self.assertNotIn('line.className', _SRC)
+        edges = _SRC.split('function paintAgentsCanvasEdges')[1].split('function paintAgentsCanvas()')[0]
+        self.assertIn("setAttribute('class','bp-agents-canvas-edge')", edges.replace(' ', ''))
+        self.assertNotIn('.className', edges)
         builder = _SRC.split('function buildAgentsCanvas(agents, now)')[1].split('function agentsCanvasFromSnapshot')[0]
         self.assertIn('floorBucket(agent)', builder)
         self.assertIn("group==='seat'", builder.replace(' ', ''))

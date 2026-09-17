@@ -2133,7 +2133,6 @@ function paintAgentsCanvasEdges(svg, canvas) {
     const mid=(x1+x2)/2;
     line.setAttribute('d',`M${x1} ${y1} C${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
     line.setAttribute('class','bp-agents-canvas-edge');
-    line.className='bp-agents-canvas-edge';
     line.dataset.kind=edge.kind || '';
     svg.append(line);
   }
