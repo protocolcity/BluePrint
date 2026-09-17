@@ -3,6 +3,9 @@
 Read-only merge of WorkLane events and comments, WorkForce ledger rows,
 supervisor passes, and cached GitHub delivery evidence. Bounded by a time
 window and row cap; never infers liveness or synthesizes rows.
+
+``timeline_activity`` buckets those same firings into a day/week histogram
+for the Timeline page. Quiet windows stay zero-filled.
 """
 from __future__ import annotations
 
@@ -11,7 +14,7 @@ import json
 import re
 import shlex
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, build_opener
@@ -23,6 +26,9 @@ from .remote_activity import remote_snapshot
 PAGE_SIZE = 200
 WINDOW_SECONDS = 14 * 86400
 SOURCE_ROW_CAP = 500
+ACTIVITY_DAY_HOURS = 24
+ACTIVITY_WEEK_DAYS = 7
+ACTIVITY_WINDOW_DAYS = WINDOW_SECONDS // 86400
 _CURSOR_SEP = '\x1f'
 
 _OWNER_RE = re.compile(r'(?m)^Owner:\s*(\S+)')
@@ -626,10 +632,63 @@ def _apply_filters(rows: list[dict], *, project: str, source: str, actor: str) -
     return filtered
 
 
+def _floor_utc(stamp: datetime, grain: str) -> datetime:
+    stamp = stamp.astimezone(timezone.utc)
+    if grain == 'hour':
+        return stamp.replace(minute=0, second=0, microsecond=0)
+    return stamp.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _activity_series(rows: list[dict], *, grain: str, periods: int, now: datetime) -> dict:
+    """Fixed UTC buckets. Quiet slots stay 0 so a dead hour/day is visible as quiet."""
+    now = now.astimezone(timezone.utc)
+    latest = _floor_utc(now, grain)
+    step = timedelta(hours=1) if grain == 'hour' else timedelta(days=1)
+    origin = latest - step * (periods - 1)
+    counts = [0] * periods
+    for row in rows:
+        stamp = _parse_time(row.get('at'))
+        if stamp is None:
+            continue
+        stamp = stamp.astimezone(timezone.utc)
+        if stamp < origin or stamp > now:
+            continue
+        if grain == 'hour':
+            index = int((stamp - origin).total_seconds() // 3600)
+        else:
+            index = (stamp.date() - origin.date()).days
+        if 0 <= index < periods:
+            counts[index] += 1
+    buckets = []
+    cursor = origin
+    for count in counts:
+        buckets.append({'start': cursor.strftime('%Y-%m-%dT%H:%M:%SZ'), 'count': count})
+        cursor += step
+    return {'grain': grain, 'buckets': buckets, 'total': sum(counts)}
+
+
+def timeline_activity(rows: list[dict] | None, *, now: datetime | None = None) -> dict:
+    """Day/week histogram of existing timeline firings. Never invents events.
+
+    ``day`` is the last 24 hours in hourly UTC buckets. ``week`` is the last
+    7 UTC days. ``window`` is the readable 14-day spine in daily UTC buckets.
+    Totals of 0 are honest quiet — zero-filled, not omitted or synthesized.
+    """
+    clock = now or datetime.now(timezone.utc)
+    events = rows or []
+    return {
+        'day': _activity_series(events, grain='hour', periods=ACTIVITY_DAY_HOURS, now=clock),
+        'week': _activity_series(events, grain='day', periods=ACTIVITY_WEEK_DAYS, now=clock),
+        'window': _activity_series(events, grain='day', periods=ACTIVITY_WINDOW_DAYS, now=clock),
+    }
+
+
 def timeline_snapshot(root: Path | None, *, project: str = '', source: str = '', actor: str = '',
-                      cursor: str = '') -> dict:
+                      cursor: str = '', now: datetime | None = None) -> dict:
     if root is None:
-        return {'rows': [], 'next_cursor': None, 'sources': [], 'filters': {'project': project, 'source': source, 'actor': actor}}
+        return {'rows': [], 'next_cursor': None, 'sources': [],
+                'filters': {'project': project, 'source': source, 'actor': actor},
+                'activity': timeline_activity([], now=now)}
     root = Path(root).resolve()
     merged: list[dict] = []
     sources: list[dict] = []
@@ -639,6 +698,9 @@ def timeline_snapshot(root: Path | None, *, project: str = '', source: str = '',
         sources.append(meta)
     merged.sort(key=_sort_key, reverse=True)
     merged = _apply_filters(merged, project=project, source=source, actor=actor)
+    # Histogram is the full filtered spine, not the current page — paging
+    # must not change the day/week counts (issue 142).
+    activity = timeline_activity(merged, now=now)
     decoded = _decode_cursor(cursor)
     if decoded is not None:
         cursor_at, cursor_id = decoded
@@ -658,4 +720,5 @@ def timeline_snapshot(root: Path | None, *, project: str = '', source: str = '',
         'next_cursor': next_cursor,
         'sources': sources,
         'filters': {'project': project, 'source': source, 'actor': actor},
+        'activity': activity,
     }

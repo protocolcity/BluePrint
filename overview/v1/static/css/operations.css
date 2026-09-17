@@ -244,6 +244,52 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-timeline-detail summary { cursor: pointer; color: var(--ov-link); }
 .bp-timeline-detail p { margin: 6px 0 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Timeline day/week activity histogram from the firings spine (issue 142).
+   Quiet windows stay copy-only — no decorative empty chart. */
+.bp-timeline-activity { padding: 14px 16px; }
+.bp-timeline-activity .bp-section-head { margin-bottom: 8px; }
+.bp-timeline-hist {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 88px;
+  margin: 0;
+}
+.bp-timeline-hist-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.bp-timeline-hist-track {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+}
+.bp-timeline-hist-bar {
+  width: 100%;
+  max-width: 14px;
+  margin-inline: auto;
+  background: var(--ov-link);
+  border-radius: 2px 2px 0 0;
+}
+.bp-timeline-hist-bar[data-empty="true"] {
+  background: var(--ov-tile-border);
+  min-height: 2px;
+}
+.bp-timeline-hist-label {
+  font-size: 10px;
+  color: var(--ov-muted);
+  text-align: center;
+  line-height: 1;
+  height: 12px;
+  overflow: hidden;
+}
+
 /* Delivery: exception-first repository summary with grouped evidence (pc-1487). */
 .bp-delivery-summary { font-size: 14px; font-weight: 500; margin: 0 0 6px !important; }
 .bp-delivery-repo .bp-delivery-groups { margin-top: 8px; }

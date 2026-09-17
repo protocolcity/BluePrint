@@ -7,6 +7,9 @@ import unittest
 from unittest.mock import patch
 
 from server.timeline import (
+    ACTIVITY_DAY_HOURS,
+    ACTIVITY_WEEK_DAYS,
+    ACTIVITY_WINDOW_DAYS,
     PAGE_SIZE,
     _comment_event_word,
     _decode_cursor,
@@ -16,6 +19,7 @@ from server.timeline import (
     _ledger_event_word,
     _normalize_at,
     _supervisor_event_word,
+    timeline_activity,
     timeline_snapshot,
 )
 
@@ -516,3 +520,136 @@ class TimelineProjectionTests(unittest.TestCase):
         page2 = timeline_snapshot(self.root, project='alpha', cursor=cursor)
         self.assertEqual(len(page2['rows']), 1)
         self.assertEqual(page2['rows'][0]['title'], 'First')
+
+
+class TimelineActivityTests(unittest.TestCase):
+    """Issue 142: day/week histogram from the existing firings spine."""
+
+    def test_quiet_spine_is_zero_filled_not_omitted(self):
+        now = datetime(2026, 9, 17, 15, 30, tzinfo=timezone.utc)
+        result = timeline_activity([], now=now)
+        self.assertEqual(result['day']['grain'], 'hour')
+        self.assertEqual(result['week']['grain'], 'day')
+        self.assertEqual(result['window']['grain'], 'day')
+        self.assertEqual(len(result['day']['buckets']), ACTIVITY_DAY_HOURS)
+        self.assertEqual(len(result['week']['buckets']), ACTIVITY_WEEK_DAYS)
+        self.assertEqual(len(result['window']['buckets']), ACTIVITY_WINDOW_DAYS)
+        self.assertEqual(result['day']['total'], 0)
+        self.assertEqual(result['week']['total'], 0)
+        self.assertEqual(result['window']['total'], 0)
+        self.assertEqual(result['day']['buckets'][-1]['start'], '2026-09-17T15:00:00Z')
+        self.assertEqual(result['day']['buckets'][0]['start'], '2026-09-16T16:00:00Z')
+        self.assertEqual(result['week']['buckets'][0]['start'], '2026-09-11T00:00:00Z')
+        self.assertEqual(result['window']['buckets'][0]['start'], '2026-09-04T00:00:00Z')
+        self.assertTrue(all(bucket['count'] == 0 for bucket in result['day']['buckets']))
+
+    def test_counts_land_in_hour_and_day_buckets(self):
+        now = datetime(2026, 9, 17, 15, 30, tzinfo=timezone.utc)
+        rows = [
+            {'at': '2026-09-17T14:10:00Z', 'id': 'a'},
+            {'at': '2026-09-17T14:40:00Z', 'id': 'b'},
+            {'at': '2026-09-16T10:00:00Z', 'id': 'c'},
+            {'at': '2026-09-10T12:00:00Z', 'id': 'd'},
+        ]
+        result = timeline_activity(rows, now=now)
+        self.assertEqual(result['day']['total'], 2)
+        hours = {bucket['start']: bucket['count'] for bucket in result['day']['buckets']}
+        self.assertEqual(hours['2026-09-17T14:00:00Z'], 2)
+        self.assertEqual(hours['2026-09-17T15:00:00Z'], 0)
+        self.assertEqual(result['week']['total'], 3)
+        self.assertEqual(result['window']['total'], 4)
+        days = {bucket['start']: bucket['count'] for bucket in result['window']['buckets']}
+        self.assertEqual(days['2026-09-16T00:00:00Z'], 1)
+        self.assertEqual(days['2026-09-17T00:00:00Z'], 2)
+        self.assertEqual(days['2026-09-10T00:00:00Z'], 1)
+
+    def test_unparseable_and_future_stamps_are_skipped(self):
+        now = datetime(2026, 9, 17, 15, 30, tzinfo=timezone.utc)
+        rows = [
+            {'at': 'not-a-time', 'id': 'bad'},
+            {'at': '2026-09-17T16:00:00Z', 'id': 'future'},
+            {'at': '2026-09-17T15:01:00Z', 'id': 'ok'},
+        ]
+        result = timeline_activity(rows, now=now)
+        self.assertEqual(result['day']['total'], 1)
+        hours = {bucket['start']: bucket['count'] for bucket in result['day']['buckets']}
+        self.assertEqual(hours['2026-09-17T15:00:00Z'], 1)
+
+    def test_none_root_carries_quiet_activity(self):
+        result = timeline_snapshot(None)
+        self.assertEqual(result['rows'], [])
+        self.assertEqual(result['activity']['day']['total'], 0)
+        self.assertEqual(len(result['activity']['day']['buckets']), ACTIVITY_DAY_HOURS)
+        self.assertEqual(len(result['activity']['window']['buckets']), ACTIVITY_WINDOW_DAYS)
+
+
+class TimelineActivityProjectionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    def _register(self, slug='product', prefix='pc'):
+        manifest = self.root / slug / '.protocolcity/desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': slug, 'prefix': prefix, 'display': slug}))
+
+    def _db(self, slug='product'):
+        data = self.root / 'worklane/worklane/local/data'
+        data.mkdir(parents=True, exist_ok=True)
+        return data / f'{slug}.db'
+
+    def test_collapsed_pair_counts_once(self):
+        self._register()
+        with sqlite3.connect(self._db()) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute('INSERT INTO tasks VALUES(1, "pc-9", "Claim task")')
+            conn.execute('INSERT INTO task_events VALUES(1,1,"status_change","in_progress","seat",?)', (_RECENT,))
+            conn.execute('INSERT INTO task_comments VALUES(1,1,?,"seat",?)',
+                         ('Owner: seat\nStart: now', _RECENT))
+        result = timeline_snapshot(self.root)
+        self.assertEqual(len(result['rows']), 1)
+        self.assertEqual(result['activity']['window']['total'], 1)
+        self.assertEqual(result['activity']['day']['total'], 1)
+
+    def test_project_filter_narrows_activity(self):
+        self._register('alpha', 'aa')
+        self._register('beta', 'bb')
+        for slug, title in (('alpha', 'Alpha task'), ('beta', 'Beta task')):
+            with sqlite3.connect(self._db(slug)) as conn:
+                conn.executescript(
+                    'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                    'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+                )
+                conn.execute('INSERT INTO tasks VALUES(1, NULL, ?)', (title,))
+                conn.execute('INSERT INTO task_events VALUES(1,1,"created",NULL,"you",?)', (_RECENT,))
+        all_rows = timeline_snapshot(self.root)
+        filtered = timeline_snapshot(self.root, project='beta')
+        self.assertEqual(all_rows['activity']['window']['total'], 2)
+        self.assertEqual(filtered['activity']['window']['total'], 1)
+        self.assertEqual(filtered['rows'][0]['project'], 'beta')
+
+    def test_paging_does_not_change_activity_totals(self):
+        self._register('alpha', 'aa')
+        with sqlite3.connect(self._db('alpha')) as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+            )
+            for index in range(PAGE_SIZE + 5):
+                conn.execute('INSERT INTO tasks VALUES(?, NULL, ?)', (index + 1, f'Task {index}'))
+                conn.execute(
+                    'INSERT INTO task_events VALUES(?, ?, "created", NULL, "you", ?)',
+                    (index + 1, index + 1, _RECENT),
+                )
+        page1 = timeline_snapshot(self.root, project='alpha')
+        page2 = timeline_snapshot(self.root, project='alpha', cursor=page1['next_cursor'])
+        self.assertEqual(len(page1['rows']), PAGE_SIZE)
+        self.assertEqual(len(page2['rows']), 5)
+        self.assertEqual(page1['activity']['window']['total'], PAGE_SIZE + 5)
+        self.assertEqual(page2['activity']['window']['total'], PAGE_SIZE + 5)
+        self.assertEqual(page1['activity']['day']['total'], PAGE_SIZE + 5)
