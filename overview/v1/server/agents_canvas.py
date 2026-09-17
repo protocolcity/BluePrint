@@ -1,12 +1,16 @@
-"""pc-1534/pc-1539 Agents Canvas — live spatial twin of the floor.
+"""pc-1534/pc-1539/pc-1545 Agents Canvas — live spatial twin of the floor.
 
 Nodes are seats and jobs. Colors reuse ``floor_bucket``. Thin edges are
-seat→claimed work and/or next-fire ticks; the claim edge pulses so the
-canvas reads as a live twin of the floor, not a static diagram. The
-claimed work order is also surfaced directly on the seat node (not only
-via its edge target) so it stays visible without scrolling to the
-target column. This is not an editor: no rewire, no invented roster,
-no Overview/Work dump.
+seat→claimed work, seat→last-run and/or next-fire ticks; the claim edge
+pulses so the canvas reads as a live twin of the floor, not a static
+diagram. The claimed work order is also surfaced directly on the seat
+node (not only via its edge target) so it stays visible without
+scrolling to the target column. A seat's most recent terminal ledger row
+(real completion or failure — SKIP and quiet seats report nothing) opens
+a Timeline door filtered to that seat, same source as the AGENTS_INTENT
+"Failed is failed" rule: a failed last run is never softened into a
+neutral tile. This is not an editor: no rewire, no invented roster, no
+Overview/Work dump.
 """
 from __future__ import annotations
 
@@ -52,6 +56,13 @@ def _work_filter_href(identity: str) -> str:
     return '/work?' + urlencode({'assignment': f'worker:{identity}'})
 
 
+def _timeline_href(identity: str) -> str:
+    return '/timeline?' + urlencode({'actor': identity})
+
+
+LAST_RUN_LABELS = {'error': 'Last run · failed', 'stop': 'Last run · ok', 'done': 'Last run · ok'}
+
+
 def _held_work(agent: dict) -> dict | None:
     held = agent.get('held')
     if not isinstance(held, dict):
@@ -70,6 +81,31 @@ def _held_work(agent: dict) -> dict | None:
         'project': project,
         'href': _work_href(project, order_id),
         'door': 'ticket',
+    }
+
+
+def _last_run(agent: dict) -> dict | None:
+    """A seat's most recent terminal ledger row, real or failed.
+
+    SKIP is neither a real run nor a failure and is left unreported, same
+    as a missing ``last_run``: nothing is invented for a quiet seat.
+    """
+    run = agent.get('last_run')
+    if not isinstance(run, dict):
+        return None
+    outcome = _text(run.get('outcome')).lower()
+    label = LAST_RUN_LABELS.get(outcome)
+    if label is None:
+        return None
+    identity = _text(agent.get('id'))
+    return {
+        'id': f'run:{identity}',
+        'kind': 'last_run',
+        'label': label,
+        'title': _text(run.get('reason'), label),
+        'outcome': outcome,
+        'href': _timeline_href(identity),
+        'door': 'timeline',
     }
 
 
@@ -120,7 +156,8 @@ def _actor_node(agent: dict, x: int, y: int, held: dict | None) -> dict:
 
 
 def _place_target(node: dict, x: int, y: int) -> dict:
-    return {**node, 'x': x, 'y': y, 'w': NODE_W, 'h': NODE_H, 'bucket': 'target'}
+    bucket = 'error' if node.get('outcome') == 'error' else 'target'
+    return {**node, 'x': x, 'y': y, 'w': NODE_W, 'h': NODE_H, 'bucket': bucket}
 
 
 def build_agents_canvas(agents: list | None, now: datetime | None = None) -> dict:
@@ -161,9 +198,13 @@ def build_agents_canvas(agents: list | None, now: datetime | None = None) -> dic
             actor = _actor_node(agent, COL_ACTOR, y, held)
             nodes.append(actor)
             targets: list[tuple[str, dict]] = []
-            fire = _next_fire(agent, stamp)
             if held is not None:
                 targets.append(('claim', held))
+            if _band == 'seat':
+                run = _last_run(agent)
+                if run is not None:
+                    targets.append(('last_run', run))
+            fire = _next_fire(agent, stamp)
             if fire is not None:
                 targets.append(('next_fire', fire))
             target_y = y
