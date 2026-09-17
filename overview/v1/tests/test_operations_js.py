@@ -529,9 +529,11 @@ class UnroutedOverviewTests(unittest.TestCase):
     def test_overview_unrouted_line_is_under_metrics_not_in_the_tile_row(self):
         self.assertIn('id="overview-unrouted"', _HTML)
         metrics_pos = _HTML.index('id="metrics"')
+        spark_pos = _HTML.index('id="overview-throughput"')
         unrouted_pos = _HTML.index('id="overview-unrouted"')
         for_you_pos = _HTML.index('id="for-you-decide"')
-        self.assertLess(metrics_pos, unrouted_pos)
+        self.assertLess(metrics_pos, spark_pos)
+        self.assertLess(spark_pos, unrouted_pos)
         self.assertLess(unrouted_pos, for_you_pos)
 
     def test_unrouted_matches_open_backlog_needs_routing_chip(self):
@@ -1356,6 +1358,10 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertIn('Unrouted', self.result['unrouted'])
         self.assertIn('2 sources', self.result['source_line'])
         self.assertEqual(self.result['kpis'], 5)
+        self.assertEqual(self.result['throughput'], '3 closes · last 24h')
+        self.assertEqual(self.result['throughput_href'], '/timeline?period=1')
+        self.assertEqual(self.result['throughput_empty'], 'No closes in the last 24h')
+        self.assertEqual(self.result['throughput_unavailable'], 'Throughput unavailable')
 
 
 class SlimOverviewFollowThroughTests(unittest.TestCase):
@@ -1388,6 +1394,7 @@ class SlimOverviewFollowThroughTests(unittest.TestCase):
         overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
         self.assertIn('id="overview-executions"', overview)
         self.assertIn('id="metrics"', overview)
+        self.assertIn('id="overview-throughput"', overview)
         self.assertIn('id="overview-unrouted"', overview)
         self.assertIn('id="overview-source-line"', overview)
         self.assertNotIn('Across your projects', _HTML)
@@ -1554,6 +1561,51 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertTrue(result['working_has_cue'])
         self.assertEqual(result['empty_when_quiet'], 'No seats working right now.')
         self.assertIn('Next fire ·', result['next_fire'])
+
+
+class OverviewThroughputTests(unittest.TestCase):
+    """Issue #141: quiet last-24h closes spark under KPIs. Door, not a
+    sixth tile or an n8n canvas. Honesty / Work / Calendar / Agents stay."""
+
+    def test_spark_host_sits_under_kpis_not_inside_the_tile_row(self):
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        metrics_pos = overview.index('id="metrics"')
+        spark_pos = overview.index('id="overview-throughput"')
+        unrouted_pos = overview.index('id="overview-unrouted"')
+        decide_pos = overview.index('id="for-you-decide"')
+        self.assertLess(metrics_pos, spark_pos)
+        self.assertLess(spark_pos, unrouted_pos)
+        self.assertLess(unrouted_pos, decide_pos)
+        self.assertEqual(_HTML.count('id="overview-throughput"'), 1)
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertNotIn('id="overview-throughput"', work)
+
+    def test_paint_uses_snapshot_ticks_and_honest_empty(self):
+        self.assertIn('function paintOverviewThroughput()', _SRC)
+        self.assertIn('function throughputSpark(', _SRC)
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        self.assertIn('paintOverviewThroughput()', fn)
+        paint = _SRC.split('function paintOverviewThroughput()')[1].split('function isUnrouted')[0]
+        self.assertIn('No closes in the last 24h', paint)
+        self.assertIn('Throughput unavailable', paint)
+        self.assertIn('closes · last 24h', paint)
+        self.assertIn('THROUGHPUT_HREF', paint)
+        self.assertNotIn('n8n', paint.lower())
+        self.assertNotIn('histogram', paint.lower())
+
+    def test_spark_is_not_a_sixth_kpi_and_keeps_option_d(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-overview-throughput', css)
+        self.assertIn('.bp-overview-spark', css)
+        self.assertIn('grid-template-columns: repeat(5,minmax(0,1fr))', css)
+        self.assertIn('OVERVIEW_DECIDE_LIMIT = 5', _SRC)
+        self.assertIn("'+'+remainder+' more on Work'", _SRC)
+        self.assertIn('id="work-band-act-now"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('function calendarDoorsFromSnapshot', _SRC)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
 
 
 class WorkDensityTests(unittest.TestCase):

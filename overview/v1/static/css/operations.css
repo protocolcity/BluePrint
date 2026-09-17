@@ -32,7 +32,11 @@
 .bp-warning { color: var(--ov-focus); padding: 12px 16px; border: 1px solid var(--ov-tile-border-strong); border-left: 3px solid var(--ov-focus); border-radius: 5px; margin-bottom: 20px !important; }
 .bp-metrics { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); border: 1px solid var(--ov-tile-border); border-radius: 8px; margin-bottom: 24px; overflow: hidden; }
 .bp-metrics-compact { margin-bottom: 16px; }
-.bp-overview-unrouted { margin: -6px 0 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bp-overview-throughput { margin: -6px 0 10px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.bp-overview-throughput a { text-decoration: none; }
+.bp-overview-throughput a:hover { text-decoration: underline; }
+.bp-overview-spark { letter-spacing: .02em; color: var(--ov-muted); font-size: 12px; line-height: 1; }
+.bp-overview-unrouted { margin: -2px 0 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .bp-overview-unrouted a { text-decoration: none; }
 .bp-overview-unrouted a:hover { text-decoration: underline; }
 .bp-overview-source-line { margin: -6px 0 14px; font-size: 13px; line-height: 1.45; }
