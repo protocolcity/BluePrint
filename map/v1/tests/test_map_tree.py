@@ -135,8 +135,11 @@ class AttachProjectStateTests(unittest.TestCase):
         self.assertEqual(recipes["attention"], 2)
         self.assertEqual(recipes["working"], 1)
         self.assertEqual(recipes["storeState"], "available")
+        self.assertEqual(recipes["motion"]["stroke"], "none")
+        self.assertEqual(recipes["motion"]["state"], "quiet")
         self.assertNotIn("open", notes)
         self.assertNotIn("storeState", notes)
+        self.assertNotIn("motion", notes)
 
     def test_unavailable_store_is_read_only(self):
         tree = {"lots": [{"relPath": "career", "name": "career", "isDir": True}]}
@@ -145,6 +148,8 @@ class AttachProjectStateTests(unittest.TestCase):
         ])
         self.assertEqual(stamped["lots"][0]["storeState"], "unavailable")
         self.assertEqual(stamped["lots"][0]["open"], 0)
+        self.assertEqual(stamped["lots"][0]["motion"]["stroke"], "unavailable")
+        self.assertEqual(stamped["lots"][0]["motion"]["motion"], 0)
 
 
 if __name__ == "__main__":

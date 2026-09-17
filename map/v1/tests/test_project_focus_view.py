@@ -455,7 +455,7 @@ class ItemSelectionSyncTests(unittest.TestCase):
         # sidebar — canvas/sidebar selection was not fully synchronized.
         self.assertIn("selectedItem = null", self.paint)
         self.assertIn("isSelected = Boolean(selectedItem) && selectedItem.branch === branch.key", self.paint)
-        self.assertIn("paintProjectFocus(world, {\n        project: snap.project,\n        branches: lastBranches,\n        expandedBranch: snap.branch,\n        selectedItem: snap.item,\n        flashBranches: liveFlashBranches(),\n        tickBranches,\n      });", self.host)
+        self.assertIn("paintProjectFocus(world, {\n        project: snap.project,\n        branches: lastBranches,\n        expandedBranch: snap.branch,\n        selectedItem: snap.item,\n        flashBranches: liveFlashBranches(),\n        tickBranches,\n        motion: nodeState[snap.project.relPath] ? nodeState[snap.project.relPath].motion : null,\n      });", self.host)
 
     def test_project_panel_marks_the_active_item_row(self) -> None:
         panel = re.search(r"function renderProjectPanel\(snap\)\s*\{([\s\S]*?)\n  \}", self.host)

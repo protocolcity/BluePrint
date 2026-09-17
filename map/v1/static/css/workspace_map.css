@@ -4,8 +4,9 @@
  * outside the SVG. Only elements with `pointer-events: auto` fight for hits;
  * .map-chrome-hit turns hits on where the hit router expects chrome ownership.
  *
- * V1 rule: no cinema, no motion, no seat classes, no wo-tape / agents-panel /
- * gold beat rules. If you add one, mark it DEFERred and gate it behind a flag.
+ * V1 rule: no cinema, no ambient pulse, no seat classes, no wo-tape /
+ * agents-panel / gold beat rules. Stroke = activity on place nodes is
+ * static paint from real motion, not a simulated beat.
  */
 
 :root {
@@ -54,9 +55,31 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-lot-file-label {
   fill: var(--map-muted); font-size: 10px; pointer-events: none;
 }
+/* Issue #156 — stroke = activity. Quiet nodes keep the 1px rest stroke.
+ * Unavailable is dashed muted, never a fake zero glow. Selected / focus
+ * still win so doors stay readable. */
+.map-lot.map-motion-recent .map-lot-plate,
+.map-dig-child.map-motion-recent .map-dig-plate,
+.map-project-node.map-motion-recent .map-hub-disc {
+  stroke: #c4a056; stroke-width: 2;
+}
+.map-lot.map-motion-live .map-lot-plate,
+.map-dig-child.map-motion-live .map-dig-plate,
+.map-project-node.map-motion-live .map-hub-disc {
+  stroke: var(--map-lot-focus); stroke-width: 2.5;
+}
+.map-lot.map-motion-unavailable .map-lot-plate,
+.map-dig-child.map-motion-unavailable .map-dig-plate,
+.map-project-node.map-motion-unavailable .map-hub-disc {
+  stroke: var(--map-muted); stroke-width: 1.5; stroke-dasharray: 3 3;
+}
+#map-browser-list button.map-motion-recent { box-shadow: inset 3px 0 0 #c4a056; }
+#map-browser-list button.map-motion-live { box-shadow: inset 3px 0 0 var(--map-lot-focus); }
+#map-browser-list button.map-motion-unavailable { box-shadow: inset 3px 0 0 var(--map-muted); }
+
 /* Selected lot = clear 2px accent focus ring on dark (Theme §Enhance). */
 .map-lot.is-selected .map-lot-plate {
-  stroke: var(--map-lot-focus); stroke-width: 2;
+  stroke: var(--map-lot-focus); stroke-width: 2; stroke-dasharray: none;
 }
 
 /* Dig-in fan */
