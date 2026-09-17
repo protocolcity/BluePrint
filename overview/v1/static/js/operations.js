@@ -412,6 +412,22 @@ function sources(parent, details) {
   const rows=sortBySeverity(snapshot.sources || [], s=>s.name);
   reconcileList(parent, rows, s=>s.name, source=>connectionRow(source.name, source, details?'details':'compact'), {emptyText:'No data sources reported.'});
 }
+function overviewSourceLine() {
+  const host=$('overview-source-line');
+  if(!host) return;
+  const rows=snapshot.sources || [];
+  host.replaceChildren();
+  if(!rows.length) {
+    host.append(el('span','No data sources reported. '));
+    host.append(link('Connections','/connections'));
+    return;
+  }
+  const exceptions=rows.filter(isException);
+  const bits=[`${rows.length} source${rows.length===1?'':'s'}`];
+  if(exceptions.length) bits.push(`${exceptions.length} need attention`);
+  host.append(el('span', bits.join(' · ') + '. '));
+  host.append(link('Connections','/connections'));
+}
 function connectionExceptions() {
   const items=[];
   for(const source of snapshot.sources || []) if(isException(source)) items.push({id:'source:'+source.name, name:source.name, record:source});
@@ -632,11 +648,13 @@ function faceEntry(order) {
   entry.append(mute);
   return entry;
 }
-function faceHeading(label, total, visible) {
+function faceHeading(label, total, visible, href) {
   let text=`${label} · ${total}`;
   if(total > visible) text+=` · showing ${visible}`;
   const summary=$(`for-you-${label.toLowerCase()}-summary`);
   if(summary) summary.textContent=text;
+  const linkWrap=summary && summary.parentElement && summary.parentElement.querySelector('a');
+  if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
 }
 function bindForYouFaceToggle(face) {
   const details=$(`for-you-${face}-details`);
@@ -692,7 +710,7 @@ function overview() {
     unroutedHost.append(document.createTextNode('Unrouted '), link(String(unrouted.length), UNROUTED_WORK_HREF));
     unroutedHost.append(el('span', unrouted.length ? ' — open, ungated orders with no seat' : ' — none right now'));
   }
-  const faceLimit={decide:6,read:6,watch:4,note:4};
+  const faceLimit={decide:3,read:3,watch:4,due:4};
   let mutedCount=0;
   for(const face of ['decide','read','watch','due']) {
     const band=forYou.filter(o=>o.attention_face===face);
@@ -700,16 +718,14 @@ function overview() {
     const visible=unmuted.slice(0,faceLimit[face]);
     mutedCount+=band.length-unmuted.length;
     reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
-    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length);
+    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
     syncForYouFaceOpen(face, band.length);
   }
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,8);
+  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,4);
   reconcileList($('overview-recent'), recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
-  sources($('source-list'),false);
-  const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
-  reconcileList($('project-summary'), projects.slice(0,6), p=>p.id, projectCard, {emptyText:'No project stores found. Inspect Connections for source details.'});
+  overviewSourceLine();
 }
 function filterOptions() {
   const select=$('project-filter');
