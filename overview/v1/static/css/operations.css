@@ -73,6 +73,70 @@
 .bp-delivery-ci-spark a:hover { text-decoration: underline; }
 .bp-delivery-ci-spark-line { letter-spacing: .02em; font-size: 12px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
 .bp-delivery-ci-spark-line[data-tone="error"] { color: var(--ov-state-error); }
+/* pc-1542 / C4: PR · CI · Remote is the Delivery hero — git ledger, not a ticket board. */
+.bp-delivery-hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 16px 28px;
+  margin: 2px 0 6px;
+  padding: 6px 0 18px;
+  font-variant-numeric: tabular-nums;
+}
+.bp-delivery-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.bp-operations a.bp-delivery-hero-chip,
+.bp-operations .bp-delivery-hero-chip {
+  display: grid;
+  gap: 4px;
+  min-width: 148px;
+  padding: 12px 14px 10px;
+  text-align: left;
+  text-decoration: none;
+  color: var(--ov-fg);
+  background: var(--ov-tile-bg);
+  border: 1px solid var(--ov-tile-border-strong);
+  border-radius: 8px;
+}
+.bp-operations a.bp-delivery-hero-chip:hover { background: var(--ov-tile-border); }
+.bp-delivery-hero-chip-name {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ov-muted);
+}
+.bp-delivery-hero-chip-name::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--ov-muted);
+  vertical-align: middle;
+}
+.bp-delivery-hero-chip[data-kind="pr"] .bp-delivery-hero-chip-name::before { background: var(--ov-link); }
+.bp-delivery-hero-chip[data-kind="ci"] .bp-delivery-hero-chip-name::before { background: var(--ov-state-working); }
+.bp-delivery-hero-chip[data-kind="remote"] .bp-delivery-hero-chip-name::before { background: var(--ov-muted); }
+.bp-delivery-hero-chip-primary { font-size: 20px; font-weight: 500; letter-spacing: -.03em; line-height: 1; color: var(--ov-fg); }
+.bp-delivery-hero-chip-secondary { font-size: 12px; font-weight: 600; color: var(--ov-muted); }
+.bp-delivery-hero-chip[data-tone="open"] .bp-delivery-hero-chip-primary { color: var(--ov-link); }
+.bp-delivery-hero-chip[data-tone="working"] .bp-delivery-hero-chip-primary { color: var(--ov-state-working); }
+.bp-delivery-hero-chip[data-tone="partial"] .bp-delivery-hero-chip-primary { color: var(--ov-state-scanning); }
+.bp-delivery-hero-chip[data-tone="error"] .bp-delivery-hero-chip-primary,
+.bp-delivery-hero-chip[data-tone="error"] .bp-delivery-hero-chip-secondary { color: var(--ov-state-error); }
+.bp-delivery-hero-chip[data-tone="error"] .bp-delivery-hero-chip-name::before { background: var(--ov-state-error); }
+.bp-delivery-hero-chip[data-tone="muted"] { opacity: .92; }
+.bp-delivery-hero-chip[data-tone="muted"] .bp-delivery-hero-chip-primary { color: var(--ov-muted); font-size: 16px; }
+#delivery-view .bp-filters { padding: 4px 0 10px; gap: 12px; }
+#delivery-view .bp-filters input,
+#delivery-view .bp-filters select { min-height: 32px; padding: 6px 10px; }
 .bp-agents-pulse { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
 .bp-agents-pulse .bp-metric { cursor: default; }
 .bp-agents-pulse .bp-metric:hover { background: var(--ov-tile-bg); }
@@ -506,7 +570,8 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-cal-chip[data-state="reserved"]::before { background: var(--ov-state-off); }
 .bp-cal-write-door[hidden] { display: none; }
 
-/* Delivery: exception-first repository summary with grouped evidence (pc-1487). */
+/* Delivery: exception-first repository summary with grouped evidence (pc-1487).
+   Hero (PR · CI · Remote) sits above this ledger — pc-1542. */
 .bp-delivery-summary { font-size: 14px; font-weight: 500; margin: 0 0 6px !important; }
 .bp-delivery-repo .bp-delivery-groups { margin-top: 8px; }
 .bp-delivery-group { border-top: 1px solid var(--ov-tile-border); padding: 9px 0; }
