@@ -70,8 +70,10 @@ class ClaimPresentationTests(unittest.TestCase):
         self.assertIn('Live with', _SRC)
         self.assertIn('Parked by', _SRC)
     def test_watch_copy_never_says_stalled(self):
-        # Whole word only: "installed" is legitimate Delivery wording (pc-1487).
-        self.assertIsNone(re.search(r'\bstalled\b', _SRC.lower()))
+        # Watch copy stays evidence language; Stalled is a Status badge (pc-1510).
+        watch = _SRC.split('function nextActionText(order)')[1].split('function orderDetailBody')[0]
+        self.assertNotIn('stalled', watch.lower())
+        self.assertIn("Check for new evidence", watch)
 
 
 class AssignmentFilterTests(unittest.TestCase):
@@ -117,16 +119,19 @@ class FiveAxisFilterTests(unittest.TestCase):
     For You are five orthogonal axes; Work composes them with search and
     project, and states the filtered/total count with a clear-all."""
     def test_status_filter_holds_only_lifecycle_words(self):
-        self.assertIn('<option value="backlog">Open</option>', _HTML)
-        self.assertIn('<option value="in_progress">Live</option>', _HTML)
-        self.assertIn('<option value="in_review">Parked</option>', _HTML)
-        self.assertNotIn('For You (any face)', _HTML.split('id="gate-filter"')[0].split('id="status-filter"')[1])
+        status = _HTML.split('id="status-filter"')[1].split('</select>')[0]
+        for value in ('Open', 'Ready', 'Live', 'Review', 'Deferred', 'Stalled', 'Done'):
+            self.assertIn(f'value="{value}"', status)
+        self.assertNotIn('For You (any face)', status)
+        self.assertNotIn('value="backlog"', status)
     def test_gate_filter_offers_the_gate_values_including_blocked(self):
         for value in ('none', 'human', 'timer', 'deferred', 'tracking', 'blocked'):
             self.assertIn(f'value="{value}"', _HTML)
-    def test_attention_filter_offers_the_four_faces_and_any(self):
-        for value in ('any', 'decide', 'read', 'watch', 'due'):
-            self.assertIn(f'<option value="{value}">', _HTML)
+    def test_attention_filter_offers_the_board_bands(self):
+        attention = _HTML.split('id="attention-filter"')[1].split('</select>')[0]
+        self.assertIn('>Any</option>', attention)
+        for value in ('act_now', 'my_todos', 'seat'):
+            self.assertIn(f'value="{value}"', attention)
     def test_kind_filter_offers_the_five_kinds(self):
         """STATES_AND_TERMS.md §5 (D16): Work gains a Kind filter separate
         from For You so the item type axis stops overloading the faces."""
@@ -140,9 +145,9 @@ class FiveAxisFilterTests(unittest.TestCase):
         compact = fn.replace(' ', '')
         self.assertIn('selectedProject||o.project===selectedProject', compact)
         self.assertIn('selectedAssignment||matchesAssignment', compact)
-        self.assertIn('status||o.status===status', compact)
+        self.assertIn('matchesStatusFacet(o,status)', compact)
         self.assertIn('gate||matchesGate(o,gate)', compact)
-        self.assertIn("attention||(attention==='any'?o.attention:o.attention_face===attention)", compact)
+        self.assertIn('matchesAttentionFacet(o,attention)', compact)
     def test_results_state_filtered_of_total(self):
         self.assertIn("`${orders.length} of ${total} matching work order", _SRC)
     def test_clear_all_resets_every_filter(self):
@@ -259,14 +264,14 @@ class RowReconciliationTests(unittest.TestCase):
         self.assertIn("import('/js/dom-reconcile.mjs')", _SRC)
 
     def test_no_wholesale_replace_children_on_the_named_lists(self):
-        for list_id in ('metrics', 'for-you-decide', 'work-list', 'project-summary', 'seat-list', 'job-list'):
+        for list_id in ('metrics', 'for-you-decide', 'work-act-now', 'work-my-todos', 'work-seat-backlog', 'project-summary', 'seat-list', 'job-list'):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('overview-executions', 'metrics', 'work-list', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
+        for list_id in ('overview-executions', 'metrics', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
-        self.assertIn("recentHost=$('work-recent')", _SRC.replace(' ', ''))
-        self.assertIn('reconcileList(recentHost', _SRC.replace(' ', ''))
+        self.assertIn("reconcileList(host, visible", _SRC)
+        self.assertIn("reconcileList(host, groups", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
         """pc-1483/pc-1487: delivery painting must reconcile repository and
@@ -465,14 +470,14 @@ class CompactRowTests(unittest.TestCase):
     """pc-1484: compact Overview and Work rows with progressive disclosure."""
 
     def test_work_row_uses_one_meta_line_not_assigned_to_owner(self):
-        fn = _SRC.split('function orderRow(order)')[1].split('function gateLabel')[0]
+        fn = _SRC.split('function workBoardRow(order')[1].split('function orderRow')[0]
         compact = fn.replace(' ', '')
         self.assertIn('compactMetaLine(order)', compact)
         self.assertNotIn('Assignedto${order.owner}', compact)
 
     def test_assignment_summary_never_prefixes_assigned_to(self):
         self.assertIn('function assignmentSummary(order)', _SRC)
-        self.assertNotIn("'Assigned to'", _SRC.split('function assignmentSummary')[1].split('function lifecycleSummary')[0])
+        self.assertNotIn("'Assigned to'", _SRC.split('function assignmentSummary')[1].split('function orderUpdatedAt')[0])
 
     def test_boilerplate_notes_are_filtered_from_summary_and_detail_gate(self):
         self.assertIn('function isBoilerplateNote(note)', _SRC)
@@ -484,12 +489,13 @@ class CompactRowTests(unittest.TestCase):
         compact = fn.replace(' ', '')
         self.assertLess(compact.index("reconcileList($('overview-executions')"), compact.index("reconcileList($('metrics')"))
 
-    def test_work_has_recent_changes_list(self):
+    def test_work_has_three_density_bands(self):
         self.assertIn('id="overview-executions"', _HTML)
-        self.assertIn('id="work-recent"', _HTML)
+        self.assertIn('id="work-act-now"', _HTML)
+        self.assertIn('id="work-my-todos"', _HTML)
+        self.assertIn('id="work-seat-backlog"', _HTML)
         self.assertNotIn('id="overview-recent"', _HTML)
-        self.assertIn("recentHost=$('work-recent')", _SRC.replace(' ', ''))
-        self.assertIn('reconcileList(recentHost', _SRC.replace(' ', ''))
+        self.assertNotIn('id="work-recent"', _HTML)
 
     def test_for_you_uses_overview_face_row_not_full_order_row(self):
         self.assertIn('function overviewFaceRow(order)', _SRC)
@@ -582,13 +588,11 @@ class SlimOverviewTests(unittest.TestCase):
         self.assertIn("emptyText:'Nothing for You'", fn)
         self.assertNotIn('faceEntry', compact)
 
-    def test_recent_changes_live_on_work_not_overview(self):
+    def test_recent_changes_stay_off_overview(self):
         overview_fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
-        work_fn = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
         self.assertNotIn("reconcileList($('overview-recent')", overview_fn)
         self.assertNotIn('Recent changes', _HTML.split('id="overview-view"')[1].split('id="work-view"')[0])
-        self.assertIn("reconcileList(recentHost", work_fn.replace(' ', ''))
-        self.assertIn('.slice(0,8)', work_fn)
+        self.assertNotIn('id="work-recent"', _HTML)
 
     def test_source_status_is_one_compact_line_not_a_source_list(self):
         self.assertIn('id="overview-source-line"', _HTML)
@@ -636,18 +640,15 @@ class CompactRowReviewFixTests(unittest.TestCase):
     """pc-1484 review recovery 1: recent changes sort, More outside the link,
     assignment summary from server owner."""
 
-    def test_recent_changes_sort_by_parsed_time_and_exclude_closed(self):
-        fn = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
-        compact = fn.replace(' ', '')
+    def test_closed_orders_stay_out_of_work_bands(self):
         self.assertIn('function orderUpdatedAt(order)', _SRC)
         self.assertIn('function isClosedOrder(order)', _SRC)
-        self.assertIn('!isClosedOrder(o)', compact)
-        self.assertIn('orderUpdatedAt(b)-orderUpdatedAt(a)', compact)
-        self.assertNotIn("localeCompare(String(a.updated_at", fn)
+        compact = _SRC.split('function isSeatBacklog(order)')[1].split('function boardBand')[0].replace(' ', '')
+        self.assertIn('if(isClosedOrder(order)||isActNow(order)||isMyTodo(order))returnfalse', compact)
 
     def test_more_disclosure_is_outside_the_row_link(self):
-        for fn_name in ('orderRow', 'overviewFaceRow'):
-            fn = _SRC.split(f'function {fn_name}(order)')[1].split('function ')[0]
+        for fn_name in ('workBoardRow', 'overviewFaceRow'):
+            fn = _SRC.split(f'function {fn_name}(order')[1].split('function ')[0]
             compact = fn.replace(' ', '')
             self.assertIn('anchor.append(content)', compact)
             self.assertNotIn('anchor.append(details)', compact)
@@ -655,7 +656,7 @@ class CompactRowReviewFixTests(unittest.TestCase):
             self.assertLess(fn.index('row.append(anchor'), fn.index('row.append(details)'))
 
     def test_assignment_summary_uses_server_owner_field(self):
-        fn = _SRC.split('function assignmentSummary(order)')[1].split('function lifecycleSummary')[0]
+        fn = _SRC.split('function assignmentSummary(order)')[1].split('function orderUpdatedAt')[0]
         compact = fn.replace(' ', '')
         self.assertIn('order.owner', fn)
         self.assertNotIn('order.assigned_you', compact)
@@ -1264,28 +1265,23 @@ class ChangeFeedLiveCueTests(unittest.TestCase):
 
 
 class OverviewForYouChromeTests(unittest.TestCase):
-    """pc-1506 / pc-1509: Work keeps full collapsible faces; Overview keeps
+    """pc-1506 / pc-1510: Work is the three-band board; Overview keeps
     Decide rows plus Read/Watch count chips and five KPI tiles."""
 
-    def test_work_keeps_all_four_faces_as_details(self):
-        for face in ('decide', 'read', 'watch', 'due'):
-            self.assertIn(f'id="work-for-you-{face}-details"', _HTML)
-            self.assertIn(f'id="work-for-you-{face}-summary"', _HTML)
-            self.assertIn(f'id="work-for-you-{face}"', _HTML)
+    def test_work_paints_three_bands_with_counts(self):
+        for band in ('act-now', 'my-todos', 'seat-backlog'):
+            self.assertIn(f'id="work-band-{band}"', _HTML)
+            self.assertIn(f'id="work-{band}"', _HTML)
+            self.assertIn(f'id="work-{band}-count"', _HTML)
 
-    def test_work_decide_and_read_default_open_in_markup(self):
-        self.assertIn('id="work-for-you-decide-details" class="bp-for-you-face" open', _HTML)
-        self.assertIn('id="work-for-you-read-details" class="bp-for-you-face" open', _HTML)
-
-    def test_watch_and_due_open_when_they_have_items_without_fighting_the_user(self):
-        self.assertIn('function syncForYouFaceOpen', _SRC)
-        self.assertIn("details.dataset.userToggled", _SRC)
-        self.assertIn("details.open=count>0", _SRC.replace(' ', ''))
-
-    def test_work_faces_get_summary_counts_from_face_heading(self):
-        work_fn = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
-        compact = work_fn.replace(' ', '')
-        self.assertIn("faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,unmuted.length,'/work?attention='+face)", compact)
+    def test_work_attention_facet_is_orthogonal_to_status(self):
+        self.assertIn('id="status-filter"', _HTML)
+        self.assertIn('id="attention-filter"', _HTML)
+        self.assertIn('function matchesStatusFacet', _SRC)
+        self.assertIn('function matchesAttentionFacet', _SRC)
+        update = _SRC.split('function updateFilters()')[1].split('function updateWorkFilters')[0]
+        self.assertIn("params.set('status'", update)
+        self.assertIn("params.set('attention'", update)
 
     def test_kpi_grid_is_five_columns_on_desktop(self):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
@@ -1347,12 +1343,14 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertEqual(self.result['empty_kpi'], 4)
         self.assertEqual(self.result['empty_chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
 
-    def test_work_keeps_full_for_you_mute_more_and_recent(self):
-        self.assertEqual(self.result['work_decide'], 6)
-        self.assertEqual(self.result['work_read'], 2)
-        self.assertEqual(self.result['work_mutes'], 6)
+    def test_work_keeps_three_bands_dual_badges_and_mute_on_act_now(self):
+        self.assertEqual(self.result['work_act_now'], 8)
+        self.assertEqual(self.result['work_my_todos'], 1)
+        self.assertGreaterEqual(self.result['work_seat'], 1)
+        self.assertEqual(self.result['work_mutes'], 8)
         self.assertGreaterEqual(self.result['work_more'], 1)
-        self.assertGreaterEqual(self.result['recent_count'], 1)
+        self.assertTrue(self.result['work_dual_badges'])
+        self.assertFalse(self.result['work_needs_you'])
 
     def test_unrouted_kpis_and_source_line_still_paint(self):
         self.assertIn('Unrouted', self.result['unrouted'])
@@ -1376,17 +1374,15 @@ class SlimOverviewFollowThroughTests(unittest.TestCase):
         self.assertNotIn("el('summary','More')", decide)
         self.assertNotIn('Mute', decide)
 
-    def test_work_owns_mute_more_and_full_for_you(self):
+    def test_work_owns_mute_more_and_the_three_bands(self):
         work_html = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
         self.assertIn('id="mute-status"', work_html)
         self.assertIn('id="restore-muted"', work_html)
-        self.assertIn('id="work-recent"', work_html)
-        inbox = _SRC.split('function renderWorkInbox()')[1].split('function filterOptions')[0]
-        self.assertIn('faceEntry', inbox)
-        self.assertIn("reconcileList(recentHost", inbox.replace(' ', ''))
-        entry = _SRC.split('function faceEntry(order)')[1].split('function faceHeading')[0]
-        self.assertIn('Mute 24h', entry)
-        self.assertIn('overviewFaceRow(order)', entry)
+        self.assertIn('id="work-act-now"', work_html)
+        self.assertIn('id="work-my-todos"', work_html)
+        self.assertIn('id="work-seat-backlog"', work_html)
+        self.assertIn('Mute 24h', _SRC.split('function workBoardRow')[1].split('function orderRow')[0])
+        self.assertIn('WORK_BAND_LIMIT=8', _SRC.replace(' ', ''))
 
     def test_overview_keeps_unrouted_execution_kpis_and_source_line(self):
         overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
@@ -1558,6 +1554,42 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertTrue(result['working_has_cue'])
         self.assertEqual(result['empty_when_quiet'], 'No seats working right now.')
         self.assertIn('Next fire ·', result['next_fire'])
+
+
+class WorkDensityTests(unittest.TestCase):
+    """pc-1510: live board — three bands, dual badges, orthogonal facets."""
+
+    def test_work_rows_use_dual_face_and_status_badges(self):
+        fn = _SRC.split('function orderBadges(order)')[1].split('function workBoardRow')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("dataset.kind='face'", compact)
+        self.assertIn("dataset.kind='status'", compact)
+        self.assertNotIn('Needs you', fn)
+        self.assertNotIn("'attention'", fn)
+
+    def test_comfortable_cap_is_eight_plus_remainder(self):
+        self.assertIn('WORK_BAND_LIMIT=8', _SRC.replace(' ', ''))
+        self.assertIn("'+'+remainder", _SRC)
+        self.assertIn('function renderComfortBand', _SRC)
+        self.assertIn('function renderSeatBacklog', _SRC)
+        self.assertIn('bp-work-seat-virt', _HTML)
+        self.assertIn('SEAT_WINDOW=40', _SRC.replace(' ', ''))
+
+    def test_honest_empty_copy_is_per_band(self):
+        self.assertIn("'Nothing to decide or read.'", _SRC)
+        self.assertIn("'No personal todos.'", _SRC)
+        self.assertIn("'No seat-drainable open work.'", _SRC)
+
+    def test_legacy_work_links_still_resolve(self):
+        self.assertIn("statusLegacy[statusParam]", _SRC)
+        self.assertIn("attentionParam === 'note'", _SRC)
+        self.assertIn("DECIDE_WORK_HREF='/work?attention=decide'", _SRC.replace(' ', ''))
+
+    def test_work_css_stays_on_dark_pc_tokens(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-work-seat-virt', css)
+        self.assertIn('.bp-order-badges', css)
+        self.assertNotIn('#fff', css.split('.bp-work-seat-virt')[1].split('}')[0])
 
 
 if __name__ == '__main__':

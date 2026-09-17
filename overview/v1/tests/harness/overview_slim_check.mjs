@@ -111,10 +111,10 @@ const IDS = [
   'timeline-view', 'connections-view', 'delivery-view', 'settings-view', 'overview-executions',
   'overview-exec-cue', 'metrics', 'overview-unrouted', 'overview-source-line',
   'for-you-decide', 'overview-decide-more', 'overview-face-chips',
-  'work-for-you-decide', 'work-for-you-read', 'work-for-you-watch', 'work-for-you-due',
-  'work-for-you-decide-details', 'work-for-you-read-details', 'work-for-you-watch-details',
-  'work-for-you-due-details', 'work-for-you-decide-summary', 'work-for-you-read-summary',
-  'work-for-you-watch-summary', 'work-for-you-due-summary', 'work-recent', 'mute-status',
+  'work-band-act-now', 'work-act-now', 'work-act-now-count', 'work-act-now-more',
+  'work-band-my-todos', 'work-my-todos', 'work-my-todos-count', 'work-my-todos-more',
+  'work-band-seat-backlog', 'work-seat-backlog', 'work-seat-backlog-count', 'work-seat-backlog-more',
+  'work-list', 'mute-status',
   'projects-list', 'projects-summary', 'projects-filter',
   'seat-list', 'job-list', 'agent-detail', 'supervisor-panel', 'coverage-list', 'agents-heartbeat',
   'agents-next-fire', 'agents-pulse', 'agents-floor-remainder', 'agents-floor-empty',
@@ -139,7 +139,8 @@ function order(id, face, extra = {}) {
     id, project: 'blueprint', project_name: 'BluePrint', title: `Order ${id}`,
     status: extra.status || 'backlog', status_word: extra.status_word || 'Open',
     attention: Boolean(face), attention_face: face || '',
-    owner: 'You', assigned_you: true, workers: ['you'], needs_routing: false,
+    owner: extra.owner || 'You', assigned_you: extra.assigned_you !== undefined ? extra.assigned_you : true,
+    workers: extra.workers || ['you'], needs_routing: false, kind: extra.kind || 'work',
     updated_at: extra.updated_at || '2026-09-16T12:00:00Z',
     face_reason: extra.face_reason || (face ? `${face} reason` : ''),
     gate_type: face === 'decide' ? 'human' : (extra.gate_type || ''),
@@ -168,8 +169,8 @@ const fixture = {
     order('pc-r1', 'read'),
     order('pc-r2', 'read'),
     order('pc-w1', 'watch'),
-    order('pc-due1', 'due'),
-    order('pc-open', '', {attention: false, updated_at: '2026-09-17T01:00:00Z', title: 'Newest open'}),
+    order('pc-due1', 'due', {kind: 'reminder', workers: ['you'], assigned_you: true}),
+    order('pc-open', '', {attention: false, assigned_you: false, workers: ['agent'], ready_for: 'agent', owner: 'agent', updated_at: '2026-09-17T01:00:00Z', title: 'Newest open'}),
     order('pc-done', '', {status: 'done', status_word: 'Done', attention: false, updated_at: '2026-09-17T08:00:00Z'}),
   ],
   sources: [
@@ -282,25 +283,27 @@ assert.match(get('overview-source-line').textContent, /2 sources/);
 assert.ok(get('metrics').children.length === 5, 'five KPI tiles');
 
 runtime.work();
-const workDecide = get('work-for-you-decide').querySelectorAll('.bp-order');
-const workRead = get('work-for-you-read').querySelectorAll('.bp-order');
-const workWatch = get('work-for-you-watch').querySelectorAll('.bp-order');
-const workDue = get('work-for-you-due').querySelectorAll('.bp-order');
-const workMutes = get('work-for-you-decide').querySelectorAll('.bp-face-mute');
-const workMore = get('work-for-you-decide').querySelectorAll('.bp-order-detail');
-const recent = get('work-recent').querySelectorAll('.bp-order');
-const recentIds = recent.map(row => row.textContent);
+const workAct = get('work-act-now').querySelectorAll('.bp-order');
+const workTodos = get('work-my-todos').querySelectorAll('.bp-order');
+const workSeat = get('work-seat-backlog').querySelectorAll('.bp-order');
+const workMutes = get('work-act-now').querySelectorAll('.bp-face-mute');
+const workMore = get('work-act-now').querySelectorAll('.bp-order-detail');
+const workBadges = workAct[0] ? workAct[0].querySelectorAll('.bp-badge') : [];
+const workBadgeText = workBadges.map(node => node.textContent);
+const workNeedsYou = [...workAct, ...workTodos, ...workSeat].some(row => row.textContent.includes('Needs you'));
 
-assert.equal(workDecide.length, 6, 'Work must show the full Decide face');
-assert.equal(workRead.length, 2);
-assert.equal(workWatch.length, 1);
-assert.equal(workDue.length, 1);
-assert.equal(workMutes.length, 6, 'Mute lives on Work For You rows');
-assert.ok(workMore.length >= 1, 'More disclosure lives on Work face rows');
-assert.ok(recent.length >= 1, 'Recent changes live on Work');
-assert.ok(!recentIds.some(text => text.includes('pc-done') || text.includes('Order pc-done')), 'closed orders stay out of Recent');
+assert.equal(workAct.length, 8, 'Act now is Decide+Read at the comfortable cap');
+assert.equal(get('work-act-now-count').textContent, '8');
+assert.equal(workTodos.length, 1, 'Due reminder lands in My todos');
+assert.ok(workSeat.length >= 1, 'Seat backlog shows agent-drainable open work');
+assert.equal(workMutes.length, 8, 'Mute lives on Work Act now rows');
+assert.ok(workMore.length >= 1, 'More disclosure lives on Work rows');
+assert.equal(workBadges.length, 2, 'every Work row has dual Face + Status badges');
+assert.ok(workBadgeText.includes('Decide'), 'Face badge is Decide, not Needs you');
+assert.ok(workBadgeText.includes('Open'), 'Status badge stays on its own pill');
+assert.equal(workNeedsYou, false, 'Work rows never paint a primary Needs you chip');
 assert.match(get('mute-status').textContent, /Mute only hides this inbox item/);
-assert.match(get('work-for-you-decide-summary').textContent, /Decide · 6/);
+assert.equal(get('work-recent') && get('work-recent').children.length, 0);
 
 get('for-you-decide').replaceChildren();
 runtime.overview();
@@ -395,11 +398,13 @@ process.stdout.write(JSON.stringify({
   chip_hrefs: chipHrefs,
   overview_has_mute: Boolean(overviewMute),
   overview_has_more: Boolean(overviewMore),
-  work_decide: workDecide.length,
-  work_read: workRead.length,
+  work_act_now: workAct.length,
+  work_my_todos: workTodos.length,
+  work_seat: workSeat.length,
   work_mutes: workMutes.length,
   work_more: workMore.length,
-  recent_count: recent.length,
+  work_dual_badges: workBadges.length === 2,
+  work_needs_you: workNeedsYou,
   unrouted: get('overview-unrouted').textContent,
   source_line: get('overview-source-line').textContent,
   kpis: get('metrics').children.length,
