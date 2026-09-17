@@ -1073,7 +1073,7 @@ function flowBar(counts, keys, kind) {
     if(!n) continue;
     const seg=el('span');
     seg.dataset[kind]=String(key).toLowerCase();
-    seg.style.flexGrow=String(n);
+    seg.setAttribute('style','flex-grow:'+n);
     bar.append(seg);
   }
   return bar;
