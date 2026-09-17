@@ -520,9 +520,9 @@ class UnroutedOverviewTests(unittest.TestCase):
         self.assertIn('id="overview-unrouted"', _HTML)
         metrics_pos = _HTML.index('id="metrics"')
         unrouted_pos = _HTML.index('id="overview-unrouted"')
-        grid_pos = _HTML.index('class="bp-overview-grid"')
+        for_you_pos = _HTML.index('id="for-you-decide-details"')
         self.assertLess(metrics_pos, unrouted_pos)
-        self.assertLess(unrouted_pos, grid_pos)
+        self.assertLess(unrouted_pos, for_you_pos)
 
     def test_unrouted_matches_open_backlog_needs_routing_chip(self):
         self.assertIn("function isUnrouted(order)", _SRC)
@@ -587,6 +587,25 @@ class SlimOverviewTests(unittest.TestCase):
     def test_face_heading_links_to_view_all_when_truncated(self):
         fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
         self.assertIn("faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,visible.length,'/work?attention='+face)", fn.replace(' ', ''))
+
+
+class SlimOverviewReviewFixTests(unittest.TestCase):
+    """pc-1508 recovery 1: source status is a compact line, not a hollow panel;
+    five KPI tiles wrap before narrow mobile."""
+
+    def test_source_line_is_outside_for_you_panel_not_a_grid_aside(self):
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        self.assertNotIn('class="bp-overview-grid"', overview)
+        self.assertNotIn('bp-overview-source-aside', overview)
+        source_pos = overview.index('id="overview-source-line"')
+        for_you_pos = overview.index('id="for-you-decide-details"')
+        self.assertLess(source_pos, for_you_pos)
+
+    def test_five_metric_tiles_have_a_mid_width_breakpoint(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        compact = css.replace(' ', '')
+        self.assertIn('grid-template-columns:repeat(5,minmax(0,1fr))', compact)
+        self.assertIn('@media(max-width:900px){.bp-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}', compact)
 
 
 class CompactRowReviewFixTests(unittest.TestCase):
