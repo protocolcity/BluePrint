@@ -159,6 +159,48 @@ class RemoteTests(unittest.TestCase):
         self.assertIn('cache_age_seconds', second)
         self.assertGreaterEqual(second['cache_age_seconds'], 0)
 
+    def test_unconfigured_snapshot_carries_an_honest_ci_spark(self):
+        with tempfile.TemporaryDirectory() as folder:
+            payload = remote.remote_snapshot(Path(folder))
+        self.assertEqual(payload['state'], 'not_configured')
+        self.assertEqual(payload['ci_spark']['state'], 'not_configured')
+        self.assertEqual(payload['ci_spark']['checks'], 0)
+        self.assertEqual(payload['ci_spark']['href'], '/delivery?type=workflow')
+
+    def test_connected_snapshot_buckets_workflow_pass_fail_and_merges(self):
+        values = [
+            {'private': False, 'default_branch': 'main'},
+            [],
+            [{'title': 'Ship', 'html_url': 'https://github.com/org/repo/pull/9', 'state': 'closed',
+              'merged_at': _RECENT, 'number': 9}],
+            {'workflow_runs': [
+                {'name': 'CI', 'status': 'completed', 'conclusion': 'failure', 'head_sha': 'abc',
+                 'updated_at': _RECENT, 'html_url': 'https://github.com/org/repo/actions/runs/2'},
+                {'name': 'CI', 'status': 'completed', 'conclusion': 'success', 'head_sha': 'def',
+                 'updated_at': _RECENT, 'html_url': 'https://github.com/org/repo/actions/runs/3'},
+            ]},
+            [],
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / '.blueprint').mkdir()
+            (root / '.blueprint/connections.json').write_text(json.dumps({
+                'github': {'repositories': [{'repo': 'org/repo'}]}}))
+            remote._CACHE.clear()
+            specs = [{'repo': 'org/repo'}]
+            key = (str(root.resolve()), json.dumps(specs, sort_keys=True), remote._WINDOW_SECONDS)
+            remote._CACHE[key] = {'checked': 0, 'busy': False, 'data': {'state': 'loading', 'repositories': []}}
+            with patch.object(remote, 'shutil') as shutil_mod, patch.object(remote, '_github', side_effect=values):
+                shutil_mod.which.return_value = 'gh'
+                remote._refresh(key, 'gh', specs, root)
+                payload = remote.remote_snapshot(root)
+        self.assertEqual(payload['ci_spark']['state'], 'healthy')
+        self.assertEqual(payload['ci_spark']['checks'], 2)
+        self.assertEqual(payload['ci_spark']['failures'], 1)
+        self.assertEqual(payload['ci_spark']['merges_total'], 1)
+        self.assertEqual(payload['repositories'][0]['ci_spark']['checks'], 2)
+        self.assertEqual(payload['ci_spark']['out_href'], 'https://github.com/org/repo/actions/runs/2')
+
 class DeployStateShaMatchTests(unittest.TestCase):
     """pc-1487 second pass: an abbreviated receipt head must match a full group sha."""
 

@@ -9,6 +9,8 @@ import subprocess
 import threading
 import time
 
+from .delivery_spark import attach_ci_sparks
+
 _LOCK = threading.Lock()
 _CACHE = {}
 _POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix='bp-github')
@@ -407,11 +409,11 @@ def _refresh(key, executable, specs, root):
 
 def remote_snapshot(binder):
     if binder is None:
-        return {'state': 'not_configured', 'repositories': [], 'refreshing': False}
+        return attach_ci_sparks({'state': 'not_configured', 'repositories': [], 'refreshing': False})
     root = Path(binder).resolve()
     config = root / '.blueprint/connections.json'
     if not config.resolve().is_relative_to(root):
-        return {'state': 'invalid_config', 'repositories': [], 'refreshing': False}
+        return attach_ci_sparks({'state': 'invalid_config', 'repositories': [], 'refreshing': False})
     try:
         raw = json.loads(config.read_text())
         specs = raw.get('github', {}).get('repositories', [])
@@ -419,13 +421,13 @@ def remote_snapshot(binder):
         if any(not isinstance(s, dict) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', s.get('repo', '')) for s in specs):
             raise ValueError('Invalid repository identity')
     except FileNotFoundError:
-        return {'state': 'not_configured', 'repositories': [], 'refreshing': False}
+        return attach_ci_sparks({'state': 'not_configured', 'repositories': [], 'refreshing': False})
     except (ValueError, OSError, AttributeError, TypeError):
-        return {'state': 'invalid_config', 'repositories': [], 'refreshing': False}
+        return attach_ci_sparks({'state': 'invalid_config', 'repositories': [], 'refreshing': False})
     executable = shutil.which('gh')
     if not executable:
-        return {'state': 'unavailable', 'error': 'GitHub CLI is not available to this application.', 'repositories': [], 'refreshing': False}
-    if not specs: return {'state': 'not_configured', 'repositories': [], 'refreshing': False}
+        return attach_ci_sparks({'state': 'unavailable', 'error': 'GitHub CLI is not available to this application.', 'repositories': [], 'refreshing': False})
+    if not specs: return attach_ci_sparks({'state': 'not_configured', 'repositories': [], 'refreshing': False})
     key = (str(root), json.dumps(specs, sort_keys=True), _WINDOW_SECONDS)
     with _LOCK:
         entry = _CACHE.setdefault(key, {'checked': 0, 'busy': False, 'data': {'state': 'loading', 'repositories': []}})
@@ -436,4 +438,4 @@ def remote_snapshot(binder):
         payload = {**entry['data'], 'refreshing': entry['busy'], 'cache_age_seconds': age}
         if entry['data'].get('fetched_at'):
             payload['fetched_at'] = entry['data']['fetched_at']
-        return payload
+        return attach_ci_sparks(payload)
