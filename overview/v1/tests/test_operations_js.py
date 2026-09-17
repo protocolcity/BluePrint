@@ -1650,11 +1650,11 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertEqual(result['empty_when_quiet'], 'No seats working right now.')
         self.assertIn('Next fire ·', result['next_fire'])
         self.assertEqual(result['working_spark'], '2 runs')
-        self.assertEqual(result['failed_spark'], '1 run · 1 fail')
+        self.assertEqual(result['failed_spark'], '1 run · 1 fail (100%)')
         self.assertEqual(result['idle_spark'], '')
         self.assertEqual(result['quiet_spark'], '')
         self.assertIn('4 runs · last 24h', result['floor_spark'])
-        self.assertIn('1 fail', result['floor_spark'])
+        self.assertIn('1 fail (25%)', result['floor_spark'])
         self.assertEqual(result['floor_spark_when_quiet'], '')
 
 
@@ -1683,22 +1683,48 @@ class AgentsFloorSparkPaintTests(unittest.TestCase):
         self.assertNotIn('seatSparkCell', pulse)
 
     def test_quiet_and_empty_stay_honest_and_timeline_keeps_the_histogram(self):
-        spark = _SRC.split('function seatSparkCell(agent)')[1].split('function paintAgentsFloorSpark()')[0]
+        spark = _SRC.split('function seatSparkCell(agent)')[1].split('function floorThroughputFromSnapshot()')[0]
         self.assertIn("bucket==='quiet'", spark.replace(' ', ''))
         self.assertIn('Runs unavailable', spark)
+        self.assertIn('failBits(', spark)
+        self.assertIn('bp-agent-spark-fail', spark)
         floor = _SRC.split('function paintAgentsFloorSpark()')[1].split('function paintAgentsPulse()')[0]
         self.assertIn('No seat runs in the last 24h', floor)
         self.assertIn("floorBucket(agent)!=='quiet'", floor.replace(' ', ''))
         self.assertIn('/timeline?period=1', floor)
+        self.assertIn('bp-agents-floor-fail', floor)
+        self.assertIn('failBits(', floor)
         self.assertNotIn('n8n', floor.lower())
         self.assertNotIn('histogram', floor.lower())
         self.assertIn('function paintTimelineActivity(', _SRC)
         self.assertIn('id="timeline-activity-chart"', _HTML)
 
+    def test_fail_rate_is_glanceable_and_mixed_fail_does_not_paint_the_strip_error(self):
+        self.assertIn('function failRateText(', _SRC)
+        self.assertIn('function failBits(', _SRC)
+        self.assertIn('function sparkTone(', _SRC)
+        self.assertIn('function floorThroughputFromSnapshot()', _SRC)
+        tone = _SRC.split('function sparkTone(data, fallback)')[1].split('function seatSparkLabel')[0]
+        self.assertIn('data.errors>=data.runs', tone.replace(' ', ''))
+        bits = _SRC.split('function failBits(errors, rate)')[1].split('function sparkTone')[0]
+        self.assertIn('1 fail', bits)
+        self.assertIn('failRateText(rate)', bits)
+        pulse = _SRC.split('function paintAgentsPulse()')[1].split('function paintAgentsNextFire()')[0]
+        self.assertIn("['Working',floor.working,'working']", pulse.replace(' ', ''))
+        self.assertIn("['Idle',floor.idle,'idle']", pulse.replace(' ', ''))
+        self.assertIn("['Error',floor.error,'last_run_failed']", pulse.replace(' ', ''))
+        work = _SRC.split('function paintWorkFlow()')[1].split('function isUnrouted')[0]
+        self.assertIn('bp-work-seat-chip', work)
+        self.assertIn('bp-work-flow-strip', work)
+        self.assertNotIn('failRateText', work)
+        self.assertNotIn('agents_floor', work)
+
     def test_spark_css_does_not_add_a_fourth_pulse_tile(self):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
         self.assertIn('.bp-agents-floor-spark', css)
         self.assertIn('.bp-agent-spark-line', css)
+        self.assertIn('.bp-agents-floor-fail', css)
+        self.assertIn('.bp-agent-spark-fail', css)
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr))', css)
         nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)

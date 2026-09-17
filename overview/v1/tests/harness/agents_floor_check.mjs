@@ -154,7 +154,12 @@ const fixture = {
       'off-seat': {hours: Array(24).fill(0), fails: Array(24).fill(0), runs: 0, errors: 0, fail_rate: null, state: 'empty'},
       'loop-health': {hours: Array.from({length: 24}, (_, i) => i === 10 ? 1 : 0), fails: Array(24).fill(0), runs: 1, errors: 0, fail_rate: 0, state: 'healthy'},
     },
-  },
+    throughput: {
+      hours: Array.from({length: 24}, (_, i) => (i === 4 || i === 10 || i === 22 || i === 23) ? 1 : 0),
+      fails: Array.from({length: 24}, (_, i) => i === 22 ? 1 : 0),
+      runs: 4, errors: 1, fail_rate: 0.25, state: 'healthy',
+    },
+  },}
   coverage: [],
   supervisor: null,
   sources: [{name: 'WorkForce heartbeat', state: 'fresh', last_at: new Date().toISOString()}],
@@ -249,7 +254,13 @@ const sparkOf = (host, id) => {
   const select = host.querySelectorAll('.bp-agent-select').find(node => node.dataset.agentId === id);
   if (!select) return '';
   const label = select.querySelector('.bp-agent-spark-label');
-  return label ? label.textContent : '';
+  const fail = select.querySelector('.bp-agent-spark-fail');
+  return [label ? label.textContent : '', fail ? fail.textContent : ''].filter(Boolean).join(' · ');
+};
+const sparkToneOf = (host, id) => {
+  const select = host.querySelectorAll('.bp-agent-select').find(node => node.dataset.agentId === id);
+  const line = select && select.querySelector('.bp-agent-spark-line');
+  return line ? line.dataset.tone : '';
 };
 const workingSpark = sparkOf(get('seat-list'), 'working-seat');
 const idleSpark = sparkOf(get('seat-list'), 'idle-seat');
@@ -258,10 +269,14 @@ const quietSpark = sparkOf(get('agents-quiet-list'), 'off-seat');
 assert.equal(workingSpark, '2 runs');
 assert.ok(get('seat-list').querySelector('.bp-agent-spark-line'), 'working seat paints a throughput spark');
 assert.equal(idleSpark, '', 'idle with no ticks stays honest empty');
-assert.equal(failedSpark, '1 run · 1 fail');
+assert.equal(failedSpark, '1 run · 1 fail (100%)');
 assert.equal(quietSpark, '', 'off seats do not invent spark motion');
+assert.equal(sparkToneOf(get('seat-list'), 'working-seat'), 'working');
+assert.equal(sparkToneOf(get('seat-list'), 'failed-seat'), 'error');
 assert.match(get('agents-floor-spark').textContent, /4 runs · last 24h/);
-assert.match(get('agents-floor-spark').textContent, /1 fail/);
+assert.match(get('agents-floor-spark').textContent, /1 fail \(25%\)/);
+assert.ok(get('agents-floor-spark').querySelector('.bp-agents-floor-fail'), 'strip fail rate is its own glanceable chip');
+assert.equal(get('agents-floor-spark').querySelector('.bp-agents-floor-spark-line') && get('agents-floor-spark').querySelector('.bp-agents-floor-spark-line').dataset.tone, 'working', 'mixed fail does not paint the whole strip as error');
 assert.equal(get('agents-floor-spark').querySelector('a') && get('agents-floor-spark').querySelector('a').href, '/timeline?period=1');
 
 const quietOnly = {
@@ -294,6 +309,6 @@ process.stdout.write(JSON.stringify({
   failed_spark: failedSpark,
   idle_spark: idleSpark,
   quiet_spark: quietSpark,
-  floor_spark: '4 runs · last 24h · 1 fail',
+  floor_spark: '4 runs · last 24h · 1 fail (25%)',
   floor_spark_when_quiet: get('agents-floor-spark').textContent,
 }));

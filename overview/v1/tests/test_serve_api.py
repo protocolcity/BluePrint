@@ -610,6 +610,11 @@ class DisposableDeskAgentsSparkSmokeTests(unittest.TestCase):
         off = payload['agents_floor']['sparks']['off-seat']
         self.assertEqual(off['state'], 'empty')
         self.assertEqual(off['runs'], 0)
+        throughput = payload['agents_floor']['throughput']
+        self.assertEqual(throughput['runs'], 2)
+        self.assertEqual(throughput['errors'], 1)
+        self.assertEqual(throughput['fail_rate'], 0.5)
+        self.assertEqual(throughput['state'], 'healthy')
 
 
 class DisposableDeskWorkFlowSmokeTests(unittest.TestCase):
