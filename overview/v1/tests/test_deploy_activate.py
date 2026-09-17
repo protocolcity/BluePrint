@@ -72,29 +72,29 @@ class ActivateTests(unittest.TestCase):
 
     def _write_matching_agent(self, legacy_ports=()):
         agent_path = self.agents_dir / f'{deploy_mod.LABEL}.plist'
-        arguments = [str(self.executable), '--binder', str(self.workspace), '--port', '8803']
+        arguments = [str(self.executable), '--binder', str(self.workspace), '--port', '8801']
         for legacy_port in legacy_ports:
             arguments.extend(['--legacy-port', str(legacy_port)])
         agent_path.write_bytes(plistlib.dumps({'Label': deploy_mod.LABEL, 'ProgramArguments': arguments}))
         deploy_mod.write_json(self.workspace / '.blueprint/deployment.json', {
             'version': '1.0.0-test',
             'entrypoint': str(self.executable),
-            'port': 8803,
+            'port': 8801,
             'active': True,
             'activated_at': datetime.now(timezone.utc).isoformat(),
         })
 
     def test_already_active_uses_probe_timeout_not_hardcoded_five_seconds(self):
         self._write_matching_agent()
-        deploy_mod.activate(self.release, self.workspace, 8803, probe_timeout=42.0)
+        deploy_mod.activate(self.release, self.workspace, 8801, probe_timeout=42.0)
         self.assertEqual(self.probe_calls, [42.0])
         self.assertEqual(self.activate_calls, [])
 
     def test_fallthrough_passes_resolved_legacy_from_existing_plist(self):
-        self._write_matching_agent(legacy_ports=(8801, 8802))
+        self._write_matching_agent(legacy_ports=(8802, 8803))
         with patch.object(deploy_mod, 'deployment_matches', return_value=False):
-            deploy_mod.activate(self.release, self.workspace, 8803, legacy_ports=None)
-        self.assertEqual(self.activate_calls[0]['legacy_ports'], [8801, 8802])
+            deploy_mod.activate(self.release, self.workspace, 8801, legacy_ports=None)
+        self.assertEqual(self.activate_calls[0]['legacy_ports'], [8802, 8803])
 
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 # BluePrint on Windows — first time (nothing installed)
 
 Hand this page to someone on a blank Windows PC.  
-**Goal:** suite open in the browser at `http://127.0.0.1:8803/`.
+**Goal:** suite open in the browser at `http://127.0.0.1:8801/`.
 
 You need about **10 minutes**, internet, and admin rights only if the Python installer asks.
 
@@ -56,7 +56,7 @@ Wait until install finishes and the last command stays running (the suite is the
 
 In your browser (Chrome, Edge, Firefox), go to:
 
-**http://127.0.0.1:8803/**
+**http://127.0.0.1:8801/**
 
 You should see the BluePrint **Overview**. Click **Map** to dig into the workspace.
 
@@ -74,7 +74,7 @@ If Windows Firewall asks about Python / private networks: **Allow**.
 |---|---|
 | `py` is not recognized | Python not on PATH. Reinstall Python and tick **Add python.exe to PATH**, then open a **new** PowerShell. Or try the same lines with `python` instead of `py -3`. |
 | `No module named protocolcity` | Install did not finish — re-run the three `pip` / `setup` / `serve` lines. |
-| Browser cannot connect | Make sure `serve` is still running in PowerShell; wait ~15s after start; try `http://127.0.0.1:8803/` again. |
+| Browser cannot connect | Make sure `serve` is still running in PowerShell; wait ~15s after start; try `http://127.0.0.1:8801/` again. |
 | Page loads but Map looks empty | Normal for a brand-new workspace. Overview still works; add folders later. |
 | Want a different folder name | Change `BluePrint` in both the `setup` and `serve` lines to any path you own. |
 
@@ -89,7 +89,7 @@ blueprint serve --foreground --root "$env:USERPROFILE\BluePrint"
 # or: py -3 -m protocolcity serve --foreground --root "$env:USERPROFILE\BluePrint"
 ```
 
-Then open **http://127.0.0.1:8803/** again.
+Then open **http://127.0.0.1:8801/** again.
 
 ---
 
