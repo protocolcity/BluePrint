@@ -2,6 +2,7 @@
 
 Presentation only — never changes stored status, gates, or eligibility.
 Keep the client helpers in operations.js aligned with these predicates.
+Seat-load / flow strip (#147) is additive and does not change band membership.
 """
 
 YOU_KINDS = frozenset({'todo', 'note', 'reminder'})
@@ -203,3 +204,102 @@ def annotate_order(order):
     order['row_face'] = row_face(order)
     order['row_status'] = row_status(order)
     return order
+
+
+FLOW_STAGES = ('Open', 'Ready', 'Live', 'Done')
+LOAD_BUCKETS = ('ready', 'claimed', 'stalled')
+SEAT_LOAD_LIMIT = 8
+
+
+def seat_hand(order):
+    """First factory seat, else You — never invents a hand."""
+    for worker in order.get('workers') or []:
+        if worker and worker != 'you':
+            return worker
+    if order.get('live_with'):
+        return order['live_with']
+    if order.get('parked_by'):
+        return order['parked_by']
+    if has_worker_you(order):
+        return 'you'
+    return ''
+
+
+def load_bucket(order):
+    """Ready / claimed / stalled — drain on a hand. Empty if not yet drainable."""
+    status = row_status(order)
+    if status == 'Ready':
+        return 'ready'
+    if status in ('Live', 'Review'):
+        return 'claimed'
+    if status == 'Stalled':
+        return 'stalled'
+    return ''
+
+
+def flow_stage(order):
+    """open → ready → live → done. Stalled stays on Live (in-flight, stuck)."""
+    status = row_status(order)
+    if status == 'Done':
+        return 'Done'
+    if status == 'Ready':
+        return 'Ready'
+    if status in ('Live', 'Review', 'Stalled'):
+        return 'Live'
+    if status in ('Open', 'Deferred'):
+        return 'Open'
+    return ''
+
+
+def empty_work_flow(state='empty'):
+    return {
+        'state': state,
+        'flow': {stage: 0 for stage in FLOW_STAGES},
+        'seats': [],
+        'total': 0,
+    }
+
+
+def build_work_flow(orders, *, readable=True, agents=None):
+    """Secondary Work drain strip. Does not change bands, badges, or facets."""
+    if not readable:
+        return empty_work_flow('unavailable')
+    flow = {stage: 0 for stage in FLOW_STAGES}
+    seats = {}
+    names = {'you': 'You'}
+    for agent in agents or []:
+        if not isinstance(agent, dict):
+            continue
+        identity = agent.get('id')
+        if not identity:
+            continue
+        if agent.get('group') == 'seat' or identity == 'you':
+            names[identity] = agent.get('name') or identity
+    for order in orders or []:
+        stage = flow_stage(order)
+        if stage:
+            flow[stage] += 1
+        bucket = load_bucket(order)
+        hand = seat_hand(order)
+        if not bucket or not hand:
+            continue
+        row = seats.setdefault(hand, {
+            'id': hand,
+            'name': names.get(hand, hand),
+            'ready': 0,
+            'claimed': 0,
+            'stalled': 0,
+        })
+        row[bucket] += 1
+    seat_list = sorted(
+        seats.values(),
+        key=lambda item: (-(item['ready'] + item['claimed'] + item['stalled']), str(item['name'])),
+    )
+    total = sum(flow.values())
+    load_total = sum(item['ready'] + item['claimed'] + item['stalled'] for item in seat_list)
+    return {
+        'state': 'healthy' if (total or load_total) else 'empty',
+        'flow': flow,
+        'seats': seat_list,
+        'total': total,
+    }

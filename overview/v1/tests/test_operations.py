@@ -512,6 +512,9 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(result['agents_floor'], {'working': 0, 'idle': 0, 'error': 0, 'stale': 0, 'quiet': 0})
         self.assertEqual(result['throughput']['state'], 'unavailable')
         self.assertEqual(result['throughput']['closes'], 0)
+        self.assertEqual(result['work_flow']['state'], 'unavailable')
+        self.assertEqual(result['work_flow']['seats'], [])
+        self.assertEqual(result['work_flow']['total'], 0)
 
     def test_placeholder_job_is_not_presented_as_working(self):
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
@@ -903,6 +906,24 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(sum(spark['fails']), 1)
         self.assertEqual(len(spark['hours']), 24)
         self.assertEqual(result['agents_floor']['error'], 1)
+
+    def test_disposable_desk_counts_seat_load_and_flow(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute("UPDATE tasks SET status='backlog', labels=?, gate_type=?, gate_note=? WHERE id=1",
+                         (json.dumps(['worker:pepper']), None, None))
+            conn.execute("INSERT INTO tasks VALUES(4,NULL,'Live peel','in_progress',1,'2026-09-17',?,'','')",
+                         (json.dumps(['worker:lili']),))
+        result = operations_snapshot(self.root)
+        flow = result['work_flow']
+        self.assertEqual(flow['state'], 'healthy')
+        self.assertGreaterEqual(flow['flow']['Ready'], 1)
+        self.assertGreaterEqual(flow['flow']['Live'], 1)
+        by_id = {seat['id']: seat for seat in flow['seats']}
+        self.assertEqual(by_id['pepper']['ready'], 1)
+        self.assertEqual(by_id['lili']['claimed'], 1)
+        self.assertEqual({order['board_band'] for order in result['orders']}, {'seat_backlog'})
+        self.assertEqual({order['row_face'] for order in result['orders']}, {'none'})
 
 class TimestampAndParkMarkerTests(unittest.TestCase):
     """pc-1495 second-pass findings: "Parked by" must count as a park marker and

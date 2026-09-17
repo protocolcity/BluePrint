@@ -996,6 +996,125 @@ function paintOverviewThroughput() {
     host.append(spark);
   }
 }
+const FLOW_STAGES=['Open','Ready','Live','Done'];
+const SEAT_LOAD_LIMIT=8;
+function seatHand(order) {
+  for(const worker of (order.workers || [])) {
+    if(worker && worker!=='you') return worker;
+  }
+  if(order.live_with) return order.live_with;
+  if(order.parked_by) return order.parked_by;
+  if(hasWorkerYou(order)) return 'you';
+  return '';
+}
+function loadBucket(order) {
+  const status=rowStatus(order);
+  if(status==='Ready') return 'ready';
+  if(status==='Live' || status==='Review') return 'claimed';
+  if(status==='Stalled') return 'stalled';
+  return '';
+}
+function flowStage(order) {
+  const status=rowStatus(order);
+  if(status==='Done') return 'Done';
+  if(status==='Ready') return 'Ready';
+  if(status==='Live' || status==='Review' || status==='Stalled') return 'Live';
+  if(status==='Open' || status==='Deferred') return 'Open';
+  return '';
+}
+function emptyWorkFlow(state) {
+  return {state:state || 'empty', flow:{Open:0,Ready:0,Live:0,Done:0}, seats:[], total:0};
+}
+function buildWorkFlow(orders, agents) {
+  const flow={Open:0,Ready:0,Live:0,Done:0};
+  const seats=new Map();
+  const names={you:'You'};
+  for(const agent of agents || []) {
+    if(!agent || !agent.id) continue;
+    if(agent.group==='seat' || agent.id==='you') names[agent.id]=agent.name || agent.id;
+  }
+  for(const order of orders || []) {
+    const stage=flowStage(order);
+    if(stage) flow[stage]+=1;
+    const bucket=loadBucket(order);
+    const hand=seatHand(order);
+    if(!bucket || !hand) continue;
+    if(!seats.has(hand)) seats.set(hand,{id:hand,name:names[hand] || hand,ready:0,claimed:0,stalled:0});
+    seats.get(hand)[bucket]+=1;
+  }
+  const list=[...seats.values()].sort((a,b)=>{
+    const load=(b.ready+b.claimed+b.stalled)-(a.ready+a.claimed+a.stalled);
+    return load || String(a.name).localeCompare(String(b.name));
+  });
+  const total=flow.Open+flow.Ready+flow.Live+flow.Done;
+  const loadTotal=list.reduce((n,seat)=>n+seat.ready+seat.claimed+seat.stalled,0);
+  return {state:(total || loadTotal) ? 'healthy' : 'empty', flow, seats:list, total};
+}
+function workFlowFromOrders() {
+  if(snapshot && snapshot.work_flow && snapshot.work_flow.state==='unavailable') return snapshot.work_flow;
+  const scoped=(snapshot.orders || []).filter(order=>!selectedProject || order.project===selectedProject);
+  return buildWorkFlow(scoped, snapshot && snapshot.agents);
+}
+function filterSeatLoad(seatId) {
+  const assignment=$('assignment-filter');
+  if(!assignment) return;
+  const value=seatId==='you' ? 'you' : 'worker:'+seatId;
+  if(!Array.from(assignment.options).some(option=>option.value===value)) assignment.add(new Option(seatId, value));
+  assignment.value=value;
+  updateWorkFilters();
+}
+function flowBar(counts, keys, kind) {
+  const total=keys.reduce((n,key)=>n+(counts[key] || 0),0);
+  const bar=el('span',undefined,'bp-work-flow-bar');
+  bar.setAttribute('aria-hidden','true');
+  if(!total) return bar;
+  for(const key of keys) {
+    const n=counts[key] || 0;
+    if(!n) continue;
+    const seg=el('span');
+    seg.dataset[kind]=String(key).toLowerCase();
+    seg.setAttribute('style','flex-grow:'+n);
+    bar.append(seg);
+  }
+  return bar;
+}
+function paintWorkFlow() {
+  const host=$('work-flow');
+  if(!host) return;
+  host.replaceChildren();
+  const data=workFlowFromOrders();
+  if(data.state==='unavailable') {
+    host.append(document.createTextNode('Seat load unavailable'));
+    return;
+  }
+  if(data.state==='empty') {
+    host.append(document.createTextNode('No seat drain right now'));
+    return;
+  }
+  const flow=el('div',undefined,'bp-work-flow-pipeline');
+  flow.append(el('p', FLOW_STAGES.map(stage=>stage+' '+data.flow[stage]).join(' → '), 'bp-muted'));
+  flow.append(flowBar(data.flow, FLOW_STAGES, 'stage'));
+  host.append(flow);
+  if(!data.seats.length) return;
+  const list=el('div',undefined,'bp-work-seat-load');
+  list.append(el('p','Ready · claimed · stalled','bp-muted bp-work-flow-legend'));
+  const visible=data.seats.slice(0,SEAT_LOAD_LIMIT);
+  for(const seat of visible) {
+    const row=el('div',undefined,'bp-work-seat-load-row');
+    const button=el('button', seat.name, 'bp-work-seat-load-name');
+    button.type='button';
+    const total=seat.ready+seat.claimed+seat.stalled;
+    const held=seat.claimed+seat.stalled;
+    const pct=total ? Math.round(held/total*100) : 0;
+    button.setAttribute('aria-label', `${seat.name}: ${seat.ready} ready, ${seat.claimed} claimed, ${seat.stalled} stalled`);
+    button.addEventListener('click',()=>filterSeatLoad(seat.id));
+    row.append(button, el('span', pct+'%', 'bp-work-seat-load-pct'), flowBar(seat, ['ready','claimed','stalled'], 'load'));
+    list.append(row);
+  }
+  const more=data.seats.length-visible.length;
+  if(more>0) list.append(link('+'+more+' more on Agents', '/agents', 'bp-work-flow-more'));
+  host.append(list);
+}
 function isUnrouted(order) {
   // Same slice as the per-row Needs routing chip: open backlog, ungated, no
   // routable seat (ONE_DESK_STORY §The fact: Unrouted).
@@ -1033,6 +1152,7 @@ function renderActiveFilters() {
 }
 function work() {
   renderWorkInbox();
+  paintWorkFlow();
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, kind=$('kind-filter').value, attention=$('attention-filter').value;
   const total=snapshot.orders.length;
   const orders=snapshot.orders.filter(o=>(!unroutedOnly || isUnrouted(o)) && (!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && matchesStatusFacet(o,status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && matchesAttentionFacet(o,attention) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
