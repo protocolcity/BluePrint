@@ -68,9 +68,23 @@
     </div>
     <div id="agents-canvas-wrap" hidden>
       <div class="bp-panel bp-agents-canvas-panel">
-        <div class="bp-section-head"><div><h2>Canvas</h2><p class="bp-muted">Read-only spatial twin of this floor. Nodes are seats and jobs. Edges are claimed work and next-fire ticks. Lists stay one hop away.</p></div></div>
+        <div class="bp-section-head"><div><h2>Canvas</h2><p class="bp-muted">Read-only spatial twin of this floor. Nodes are seats and jobs. Edges are claimed work and next-fire ticks. Lists stay one hop away.</p></div><button type="button" id="agents-canvas-tour-start">Tour</button></div>
         <p id="agents-canvas-empty" class="bp-muted" hidden></p>
+        <ol id="agents-canvas-empty-teach" class="bp-agents-tour-teach" hidden>
+          <li><strong>Strip</strong> — Working / Idle / Error counts this floor. Zero is still a count.</li>
+          <li><strong>Node</strong> — A seat or job would sit here. Seats can hold a claim; jobs never claim.</li>
+          <li><strong>Door</strong> — Work or Timeline opens from a node. Lists stay one hop away.</li>
+        </ol>
         <div id="agents-canvas" class="bp-agents-canvas" hidden></div>
+        <aside id="agents-canvas-tour" class="bp-agents-tour" hidden>
+          <p id="agents-canvas-tour-kicker" class="bp-eyebrow">Acquaintance</p>
+          <p id="agents-canvas-tour-copy"></p>
+          <div class="bp-agents-tour-nav">
+            <button type="button" id="agents-canvas-tour-back" hidden>Back</button>
+            <button type="button" id="agents-canvas-tour-next">Next</button>
+            <button type="button" id="agents-canvas-tour-skip">Skip</button>
+          </div>
+        </aside>
       </div>
     </div>
     <div id="agent-detail" class="bp-panel bp-agent-detail" hidden></div>
