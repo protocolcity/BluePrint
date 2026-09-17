@@ -117,6 +117,7 @@ const IDS = [
   'work-for-you-watch-summary', 'work-for-you-due-summary', 'work-recent', 'mute-status',
   'projects-list', 'projects-summary', 'projects-filter',
   'seat-list', 'job-list', 'agent-detail', 'supervisor-panel', 'coverage-list', 'agents-heartbeat',
+  'agents-next-fire', 'work-calendar-doors',
   'timeline-project', 'timeline-source', 'timeline-actor', 'timeline-list', 'timeline-sources',
   'timeline-more', 'timeline-new-events', 'calendar-project', 'calendar-today', 'calendar-next',
   'calendar-past', 'calendar-prev-week', 'calendar-next-week', 'calendar-today-btn',
@@ -155,8 +156,12 @@ const fixture = {
   projects: [{id: 'blueprint', name: 'BluePrint', open: 12, attention: 10, state: 'available'}],
   agents: [
     {id: 'bp-cursor-implementer', name: 'Cursor', group: 'seat', state: 'working', badge: 'WORKING', project: 'blueprint', held: {id: 'pc-d1', project: 'blueprint'}, shift: {started_at: '2026-09-16T10:00:00Z', age_seconds: 120, budget_secs: 2100}},
-    {id: 'loop-health', name: 'loop-health', group: 'job', state: 'idle', badge: 'IDLE'},
+    {id: 'loop-health', name: 'loop-health', group: 'job', state: 'idle', badge: 'IDLE', schedule: '5,35 * * * *', next_fire: new Date(Date.now() + 12 * 60 * 1000).toISOString()},
   ],
+  work_dates: [
+    {kind: 'deadline', product: 'blueprint', task_id: 'pc-due1', summary: 'Order pc-due1', dtstart: '2026-09-16', all_day: true, source: 'deadline:2026-09-16'},
+  ],
+  events: [],
   orders: [
     ...Array.from({length: 6}, (_, i) => order(`pc-d${i + 1}`, 'decide', {updated_at: `2026-09-16T1${i}:00:00Z`})),
     order('pc-r1', 'read'),
@@ -234,7 +239,7 @@ const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
 raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; lastSuccess = Date.now();`;
-const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox, applySnapshot(next){ snapshot = next; }}; })();`);
+const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox, agents, applySnapshot(next){ snapshot = next; }, calendarDueItems, nextScheduleFire, nextFireLine, buildCalendarDoors}; })();`);
 const runtime = await boot(...Object.values(context));
 
 function kpiForYouCount() {
@@ -266,7 +271,9 @@ assert.equal(get('overview-decide-more').hidden, false);
 const sixKpi = kpiForYouCount();
 assert.equal(sixKpi, 10, 'For You KPI is the true pile, not the five-row cap');
 assert.deepEqual(chipText, ['Read · 2', 'Watch · 1', 'Due · 1']);
-assert.ok(chipHrefs.every(href => String(href).includes('/work?attention=')), 'chips must navigate to Work faces');
+assert.equal(chipHrefs[0], '/work?attention=read');
+assert.equal(chipHrefs[1], '/work?attention=watch');
+assert.equal(chipHrefs[2], '/work?attention=due', 'Calendar Due with a work-order clock routes to Work attention');
 assert.equal(get('work-recent').children.length, 0, 'overview() must not paint Recent on Work');
 assert.equal(get('mute-status').textContent, '', 'overview() must not write mute status');
 assert.match(get('overview-unrouted').textContent, /Unrouted/);
@@ -346,6 +353,38 @@ const emptyKpi = kpiForYouCount();
 assert.equal(emptyKpi, 4, 'For You KPI still counts Read/Watch/Due when Decide is 0');
 assert.deepEqual(emptyChips, ['Read · 2', 'Watch · 1', 'Due · 1']);
 
+runtime.applySnapshot({...fixture, work_dates: [], events: [{title: 'Standup', at: '2026-09-17T10:00:00Z', state: 'due', source: 'routine'}], calendar_doors: undefined});
+get('overview-face-chips').replaceChildren();
+runtime.overview();
+const eventChips = get('overview-face-chips').querySelectorAll('.bp-face-chip');
+assert.equal(eventChips[2] && eventChips[2].textContent, 'Due · 1');
+assert.equal(eventChips[2] && eventChips[2].href, '/calendar', 'event-only Due routes to Calendar');
+
+runtime.applySnapshot({...fixture, work_dates: [], events: [], calendar_doors: undefined});
+get('overview-face-chips').replaceChildren();
+runtime.overview();
+const zeroDue = get('overview-face-chips').querySelectorAll('.bp-face-chip').map(c => c.textContent);
+assert.deepEqual(zeroDue, ['Read · 2', 'Watch · 1', 'Due · 0']);
+
+runtime.applySnapshot({...fixture, calendar_doors: undefined});
+runtime.agents();
+const nextFireText = get('agents-next-fire').textContent;
+assert.match(nextFireText, /Next fire · loop-health in \d+m/);
+assert.equal(get('agents-next-fire').querySelector('a') && get('agents-next-fire').querySelector('a').href, '/calendar');
+
+const helperNow = new Date('2026-09-17T15:00:00Z');
+const helperDoors = runtime.buildCalendarDoors(
+  [{kind: 'deadline', product: 'blueprint', task_id: 'pc-due1', dtstart: '2026-09-16', all_day: true, summary: 'Order pc-due1'}],
+  [],
+  [{name: 'loop-health', id: 'loop-health', next_fire: '2026-09-17T15:12:00Z'}],
+  helperNow,
+);
+assert.equal(helperDoors.due_count, 1);
+assert.equal(helperDoors.due_href, '/work?attention=due');
+assert.equal(helperDoors.next_fire_line, 'Next fire · loop-health in 12m');
+assert.equal(runtime.nextFireLine(null), 'Next fire · none reported');
+assert.equal(runtime.calendarDueItems([], [{title: 'Standup', at: '2026-09-17T10:00:00Z', state: 'due'}], helperNow).length, 1);
+
 process.stdout.write(JSON.stringify({
   decide_rows: decideRows.length,
   decide_more: sixMore && sixMore.textContent,
@@ -371,4 +410,10 @@ process.stdout.write(JSON.stringify({
   empty_decide_more: emptyMore && emptyMore.textContent,
   empty_kpi: emptyKpi,
   empty_chips: emptyChips,
+  event_due_chip: eventChips[2] && eventChips[2].textContent,
+  event_due_href: eventChips[2] && eventChips[2].href,
+  zero_due_chips: zeroDue,
+  next_fire: nextFireText,
+  helper_due_count: helperDoors.due_count,
+  helper_next_fire: helperDoors.next_fire_line,
 }));

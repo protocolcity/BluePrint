@@ -55,6 +55,11 @@
 .bp-for-you-face > summary::before { content: '▸ '; color: var(--ov-muted); }
 .bp-for-you-face[open] > summary::before { content: '▾ '; }
 .bp-overview-face-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.bp-agents-next-fire { margin: 6px 0 0; font-variant-numeric: tabular-nums; }
+.bp-agents-next-fire a { text-decoration: none; }
+.bp-agents-next-fire a:hover { text-decoration: underline; }
+.bp-work-calendar-doors { margin: 8px 0 2px; }
+.bp-work-calendar-doors .bp-order { padding: 8px 0; }
 a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-fg); }
 .bp-overview-decide { padding: 7px 0; }
 .bp-overview-decide .bp-order-link { min-width: 0; }
