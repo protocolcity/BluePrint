@@ -36,7 +36,7 @@ class CalendarFoldTests(unittest.TestCase):
     def test_render_vevent_with_live_shape(self):
         ev = {"uid": "osp-653", "summary": "HOST · rotate CRE SQL Server sa password",
               "description": "Remind me on 2026-08-10\nFOUNDER DECISION osp-571 (2026-08-07): rotate the CRE SQL Server `sa` password NOW (option a). This card is the execution runbook. Founder-only: the box is the legacy Win7 CRE machine; it will…",
-              "dtstart": date(2026, 8, 10), "all_day": True, "url": "http://127.0.0.1:8803/work-order?project=oneseo-pos&id=653", "kind": "timer", "source": "gate_until"}
+              "dtstart": date(2026, 8, 10), "all_day": True, "url": "http://127.0.0.1:8801/work-order?project=oneseo-pos&id=653", "kind": "timer", "source": "gate_until"}
         text = render_vevent(ev, dtstamp=datetime(2026, 9, 13))
         self.assertIn("DESCRIPTION:", text)
         self.assertIn("CATEGORIES:timer", text)

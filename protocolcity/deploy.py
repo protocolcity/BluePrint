@@ -20,6 +20,9 @@ import venv
 import zipfile
 
 LABEL = 'com.protocolcity.blueprint-overview'
+DEFAULT_PORT = 8801
+# Leftover split ports from the three-lane install (old Map / old Overview).
+DEFAULT_LEGACY_PORTS = (8802, 8803)
 DEFAULT_PROBE_TIMEOUT = 60.0
 DEFAULT_PROBE_INTERVAL = 0.3
 
@@ -258,7 +261,7 @@ def _looks_like_workspace(workspace):
     return any(workspace.glob('*/.protocolcity/desk-join.json'))
 
 
-def upgrade(workspace, *, port=8803, legacy_ports=(8801,8802), python=None, quiet=False, dry_run=False):
+def upgrade(workspace, *, port=DEFAULT_PORT, legacy_ports=DEFAULT_LEGACY_PORTS, python=None, quiet=False, dry_run=False):
     """Convert an existing three-lane install to the single consolidated app.
 
     Boots out and retires the legacy launch agents, then writes the single
@@ -305,7 +308,7 @@ def upgrade(workspace, *, port=8803, legacy_ports=(8801,8802), python=None, quie
     except Exception:
         # activate_agent already restores the previous launch agent plist from
         # memory on failure; restore the deployment receipt from the snapshot
-        # taken just above so :8803's on-disk record does not point at a build
+        # taken just above so :8801's on-disk record does not point at a build
         # that never went live.
         backup_receipt = backup_dir/'previous-deployment.json'
         if backup_receipt.is_file():
@@ -325,7 +328,7 @@ def main():
     parser.add_argument('--source', type=Path)
     parser.add_argument('--python', default=sys.executable)
     parser.add_argument('--release', type=Path)
-    parser.add_argument('--port', type=int, default=8803)
+    parser.add_argument('--port', type=int, default=DEFAULT_PORT)
     parser.add_argument('--legacy-port', action='append', type=int)
     parser.add_argument('--probe-timeout', type=float, default=DEFAULT_PROBE_TIMEOUT,
                         help='Seconds to wait for the service to report the expected build after restart.')
