@@ -216,6 +216,66 @@ export function paintDoors(root, doors) {
   }
 }
 
+// Hybrid honesty (CAP_ACQUAINTANCE_052 C2): the Agenda week strip is the
+// WorkLane schedule spine. Local and WorkLane are the only live sources
+// today — MCP and Connector are reserved slots, never painted as live
+// until that fabric actually exists. Apple/Outlook are reserved outbound
+// readers: BluePrint stays the source of truth, those apps do not write
+// here yet.
+export function sourceStripChips(opts = {}) {
+  return [
+    { id: "local", label: "Local", state: "live" },
+    { id: "worklane", label: "WorkLane", state: opts.workLane ? "live" : "unavailable" },
+    { id: "mcp", label: "MCP", state: "reserved" },
+    { id: "connector", label: "Connector", state: "reserved" },
+  ];
+}
+
+export function outboundStripChips() {
+  return [
+    { id: "apple", label: "Apple", state: "reserved" },
+    { id: "outlook", label: "Outlook", state: "reserved" },
+  ];
+}
+
+const CHIP_STATE_LABELS = {
+  live: "Live",
+  unavailable: "Unavailable",
+  reserved: "Reserved",
+};
+
+function paintChipStrip(root, role, chips, reservedTitle) {
+  const host = root.querySelector(`[data-role="${role}"]`);
+  if (!host) return;
+  clear(host);
+  for (const chip of chips) {
+    const span = document.createElement("span");
+    span.className = "bp-cal-chip";
+    span.dataset.state = chip.state;
+    const stateLabel = CHIP_STATE_LABELS[chip.state] || chip.state;
+    span.textContent = `${chip.label} · ${stateLabel}`;
+    if (chip.state === "reserved") {
+      span.title = reservedTitle || `${chip.label} — reserved, not connected yet`;
+    } else if (chip.state === "unavailable") {
+      span.title = `${chip.label} — unavailable`;
+    }
+    host.appendChild(span);
+  }
+}
+
+export function paintSourceStrip(root, opts = {}) {
+  paintChipStrip(root, "cal-sources", sourceStripChips(opts));
+}
+
+export function paintOutboundStrip(root) {
+  paintChipStrip(
+    root,
+    "cal-outbound",
+    outboundStripChips(),
+    "Reserved outbound reader — BluePrint stays source of truth",
+  );
+}
+
 export function openSheet(root, event) {
   const sheet = root.querySelector('[data-role="cal-sheet"]');
   if (!sheet) return;
