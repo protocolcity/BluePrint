@@ -1,10 +1,10 @@
 # suite/ — BluePrint citizen glass (`:8801`, historical)
 
-**Status:** HISTORICAL. The independent `suite/` UI on `:8801` is retired —
-superseded by the single consolidated app on `:8803` (`overview/v1/` +
+**Status:** HISTORICAL. The independent `suite/` UI is retired —
+superseded by the single consolidated app on `:8801` (`overview/v1/` +
 `map/v1/`), documented in [../ARCHITECTURE.md](../ARCHITECTURE.md) and
-[../README.md](../README.md). `:8801` survives only as a redirect from that
-same `:8803` process (see
+[../README.md](../README.md). Leftover split ports `:8802` and `:8803`
+redirect from that same `:8801` process (see
 [docs/operations/DEPLOYMENT.md](../docs/operations/DEPLOYMENT.md)). Retained
 below as design history; do not re-port or launch this folder as a second
 door.
@@ -53,7 +53,7 @@ Canon: [`docs/specs/SUITE_IA.md`](../docs/specs/SUITE_IA.md) ·
   work-order **timer gates** (`gate_type=timer` + `gate_until`) and
   **`deadline:YYYY-MM-DD` labels** across all WorkLane product stores.
   Subscribe from Apple Calendar (File → New Calendar Subscription) at
-  `http://127.0.0.1:8803/calendar.ics`. Optional HTML list:
+  `http://127.0.0.1:8801/calendar.ics`. Optional HTML list:
   `/calendar`. **Convention:** founders/hands put real-world dates on
   tickets as those labels/gates — no second date store. Regenerated on
   request (≈30s suite cache); set Apple’s refresh interval on the

@@ -27,7 +27,7 @@ Endpoints (all on the same origin):
 
 Usage::
 
-    python3 overview/v1/serve.py --port 8803 --binder ~/BluePrint
+    python3 overview/v1/serve.py --port 8801 --binder ~/BluePrint
 
 The default serve is **honest empty** (`No agents` · `No open jobs` · silent
 pulse · `No events`) per ``docs/specs/OVERVIEW_INTENT.md`` §Dogfood note
@@ -570,10 +570,13 @@ def _apply_cellar_tip(state: dict, cellar_tip: str) -> dict:
     return state
 
 
+DEFAULT_PORT = 8801
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Dogfood desk server for BluePrint (four-lens)")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8803)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--legacy-port", action="append", type=int, default=[], help="Retired local UI port to redirect to this app")
     parser.add_argument(
         "--binder",
