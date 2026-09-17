@@ -133,7 +133,7 @@ const IDS = [
   'filters', 'work-list', 'results', 'page-count', 'previous', 'next', 'clear-filters',
   'active-filters', 'overview-view', 'work-view', 'agents-view', 'calendar-view',
   'timeline-view', 'connections-view', 'delivery-view', 'settings-view', 'overview-executions',
-  'metrics', 'for-you-decide', 'overview-face-chips', 'overview-unrouted', 'overview-source-line',
+  'metrics', 'for-you-decide', 'overview-decide-more', 'overview-face-chips', 'overview-unrouted', 'overview-source-line',
   'work-for-you-decide', 'work-for-you-read', 'work-for-you-watch', 'work-for-you-due',
   'work-for-you-decide-details', 'work-for-you-read-details', 'work-for-you-watch-details',
   'work-for-you-due-details', 'work-for-you-decide-summary', 'work-for-you-read-summary',
