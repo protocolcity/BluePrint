@@ -1536,6 +1536,57 @@ class OverviewHonestyTests(unittest.TestCase):
         self.assertIn('font-variant-numeric: tabular-nums', css.split('.bp-overview-decide-more')[1].split('}')[0])
 
 
+class OverviewNowPaintTests(unittest.TestCase):
+    """pc-1541 / CAP_ACQUAINTANCE_052 C3: overnight paint parity on Now.
+    Option D membership stays: ≤5 Decide rows, +N remainder door, Read /
+    Watch / Due chips. Paint only — no membership reopen."""
+
+    def test_due_and_decide_chips_carry_face_tokens(self):
+        chip = _SRC.split('function overviewFaceChip(')[1].split('function faceHost')[0]
+        compact = chip.replace(' ', '')
+        self.assertIn('chip.dataset.face=face', compact)
+        fn = _SRC.split('function overview()')[1].split('function remainderLabel')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("overviewFaceChip(label,doors.due_count,doors.due_href||'/calendar',face)", compact)
+        self.assertIn("'/work?attention='+face,face)", compact)
+        self.assertIn("door.dataset.face='decide'", compact)
+        self.assertIn("'bp-filter-chip bp-face-chip'", fn)
+
+    def test_now_hides_tall_mute_and_more_bodies(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        hide = css.split('#overview-view .bp-face-entry')[1].split('#overview-view .bp-face-chip')[0]
+        self.assertIn('.bp-face-mute', hide)
+        self.assertIn('.bp-order-detail', hide)
+        self.assertIn('display: none !important', hide)
+        overview_fn = _SRC.split('function overview()')[1].split('function remainderLabel')[0]
+        self.assertNotIn('Mute 24h', overview_fn)
+        self.assertNotIn("el('summary','More')", overview_fn)
+        self.assertNotIn('faceEntry', overview_fn)
+
+    def test_decide_rows_stay_one_line_on_narrow(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        compact = css.replace(' ', '')
+        self.assertIn('.bp-overview-decide{padding:5px0;align-items:center;gap:8px;grid-template-columns:minmax(0,1fr)auto;}', compact)
+        narrow = css.split('@media(max-width:560px)')[1]
+        self.assertIn('#overview-view .bp-overview-decide { grid-template-columns: minmax(0,1fr) auto', narrow)
+        self.assertIn('#overview-view .bp-overview-decide .bp-badge { justify-self: end; }', narrow)
+
+    def test_due_chip_uses_quiet_gold_not_alarm_red(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        due = css.split('.bp-face-chip[data-face="due"]')[1].split('}')[0]
+        self.assertIn('var(--ov-state-scanning)', due)
+        self.assertIn('var(--ov-badge-lit-border)', due)
+        self.assertNotIn('var(--ov-state-error)', due)
+        decide = css.split('.bp-face-chip[data-face="decide"]')[1].split('}')[0]
+        self.assertIn('var(--ov-focus)', decide)
+        self.assertIn('OVERVIEW_DECIDE_LIMIT = 5', _SRC)
+        self.assertIn("'+'+remainder+' more on Work'", _SRC)
+        self.assertIn('id="overview-decide-more"', _HTML)
+        self.assertIn('id="overview-face-chips"', _HTML)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+
+
 class CalendarDoorsTests(unittest.TestCase):
     """pc-1512: thin Calendar doors on Overview and Agents only."""
 
