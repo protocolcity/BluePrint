@@ -271,7 +271,7 @@ class RowReconciliationTests(unittest.TestCase):
         for list_id in ('overview-executions', 'metrics', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
         self.assertIn("reconcileList(host, visible", _SRC)
-        self.assertIn("reconcileList(host, groups", _SRC)
+        self.assertIn("reconcileList(host, preview", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
         """pc-1483/pc-1487: delivery painting must reconcile repository and
@@ -469,11 +469,15 @@ class PersonaChipTests(unittest.TestCase):
 class CompactRowTests(unittest.TestCase):
     """pc-1484: compact Overview and Work rows with progressive disclosure."""
 
-    def test_work_row_uses_one_meta_line_not_assigned_to_owner(self):
+    def test_work_row_uses_one_line_title_not_a_tall_body(self):
         fn = _SRC.split('function workBoardRow(order')[1].split('function orderRow')[0]
         compact = fn.replace(' ', '')
-        self.assertIn('compactMetaLine(order)', compact)
-        self.assertNotIn('Assignedto${order.owner}', compact)
+        self.assertIn("el('strong',order.title)", compact)
+        self.assertIn('relativeAge(order.updated_at)', compact)
+        self.assertIn('seatChipForOrder(order)', compact)
+        self.assertNotIn('compactMetaLine(order)', compact)
+        self.assertNotIn('Mute 24h', fn)
+        self.assertNotIn("el('summary','More')", fn)
 
     def test_assignment_summary_never_prefixes_assigned_to(self):
         self.assertIn('function assignmentSummary(order)', _SRC)
@@ -649,13 +653,15 @@ class CompactRowReviewFixTests(unittest.TestCase):
         self.assertIn('if(isClosedOrder(order)||isActNow(order)||isMyTodo(order))returnfalse', compact)
 
     def test_more_disclosure_is_outside_the_row_link(self):
-        for fn_name in ('workBoardRow', 'overviewFaceRow'):
-            fn = _SRC.split(f'function {fn_name}(order')[1].split('function ')[0]
-            compact = fn.replace(' ', '')
-            self.assertIn('anchor.append(content)', compact)
-            self.assertNotIn('anchor.append(details)', compact)
-            self.assertIn('row.append(details)', compact)
-            self.assertLess(fn.index('row.append(anchor'), fn.index('row.append(details)'))
+        fn = _SRC.split('function overviewFaceRow(order')[1].split('function ')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('anchor.append(content)', compact)
+        self.assertNotIn('anchor.append(details)', compact)
+        self.assertIn('row.append(details)', compact)
+        self.assertLess(fn.index('row.append(anchor'), fn.index('row.append(details)'))
+        work = _SRC.split('function workBoardRow(order')[1].split('function orderRow')[0]
+        self.assertNotIn("el('summary','More')", work)
+        self.assertNotIn('bp-order-detail', work)
 
     def test_assignment_summary_uses_server_owner_field(self):
         fn = _SRC.split('function assignmentSummary(order)')[1].split('function orderUpdatedAt')[0]
@@ -676,8 +682,9 @@ class CompactRowReviewFixTests(unittest.TestCase):
         self.assertTrue(result['persona_owner_shows_you'])
         self.assertTrue(result['recent_sorts_by_real_time'])
         self.assertTrue(result['done_order_excluded'])
-        self.assertTrue(result['more_outside_link'])
-        self.assertTrue(result['more_open_survives_repaint'])
+        self.assertTrue(result['one_line_title'])
+        self.assertFalse(result['has_more'])
+        self.assertFalse(result['has_mute'])
 
 
 class SeatCoverageTests(unittest.TestCase):
@@ -1403,12 +1410,12 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertEqual(self.result['empty_kpi'], 4)
         self.assertEqual(self.result['empty_chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
 
-    def test_work_keeps_three_bands_dual_badges_and_mute_on_act_now(self):
+    def test_work_keeps_three_bands_dual_badges_without_mute(self):
         self.assertEqual(self.result['work_act_now'], 8)
         self.assertEqual(self.result['work_my_todos'], 1)
         self.assertGreaterEqual(self.result['work_seat'], 1)
-        self.assertEqual(self.result['work_mutes'], 8)
-        self.assertGreaterEqual(self.result['work_more'], 1)
+        self.assertEqual(self.result['work_mutes'], 0)
+        self.assertEqual(self.result['work_more'], 0)
         self.assertTrue(self.result['work_dual_badges'])
         self.assertFalse(self.result['work_needs_you'])
 
@@ -1420,7 +1427,9 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertEqual(self.result['throughput_href'], '/timeline?period=1')
         self.assertEqual(self.result['throughput_empty'], 'No closes in the last 24h')
         self.assertEqual(self.result['throughput_unavailable'], 'Throughput unavailable')
-        self.assertIn('Open 1 → Ready 1 → Live 2 → Done 0', self.result['work_flow'])
+        self.assertIn('pepper', self.result['work_flow'])
+        self.assertIn('lili', self.result['work_flow'])
+        self.assertNotIn('Open 1 → Ready 1 → Live 2 → Done 0', self.result['work_flow'])
         self.assertEqual(self.result['work_flow_seats'], ['lili', 'pepper'])
         self.assertEqual(self.result['work_flow_empty'], 'No seat drain right now')
         self.assertEqual(self.result['work_flow_unavailable'], 'Seat load unavailable')
@@ -1442,14 +1451,16 @@ class SlimOverviewFollowThroughTests(unittest.TestCase):
         self.assertNotIn("el('summary','More')", decide)
         self.assertNotIn('Mute', decide)
 
-    def test_work_owns_mute_more_and_the_three_bands(self):
+    def test_work_owns_the_three_bands_without_mute_more(self):
         work_html = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
-        self.assertIn('id="mute-status"', work_html)
-        self.assertIn('id="restore-muted"', work_html)
+        self.assertNotIn('id="mute-status"', work_html)
+        self.assertNotIn('id="restore-muted"', work_html)
         self.assertIn('id="work-act-now"', work_html)
         self.assertIn('id="work-my-todos"', work_html)
         self.assertIn('id="work-seat-backlog"', work_html)
-        self.assertIn('Mute 24h', _SRC.split('function workBoardRow')[1].split('function orderRow')[0])
+        work_row = _SRC.split('function workBoardRow')[1].split('function orderRow')[0]
+        self.assertNotIn('Mute 24h', work_row)
+        self.assertNotIn("el('summary','More')", work_row)
         self.assertIn('WORK_BAND_LIMIT=8', _SRC.replace(' ', ''))
 
     def test_overview_keeps_unrouted_execution_kpis_and_source_line(self):
@@ -1752,15 +1763,20 @@ class WorkDensityTests(unittest.TestCase):
     def test_comfortable_cap_is_eight_plus_remainder(self):
         self.assertIn('WORK_BAND_LIMIT=8', _SRC.replace(' ', ''))
         self.assertIn("'+'+remainder", _SRC)
+        self.assertIn('more in Act now', _SRC)
+        self.assertIn('more · My todos', _SRC)
+        self.assertIn('more · filter by seat', _SRC)
         self.assertIn('function renderComfortBand', _SRC)
         self.assertIn('function renderSeatBacklog', _SRC)
         self.assertIn('bp-work-seat-virt', _HTML)
-        self.assertIn('SEAT_WINDOW=40', _SRC.replace(' ', ''))
+        self.assertIn('SEAT_PREVIEW_SEATS=3', _SRC.replace(' ', ''))
+        self.assertIn('SEAT_PREVIEW_PER_SEAT=3', _SRC.replace(' ', ''))
+        self.assertNotIn('SEAT_WINDOW=40', _SRC.replace(' ', ''))
 
     def test_honest_empty_copy_is_per_band(self):
-        self.assertIn("'Nothing to decide or read.'", _SRC)
-        self.assertIn("'No personal todos.'", _SRC)
-        self.assertIn("'No seat-drainable open work.'", _SRC)
+        self.assertIn("'Nothing for You'", _SRC)
+        self.assertIn("'Your list is clear'", _SRC)
+        self.assertIn("'No seat backlog'", _SRC)
 
     def test_legacy_work_links_still_resolve(self):
         self.assertIn("statusLegacy[statusParam]", _SRC)
@@ -1775,7 +1791,7 @@ class WorkDensityTests(unittest.TestCase):
 
 
 class WorkFlowStripTests(unittest.TestCase):
-    """Issue #147: thin seat-load / flow strip secondary to the three bands."""
+    """Issue #158: seat-load chips are the only Work hero. Flow bars held."""
 
     def test_strip_host_sits_on_work_above_the_bands_only(self):
         work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
@@ -1790,7 +1806,7 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertNotIn('id="work-flow"', _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0])
         self.assertNotIn('id="work-flow"', _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0])
 
-    def test_paint_uses_ready_claimed_stalled_and_honest_empty(self):
+    def test_paint_uses_ready_stalled_chips_and_honest_empty(self):
         self.assertIn('function paintWorkFlow()', _SRC)
         self.assertIn('function buildWorkFlow(', _SRC)
         work_fn = _SRC.split('function work()')[1].split('function agentAction')[0]
@@ -1798,8 +1814,12 @@ class WorkFlowStripTests(unittest.TestCase):
         paint = _SRC.split('function paintWorkFlow()')[1].split('function isUnrouted')[0]
         self.assertIn('Seat load unavailable', paint)
         self.assertIn('No seat drain right now', paint)
-        self.assertIn('Ready · claimed · stalled', paint)
-        self.assertIn('filterSeatLoad', paint)
+        self.assertIn('bp-work-seat-chip', paint)
+        self.assertIn(' ready', paint)
+        self.assertIn(' stalled', paint)
+        self.assertIn('scopeSeatLoad', paint)
+        self.assertNotIn('bp-work-flow-bar', paint)
+        self.assertNotIn('Open → Ready', paint)
         self.assertNotIn('n8n', paint.lower())
         self.assertNotIn('histogram', paint.lower())
         self.assertNotIn('Needs you', paint)
@@ -1822,6 +1842,42 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
         self.assertNotIn('n8n', _HTML.lower())
         self.assertNotIn('point of sale', _HTML.lower())
+
+
+class WorkRepresentationV2Tests(unittest.TestCase):
+    """Issue #158: seat-load chips only, hard caps, +N doors, no 78 flat."""
+
+    def test_work_html_keeps_one_hero_host_above_the_bands(self):
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertIn('aria-label="Seat load"', work)
+        self.assertNotIn('Seat load and flow', work)
+        self.assertNotIn('id="mute-status"', work)
+        self.assertIn('bp-work-band-act-now', work)
+
+    def test_desk_like_counts_cap_and_doors(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping work v2 harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'work_v2_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=20, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'work v2 harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['act_now_total'], '9')
+        self.assertEqual(result['act_now_visible_default'], 8)
+        self.assertEqual(result['act_now_more'], '+1 more in Act now')
+        self.assertEqual(result['my_todos_total'], '31')
+        self.assertEqual(result['my_todos_visible_default'], 8)
+        self.assertEqual(result['my_todos_more'], '+23 more · My todos')
+        self.assertEqual(result['seat_total'], '78')
+        self.assertEqual(result['seat_visible_default'], 9)
+        self.assertEqual(result['seat_more'], '+69 more · filter by seat')
+        self.assertFalse(result['hero_has_flow_bar'])
+        self.assertIn('pepper', result['hero_chips'])
+        self.assertEqual(result['mute_on_rows'], 0)
+        self.assertEqual(result['more_on_rows'], 0)
+        self.assertEqual(result['door_sets_attention'], 'act_now')
+        self.assertEqual(result['chip_sets_seat'], 'worker:pepper')
 
 
 class ProjectsPortfolioSparkTests(unittest.TestCase):
