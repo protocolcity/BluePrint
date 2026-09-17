@@ -4,7 +4,6 @@
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
 const {reconcileList} = await import('/js/dom-reconcile.mjs');
-window.__CALENDAR_V1_NO_AUTO_BOOT__ = true;
 const {buildLoadByDay, paintLoad, paintDoors} = await import('/js/calendar.v1.js');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
