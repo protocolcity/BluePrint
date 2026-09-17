@@ -1045,6 +1045,14 @@ class ProjectsSurfaceHarnessTests(unittest.TestCase):
     def test_breakdown_disclosure_is_present(self) -> None:
         self.assertTrue(self.result['breakdown_present'])
 
+    def test_portfolio_spark_marks_hot_store(self) -> None:
+        self.assertTrue(self.result['spark_hot'])
+
+    def test_compare_bars_door_open_work_and_skip_quiet(self) -> None:
+        self.assertGreaterEqual(self.result['compare_rows'], 4)
+        self.assertTrue(self.result['compare_has_work_door'])
+        self.assertTrue(self.result['compare_skips_quiet'])
+
 
 class ConnectionsEngineTests(unittest.TestCase):
     def test_engine_list_paints_versions_reachability_and_supervisor(self):
@@ -1814,6 +1822,65 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
         self.assertNotIn('n8n', _HTML.lower())
         self.assertNotIn('point of sale', _HTML.lower())
+
+
+class ProjectsPortfolioSparkTests(unittest.TestCase):
+    """Issue #150: per-card open/For You sparks and workspace compare bars."""
+
+    def test_hosts_live_on_projects_view_only(self):
+        projects = _HTML.split('id="projects-view"')[1].split('id="agents-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        self.assertIn('id="projects-compare"', projects)
+        self.assertIn('id="projects-compare-summary"', projects)
+        self.assertLess(projects.index('id="projects-summary"'), projects.index('id="projects-compare"'))
+        self.assertLess(projects.index('id="projects-compare"'), projects.index('id="projects-list"'))
+        self.assertEqual(_HTML.count('id="projects-compare"'), 1)
+        self.assertNotIn('id="projects-compare"', work)
+        self.assertNotIn('id="projects-compare"', overview)
+        self.assertNotIn('id="projects-compare"', agents)
+
+    def test_paint_uses_stacked_open_for_you_and_work_map_doors(self):
+        self.assertIn('function paintProjectsCompare()', _SRC)
+        self.assertIn('function projectSparkCell(', _SRC)
+        self.assertIn('function stackedOpenBar(', _SRC)
+        fn = _SRC.split('function projects()')[1].split('function overviewDecideRow')[0]
+        self.assertIn('paintProjectsCompare()', fn)
+        paint = _SRC.split('function paintProjectsCompare()')[1].split('function projectComparisonRow')[0]
+        self.assertIn("row.pulse!=='quiet'", paint.replace(' ', ''))
+        self.assertIn('pulseRank', paint)
+        self.assertIn('For You', paint)
+        self.assertIn('Map', paint)
+        self.assertIn('/work?project=', paint)
+        self.assertNotIn('/delivery', paint)
+        self.assertNotIn("link('Agents'", paint)
+        self.assertNotIn('n8n', paint.lower())
+        self.assertNotIn('histogram', paint.lower())
+        row = _SRC.split('function projectComparisonRow(project)')[1].split('function projectIsQuiet')[0]
+        self.assertIn('projectSparkCell(project)', row)
+
+    def test_does_not_regress_other_map_a_surfaces(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-projects-compare', css)
+        self.assertIn('.bp-projects-stack', css)
+        self.assertIn('.bp-projects-spark', css)
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="agents-floor-spark"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+        self.assertIn('id="work-band-act-now"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="work-calendar-doors"', _HTML)
+        self.assertIn('function paintOverviewThroughput()', _SRC)
+        self.assertIn('function paintAgentsFloorSpark()', _SRC)
+        self.assertIn('function paintWorkFlow()', _SRC)
+        self.assertIn('function paintTimelineActivity()', _SRC)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('POS', _HTML)
 
 
 if __name__ == '__main__':
