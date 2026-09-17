@@ -1181,6 +1181,7 @@ function agentRow(agent) {
   const workCell=el('span',undefined,'bp-agent-cell bp-agent-work');workCell.append(heldLink(agent));select.append(workCell);
   select.append(el('span',elapsedText(agent),'bp-agent-cell bp-muted'));
   select.append(el('span',lastUpdateText(agent),'bp-agent-cell bp-muted'));
+  select.append(seatSparkCell(agent));
   const activate=event=>{ if(event.target.closest('a')) return; event.preventDefault(); selectAgent(agent.id); };
   select.addEventListener('click',activate);
   select.addEventListener('keydown',event=>{ if((event.key==='Enter' || event.key===' ') && !event.target.closest('a')) { event.preventDefault(); selectAgent(agent.id); } });
@@ -1197,6 +1198,7 @@ function jobRow(agent) {
   const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));info.append(stateCell);
   const reportText=agent.report ? `${agent.report.state} · ${agent.report.summary}` : (agent.last_run ? `${agent.last_run.outcome} · ${date(agent.last_run.at)}` : 'No report yet');
   info.append(el('span',reportText,'bp-agent-cell bp-muted'));
+  info.append(seatSparkCell(agent));
   row.append(info);
   const actionCell=el('span',undefined,'bp-agent-cell bp-agent-action');actionCell.append(...agentAction(agent));row.append(actionCell);
   return row;
@@ -1431,6 +1433,81 @@ function agentsFloorFromSnapshot() {
   if(floor && typeof floor.working==='number') return floor;
   return buildAgentsFloor(snapshot?.agents || []);
 }
+function emptySeatSpark() {
+  return {hours:Array(24).fill(0), fails:Array(24).fill(0), runs:0, errors:0, fail_rate:null, state:'empty'};
+}
+function seatSparkFromSnapshot(id) {
+  const sparks=snapshot && snapshot.agents_floor && snapshot.agents_floor.sparks;
+  if(sparks && sparks[id] && Array.isArray(sparks[id].hours)) return sparks[id];
+  return emptySeatSpark();
+}
+function seatSparkLabel(data) {
+  const bits=[];
+  if(data.runs) bits.push(data.runs===1?'1 run':`${data.runs} runs`);
+  if(data.errors) bits.push(data.errors===1?'1 fail':`${data.errors} fails`);
+  return bits.join(' · ');
+}
+function seatSparkCell(agent) {
+  const cell=el('span',undefined,'bp-agent-cell bp-agent-spark-cell');
+  const bucket=floorBucket(agent);
+  if(bucket==='quiet') return cell;
+  const data=seatSparkFromSnapshot(agent.id);
+  if(data.state==='unavailable') {
+    cell.append(el('span','Runs unavailable','bp-muted'));
+    return cell;
+  }
+  const glyphs=throughputSpark(data.hours);
+  if(glyphs) {
+    const line=el('span',glyphs,'bp-agent-spark-line');
+    line.dataset.tone=data.errors?'error':(bucket==='working'?'working':'idle');
+    line.setAttribute('aria-hidden','true');
+    cell.append(line);
+  }
+  const label=seatSparkLabel(data);
+  if(label) {
+    cell.append(el('span',label,'bp-muted bp-agent-spark-label'));
+    cell.setAttribute('aria-label', label+' · last 24h');
+  }
+  return cell;
+}
+function paintAgentsFloorSpark() {
+  const host=$('agents-floor-spark');
+  if(!host) return;
+  host.replaceChildren();
+  const floor=agentsFloorFromSnapshot();
+  const sparks=floor.sparks || {};
+  const live=(snapshot.agents || []).filter(agent=>floorBucket(agent)!=='quiet');
+  if(!live.length) return;
+  const hours=Array(24).fill(0);
+  let runs=0, errors=0, readable=0, unavailable=0;
+  for(const agent of live) {
+    const spark=sparks[agent.id];
+    if(!spark) continue;
+    if(spark.state==='unavailable') { unavailable+=1; continue; }
+    readable+=1;
+    runs+=spark.runs || 0;
+    errors+=spark.errors || 0;
+    (spark.hours || []).forEach((n,index)=>{ if(index<24) hours[index]+=n || 0; });
+  }
+  if(!readable && unavailable) {
+    host.append(document.createTextNode('Seat runs unavailable'));
+    return;
+  }
+  if(!runs) {
+    host.append(document.createTextNode('No seat runs in the last 24h'));
+    return;
+  }
+  const count=runs===1?'1 run · last 24h':`${runs} runs · last 24h`;
+  host.append(link(count, '/timeline?period=1'));
+  if(errors) host.append(document.createTextNode(errors===1?' · 1 fail':` · ${errors} fails`));
+  const glyphs=throughputSpark(hours);
+  if(glyphs) {
+    const spark=el('span',glyphs,'bp-agents-floor-spark-line');
+    spark.dataset.tone=errors?'error':'working';
+    spark.setAttribute('aria-hidden','true');
+    host.append(spark);
+  }
+}
 function paintAgentsPulse() {
   const host=$('agents-pulse');
   if(!host) return;
@@ -1496,6 +1573,7 @@ function agents() {
   const quietSeats=seats.filter(a=>floorBucket(a)==='quiet');
   $('agents-heartbeat').textContent=heartbeatLine();
   paintAgentsPulse();
+  paintAgentsFloorSpark();
   paintAgentsNextFire();
   const liveEmpty=seats.length ? 'No seats working or idle — quiet roster below.' : 'No seats registered in the readable registry.';
   reconcileList($('seat-list'), liveSeats, a=>a.id, agentRow, liveSeats.length ? {} : {emptyText:liveEmpty});
