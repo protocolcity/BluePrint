@@ -320,7 +320,7 @@ assert.ok(workBadgeText.includes('Open'), 'Status badge stays on its own pill');
 assert.equal(workNeedsYou, false, 'Work rows never paint a primary Needs you chip');
 assert.equal(get('mute-status').textContent, '');
 assert.equal(get('work-recent') && get('work-recent').children.length, 0);
-assert.equal(get('work-flow').querySelector('.bp-work-flow-bar'), null, 'flow bars are held');
+assert.equal(get('work-flow').querySelector('.bp-work-flow-bar'), null, 'flow bars stay out — companion is counts');
 assert.ok(get('work-flow').querySelector('.bp-work-seat-chip') || get('work-flow').textContent.includes('seat'), 'seat-load hero is present or honest empty');
 
 runtime.applySnapshot({
@@ -344,7 +344,8 @@ const seatNames = seatChips.map(row => {
   const name = row.querySelector('.bp-work-seat-chip-name');
   return name ? name.textContent : '';
 });
-assert.doesNotMatch(flowText, /Open 1 → Ready 1 → Live 2 → Done 0/);
+assert.match(flowText, /Open 1 → Ready 1 → Live 2 → Done 0/);
+assert.ok(get('work-flow').querySelector('.bp-work-flow-strip'), 'thin flow strip paints matching counts');
 assert.equal(get('work-flow').querySelector('.bp-work-flow-bar'), null, 'no second hero flow bar');
 assert.deepEqual(seatNames.sort(), ['lili', 'pepper']);
 assert.match(flowText, /ready/);
