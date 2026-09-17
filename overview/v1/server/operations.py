@@ -16,6 +16,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from .agents_floor import build_agents_floor, empty_agents_floor
 from .calendar_doors import build_calendar_doors, empty_calendar_doors
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
+from .work_board import annotate_order
 
 # Fixed badge vocabulary (STATES_AND_TERMS.md §2, AGENTS_INTENT.md). Never
 # invent a badge word outside this map.
@@ -1334,6 +1335,7 @@ def operations_snapshot(binder):
                         'blocked_note': '',
                         'persona': persona_text(item, labels),
                         'assigned_you': assigned_you,
+                        'you_host': 'you:host' in labels,
                         'owner': 'You' if assigned_you else (', '.join(routable_workers) or 'Unassigned'),
                         'live_with': marker['identity'] if marker and status == 'in_progress' else None,
                         'parked_by': marker['identity'] if marker and status == 'in_review' else None,
@@ -1376,6 +1378,7 @@ def operations_snapshot(binder):
         order['blocked_note'] = blocked_note
         if seat and order['status'] == 'backlog' and not order['gate_type'] and blocked_state == 'clear':
             order['ready_for'] = seat
+        annotate_order(order)
     failed = [p['name'] for p in result['projects'] if p['state'] != 'available']
     readable = sum(p['state'] == 'available' for p in result['projects'])
     if not paths:

@@ -152,6 +152,9 @@ class OperationsTests(unittest.TestCase):
         order = operations_snapshot(self.root)['orders'][0]
         self.assertEqual(order['attention_face'], 'decide')
         self.assertEqual(order['face_reason'], 'Ratify the plan')
+        self.assertEqual(order['board_band'], 'act_now')
+        self.assertEqual(order['row_face'], 'Decide')
+        self.assertNotEqual(order['row_status'], 'Needs you')
     def test_bare_worker_you_is_assigned_to_you_not_unassigned(self):
         self.seed()
         with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
