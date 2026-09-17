@@ -55,18 +55,20 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-lot-file-label {
   fill: var(--map-muted); font-size: 10px; pointer-events: none;
 }
-/* Issue #156 — stroke = activity. Quiet nodes keep the 1px rest stroke.
- * Unavailable is dashed muted, never a fake zero glow. Selected / focus
- * still win so doors stay readable. */
+/* Issue #156 / Cap C8 — stroke = activity, thin only. Quiet nodes keep the
+ * 1px rest stroke. Unavailable is dashed muted, never a fake zero glow.
+ * Live/recent stay a thin accent (max 1.5px), never a bold ring — the
+ * selected (2px) and focus-visible (3px) outlines stay the strongest marks
+ * on the canvas so doors keep reading first. */
 .map-lot.map-motion-recent .map-lot-plate,
 .map-dig-child.map-motion-recent .map-dig-plate,
 .map-project-node.map-motion-recent .map-hub-disc {
-  stroke: #c4a056; stroke-width: 2;
+  stroke: #c4a056; stroke-width: 1.5;
 }
 .map-lot.map-motion-live .map-lot-plate,
 .map-dig-child.map-motion-live .map-dig-plate,
 .map-project-node.map-motion-live .map-hub-disc {
-  stroke: var(--map-lot-focus); stroke-width: 2.5;
+  stroke: var(--map-lot-focus); stroke-width: 1.5;
 }
 .map-lot.map-motion-unavailable .map-lot-plate,
 .map-dig-child.map-motion-unavailable .map-dig-plate,
