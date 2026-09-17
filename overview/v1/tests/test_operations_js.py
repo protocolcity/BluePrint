@@ -2211,9 +2211,10 @@ class DeliveryHeroTests(unittest.TestCase):
     def test_paint_uses_pr_ci_remote_doors_not_worklane_triage(self):
         self.assertIn('function paintDeliveryHero(', _SRC)
         self.assertIn('function deliveryHeroFromRemote(', _SRC)
+        chip = _SRC.split('function deliveryHeroChip(')[1].split('function paintDeliveryHero(')[0]
+        self.assertIn('node.dataset.kind=kind', chip.replace(' ', ''))
         paint = _SRC.split('function paintDeliveryHero(')[1].split('function paintDeliverySpark(')[0]
         compact = paint.replace(' ', '')
-        self.assertIn("dataset.kind=kind", compact)
         self.assertIn("deliverySparkHref('pull_request')", compact)
         self.assertIn("deliverySparkHref('workflow')", compact)
         self.assertIn("'/connections'", paint)
