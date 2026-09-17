@@ -916,6 +916,11 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(sum(spark['fails']), 1)
         self.assertEqual(len(spark['hours']), 24)
         self.assertEqual(result['agents_floor']['error'], 1)
+        throughput = result['agents_floor']['throughput']
+        self.assertEqual(throughput['runs'], 2)
+        self.assertEqual(throughput['errors'], 1)
+        self.assertEqual(throughput['fail_rate'], 0.5)
+        self.assertEqual(throughput['state'], 'healthy')
 
     def test_disposable_desk_counts_seat_load_and_flow(self):
         self.seed()

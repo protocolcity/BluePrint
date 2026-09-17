@@ -6,10 +6,13 @@ from server.agents_floor import (
     HOURS,
     build_agents_floor,
     build_floor_sparks,
+    build_floor_throughput,
     build_seat_spark,
     empty_agents_floor,
     empty_seat_spark,
+    fail_rate_text,
     floor_bucket,
+    spark_tone,
     tick_from_ledger_parts,
     ticks_from_ledger_lines,
 )
@@ -158,6 +161,62 @@ class AgentsFloorSparkTests(unittest.TestCase):
         missing = build_floor_sparks(agents, {}, NOW)
         self.assertEqual(missing['off-seat']['state'], 'empty')
         self.assertEqual(missing['live']['state'], 'empty')
+
+
+class AgentsFloorClarityTests(unittest.TestCase):
+    """Issue #162: fail rate and strip totals on the existing payload."""
+
+    def test_fail_rate_text_is_glanceable_and_honest(self):
+        self.assertIsNone(fail_rate_text(None))
+        self.assertEqual(fail_rate_text(0), '0%')
+        self.assertEqual(fail_rate_text(0.25), '25%')
+        self.assertEqual(fail_rate_text(0.5), '50%')
+        self.assertEqual(fail_rate_text(1), '100%')
+        self.assertEqual(fail_rate_text(0.004), '<1%')
+        self.assertIsNone(fail_rate_text(-0.1))
+
+    def test_spark_tone_is_error_only_when_every_run_failed(self):
+        self.assertEqual(spark_tone(4, 1), 'working')
+        self.assertEqual(spark_tone(1, 1), 'error')
+        self.assertEqual(spark_tone(0, 0), 'idle')
+
+    def test_floor_throughput_skips_quiet_and_sums_live_fails(self):
+        agents = [
+            {'id': 'live', 'state': 'working'},
+            {'id': 'failed', 'state': 'last_run_failed'},
+            {'id': 'off-seat', 'state': 'off'},
+        ]
+        sparks = {
+            'live': {'hours': [1] + [0] * 23, 'fails': [0] * 24, 'runs': 3, 'errors': 0, 'fail_rate': 0, 'state': 'healthy'},
+            'failed': {'hours': [0] * 23 + [1], 'fails': [0] * 23 + [1], 'runs': 1, 'errors': 1, 'fail_rate': 1, 'state': 'healthy'},
+            'off-seat': {'hours': [9] * 24, 'fails': [9] * 24, 'runs': 9, 'errors': 9, 'fail_rate': 1, 'state': 'healthy'},
+        }
+        payload = build_floor_throughput(agents, sparks)
+        self.assertEqual(payload['runs'], 4)
+        self.assertEqual(payload['errors'], 1)
+        self.assertEqual(payload['fail_rate'], 0.25)
+        self.assertEqual(payload['state'], 'healthy')
+        self.assertEqual(sum(payload['hours']), 2)
+        self.assertEqual(sum(payload['fails']), 1)
+        self.assertEqual(fail_rate_text(payload['fail_rate']), '25%')
+
+    def test_floor_throughput_unavailable_is_not_a_fake_zero(self):
+        agents = [{'id': 'live', 'state': 'idle'}]
+        payload = build_floor_throughput(agents, {
+            'live': empty_seat_spark('unavailable'),
+        })
+        self.assertEqual(payload['state'], 'unavailable')
+        self.assertEqual(payload['runs'], 0)
+        self.assertIsNone(payload['fail_rate'])
+
+    def test_floor_throughput_empty_when_live_seats_have_no_runs(self):
+        agents = [{'id': 'idle', 'state': 'idle'}]
+        payload = build_floor_throughput(agents, {
+            'idle': empty_seat_spark(),
+        })
+        self.assertEqual(payload['state'], 'empty')
+        self.assertEqual(payload['runs'], 0)
+        self.assertIsNone(payload['fail_rate'])
 
 
 if __name__ == '__main__':

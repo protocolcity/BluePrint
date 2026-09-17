@@ -7,6 +7,9 @@ Idle. Stale shift is counted separately so a failed run is never softened.
 Sparks are last-24h WorkForce ledger terminals (STOP/DONE = a run,
 ERROR = a fail). START, SKIP, and CANDIDATE are not runs. Quiet seats
 are still bucketed as quiet; they do not invent floor motion.
+
+Issue #162 is clarity on that same payload: floor ``throughput`` totals
+and a fail-rate label. It does not add a fourth pulse tile or a canvas.
 """
 from __future__ import annotations
 
@@ -168,3 +171,71 @@ def build_floor_sparks(
         else:
             sparks[identity] = build_seat_spark(ticks, now)
     return sparks
+
+
+def fail_rate_text(rate: float | None) -> str | None:
+    """Glanceable percent. None when there is no rate to show."""
+    if rate is None:
+        return None
+    try:
+        value = float(rate)
+    except (TypeError, ValueError):
+        return None
+    if value < 0:
+        return None
+    percent = round(value * 100)
+    if percent == 0 and value > 0:
+        return '<1%'
+    return f'{percent}%'
+
+
+def spark_tone(runs: int, errors: int) -> str:
+    """Whole-spark error only when every counted run failed."""
+    if runs and errors >= runs:
+        return 'error'
+    if runs:
+        return 'working'
+    return 'idle'
+
+
+def build_floor_throughput(
+    agents: list | None,
+    sparks: dict[str, dict] | None,
+) -> dict:
+    """Live-seat totals for the strip. Quiet never invents motion."""
+    hours = [0] * HOURS
+    fails = [0] * HOURS
+    runs = 0
+    errors = 0
+    readable = 0
+    unavailable = 0
+    by_id = sparks or {}
+    for agent in agents or []:
+        if not isinstance(agent, dict) or floor_bucket(agent) == 'quiet':
+            continue
+        identity = str(agent.get('id') or '')
+        spark = by_id.get(identity)
+        if not isinstance(spark, dict):
+            continue
+        if spark.get('state') == 'unavailable':
+            unavailable += 1
+            continue
+        readable += 1
+        runs += int(spark.get('runs') or 0)
+        errors += int(spark.get('errors') or 0)
+        for index, count in enumerate(spark.get('hours') or []):
+            if index < HOURS:
+                hours[index] += int(count or 0)
+        for index, count in enumerate(spark.get('fails') or []):
+            if index < HOURS:
+                fails[index] += int(count or 0)
+    if not readable and unavailable:
+        return empty_seat_spark('unavailable')
+    return {
+        'hours': hours,
+        'fails': fails,
+        'runs': runs,
+        'errors': errors,
+        'fail_rate': (errors / runs) if runs else None,
+        'state': 'healthy' if runs else 'empty',
+    }
