@@ -4,15 +4,20 @@ import unittest
 from server.work_board import (
     apply_facets,
     board_band,
+    build_work_flow,
+    empty_work_flow,
+    flow_stage,
     is_act_now,
     is_my_todo,
     is_seat_backlog,
+    load_bucket,
     matches_attention_facet,
     matches_status_facet,
     partition_bands,
     row_face,
     row_status,
     annotate_order,
+    seat_hand,
 )
 
 
@@ -174,6 +179,73 @@ class OrthogonalFacetTests(unittest.TestCase):
     def test_seat_only_excludes_act_now_and_todos(self):
         seat = apply_facets(self.rows, attention='seat')
         self.assertEqual({o['id'] for o in seat}, {'ready', 'live', 'deferred'})
+
+
+class WorkFlowStripTests(unittest.TestCase):
+    """#147: seat-load / flow is additive — bands and facets stay put."""
+
+    def test_unreadable_is_unavailable_not_a_fake_zero_strip(self):
+        payload = build_work_flow([order(workers=['pepper'], ready_for='pepper')], readable=False)
+        self.assertEqual(payload, empty_work_flow('unavailable'))
+        self.assertEqual(payload['seats'], [])
+        self.assertEqual(payload['total'], 0)
+
+    def test_empty_orders_are_honest_empty(self):
+        payload = build_work_flow([])
+        self.assertEqual(payload['state'], 'empty')
+        self.assertEqual(payload['flow'], {'Open': 0, 'Ready': 0, 'Live': 0, 'Done': 0})
+        self.assertEqual(payload['seats'], [])
+
+    def test_ready_claimed_stalled_per_seat_and_open_ready_live_done_flow(self):
+        rows = [
+            order(id='open', workers=['lili']),
+            order(id='ready', workers=['pepper'], ready_for='pepper'),
+            order(id='live', status='in_progress', workers=['pepper']),
+            order(id='review', status='in_review', workers=['lili']),
+            order(id='stall', status='in_progress', attention_face='watch', workers=['lili']),
+            order(id='done', status='done', workers=['pepper']),
+            order(id='decide', attention_face='decide', gate_type='human'),
+        ]
+        payload = build_work_flow(rows, agents=[
+            {'id': 'pepper', 'name': 'pepper', 'group': 'seat'},
+            {'id': 'lili', 'name': 'lili', 'group': 'seat'},
+        ])
+        self.assertEqual(payload['state'], 'healthy')
+        self.assertEqual(payload['flow'], {'Open': 2, 'Ready': 1, 'Live': 3, 'Done': 1})
+        self.assertEqual(payload['total'], 7)
+        by_id = {seat['id']: seat for seat in payload['seats']}
+        self.assertEqual(by_id['pepper'], {
+            'id': 'pepper', 'name': 'pepper', 'ready': 1, 'claimed': 1, 'stalled': 0,
+        })
+        self.assertEqual(by_id['lili'], {
+            'id': 'lili', 'name': 'lili', 'ready': 0, 'claimed': 1, 'stalled': 1,
+        })
+        self.assertEqual([seat['id'] for seat in payload['seats']], ['lili', 'pepper'])
+
+    def test_strip_does_not_move_rows_between_bands(self):
+        decide = order(id='d', attention_face='decide', gate_type='human', workers=['pepper'])
+        todo = order(id='t', kind='todo', workers=['you'], assigned_you=True)
+        ready = order(id='r', workers=['pepper'], ready_for='pepper')
+        self.assertEqual(board_band(decide), 'act_now')
+        self.assertEqual(board_band(todo), 'my_todos')
+        self.assertEqual(board_band(ready), 'seat_backlog')
+        build_work_flow([decide, todo, ready])
+        self.assertEqual(board_band(decide), 'act_now')
+        self.assertEqual(board_band(todo), 'my_todos')
+        self.assertEqual(board_band(ready), 'seat_backlog')
+        self.assertEqual(row_face(decide), 'Decide')
+        self.assertEqual(row_status(ready), 'Ready')
+        self.assertTrue(matches_attention_facet(decide, 'act_now'))
+        self.assertTrue(matches_status_facet(ready, 'Ready'))
+
+    def test_unassigned_open_is_flow_only_not_a_ghost_seat(self):
+        row = order(id='u', workers=[], needs_routing=True)
+        self.assertEqual(seat_hand(row), '')
+        self.assertEqual(load_bucket(row), '')
+        self.assertEqual(flow_stage(row), 'Open')
+        payload = build_work_flow([row])
+        self.assertEqual(payload['seats'], [])
+        self.assertEqual(payload['flow']['Open'], 1)
 
 
 if __name__ == '__main__':

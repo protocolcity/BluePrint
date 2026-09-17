@@ -114,7 +114,7 @@ const IDS = [
   'work-band-act-now', 'work-act-now', 'work-act-now-count', 'work-act-now-more',
   'work-band-my-todos', 'work-my-todos', 'work-my-todos-count', 'work-my-todos-more',
   'work-band-seat-backlog', 'work-seat-backlog', 'work-seat-backlog-count', 'work-seat-backlog-more',
-  'work-list', 'mute-status',
+  'work-flow', 'work-list', 'mute-status',
   'projects-list', 'projects-summary', 'projects-filter',
   'seat-list', 'job-list', 'agent-detail', 'supervisor-panel', 'coverage-list', 'agents-heartbeat',
   'agents-next-fire', 'agents-pulse', 'agents-floor-remainder', 'agents-floor-empty', 'agents-floor-spark',
@@ -248,7 +248,7 @@ const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
 raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; lastSuccess = Date.now();`;
-const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox, agents, applySnapshot(next){ snapshot = next; }, calendarDueItems, nextScheduleFire, nextFireLine, buildCalendarDoors, throughputSpark, emptyThroughput}; })();`);
+const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox, agents, applySnapshot(next){ snapshot = next; }, calendarDueItems, nextScheduleFire, nextFireLine, buildCalendarDoors, throughputSpark, emptyThroughput, buildWorkFlow, emptyWorkFlow, paintWorkFlow}; })();`);
 const runtime = await boot(...Object.values(context));
 
 function kpiForYouCount() {
@@ -317,6 +317,45 @@ assert.ok(workBadgeText.includes('Open'), 'Status badge stays on its own pill');
 assert.equal(workNeedsYou, false, 'Work rows never paint a primary Needs you chip');
 assert.match(get('mute-status').textContent, /Mute only hides this inbox item/);
 assert.equal(get('work-recent') && get('work-recent').children.length, 0);
+assert.match(get('work-flow').textContent, /Ready/, 'Work paints a flow strip above the bands');
+assert.ok(get('work-flow').querySelector('.bp-work-flow-bar'), 'flow bar is present');
+
+runtime.applySnapshot({
+  ...fixture,
+  orders: [
+    order('pc-ready', '', {workers: ['pepper'], ready_for: 'pepper', assigned_you: false, owner: 'pepper'}),
+    order('pc-live', '', {status: 'in_progress', workers: ['pepper'], assigned_you: false, owner: 'pepper', live_with: 'pepper'}),
+    order('pc-stall', '', {status: 'in_progress', attention_face: 'watch', workers: ['lili'], assigned_you: false, owner: 'lili'}),
+    order('pc-open2', '', {workers: ['lili'], assigned_you: false, owner: 'lili'}),
+  ],
+  agents: [
+    {id: 'pepper', name: 'pepper', group: 'seat', state: 'working'},
+    {id: 'lili', name: 'lili', group: 'seat', state: 'idle'},
+  ],
+});
+get('work-flow').replaceChildren();
+runtime.work();
+const flowText = get('work-flow').textContent;
+const seatRows = get('work-flow').querySelectorAll('.bp-work-seat-load-row');
+const seatNames = seatRows.map(row => {
+  const name = row.querySelector('.bp-work-seat-load-name');
+  return name ? name.textContent : '';
+});
+assert.match(flowText, /Open 1 → Ready 1 → Live 2 → Done 0/);
+assert.deepEqual(seatNames.sort(), ['lili', 'pepper']);
+assert.equal(get('work-act-now').querySelectorAll('.bp-order').length, 0, 'flow fixture does not invent Act now');
+assert.equal(get('work-band-act-now').hidden, false, 'empty Act now band stays visible');
+assert.ok(get('work-flow').querySelector('.bp-work-seat-load'), 'per-seat ready/claimed/stalled rows paint');
+runtime.applySnapshot({...fixture, orders: [], work_flow: runtime.emptyWorkFlow()});
+get('work-flow').replaceChildren();
+runtime.work();
+assert.equal(get('work-flow').textContent, 'No seat drain right now');
+runtime.applySnapshot({...fixture, work_flow: runtime.emptyWorkFlow('unavailable')});
+get('work-flow').replaceChildren();
+runtime.work();
+assert.equal(get('work-flow').textContent, 'Seat load unavailable');
+runtime.applySnapshot(fixture);
+runtime.work();
 
 get('for-you-decide').replaceChildren();
 runtime.overview();
@@ -451,4 +490,8 @@ process.stdout.write(JSON.stringify({
   throughput_href: '/timeline?period=1',
   throughput_empty: 'No closes in the last 24h',
   throughput_unavailable: 'Throughput unavailable',
+  work_flow: flowText,
+  work_flow_seats: seatNames.sort(),
+  work_flow_empty: 'No seat drain right now',
+  work_flow_unavailable: 'Seat load unavailable',
 }));
