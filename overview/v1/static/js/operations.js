@@ -1490,16 +1490,16 @@ function paintAgentsFloorSpark() {
     (spark.hours || []).forEach((n,index)=>{ if(index<24) hours[index]+=n || 0; });
   }
   if(!readable && unavailable) {
-    host.append(document.createTextNode('Seat runs unavailable'));
+    host.textContent='Seat runs unavailable';
     return;
   }
   if(!runs) {
-    host.append(document.createTextNode('No seat runs in the last 24h'));
+    host.textContent='No seat runs in the last 24h';
     return;
   }
   const count=runs===1?'1 run · last 24h':`${runs} runs · last 24h`;
   host.append(link(count, '/timeline?period=1'));
-  if(errors) host.append(document.createTextNode(errors===1?' · 1 fail':` · ${errors} fails`));
+  if(errors) host.append(el('span', errors===1?' · 1 fail':` · ${errors} fails`));
   const glyphs=throughputSpark(hours);
   if(glyphs) {
     const spark=el('span',glyphs,'bp-agents-floor-spark-line');
