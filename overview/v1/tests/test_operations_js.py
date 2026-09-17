@@ -2178,6 +2178,103 @@ class DeliveryCiSparkTests(unittest.TestCase):
         self.assertIn('1 merge', result['merges_only'])
 
 
+class DeliveryHeroTests(unittest.TestCase):
+    """pc-1542 / CAP_ACQUAINTANCE_052 C4: PR · CI · Remote is the Delivery
+    hero (git ledger). Optional CI spark stays. Not WorkLane triage."""
+
+    def test_hero_sits_on_delivery_above_status_spark_and_filters(self):
+        delivery = _HTML.split('id="delivery-view"')[1].split('id="timeline-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        projects = _HTML.split('id="projects-view"')[1].split('id="agents-view"')[0]
+        timeline = _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0]
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        self.assertIn('id="delivery-hero"', delivery)
+        self.assertIn('id="delivery-hero-chips"', delivery)
+        self.assertIn('id="delivery-ci-spark"', delivery)
+        self.assertLess(delivery.index('id="delivery-hero"'), delivery.index('id="remote-status"'))
+        self.assertLess(delivery.index('id="delivery-hero-chips"'), delivery.index('id="delivery-ci-spark"'))
+        self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="delivery-filters"'))
+        self.assertLess(delivery.index('id="delivery-filters"'), delivery.index('id="remote-repositories"'))
+        self.assertEqual(_HTML.count('id="delivery-hero"'), 1)
+        self.assertNotIn('id="delivery-hero"', overview)
+        self.assertNotIn('id="delivery-hero"', work)
+        self.assertNotIn('id="delivery-hero"', agents)
+        self.assertNotIn('id="delivery-hero"', projects)
+        self.assertNotIn('id="delivery-hero"', timeline)
+        self.assertNotIn('id="delivery-hero"', calendar)
+        self.assertNotIn('wo-tile', delivery)
+        self.assertNotIn('id="work-band-act-now"', delivery)
+        self.assertNotIn('id="for-you-decide"', delivery)
+
+    def test_paint_uses_pr_ci_remote_doors_not_worklane_triage(self):
+        self.assertIn('function paintDeliveryHero(', _SRC)
+        self.assertIn('function deliveryHeroFromRemote(', _SRC)
+        paint = _SRC.split('function paintDeliveryHero(')[1].split('function paintDeliverySpark(')[0]
+        compact = paint.replace(' ', '')
+        self.assertIn("dataset.kind=kind", compact)
+        self.assertIn("deliverySparkHref('pull_request')", compact)
+        self.assertIn("deliverySparkHref('workflow')", compact)
+        self.assertIn("'/connections'", paint)
+        self.assertIn("'PR'", paint)
+        self.assertIn("'CI'", paint)
+        self.assertIn("'Remote'", paint)
+        self.assertIn('not configured', paint)
+        self.assertIn('unavailable', paint)
+        self.assertNotIn('Needs you', paint)
+        self.assertNotIn('Act now', paint)
+        self.assertNotIn('Decide', paint)
+        self.assertNotIn('For You', paint)
+        self.assertNotIn('seat', paint.lower())
+        self.assertNotIn('n8n', paint.lower())
+        delivery = _SRC.split('function paintDelivery(')[1].split('function remoteStatusText')[0]
+        self.assertIn('paintDeliveryHero(data)', delivery)
+        self.assertIn('paintDeliverySpark(data)', delivery)
+        self.assertLess(delivery.index('paintDeliveryHero'), delivery.index('paintDeliverySpark'))
+
+    def test_hero_weight_beats_filter_mast_and_holds_neighbors(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-delivery-hero', css)
+        self.assertIn('.bp-delivery-hero-chip', css)
+        self.assertIn('#delivery-view .bp-filters', css)
+        hero = css.split('.bp-delivery-hero-chip-primary')[1].split('}')[0]
+        self.assertIn('font-size: 20px', hero)
+        filters = css.split('#delivery-view .bp-filters input')[1].split('}')[0]
+        self.assertIn('min-height: 32px', filters)
+        self.assertIn('id="overview-face-chips"', _HTML)
+        self.assertIn('id="overview-decide-more"', _HTML)
+        self.assertIn('id="agents-canvas"', _HTML)
+        self.assertIn('id="calendar-load"', _HTML)
+        self.assertIn('id="calendar-doors"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('POS', _HTML)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+
+    def test_delivery_hero_harness(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping delivery hero harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'delivery_hero_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'delivery hero harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['kinds'], ['pr', 'ci', 'remote'])
+        self.assertEqual(result['healthy_pr'], 'PR2 open3 merged')
+        self.assertEqual(result['healthy_ci'], 'CI8 checks2 fails')
+        self.assertEqual(result['healthy_remote'], 'Remoteconnected1 remote')
+        self.assertEqual(result['pr_href'], '/delivery?type=pull_request')
+        self.assertEqual(result['ci_href'], '/delivery?type=workflow')
+        self.assertEqual(result['remote_href'], '/connections')
+        self.assertEqual(result['empty_pr'], 'PRnone')
+        self.assertEqual(result['unavailable'], ['PRunavailable', 'CIunavailable', 'Remoteunavailable'])
+        self.assertEqual(result['not_configured'], ['PRnot configured', 'CInot configured', 'Remotenot configured'])
+
+
 class CalendarLoadBarTests(unittest.TestCase):
     """Issue #153: load-by-day bars on Calendar. Doors stay; no WO dump."""
 
