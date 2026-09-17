@@ -982,7 +982,7 @@ def _suite_bootstrap_remediation(root: Path, plist: str) -> str:
     return (
         "blueprint service start  "
         "# exact bootstrap: launchctl bootstrap gui/%d %s  "
-        "# or reinstall: blueprint service install --root %s --force"
+        "# or reinstall: blueprint upgrade --root %s"
         % (uid, plist, root)
     )
 
@@ -1057,7 +1057,7 @@ def diagnose_login_service(city_root: Path) -> List[Finding]:
         else:
             repair = (
                 "blueprint relocate-root --from %s --to <new-workspace>  "
-                "# or: blueprint service install --root <new-workspace>"
+                "# or: blueprint upgrade --root <new-workspace>"
                 % state_root
             )
         out.append(
@@ -1082,10 +1082,10 @@ def diagnose_login_service(city_root: Path) -> List[Finding]:
         try:
             if svc_mod.is_ephemeral_root(Path(state_root)):
                 repair = (
-                    "blueprint service install --root %s --force"
+                    "blueprint upgrade --root %s"
                     % root
                     if root.is_dir()
-                    else "blueprint service install --root <workspace> --force"
+                    else "blueprint upgrade --root <workspace>"
                 )
                 out.append(
                     _finding(
@@ -1124,7 +1124,7 @@ def diagnose_login_service(city_root: Path) -> List[Finding]:
                     "Suite service state root (%s) ≠ doctor workspace (%s) — "
                     "after a folder rename/move run: %s  "
                     "(if this is a second workspace, not a rename: "
-                    "blueprint service install --root %s)"
+                    "blueprint upgrade --root %s)"
                     % (state_root, root, repair, root)
                 ),
                 fixable=False,
@@ -1199,7 +1199,7 @@ def diagnose_login_service(city_root: Path) -> List[Finding]:
             status="weak",
             detail=(
                 "Suite login LaunchAgent not installed — "
-                "blueprint service install --root %s" % root
+                "blueprint upgrade --root %s" % root
             ),
             fixable=False,
         )
