@@ -929,9 +929,13 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(flow['state'], 'healthy')
         self.assertGreaterEqual(flow['flow']['Ready'], 1)
         self.assertGreaterEqual(flow['flow']['Live'], 1)
+        self.assertEqual(set(flow['flow']), {'Open', 'Ready', 'Live', 'Done'})
         by_id = {seat['id']: seat for seat in flow['seats']}
         self.assertEqual(by_id['pepper']['ready'], 1)
         self.assertEqual(by_id['lili']['claimed'], 1)
+        self.assertTrue(flow['chips'])
+        self.assertTrue(any(chip.get('id') in ('pepper', 'lili') for chip in flow['chips']))
+        self.assertTrue(all('ready' in chip and 'stalled' in chip for chip in flow['chips']))
         self.assertEqual({order['board_band'] for order in result['orders']}, {'seat_backlog'})
         self.assertEqual({order['row_face'] for order in result['orders']}, {'none'})
 
