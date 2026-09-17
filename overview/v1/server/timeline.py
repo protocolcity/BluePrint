@@ -27,6 +27,7 @@ PAGE_SIZE = 200
 WINDOW_SECONDS = 14 * 86400
 SOURCE_ROW_CAP = 500
 ACTIVITY_DAY_HOURS = 24
+ACTIVITY_THREE_DAYS = 3
 ACTIVITY_WEEK_DAYS = 7
 ACTIVITY_WINDOW_DAYS = WINDOW_SECONDS // 86400
 _CURSOR_SEP = '\x1f'
@@ -639,6 +640,16 @@ def _floor_utc(stamp: datetime, grain: str) -> datetime:
     return stamp.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def _activity_doors(work_count: int, delivery_count: int) -> dict:
+    """WorkLane → Work, GitHub → Delivery. Other sources stay on the stream."""
+    return {
+        'work_count': work_count,
+        'work_href': '/work',
+        'delivery_count': delivery_count,
+        'delivery_href': '/delivery',
+    }
+
+
 def _activity_series(rows: list[dict], *, grain: str, periods: int, now: datetime) -> dict:
     """Fixed UTC buckets. Quiet slots stay 0 so a dead hour/day is visible as quiet."""
     now = now.astimezone(timezone.utc)
@@ -646,6 +657,8 @@ def _activity_series(rows: list[dict], *, grain: str, periods: int, now: datetim
     step = timedelta(hours=1) if grain == 'hour' else timedelta(days=1)
     origin = latest - step * (periods - 1)
     counts = [0] * periods
+    work = 0
+    delivery = 0
     for row in rows:
         stamp = _parse_time(row.get('at'))
         if stamp is None:
@@ -659,25 +672,38 @@ def _activity_series(rows: list[dict], *, grain: str, periods: int, now: datetim
             index = (stamp.date() - origin.date()).days
         if 0 <= index < periods:
             counts[index] += 1
+            source = row.get('source')
+            if source == 'worklane':
+                work += 1
+            elif source == 'github':
+                delivery += 1
     buckets = []
     cursor = origin
     for count in counts:
         buckets.append({'start': cursor.strftime('%Y-%m-%dT%H:%M:%SZ'), 'count': count})
         cursor += step
-    return {'grain': grain, 'buckets': buckets, 'total': sum(counts)}
+    return {
+        'grain': grain,
+        'buckets': buckets,
+        'total': sum(counts),
+        'doors': _activity_doors(work, delivery),
+    }
 
 
 def timeline_activity(rows: list[dict] | None, *, now: datetime | None = None) -> dict:
     """Day/week histogram of existing timeline firings. Never invents events.
 
-    ``day`` is the last 24 hours in hourly UTC buckets. ``week`` is the last
-    7 UTC days. ``window`` is the readable 14-day spine in daily UTC buckets.
-    Totals of 0 are honest quiet — zero-filled, not omitted or synthesized.
+    ``day`` is the last 24 hours in hourly UTC buckets. ``three`` is the last
+    3 UTC days. ``week`` is the last 7 UTC days. ``window`` is the readable
+    14-day spine in daily UTC buckets. Totals of 0 are honest quiet —
+    zero-filled, not omitted or synthesized. Each series also carries Work /
+    Delivery door counts from that window (WorkLane → Work, GitHub → Delivery).
     """
     clock = now or datetime.now(timezone.utc)
     events = rows or []
     return {
         'day': _activity_series(events, grain='hour', periods=ACTIVITY_DAY_HOURS, now=clock),
+        'three': _activity_series(events, grain='day', periods=ACTIVITY_THREE_DAYS, now=clock),
         'week': _activity_series(events, grain='day', periods=ACTIVITY_WEEK_DAYS, now=clock),
         'window': _activity_series(events, grain='day', periods=ACTIVITY_WINDOW_DAYS, now=clock),
     }

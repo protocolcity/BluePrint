@@ -2270,16 +2270,15 @@ function timelineFilterChips() {
 function timelineActivitySeries() {
   const activity = timelineData?.activity || {};
   if (timelinePeriod === '1') {
-    return {label: 'last day', grain: 'hour', buckets: activity.day?.buckets || []};
+    return {label: 'last day', grain: 'hour', buckets: activity.day?.buckets || [], doors: activity.day?.doors};
   }
   if (timelinePeriod === '3') {
-    const days = activity.window?.buckets || [];
-    return {label: 'last 3 days', grain: 'day', buckets: days.slice(-3)};
+    return {label: 'last 3 days', grain: 'day', buckets: activity.three?.buckets || [], doors: activity.three?.doors};
   }
   if (timelinePeriod === '7') {
-    return {label: 'last 7 days', grain: 'day', buckets: activity.week?.buckets || []};
+    return {label: 'last 7 days', grain: 'day', buckets: activity.week?.buckets || [], doors: activity.week?.doors};
   }
-  return {label: 'last 14 days', grain: 'day', buckets: activity.window?.buckets || []};
+  return {label: 'last 14 days', grain: 'day', buckets: activity.window?.buckets || [], doors: activity.window?.doors};
 }
 function timelineActivityLabel(bucket, grain, index, total) {
   const stamp = Date.parse(bucket.start);
@@ -2291,6 +2290,70 @@ function timelineActivityLabel(bucket, grain, index, total) {
   }
   if (total > 7 && index % 2 && index !== total - 1) return '';
   return d.toLocaleDateString([], {month: 'short', day: 'numeric'});
+}
+function timelineWorkHref() {
+  if (timelineProject) return '/work?' + new URLSearchParams({project: timelineProject});
+  return '/work';
+}
+function timelineDoorChip(kind, name, primary, href, tone) {
+  const node = link('', href, 'bp-timeline-door');
+  node.dataset.kind = kind;
+  node.dataset.tone = tone;
+  node.append(el('span', name, 'bp-timeline-door-name'));
+  node.append(el('span', primary, 'bp-timeline-door-primary'));
+  return node;
+}
+function paintTimelineDoors() {
+  const host = $('timeline-doors');
+  if (!host) return;
+  host.replaceChildren();
+  if (!timelineData) {
+    host.append(timelineDoorChip('work', 'Work', 'unavailable', timelineWorkHref(), 'error'));
+    host.append(timelineDoorChip('delivery', 'Delivery', 'unavailable', '/delivery', 'error'));
+    return;
+  }
+  if (!timelineData.activity) {
+    host.replaceChildren();
+    return;
+  }
+  const doors = timelineActivitySeries().doors || {};
+  const workCount = Number(doors.work_count) || 0;
+  const deliveryCount = Number(doors.delivery_count) || 0;
+  const workPrimary = workCount ? `${workCount} event${workCount === 1 ? '' : 's'}` : 'none';
+  const deliveryPrimary = deliveryCount ? `${deliveryCount} event${deliveryCount === 1 ? '' : 's'}` : 'none';
+  host.append(timelineDoorChip('work', 'Work', workPrimary, doors.work_href || timelineWorkHref(), workCount ? 'open' : 'muted'));
+  host.append(timelineDoorChip('delivery', 'Delivery', deliveryPrimary, doors.delivery_href || '/delivery', deliveryCount ? 'open' : 'muted'));
+}
+function paintTimelineActivityLine(chart, buckets, peak) {
+  const wrap = el('div', undefined, 'bp-timeline-hist-line');
+  wrap.setAttribute('aria-hidden', 'true');
+  const max = Math.max(peak, 1);
+  const n = buckets.length;
+  const points = buckets.map((bucket, index) => {
+    const x = n === 1 ? 50 : (index / (n - 1)) * 100;
+    const y = 96 - ((Number(bucket.count) || 0) / max) * 88;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(' ');
+  wrap.dataset.points = points;
+  const doc = chart.ownerDocument || document;
+  const svg = typeof doc.createElementNS === 'function'
+    ? doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    : el('svg');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('class', 'bp-timeline-hist-line-svg');
+  const polyline = typeof doc.createElementNS === 'function'
+    ? doc.createElementNS('http://www.w3.org/2000/svg', 'polyline')
+    : el('polyline');
+  polyline.setAttribute('points', points);
+  polyline.setAttribute('fill', 'none');
+  polyline.setAttribute('stroke', 'currentColor');
+  polyline.setAttribute('stroke-width', '1.6');
+  polyline.setAttribute('stroke-linejoin', 'round');
+  polyline.setAttribute('stroke-linecap', 'round');
+  svg.appendChild(polyline);
+  wrap.append(svg);
+  chart.append(wrap);
 }
 function paintTimelineActivity() {
   const summary = $('timeline-activity-summary');
@@ -2339,11 +2402,13 @@ function paintTimelineActivity() {
     if (label) col.append(el('span', label, 'bp-timeline-hist-label'));
     chart.append(col);
   });
+  paintTimelineActivityLine(chart, buckets, peak);
 }
 function timeline() {
   const groups = buildTimelineGroups(timelineVisibleRows());
   reconcileList($('timeline-list'), groups, g => g.id, timelineGroupNode, {emptyText: 'No timeline rows in the readable window.'});
   timelineSources();
+  paintTimelineDoors();
   paintTimelineActivity();
   $('timeline-more').hidden = !timelineMore;
   $('timeline-clear-filters').hidden = !timelineFilterChips().length;
