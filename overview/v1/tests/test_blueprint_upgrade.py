@@ -154,6 +154,21 @@ class UpgradeTests(LegacyAgentFixture):
         activate_patch.start()
         self.addCleanup(activate_patch.stop)
 
+    def test_upgrade_defaults_primary_8801_and_leftover_split_ports(self):
+        result = deploy_mod.upgrade(self.workspace, quiet=True)
+        self.assertEqual(result['port'], 8801)
+        self.assertEqual(result['legacy_ports'], [8802, 8803])
+        self.assertEqual(deploy_mod.DEFAULT_PORT, 8801)
+        self.assertEqual(deploy_mod.DEFAULT_LEGACY_PORTS, (8802, 8803))
+        import plistlib
+        agent_path = self.root / 'Library' / 'LaunchAgents' / ('%s.plist' % deploy_mod.LABEL)
+        args = plistlib.loads(agent_path.read_bytes())['ProgramArguments']
+        self.assertEqual(args[args.index('--port') + 1], '8801')
+        self.assertEqual(
+            [int(args[i + 1]) for i, value in enumerate(args[:-1]) if value == '--legacy-port'],
+            [8802, 8803],
+        )
+
     def test_fresh_install_is_a_no_op_plus_agent_write(self):
         result = deploy_mod.upgrade(self.workspace, quiet=True)
         self.assertEqual(result['action'], 'activated')

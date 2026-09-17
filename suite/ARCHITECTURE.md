@@ -1,7 +1,7 @@
-**Status:** HISTORICAL. The independent `suite/` UI on `:8801` is retired —
-superseded by the single consolidated app on `:8803` (`overview/v1/` +
-`map/v1/`), documented in [../ARCHITECTURE.md](../ARCHITECTURE.md). `:8801`
-survives only as a redirect from that same `:8803` process (see
+**Status:** HISTORICAL. The independent `suite/` UI is retired —
+superseded by the single consolidated app on `:8801` (`overview/v1/` +
+`map/v1/`), documented in [../ARCHITECTURE.md](../ARCHITECTURE.md). Leftover
+split ports `:8802` and `:8803` redirect from that same `:8801` process (see
 [docs/operations/DEPLOYMENT.md](../docs/operations/DEPLOYMENT.md)). Retained
 rules below apply only where compatible with the current architecture.
 
@@ -26,7 +26,8 @@ The suite is a **thin client** over disk-truth engines. Three layers, one direct
 | **View** | Suite :8801 (historical) — `serve.py` BFF + `suite/` JS | Thin client: compose + cache + pulse only |
 
 Citizen entry was **:8801 only** (ONE DOOR — pc-277) when this paper was
-binding law. Live citizen entry is now **:8803** — see the status note above.
+binding law. Live citizen entry is again **:8801** (leftover split ports
+:8802 / :8803 redirect) — see the status note above.
 Engines are API-only from the citizen's perspective; their own HTML surfaces
 are lumber.
 

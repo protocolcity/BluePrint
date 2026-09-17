@@ -20,10 +20,11 @@ The desk disclosure describes the selected workspace; it is not a cloud switch. 
 
 ## Current delivery state
 
-The application is deployed on :8803 from the canonical BluePrint source and
+The application is deployed on :8801 from the canonical BluePrint source and
 an isolated installed release. Build identity comes from installed package
-metadata and the workspace deployment receipt. Old :8801/:8802 links redirect
-in the same process; no separate preview is part of normal operation.
+metadata and the workspace deployment receipt. Leftover split-port :8802/:8803
+links redirect in the same process; no separate preview is part of normal
+operation.
 See [deployment and recovery](../operations/DEPLOYMENT.md).
 
 Work-order notes, priority, hold, resume, and assignment to a registered agent

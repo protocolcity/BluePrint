@@ -20,7 +20,7 @@ brew install protocolcity/tap/blueprint
 blueprint setup                 # soft default ~/BluePrint — or use an existing folder
 # blueprint setup ~/my-workspace --create --yes
 blueprint serve --foreground --root ~/BluePrint
-# → http://127.0.0.1:8803/  (Overview; Map digs in at /workspace-map)
+# → http://127.0.0.1:8801/  (Overview; Map digs in at /workspace-map)
 ```
 
 Want it to stay up after you close the terminal? `blueprint service start --root ~/BluePrint`
@@ -32,7 +32,7 @@ alias). Product source repos stay separate; install does not require cloning the
 
 ### Upgrading from the three-lane install
 
-Already running the older three-service setup (separate suite :8801 and Map :8802 launch agents)? `blueprint upgrade --root ~/my-workspace` retires those agents (plists moved, never deleted) and activates the single consolidated app on :8803, which keeps :8801 and :8802 alive only as redirects for old bookmarks. See [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md#upgrading-from-the-three-lane-install).
+Already running the older three-service setup (separate suite :8801 and Map :8802 launch agents, or the later Overview-only :8803 agent)? `blueprint upgrade --root ~/my-workspace` retires those agents (plists moved, never deleted) and activates the single consolidated app on :8801, which keeps leftover split ports :8802 and :8803 alive only as redirects for old bookmarks. See [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md#upgrading-from-the-three-lane-install).
 
 ### Windows — first time (nothing installed)
 
@@ -50,7 +50,7 @@ blueprint serve --foreground --root "$env:USERPROFILE\ProtocolCity"
 # If blueprint is not on PATH: py -3 -m protocolcity setup … / serve …
 ```
 
-**3. Open** [http://127.0.0.1:8803/](http://127.0.0.1:8803/) in your browser.  
+**3. Open** [http://127.0.0.1:8801/](http://127.0.0.1:8801/) in your browser.  
 Leave PowerShell open while you use the suite. Stop with **Ctrl+C**.
 
 Stuck? [WINDOWS_FIRST_USER.md](WINDOWS_FIRST_USER.md) — PATH fixes, firewall, next-day restart.
@@ -76,7 +76,7 @@ Cloning BluePrint alone does **not** install a runnable suite.
 ## What you see
 
 Open the suite → **Overview** (system summary). Click **Map**
-(`http://127.0.0.1:8803/workspace-map`) to dig in — then click a project
+(`http://127.0.0.1:8801/workspace-map`) to dig in — then click a project
 folder to see:
 
 | Layer | What it is | Typical files |

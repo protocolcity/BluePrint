@@ -7,6 +7,8 @@ import subprocess
 import sys
 from urllib.request import urlopen
 
+DEFAULT_PORT = 8801
+
 
 def main(argv=None):
     args=list(sys.argv[1:] if argv is None else argv)
@@ -37,7 +39,7 @@ def main(argv=None):
         service_action=args.pop(0) if command=='service' and args else 'status'
         parser=argparse.ArgumentParser(prog='blueprint '+command)
         parser.add_argument('--root','--binder',dest='root',type=Path,default=Path.cwd())
-        parser.add_argument('--port',type=int,default=8803)
+        parser.add_argument('--port',type=int,default=DEFAULT_PORT)
         parser.add_argument('--foreground',action='store_true')
         options=parser.parse_args(args)
         root=options.root.expanduser().resolve()

@@ -43,7 +43,7 @@ Charter drawer + Crew paint, over the Agents · Jobs · Pulse spine — the thre
 
 ## Peel fence
 - CLI under a local tools home → `protocolcity/BluePrint` → Cellar after glass DoD
-- Historical suite Map on `:8801` is retired; the consolidated app serves on `:8803`
+- Historical suite Map UI is retired; the consolidated app serves on `:8801`. Leftover split ports `:8802` / `:8803` redirect.
 - No Map JS · no Wall · no LLC cream · no sparklines · no cinema
 
 ## Soft polish (Brand)

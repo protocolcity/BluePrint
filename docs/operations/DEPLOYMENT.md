@@ -1,6 +1,6 @@
 # BluePrint build, activate, recover
 
-BluePrint is one application, normally on localhost:8803. WorkLane and WorkForce are independent engines. Updating BP must not replace their databases, rosters, credentials, or running processes.
+BluePrint is one application, normally on localhost:8801. Leftover split ports :8802 (old Map) and :8803 (old Overview) redirect to that origin. WorkLane and WorkForce are independent engines. Updating BP must not replace their databases, rosters, credentials, or running processes.
 
 ## Build and verify
 
@@ -19,12 +19,12 @@ PYTHONPATH=map/v1 .venv/bin/python -m unittest discover -s map/v1/tests
 ## Activate
 
 ```sh
-.venv/bin/python tools/deploy.py activate --workspace /path/to/workspace --release /path/to/workspace/local/blueprint/releases/VERSION
+.venv/bin/python tools/deploy.py activate --workspace /path/to/workspace --release /path/to/workspace/local/blueprint/releases/VERSION --port 8801
 ```
 
 Activation checks the installed app on a temporary port, replaces only BluePrint's launch agent, and verifies the running version and workspace. After restart it waits up to 60 seconds (override with `--probe-timeout`) for the service to report the expected build, distinguishing a slow start from a wrong build. Re-activating the release that is already live is a fast no-op. A failed activation restores the previous launch-agent configuration. The active receipt is `<workspace>/.blueprint/deployment.json`.
 
-For a workspace retiring older UI ports, specify `--legacy-port 8801 --legacy-port 8802` during the first activation, after stopping their prior listeners. Subsequent activations preserve these options. The single BP process owns the redirect listeners; they do not run additional UIs or engines. GET links redirect to the current origin; legacy writes are refused. `/desk`, `/roster`, and `/workspace-map` resolve to Work, Agents, and Map.
+For a workspace retiring leftover split ports, specify `--legacy-port 8802 --legacy-port 8803` during the first activation, after stopping their prior listeners. Subsequent activations preserve these options. The single BP process owns the redirect listeners; they do not run additional UIs or engines. GET links redirect to the current origin; legacy writes are refused. `/desk`, `/roster`, and `/workspace-map` resolve to Work, Agents, and Map. Activation always writes `--port 8801` for the primary listener.
 
 ## Recovery and ordinary operation
 
@@ -43,7 +43,7 @@ blueprint upgrade --root /path/to/workspace --dry-run   # print the plan only, w
 blueprint upgrade --root /path/to/workspace              # boot out legacy agents, activate the single app
 ```
 
-It detects each legacy agent by plist presence and by `launchctl print`, boots out any that are found, and moves their plists to `<workspace>/local/blueprint/retired-services/<date>/` — it never deletes them. It then writes and bootstraps the single `com.protocolcity.blueprint-overview` agent for the *installed* package (no build/stage step) with `--legacy-port 8801 --legacy-port 8802`, and verifies the responding build on :8803 and the 307 redirects on :8801 and :8802. `--quiet` suppresses output for scripted/post-install use. A second run with nothing to change reports a no-op. `<workspace>/.blueprint/` (connections, job reports) and every project's `.protocolcity/desk-join.json` are left untouched; no WorkLane store, WorkForce roster, ledger, or daemon is touched. This is macOS-only today; on other platforms it fails with a clear error instead of doing nothing silently.
+It detects each legacy agent by plist presence and by `launchctl print`, boots out any that are found, and moves their plists to `<workspace>/local/blueprint/retired-services/<date>/` — it never deletes them. It then writes and bootstraps the single `com.protocolcity.blueprint-overview` agent for the *installed* package (no build/stage step) with `--port 8801 --legacy-port 8802 --legacy-port 8803`, and verifies the responding build on :8801 and the 307 redirects on leftover :8802 and :8803. `--quiet` suppresses output for scripted/post-install use. A second run with nothing to change reports a no-op. `<workspace>/.blueprint/` (connections, job reports) and every project's `.protocolcity/desk-join.json` are left untouched; no WorkLane store, WorkForce roster, ledger, or daemon is touched. This is macOS-only today; on other platforms it fails with a clear error instead of doing nothing silently.
 
 ## Read-only staffing audit
 

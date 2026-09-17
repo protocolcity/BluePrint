@@ -25,7 +25,8 @@ PRODUCTION_PORTS = frozenset((8797, 8799, 8801))
 # Legacy pre-fold-C agent (pc-575): census is in-process; unload on stop/heal.
 CITYLENS_LABEL = "com.protocolcity.citylens"
 # Legacy three-lane install (pc-1469): standalone Map lane, folded into the
-# single consolidated blueprint-overview process on :8803.
+# single consolidated blueprint-overview process on :8801. Leftover split
+# ports :8802 / :8803 redirect from that same process.
 BLUEPRINT_MAP_LABEL = "com.protocolcity.blueprint-map"
 # Every launch agent a pre-consolidation host may still have running.
 LEGACY_AGENT_LABELS = (LABEL, BLUEPRINT_MAP_LABEL, CITYLENS_LABEL)
