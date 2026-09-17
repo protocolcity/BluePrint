@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from server.timeline import (
     ACTIVITY_DAY_HOURS,
+    ACTIVITY_THREE_DAYS,
     ACTIVITY_WEEK_DAYS,
     ACTIVITY_WINDOW_DAYS,
     PAGE_SIZE,
@@ -529,14 +530,20 @@ class TimelineActivityTests(unittest.TestCase):
         now = datetime(2026, 9, 17, 15, 30, tzinfo=timezone.utc)
         result = timeline_activity([], now=now)
         self.assertEqual(result['day']['grain'], 'hour')
+        self.assertEqual(result['three']['grain'], 'day')
         self.assertEqual(result['week']['grain'], 'day')
         self.assertEqual(result['window']['grain'], 'day')
         self.assertEqual(len(result['day']['buckets']), ACTIVITY_DAY_HOURS)
+        self.assertEqual(len(result['three']['buckets']), ACTIVITY_THREE_DAYS)
         self.assertEqual(len(result['week']['buckets']), ACTIVITY_WEEK_DAYS)
         self.assertEqual(len(result['window']['buckets']), ACTIVITY_WINDOW_DAYS)
         self.assertEqual(result['day']['total'], 0)
         self.assertEqual(result['week']['total'], 0)
         self.assertEqual(result['window']['total'], 0)
+        self.assertEqual(result['day']['doors']['work_count'], 0)
+        self.assertEqual(result['day']['doors']['delivery_count'], 0)
+        self.assertEqual(result['day']['doors']['work_href'], '/work')
+        self.assertEqual(result['day']['doors']['delivery_href'], '/delivery')
         self.assertEqual(result['day']['buckets'][-1]['start'], '2026-09-17T15:00:00Z')
         self.assertEqual(result['day']['buckets'][0]['start'], '2026-09-16T16:00:00Z')
         self.assertEqual(result['week']['buckets'][0]['start'], '2026-09-11T00:00:00Z')
@@ -574,6 +581,29 @@ class TimelineActivityTests(unittest.TestCase):
         self.assertEqual(result['day']['total'], 1)
         hours = {bucket['start']: bucket['count'] for bucket in result['day']['buckets']}
         self.assertEqual(hours['2026-09-17T15:00:00Z'], 1)
+
+    def test_doors_count_worklane_and_github_only(self):
+        now = datetime(2026, 9, 17, 15, 30, tzinfo=timezone.utc)
+        rows = [
+            {'at': '2026-09-17T14:10:00Z', 'id': 'a', 'source': 'worklane'},
+            {'at': '2026-09-17T14:20:00Z', 'id': 'b', 'source': 'github'},
+            {'at': '2026-09-17T14:30:00Z', 'id': 'c', 'source': 'workforce'},
+            {'at': '2026-09-16T10:00:00Z', 'id': 'd', 'source': 'github'},
+            {'at': '2026-09-14T10:00:00Z', 'id': 'e', 'source': 'worklane'},
+        ]
+        result = timeline_activity(rows, now=now)
+        self.assertEqual(result['day']['total'], 3)
+        self.assertEqual(result['day']['doors']['work_count'], 1)
+        self.assertEqual(result['day']['doors']['delivery_count'], 1)
+        self.assertEqual(result['three']['total'], 4)
+        self.assertEqual(result['three']['doors']['work_count'], 1)
+        self.assertEqual(result['three']['doors']['delivery_count'], 2)
+        self.assertEqual(result['week']['doors']['work_count'], 2)
+        self.assertEqual(result['week']['doors']['delivery_count'], 2)
+        self.assertEqual(result['window']['doors']['work_count'], 2)
+        self.assertEqual(result['window']['doors']['delivery_count'], 2)
+        self.assertEqual(result['window']['doors']['work_href'], '/work')
+        self.assertEqual(result['window']['doors']['delivery_href'], '/delivery')
 
     def test_none_root_carries_quiet_activity(self):
         result = timeline_snapshot(None)
