@@ -357,7 +357,11 @@ def seat_load_chips(seats, *, named=SEAT_CHIP_NAMED):
 
 
 def build_work_flow(orders, *, readable=True, agents=None):
-    """Work drain payload. Hero chips are ready vs stalled; flow is held."""
+    """Work drain payload. Hero chips are ready vs stalled.
+
+    Flow Open→Ready→Live→Done is held in this object for a later peel and
+    is not painted on Work.
+    """
     if not readable:
         return empty_work_flow('unavailable')
     flow = {stage: 0 for stage in FLOW_STAGES}
