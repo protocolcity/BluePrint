@@ -35,6 +35,9 @@
 .bp-overview-unrouted { margin: -6px 0 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .bp-overview-unrouted a { text-decoration: none; }
 .bp-overview-unrouted a:hover { text-decoration: underline; }
+.bp-overview-source-line { margin: -6px 0 14px; font-size: 13px; line-height: 1.45; }
+.bp-overview-source-line a { font-size: 12px; text-decoration: none; }
+.bp-overview-source-line a:hover { text-decoration: underline; }
 .bp-metrics-compact .bp-metric { padding: 12px 16px; }
 .bp-metrics-compact .bp-metric strong { font-size: 22px; }
 .bp-metric { color: var(--ov-fg) !important; text-decoration: none; padding: 18px 22px; border-right: 1px solid var(--ov-tile-border); background: var(--ov-tile-bg); }
@@ -144,7 +147,7 @@
    motion turns it into a static dot via the existing global override. */
 @keyframes bp-shift-active { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
 .bp-shift-cue { display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: var(--ov-state-working); margin-right: 6px; animation: bp-shift-active 1800ms ease-in-out infinite; vertical-align: middle; }
-@media(max-width:900px) { .bp-overview-grid { grid-template-columns: 1fr; }.bp-project-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.bp-nav { gap: 20px; } }
+@media(max-width:900px) { .bp-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }.bp-project-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.bp-nav { gap: 20px; } }
 @media(max-width:720px) { .bp-agent-row { grid-template-columns: 1fr; text-align: left; } .bp-agent-select,.bp-job-info { grid-template-columns: 1fr; } .bp-agent-action { justify-self: start; } }
 @media(max-width:900px) { .bp-projects-head { display: none; } .bp-projects-row { grid-template-columns: 1fr; gap: 6px; } .bp-projects-row > span::before { color: var(--ov-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 2px; } .bp-projects-row > span:nth-child(2)::before { content: 'Open'; } .bp-projects-row > span:nth-child(3)::before { content: 'For You'; } .bp-projects-row > span:nth-child(4)::before { content: 'Deferred'; } .bp-projects-row > span:nth-child(5)::before { content: 'Live / Parked'; } .bp-projects-row > span:nth-child(6)::before { content: 'Agents now'; } .bp-projects-row > span:nth-child(7)::before { content: 'Last change'; } .bp-projects-row > span:nth-child(8)::before { content: 'Go'; } }
 @media(max-width:560px) { .bp-header,.bp-nav,.bp-main,.bp-footer { padding-inline: 16px; }.bp-header { gap: 12px; }.bp-brand small { display: none; }.bp-header-actions { gap: 6px; }.bp-header { flex-wrap: wrap; }.bp-header-actions { width: 100%; justify-content: space-between; }.bp-heading { display: block; }.bp-metrics { grid-template-columns: repeat(2,1fr); }.bp-metric { border-bottom: 1px solid var(--ov-tile-border); }.bp-project-grid { grid-template-columns: 1fr; }.bp-order { grid-template-columns: 1fr; gap: 8px; }.bp-badge { justify-self: start; }.bp-filters label { flex: 1; min-width: 130px; }.bp-section-head { align-items: start; }.bp-footer { flex-direction: column; }.bp-facts { grid-template-columns: 1fr; gap: 6px; }.bp-facts dd { margin-bottom: 8px; } }
