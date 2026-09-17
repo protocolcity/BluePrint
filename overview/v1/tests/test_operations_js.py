@@ -1820,9 +1820,25 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertIn('scopeSeatLoad', paint)
         self.assertNotIn('bp-work-flow-bar', paint)
         self.assertNotIn('Open → Ready', paint)
+        self.assertNotIn('FLOW_STAGES', paint)
+        self.assertNotIn('data.flow', paint)
+        self.assertNotIn('flow-pipeline', paint)
         self.assertNotIn('n8n', paint.lower())
         self.assertNotIn('histogram', paint.lower())
         self.assertNotIn('Needs you', paint)
+
+    def test_work_view_does_not_ship_the_held_flow_pipeline(self):
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertNotIn('Open → Ready → Live → Done', _SRC)
+        self.assertNotIn('FLOW_STAGES', _SRC)
+        self.assertNotIn('function flowStage', _SRC)
+        self.assertNotIn('bp-work-flow-pipeline', _SRC)
+        self.assertNotIn('bp-work-flow-bar', _SRC)
+        self.assertIn('aria-label="Seat load"', work)
+        self.assertIn('bp-work-seat-chip', _SRC)
+        paint = _SRC.split('function paintWorkFlow()')[1].split('function isUnrouted')[0]
+        self.assertIn('Held', paint)
+        self.assertNotIn('join(', paint)
 
     def test_strip_does_not_retouch_density_or_neighbor_doors(self):
         self.assertIn("dataset.kind='face'", _SRC)

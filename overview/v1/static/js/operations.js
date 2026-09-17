@@ -1186,8 +1186,6 @@ function paintOverviewThroughput() {
     host.append(spark);
   }
 }
-const FLOW_STAGES=['Open','Ready','Live','Done'];
-const SEAT_LOAD_LIMIT=8;
 function seatHand(order) {
   for(const worker of (order.workers || [])) {
     if(worker && worker!=='you') return worker;
@@ -1204,19 +1202,10 @@ function loadBucket(order) {
   if(status==='Stalled') return 'stalled';
   return '';
 }
-function flowStage(order) {
-  const status=rowStatus(order);
-  if(status==='Done') return 'Done';
-  if(status==='Ready') return 'Ready';
-  if(status==='Live' || status==='Review' || status==='Stalled') return 'Live';
-  if(status==='Open' || status==='Deferred') return 'Open';
-  return '';
-}
 function emptyWorkFlow(state) {
-  return {state:state || 'empty', flow:{Open:0,Ready:0,Live:0,Done:0}, seats:[], chips:[], total:0};
+  return {state:state || 'empty', seats:[], chips:[], total:0};
 }
 function buildWorkFlow(orders, agents) {
-  const flow={Open:0,Ready:0,Live:0,Done:0};
   const seats=new Map();
   const names={you:'You'};
   for(const agent of agents || []) {
@@ -1224,8 +1213,6 @@ function buildWorkFlow(orders, agents) {
     if(agent.group==='seat' || agent.id==='you') names[agent.id]=agent.name || agent.id;
   }
   for(const order of orders || []) {
-    const stage=flowStage(order);
-    if(stage) flow[stage]+=1;
     const bucket=loadBucket(order);
     const hand=seatHand(order);
     if(!bucket || !hand) continue;
@@ -1236,9 +1223,8 @@ function buildWorkFlow(orders, agents) {
     const load=(b.ready+b.claimed+b.stalled)-(a.ready+a.claimed+a.stalled);
     return load || String(a.name).localeCompare(String(b.name));
   });
-  const total=flow.Open+flow.Ready+flow.Live+flow.Done;
   const loadTotal=list.reduce((n,seat)=>n+seat.ready+seat.claimed+seat.stalled,0);
-  return {state:(total || loadTotal) ? 'healthy' : 'empty', flow, seats:list, chips:seatLoadChips(list), total};
+  return {state:loadTotal ? 'healthy' : 'empty', seats:list, chips:seatLoadChips(list), total:loadTotal};
 }
 function workFlowFromOrders() {
   if(snapshot && snapshot.work_flow && snapshot.work_flow.state==='unavailable') return snapshot.work_flow;
@@ -1274,6 +1260,7 @@ function filterSeatLoad(seatId) {
   scopeSeatLoad({id:seatId, name:seatDisplayName(seatId), kind:'seat'});
 }
 function paintWorkFlow() {
+  // Held: Open→Ready→Live→Done is not painted. Seat-load chips are the only hero.
   const host=$('work-flow');
   if(!host) return;
   host.replaceChildren();
