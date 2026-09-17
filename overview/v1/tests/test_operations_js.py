@@ -2060,5 +2060,42 @@ class CalendarLoadBarTests(unittest.TestCase):
         self.assertEqual(result['fire_door'], '/agents')
 
 
+class MapNodeMotionLeakTests(unittest.TestCase):
+    """Issue #156: Map motion stroke stays on Map. Neighbor peels untouched."""
+
+    def test_operations_pages_do_not_host_map_motion_paint(self):
+        self.assertNotIn('map-motion-live', _HTML)
+        self.assertNotIn('map-motion-recent', _HTML)
+        self.assertNotIn('map-motion-unavailable', _HTML)
+        self.assertNotIn('classifyNodeMotion', _SRC)
+        self.assertNotIn('indexNodeState', _SRC)
+        self.assertNotIn('data-motion', _SRC)
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertNotIn('.map-motion-live', css)
+        self.assertNotIn('.map-lot.map-motion', css)
+
+    def test_neighbor_peels_stay_on_their_pages(self):
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="agents-floor-spark"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="projects-compare"', _HTML)
+        self.assertIn('id="delivery-ci-spark"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+        self.assertIn('id="calendar-load"', _HTML)
+        self.assertIn('id="calendar-doors"', _HTML)
+        self.assertIn('function paintOverviewThroughput()', _SRC)
+        self.assertIn('function paintWorkFlow()', _SRC)
+        self.assertIn('function paintAgentsFloorSpark()', _SRC)
+        self.assertIn('function paintProjectsCompare()', _SRC)
+        self.assertIn('function paintDeliverySpark(', _SRC)
+        self.assertIn('function paintTimelineActivity()', _SRC)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('POS', _HTML)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -116,12 +116,19 @@ def build_tree(root: Path, *, hidden_names: Iterable[str] | None = None) -> dict
     return {"binder": binder, "lots": lots, "git": _git_shape(root)}
 
 
-def attach_project_state(tree: dict, projects: Iterable[dict] | None) -> dict:
-    """Stamp open / For You / working counts onto lots that match a project folder.
+def attach_project_state(
+    tree: dict,
+    projects: Iterable[dict] | None,
+    *,
+    pulses: dict | None = None,
+    now=None,
+) -> dict:
+    """Stamp open / For You / working counts and motion onto matching lots.
 
     Counts come from the same operations projection Overview uses. Lots without
-    a matching folder are unchanged. ``storeState`` is ``available`` or not —
-    the client paints a read-only mark when the store is not available.
+    a matching folder are unchanged — they stay quiet, never a fake pulse.
+    ``storeState`` is ``available`` or not — the client paints a read-only mark
+    when the store is not available. ``motion`` is stroke = activity (#156).
     """
     by_folder: dict[str, dict] = {}
     for project in projects or []:
@@ -130,6 +137,11 @@ def attach_project_state(tree: dict, projects: Iterable[dict] | None) -> dict:
         folder = project.get("folder")
         if isinstance(folder, str) and folder:
             by_folder[folder] = project
+    try:
+        from .node_motion import classify_node_motion
+    except ImportError:  # loaded as a loose file from overview/v1/serve.py
+        from node_motion import classify_node_motion  # type: ignore
+    pulse_by_id = pulses or {}
     lots = []
     for lot in tree.get("lots") or []:
         if not isinstance(lot, dict):
@@ -142,8 +154,10 @@ def attach_project_state(tree: dict, projects: Iterable[dict] | None) -> dict:
         row = dict(lot)
         row["open"] = int(project.get("open") or 0)
         row["attention"] = int(project.get("attention") or 0)
-        row["working"] = int(project.get("working") or 0)
+        row["working"] = int(project.get("working") or project.get("running") or 0)
         row["storeState"] = state
+        pulse = pulse_by_id.get(project.get("id")) if project.get("id") else None
+        row["motion"] = classify_node_motion(project, pulse, now=now)
         lots.append(row)
     return {**tree, "lots": lots}
 

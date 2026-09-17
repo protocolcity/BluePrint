@@ -683,6 +683,90 @@ class DisposableDeskWorkFlowSmokeTests(unittest.TestCase):
         self.assertTrue(all(order.get('board_band') == 'seat_backlog' for order in payload['orders']))
 
 
+class DisposableDeskMapMotionSmokeTests(unittest.TestCase):
+    """Issue #156: Map motion paint on a throwaway desk; neighbor pages stay clean."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix='bp-map-motion-')
+        self.root = Path(self.temp.name)
+        manifest = self.root / 'product' / '.protocolcity' / 'desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': 'product', 'prefix': 'pc', 'display': 'Product'}))
+        data = self.root / 'worklane' / 'worklane' / 'local' / 'data'
+        data.mkdir(parents=True)
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        with sqlite3.connect(data / 'product.db') as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, '
+                'priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+            )
+            conn.execute("INSERT INTO tasks VALUES(1,NULL,'Live','in_progress',1,?,?,'human','Decide')",
+                         (recent, json.dumps(['worker:agent'])))
+            conn.execute("INSERT INTO task_events VALUES(1,1,'status_change','in_progress','seat',?)", (recent,))
+            conn.execute("INSERT INTO task_comments VALUES(1,1,'Working: peel','seat',?)", (recent,))
+        (self.root / 'product' / 'note.md').write_text('# paper\n')
+        self.httpd, self.port, self.thread = _start_server(empty_state(), binder_root=self.root)
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.temp.cleanup()
+
+    def test_map_shell_hosts_motion_stroke_and_doors(self) -> None:
+        status, body, _ = _get(self.port, '/map')
+        text = body.decode()
+        self.assertEqual(status, 200)
+        self.assertIn('id="map-shell"', text)
+        self.assertIn('id="map-browser-list"', text)
+        self.assertIn('id="map-project-panel"', text)
+        self.assertIn('id="map-dig-trail"', text)
+        self.assertIn('/map/css/workspace_map.css', text)
+        self.assertIn('/map/js/workspace_map_app.v1.js', text)
+        css_status, css_body, _ = _get(self.port, '/map/css/workspace_map.css')
+        css = css_body.decode()
+        self.assertEqual(css_status, 200)
+        self.assertIn('.map-lot.map-motion-live .map-lot-plate', css)
+        self.assertIn('.map-lot.map-motion-recent .map-lot-plate', css)
+        self.assertIn('.map-lot.map-motion-unavailable .map-lot-plate', css)
+        self.assertNotIn('n8n', css.lower())
+        js_status, js_body, _ = _get(self.port, '/map/js/map-motion.js')
+        self.assertEqual(js_status, 200)
+        self.assertIn('classifyNodeMotion', js_body.decode())
+
+    def test_operations_pages_do_not_receive_map_motion(self) -> None:
+        status, body, _ = _get(self.port, '/')
+        text = body.decode()
+        self.assertEqual(status, 200)
+        self.assertNotIn('map-motion-live', text)
+        self.assertNotIn('id="map-shell"', text)
+        self.assertIn('id="overview-throughput"', text)
+        self.assertIn('id="work-flow"', text)
+        self.assertIn('id="agents-floor-spark"', text)
+        self.assertIn('id="projects-compare"', text)
+        self.assertIn('id="delivery-ci-spark"', text)
+        self.assertIn('id="timeline-activity-chart"', text)
+        self.assertIn('id="calendar-load"', text)
+        self.assertIn('id="calendar-doors"', text)
+        nav = text.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+
+    def test_operations_api_still_exposes_truthful_motion_signals(self) -> None:
+        status, body, ctype = _get(self.port, '/api/operations')
+        self.assertEqual(status, 200)
+        self.assertIn('application/json', ctype)
+        payload = json.loads(body)
+        row = next(item for item in payload['portfolio']['projects'] if item['id'] == 'product')
+        self.assertGreaterEqual(row['motion'], 1)
+        project = next(item for item in payload['projects'] if item['id'] == 'product')
+        self.assertEqual(project['state'], 'available')
+        self.assertIsNotNone(project['last_change'])
+        self.assertIsNotNone(project['last_change']['at'])
+        self.assertNotEqual(row['pulse'], 'unavailable')
+
+
 if __name__ == "__main__":
     unittest.main()
 

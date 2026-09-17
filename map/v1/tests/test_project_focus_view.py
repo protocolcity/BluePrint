@@ -397,7 +397,7 @@ class DigInFanUnderFocusTests(unittest.TestCase):
         match = re.search(r"async function digInto\(node, \{ mode = 'root' \} = \{\}\)\s*\{([\s\S]*?)\n  \}", self.host)
         self.assertIsNotNone(match)
         body = match.group(1)
-        self.assertIn("if (!viewState.snapshot().project) {\n      paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220 });\n    }", body)
+        self.assertIn("if (!viewState.snapshot().project) {\n      paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220, nodeState });\n    }", body)
 
     def test_backspace_does_not_paint_the_legacy_fan_while_a_project_is_focused(self) -> None:
         match = re.search(r"if \(ev\.key !== 'Backspace'\) return;([\s\S]*?)\n  \}\);", self.host)
@@ -455,7 +455,7 @@ class ItemSelectionSyncTests(unittest.TestCase):
         # sidebar — canvas/sidebar selection was not fully synchronized.
         self.assertIn("selectedItem = null", self.paint)
         self.assertIn("isSelected = Boolean(selectedItem) && selectedItem.branch === branch.key", self.paint)
-        self.assertIn("paintProjectFocus(world, {\n        project: snap.project,\n        branches: lastBranches,\n        expandedBranch: snap.branch,\n        selectedItem: snap.item,\n        flashBranches: liveFlashBranches(),\n        tickBranches,\n      });", self.host)
+        self.assertIn("paintProjectFocus(world, {\n        project: snap.project,\n        branches: lastBranches,\n        expandedBranch: snap.branch,\n        selectedItem: snap.item,\n        flashBranches: liveFlashBranches(),\n        tickBranches,\n        motion: nodeState[snap.project.relPath] ? nodeState[snap.project.relPath].motion : null,\n      });", self.host)
 
     def test_project_panel_marks_the_active_item_row(self) -> None:
         panel = re.search(r"function renderProjectPanel\(snap\)\s*\{([\s\S]*?)\n  \}", self.host)
