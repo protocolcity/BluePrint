@@ -1,0 +1,36 @@
+# Forever-compat PyPI alias for the BluePrint suite.
+#
+# Preferred distro: protocolcity-blueprint (repo root pyproject.toml).
+# This meta package keeps `pip install protocolcity` working; it depends
+# on the preferred wheel and adds no second import path.
+#
+# Keep version and engines pin identical to the root package.
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "protocolcity"
+version = "0.1.50"
+description = "BluePrint suite (compat alias) — installs protocolcity-blueprint; taught CLI is blueprint"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "protocolcity-blueprint==0.1.50",
+]
+
+[project.optional-dependencies]
+# Same engines pin as the preferred distro so `pip install 'protocolcity[engines]'`
+# resolves WorkLane/WorkForce 0.1.9.
+engines = [
+    "protocolcity-blueprint[engines]==0.1.50",
+    "protocolcity-worklane==0.1.9",
+    "protocolcity-workforce==0.1.9",
+]
+
+# No [project.scripts] — console script `blueprint` comes from protocolcity-blueprint.
+
+[tool.setuptools]
+# Meta package ships no import packages (empty).
+packages = []

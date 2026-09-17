@@ -1,0 +1,37 @@
+# Public sdist: product source only. Host runtime and generated MCP stay out.
+include README.md
+include LICENSE
+include pyproject.toml
+include AGENTS.md
+include RUNNING.md
+
+graft protocolcity
+graft suite
+graft overview
+graft map
+graft templates
+
+prune .git
+prune .github
+prune .venv
+prune .protocolcity
+prune local
+prune dist
+prune build
+prune docs
+prune tests
+prune example
+prune scripts
+prune packaging
+prune overview/v1/tests
+prune map/v1/tests
+prune tools
+
+global-exclude .mcp.json
+global-exclude .DS_Store
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude .env
+global-exclude .env.*
+recursive-exclude * __pycache__
+recursive-exclude * .protocolcity
