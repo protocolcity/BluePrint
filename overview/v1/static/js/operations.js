@@ -631,13 +631,11 @@ function faceEntry(order) {
   entry.append(mute);
   return entry;
 }
-function faceHeading(label, total, visible, href) {
+function faceHeading(label, total, visible) {
   let text=`${label} · ${total}`;
   if(total > visible) text+=` · showing ${visible}`;
-  const heading=$(`for-you-${label.toLowerCase()}-heading`) || $(`for-you-${label.toLowerCase()}-summary`);
-  if(heading) heading.textContent=text;
-  const linkWrap=heading && heading.parentElement && heading.parentElement.querySelector('a');
-  if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
+  const summary=$(`for-you-${label.toLowerCase()}-summary`);
+  if(summary) summary.textContent=text;
 }
 function bindForYouFaceToggle(face) {
   const details=$(`for-you-${face}-details`);
@@ -687,6 +685,12 @@ function overview() {
   reconcileList($('overview-executions'), running, a=>a.id, executionRow, running.length ? {} : {emptyText:overviewExecutionEmpty()});
   const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
+  const unrouted=orders.filter(isUnrouted), unroutedHost=$('overview-unrouted');
+  if(unroutedHost) {
+    unroutedHost.replaceChildren();
+    unroutedHost.append(document.createTextNode('Unrouted '), link(String(unrouted.length), UNROUTED_WORK_HREF));
+    unroutedHost.append(el('span', unrouted.length ? ' — open, ungated orders with no seat' : ' — none right now'));
+  }
   const faceLimit={decide:6,read:6,watch:4,note:4};
   let mutedCount=0;
   for(const face of ['decide','read','watch','due']) {
@@ -695,7 +699,7 @@ function overview() {
     const visible=unmuted.slice(0,faceLimit[face]);
     mutedCount+=band.length-unmuted.length;
     reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
-    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
+    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length);
     syncForYouFaceOpen(face, band.length);
   }
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
@@ -730,6 +734,13 @@ function matchesAssignment(order, value) {
   if(value==='you') return order.assigned_you;
   if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
   return order.workers.includes(value.slice(7));
+}
+const UNROUTED_WORK_HREF = '/work?gate=none&assignment=unassigned';
+function isUnrouted(order) {
+  // Same slice as the per-row Needs routing chip: open backlog, ungated, no
+  // routable seat (ONE_DESK_STORY §The fact: Unrouted). The Work link keeps
+  // the saved Gate=none + Assignment=unassigned filter named in pc-1507.
+  return order.status === 'backlog' && Boolean(order.needs_routing);
 }
 function matchesGate(order, value) {
   if(value==='none') return !order.gate_type && order.blocked_on==='clear';
