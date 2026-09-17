@@ -141,12 +141,14 @@ const canvas = {
     {id: 'work:blueprint:pc-9', kind: 'work', label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9', door: 'ticket', bucket: 'target', x: 268, y: 24, w: 188, h: 58},
     {id: 'idle-seat', kind: 'seat', label: 'idle-seat', badge: 'IDLE', bucket: 'idle', group: 'seat', x: 24, y: 98, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:idle-seat'},
     {id: 'failed-seat', kind: 'seat', label: 'failed-seat', badge: 'LAST RUN FAILED', bucket: 'error', group: 'seat', x: 24, y: 172, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:failed-seat'},
+    {id: 'run:failed-seat', kind: 'last_run', label: 'Last run · failed', title: 'agent exit', outcome: 'error', href: '/timeline?actor=failed-seat', door: 'timeline', bucket: 'error', x: 268, y: 172, w: 188, h: 58},
     {id: 'off-seat', kind: 'seat', label: 'off-seat', badge: 'OFF', bucket: 'quiet', group: 'seat', x: 24, y: 246, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:off-seat'},
     {id: 'loop-health', kind: 'job', label: 'loop-health', badge: 'IDLE', bucket: 'idle', group: 'job', x: 24, y: 332, w: 188, h: 58, door: ''},
     {id: 'fire:loop-health', kind: 'fire', label: 'Next fire · in 12m', href: '/calendar', door: 'calendar', bucket: 'target', x: 268, y: 332, w: 188, h: 58},
   ],
   edges: [
     {from: 'working-seat', to: 'work:blueprint:pc-9', kind: 'claim'},
+    {from: 'failed-seat', to: 'run:failed-seat', kind: 'last_run'},
     {from: 'loop-health', to: 'fire:loop-health', kind: 'next_fire'},
   ],
 };
@@ -280,12 +282,17 @@ assert.ok(working.querySelector('.bp-shift-cue'));
 
 const edges = get('agents-canvas').querySelectorAll('.bp-agents-canvas-edge');
 assert.ok(edges.some(edge => edge.dataset.kind === 'claim'));
+assert.ok(edges.some(edge => edge.dataset.kind === 'last_run'));
 assert.ok(edges.some(edge => edge.dataset.kind === 'next_fire'));
 
 const links = get('agents-canvas').querySelectorAll('a');
 assert.ok(links.some(a => String(a.href).includes('/work?assignment=worker:idle-seat')), 'seats without a held WO still get the generic Work link');
 assert.ok(links.some(a => String(a.href).includes('/work-order?project=blueprint&id=pc-9')));
 assert.ok(links.some(a => String(a.href) === '/calendar'));
+assert.ok(links.some(a => String(a.href) === '/timeline?actor=failed-seat'), 'a failed last run opens a Timeline door scoped to that seat');
+const failedRun = cards.find(n => n.dataset.id === 'run:failed-seat');
+assert.ok(failedRun, 'last-run target node is painted');
+assert.equal(failedRun.dataset.bucket, 'error', 'a failed last run stays error, not softened');
 assert.ok(!cards.some(n => n.draggable), 'canvas nodes are not an editor');
 
 const claimChip = working.querySelectorAll('.bp-agents-canvas-claim')[0];

@@ -130,6 +130,51 @@ class AgentsCanvasTests(unittest.TestCase):
         self.assertEqual(kinds, ['claim', 'next_fire'])
         self.assertEqual({node['kind'] for node in canvas['nodes']}, {'seat', 'work', 'fire'})
 
+    def test_last_run_targets_seats_with_a_timeline_door(self):
+        canvas = build_agents_canvas([
+            _agent('failed-seat', 'seat', 'last_run_failed', last_run={
+                'outcome': 'error', 'reason': 'agent exit rc 1', 'at': '2026-09-17T02:00:00Z',
+            }),
+            _agent('ok-seat', 'seat', 'idle', last_run={
+                'outcome': 'stop', 'reason': 'single-pass complete', 'at': '2026-09-17T02:00:00Z',
+            }),
+            _agent('skip-seat', 'seat', 'idle', last_run={'outcome': 'skip', 'at': '2026-09-17T02:00:00Z'}),
+            _agent('quiet-seat', 'seat', 'idle'),
+        ], now=NOW)
+        by_id = {node['id']: node for node in canvas['nodes']}
+        failed = by_id['run:failed-seat']
+        self.assertEqual(failed['kind'], 'last_run')
+        self.assertEqual(failed['door'], 'timeline')
+        self.assertEqual(failed['href'], '/timeline?actor=failed-seat')
+        self.assertEqual(failed['label'], 'Last run · failed')
+        self.assertEqual(failed['bucket'], 'error')
+        ok = by_id['run:ok-seat']
+        self.assertEqual(ok['label'], 'Last run · ok')
+        self.assertEqual(ok['bucket'], 'target')
+        self.assertNotIn('run:skip-seat', by_id)
+        self.assertNotIn('run:quiet-seat', by_id)
+        edges = {(edge['from'], edge['to']): edge['kind'] for edge in canvas['edges']}
+        self.assertEqual(edges[('failed-seat', 'run:failed-seat')], 'last_run')
+        self.assertEqual(edges[('ok-seat', 'run:ok-seat')], 'last_run')
+
+    def test_last_run_never_shown_on_jobs(self):
+        canvas = build_agents_canvas([
+            _agent('loop-health', 'job', 'idle', last_run={'outcome': 'error', 'reason': 'x'}),
+        ], now=NOW)
+        self.assertEqual(canvas['edges'], [])
+        self.assertEqual({node['kind'] for node in canvas['nodes']}, {'job'})
+
+    def test_seat_can_carry_claim_last_run_and_next_fire(self):
+        later = (NOW + timedelta(hours=1)).isoformat()
+        canvas = build_agents_canvas([
+            _agent('lane', 'seat', 'working', held={
+                'id': 'pc-2', 'project': 'blueprint', 'title': 'Held',
+            }, last_run={'outcome': 'error', 'reason': 'agent exit'}, next_fire=later),
+        ], now=NOW)
+        kinds = sorted(edge['kind'] for edge in canvas['edges'])
+        self.assertEqual(kinds, ['claim', 'last_run', 'next_fire'])
+        self.assertEqual({node['kind'] for node in canvas['nodes']}, {'seat', 'work', 'last_run', 'fire'})
+
     def test_layout_places_targets_to_the_right(self):
         later = (NOW + timedelta(minutes=8)).isoformat()
         canvas = build_agents_canvas([

@@ -2618,7 +2618,9 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertIn('agent.held', builder)
         self.assertIn('next_fire', builder)
         self.assertIn("kind:'claim'", builder.replace(' ', ''))
+        self.assertIn("kind:'last_run'", builder.replace(' ', ''))
         self.assertIn("kind:'next_fire'", builder.replace(' ', ''))
+        self.assertIn('lastRunTarget(agent)', builder)
         node = _SRC.split('function paintAgentsCanvasNode(node)')[1].split('function paintAgentsCanvasEdges')[0]
         self.assertIn('selectAgent(node.id)', node.replace(' ', ''))
         self.assertIn('work_href', node)

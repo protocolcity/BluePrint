@@ -2000,6 +2000,18 @@ function futureFireAt(value, now) {
   if(Number.isNaN(ms) || ms<=now) return null;
   return ms;
 }
+const LAST_RUN_LABELS={error:'Last run · failed', stop:'Last run · ok', done:'Last run · ok'};
+function lastRunTarget(agent) {
+  const run=agent.last_run;
+  if(!run || typeof run!=='object') return null;
+  const outcome=String(run.outcome || '').toLowerCase();
+  const label=LAST_RUN_LABELS[outcome];
+  if(!label) return null;
+  return {
+    id:`run:${agent.id}`, kind:'last_run', label, title:run.reason || label,
+    outcome, href:'/timeline?'+new URLSearchParams({actor:agent.id}), door:'timeline',
+  };
+}
 function buildAgentsCanvas(agents, now) {
   const stamp=now || Date.now();
   const seats=[], jobs=[];
@@ -2038,6 +2050,10 @@ function buildAgentsCanvas(agents, now) {
             door:'ticket', bucket:'target',
           },
         });
+      }
+      if(agent.group==='seat') {
+        const run=lastRunTarget(agent);
+        if(run) targets.push({kind:'last_run', node:{...run, bucket:run.outcome==='error'?'error':'target'}});
       }
       const fireAt=futureFireAt(agent.next_fire, stamp);
       if(fireAt!=null) {
