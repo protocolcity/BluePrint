@@ -67,6 +67,7 @@
 .bp-agents-floor-spark a:hover { text-decoration: underline; }
 .bp-agents-floor-spark-line { letter-spacing: .02em; font-size: 12px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
 .bp-agents-floor-spark-line[data-tone="error"] { color: var(--ov-state-error); }
+.bp-agents-floor-fail { color: var(--ov-state-error); font-variant-numeric: tabular-nums; }
 .bp-delivery-ci-spark { margin: 2px 0 12px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .bp-delivery-ci-spark a { text-decoration: none; }
 .bp-delivery-ci-spark a:hover { text-decoration: underline; }
@@ -163,15 +164,16 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-agent-rows { display: flex; flex-direction: column; }
 .bp-agent-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; width: 100%; border-top: 1px solid var(--ov-tile-border); padding: 12px 6px; }
 .bp-agent-rows > .bp-agent-row:first-child { border-top: 0; }
-.bp-agent-select { display: grid; grid-template-columns: minmax(80px,1fr) minmax(140px,1.3fr) auto minmax(160px,1.6fr) minmax(70px,auto) minmax(100px,auto) minmax(88px,auto); gap: 12px; align-items: center; min-width: 0; text-align: left; font: inherit; color: var(--ov-fg); background: transparent; border: 0; padding: 0; cursor: pointer; }
+.bp-agent-select { display: grid; grid-template-columns: minmax(80px,1fr) minmax(140px,1.3fr) auto minmax(160px,1.6fr) minmax(70px,auto) minmax(100px,auto) minmax(110px,auto); gap: 12px; align-items: center; min-width: 0; text-align: left; font: inherit; color: var(--ov-fg); background: transparent; border: 0; padding: 0; cursor: pointer; }
 .bp-agent-select:hover { background: var(--ov-bg); }
 .bp-agent-select[data-selected="true"] { background: var(--ov-bg); box-shadow: inset 3px 0 0 var(--ov-link); }
-.bp-job-info { display: grid; grid-template-columns: minmax(80px,1fr) minmax(140px,1.3fr) minmax(70px,auto) auto minmax(160px,1.6fr) minmax(88px,auto); gap: 12px; align-items: center; min-width: 0; }
-.bp-agent-spark-cell { display: grid; gap: 2px; justify-items: end; min-width: 88px; }
+.bp-job-info { display: grid; grid-template-columns: minmax(80px,1fr) minmax(140px,1.3fr) minmax(70px,auto) auto minmax(160px,1.6fr) minmax(110px,auto); gap: 12px; align-items: center; min-width: 0; }
+.bp-agent-spark-cell { display: grid; gap: 2px; justify-items: end; min-width: 110px; }
 .bp-agent-spark-line { letter-spacing: .02em; font-size: 11px; line-height: 1; color: var(--ov-muted); animation: bp-spark-in 400ms ease-out; }
 .bp-agent-spark-line[data-tone="working"] { color: var(--ov-state-working); }
 .bp-agent-spark-line[data-tone="error"] { color: var(--ov-state-error); }
 .bp-agent-spark-label { font-size: 11px; }
+.bp-agent-spark-fail { font-size: 11px; color: var(--ov-state-error); font-variant-numeric: tabular-nums; }
 @keyframes bp-spark-in { from { opacity: .35; } to { opacity: 1; } }
 .bp-agent-cell { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
 .bp-agent-name strong { display: block; font-size: 14px; font-weight: 500; }
