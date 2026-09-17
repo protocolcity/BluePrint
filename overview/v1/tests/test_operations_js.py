@@ -2212,6 +2212,65 @@ class CalendarLoadBarTests(unittest.TestCase):
         self.assertEqual(result['fire_door'], '/agents')
 
 
+class CalendarHybridHonestyStripTests(unittest.TestCase):
+    """pc-1540 / Cap C2: reserved Hybrid source + outbound strips, and the
+    write door, stay honest — no fake MCP/Connector/Apple/Outlook live
+    state, and no write UI until the fabric exists."""
+
+    def test_source_and_outbound_strips_live_on_calendar_view_only(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertIn('data-role="cal-sources"', calendar)
+        self.assertIn('data-role="cal-outbound"', calendar)
+        self.assertIn('id="calendar-write-door"', calendar)
+        self.assertNotIn('data-role="cal-sources"', overview)
+        self.assertNotIn('data-role="cal-sources"', work)
+        self.assertLess(calendar.index('data-role="cal-sources"'), calendar.index('id="calendar-load"'))
+
+    def test_write_door_is_reserved_and_hidden(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        write_door = calendar.split('id="calendar-write-door"')[1].split('>')[0]
+        self.assertIn('hidden', write_door)
+        self.assertIn('disabled', write_door)
+        self.assertIn('aria-disabled="true"', write_door)
+
+    def test_paint_calendar_schedule_paints_both_strips(self):
+        paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
+        self.assertIn('paintSourceStrip(', paint)
+        self.assertIn('paintOutboundStrip(', paint)
+        import_line = _SRC.split("await import('/js/calendar.v1.js')")[0].splitlines()[-1]
+        self.assertIn('paintSourceStrip', import_line)
+        self.assertIn('paintOutboundStrip', import_line)
+
+    def test_source_strip_reads_worklane_from_workspace_not_a_fake_mcp(self):
+        paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
+        self.assertIn('workLane: Boolean(snapshot?.workspace)', paint)
+        self.assertNotIn('mcp: true', _SRC.lower())
+        self.assertNotIn('connector: true', _SRC.lower())
+
+    def test_css_dims_reserved_chips(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-cal-chip[data-state="reserved"]', css)
+        self.assertIn('.bp-cal-write-door[hidden]', css)
+
+    def test_load_harness_covers_strips(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping calendar load harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'calendar_load_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'calendar load harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['source_states'], ['live', 'live', 'reserved', 'reserved'])
+        self.assertEqual(result['source_states_no_worklane'], ['live', 'unavailable', 'reserved', 'reserved'])
+        self.assertEqual(result['outbound_states'], ['reserved', 'reserved'])
+
+
 class MapNodeMotionLeakTests(unittest.TestCase):
     """Issue #156: Map motion stroke stays on Map. Neighbor peels untouched."""
 

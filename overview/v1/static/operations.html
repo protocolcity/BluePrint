@@ -81,6 +81,10 @@
   <section id="calendar-view" hidden>
     <p class="bp-note bp-muted">Upcoming agent runs are reported by WorkForce. Timed values use your browser’s timezone. All-day dates stay on the calendar day they were recorded.</p>
     <nav id="calendar-doors" class="bp-calendar-doors" data-role="cal-doors" aria-label="Calendar doors"></nav>
+    <div class="bp-cal-strip bp-cal-sources-strip" aria-label="Schedule sources">
+      <span class="bp-cal-strip-label">Sources</span>
+      <div class="bp-cal-strip-chips" data-role="cal-sources"></div>
+    </div>
     <div id="calendar-load" class="bp-panel bp-calendar-load" data-role="cal-load">
       <div class="bp-section-head"><div><h2>Load by day</h2><p id="calendar-load-summary" class="bp-muted" data-role="cal-load-summary"></p></div></div>
       <div id="calendar-load-chart" class="ov-cal-load-chart" data-role="cal-load-chart" hidden></div>
@@ -92,7 +96,20 @@
         <button type="button" id="calendar-today-btn">Today</button>
         <button type="button" id="calendar-next-week">Next week</button>
       </div>
+      <button
+        type="button"
+        id="calendar-write-door"
+        class="bp-cal-write-door"
+        hidden
+        disabled
+        aria-disabled="true"
+        title="Reserved — Calendar writes arrive with Hybrid fabric"
+      >New event · reserved</button>
     </form>
+    <div class="bp-cal-strip bp-cal-outbound-strip" aria-label="Outbound calendar apps (reserved)">
+      <span class="bp-cal-strip-label">Outbound</span>
+      <div class="bp-cal-strip-chips" data-role="cal-outbound"></div>
+    </div>
     <p id="calendar-range" class="bp-muted" role="status"></p>
     <div class="bp-panel"><div class="bp-section-head"><div><h2>Next scheduled runs</h2><p class="bp-muted">WorkForce next-run times. Manual jobs have no next run.</p></div></div><div id="schedule-list"></div></div>
     <div class="bp-panel"><div class="bp-section-head"><div><h2>Agenda</h2><p class="bp-muted">Today and upcoming clocks. Past and overdue stay collapsed.</p></div><a href="/calendar.ics">Subscribe / export calendar</a></div>

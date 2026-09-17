@@ -479,6 +479,26 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-calendar-load { padding: 14px 16px; margin-bottom: 16px; }
 .bp-calendar-load .bp-section-head { margin-bottom: 8px; }
 
+/* Hybrid honesty strips (CAP_ACQUAINTANCE_052 C2): Local/WorkLane are the
+   only live schedule sources; MCP/Connector and the outbound Apple/Outlook
+   readers are reserved slots, dimmed until that fabric exists. */
+.bp-cal-strip { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.bp-cal-strip-label { color: var(--ov-muted); font-size: 12px; min-width: 52px; }
+.bp-cal-strip-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bp-cal-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--ov-tile-border); border-radius: 999px;
+  padding: 2px 10px; font-size: 12px; color: var(--ov-fg);
+}
+.bp-cal-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ov-state-idle); }
+.bp-cal-chip[data-state="live"] { border-color: var(--ov-tile-border-strong); }
+.bp-cal-chip[data-state="live"]::before { background: var(--ov-state-connected); }
+.bp-cal-chip[data-state="unavailable"] { color: var(--ov-muted); }
+.bp-cal-chip[data-state="unavailable"]::before { background: var(--ov-state-error); }
+.bp-cal-chip[data-state="reserved"] { color: var(--ov-muted); border-style: dashed; opacity: 0.65; }
+.bp-cal-chip[data-state="reserved"]::before { background: var(--ov-state-off); }
+.bp-cal-write-door[hidden] { display: none; }
+
 /* Delivery: exception-first repository summary with grouped evidence (pc-1487). */
 .bp-delivery-summary { font-size: 14px; font-weight: 500; margin: 0 0 6px !important; }
 .bp-delivery-repo .bp-delivery-groups { margin-top: 8px; }
