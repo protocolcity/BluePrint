@@ -24,6 +24,7 @@ class Element {
     this.style = {};
     this.options = [];
     this.selectedOptions = [{text: ''}];
+    this.ownerDocument = {createElement: t => new Element(t), createTextNode: t => Object.assign(new Element('#text'), {_text: String(t), textContent: String(t)})};
     this.classList = {
       add: name => { this.className = `${this.className} ${name}`.trim(); },
       remove: name => { this.className = this.className.split(/\s+/).filter(x => x && x !== name).join(' '); },
@@ -39,6 +40,22 @@ class Element {
     }
   }
   appendChild(node) { this.append(node); return node; }
+  insertBefore(node, ref) {
+    const idx = ref ? this.children.indexOf(ref) : this.children.length;
+    node.parent = this;
+    this.children.splice(idx < 0 ? this.children.length : idx, 0, node);
+    return node;
+  }
+  removeChild(node) {
+    const idx = this.children.indexOf(node);
+    if (idx >= 0) this.children.splice(idx, 1);
+    return node;
+  }
+  get nextSibling() {
+    if (!this.parent) return null;
+    const idx = this.parent.children.indexOf(this);
+    return this.parent.children[idx + 1] || null;
+  }
   replaceChildren(...nodes) { this.children.length = 0; this.append(...nodes); }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   hasAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name); }
@@ -201,21 +218,19 @@ raw = raw
   .replace("const {readerHref} = await import('/js/reader-navigation.mjs');", 'const {readerHref} = readerNav;')
   .replace("const {connectChanges} = await import('/js/change-feed.mjs');", 'const {connectChanges} = changeFeed;')
   .replace("const {reconcileList} = await import('/js/dom-reconcile.mjs');", 'const {reconcileList} = {reconcileList: reconcileListFn};');
+const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
+const bootAt = raw.indexOf(bootMarker);
+if (bootAt === -1) throw new Error('operations.js boot marker missing');
+raw = raw.slice(0, bootAt) + `timelineData = ${JSON.stringify(busyPage)}; lastSuccess = Date.now();`;
 
 const boot = new Function(...Object.keys(context), `return (async () => { ${raw}
 return {
   timeline,
-  updateTimelinePeriod,
   applyTimeline(data) { timelineData = data; },
   setPeriod(value) { timelinePeriod = value; },
 }; })();`);
 const runtime = await boot(...Object.values(context));
-
-for (let i = 0; i < 10 && !get('timeline-activity-summary').textContent.includes('event'); i++) {
-  await Promise.resolve();
-}
-await Promise.resolve();
-await Promise.resolve();
+runtime.timeline();
 
 const defaultSummary = get('timeline-activity-summary').textContent;
 const defaultBars = get('timeline-activity-chart').querySelectorAll('.bp-timeline-hist-col').length;
