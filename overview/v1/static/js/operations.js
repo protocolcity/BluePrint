@@ -15,7 +15,7 @@ const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
 function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
 function saveMutes(){try{localStorage.setItem('bp-attention-mutes',JSON.stringify(muted));}catch(error){}}
-$('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();work();});
+if($('restore-muted')) $('restore-muted').addEventListener('click',()=>{for(const order of snapshot.orders)delete muted[muteKey(order)];saveMutes();work();});
 let remotePending = false, remoteLast = 0, remoteData = null;
 let deliveryRepo = '', deliveryType = '', deliveryPeriod = '';
 let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false, timelineFingerprint = '', timelineExpanded = false;
@@ -231,9 +231,11 @@ function isClosedOrder(order) {
 }
 const YOU_KINDS=new Set(['todo','note','reminder']);
 const WORK_BAND_LIMIT=8;
-const SEAT_WINDOW=40;
-let workBandExpanded={act_now:false,my_todos:false};
-let seatWindow=SEAT_WINDOW;
+const SEAT_PREVIEW_SEATS=3;
+const SEAT_PREVIEW_PER_SEAT=3;
+const SEAT_CHIP_NAMED=2;
+const BAND_VIRTUAL_WINDOW=50;
+let bandWindow={act_now:BAND_VIRTUAL_WINDOW,my_todos:BAND_VIRTUAL_WINDOW,seat_backlog:BAND_VIRTUAL_WINDOW};
 function hasWorkerYou(order) {
   return Boolean(order.assigned_you) || (order.workers || []).includes('you');
 }
@@ -363,33 +365,51 @@ function orderBadges(order) {
   statusBadge.dataset.kind='status';
   return [faceBadge, statusBadge];
 }
-function workBoardRow(order, withMute) {
-  const row=el('div',undefined,'bp-order bp-order-compact');
-  const anchor=link('',workUrl(order),'bp-order-link');
-  const content=el('div');
-  content.append(el('strong',order.title));
-  content.append(el('span',compactMetaLine(order),'bp-order-meta'));
-  const action=nextActionText(order);
-  if(action) content.append(el('span',action,'bp-order-note'));
-  anchor.append(content);
+function relativeAge(value) {
+  const parsed=Date.parse(String(value || ''));
+  if(Number.isNaN(parsed)) return '';
+  const seconds=Math.max(0, Math.round((Date.now()-parsed)/1000));
+  if(seconds<60) return seconds+'s ago';
+  const minutes=Math.floor(seconds/60);
+  if(minutes<60) return minutes+'m ago';
+  const hours=Math.floor(minutes/60);
+  if(hours<48) return hours+'h ago';
+  return Math.floor(hours/24)+'d ago';
+}
+function seatDisplayName(id) {
+  if(!id || id==='unassigned') return 'Unassigned';
+  if(id==='you') return 'You';
+  const agent=(snapshot && snapshot.agents || []).find(item=>item.id===id);
+  return (agent && agent.name) || id;
+}
+function seatChipForOrder(order) {
+  const hand=seatHand(order);
+  const name=hand ? seatDisplayName(hand) : '';
+  if(!name || name==='Unassigned') return null;
+  const chip=el('button', name, 'bp-work-row-seat');
+  chip.type='button';
+  chip.addEventListener('click', event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    scopeSeatLoad({id:hand, name, kind:'seat'});
+  });
+  return chip;
+}
+function workBoardRow(order) {
+  const row=el('div',undefined,'bp-order bp-order-compact bp-work-row');
   const badges=el('div',undefined,'bp-order-badges');
   badges.append(...orderBadges(order));
-  row.append(anchor,badges);
-  if(withMute) {
-    const mute=el('button','Mute 24h');mute.type='button';mute.className='bp-face-mute';
-    mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();work();});
-    row.append(mute);
-  }
-  if(orderHasDetail(order)) {
-    const details=el('details',undefined,'bp-order-detail');
-    details.append(el('summary','More'));
-    orderDetailBody(order, details);
-    row.append(details);
-  }
+  const anchor=link('',workUrl(order),'bp-order-link');
+  anchor.append(el('strong',order.title));
+  row.append(badges, anchor);
+  const seat=seatChipForOrder(order);
+  if(seat) row.append(seat);
+  const age=relativeAge(order.updated_at);
+  if(age) row.append(el('span', age, 'bp-work-row-age'));
   return row;
 }
 function orderRow(order) {
-  return workBoardRow(order, false);
+  return workBoardRow(order);
 }
 function gateLabel(order) {
   if(order.gate_type==='deferred') return 'Deferred';
@@ -982,16 +1002,41 @@ function overview() {
   }
   overviewSourceLine();
 }
-function renderWorkMore(host, remainder, key) {
+function remainderLabel(remainder, key) {
+  if(key==='act_now') return '+'+remainder+' more in Act now';
+  if(key==='my_todos') return '+'+remainder+' more · My todos';
+  if(key==='seat_backlog') return '+'+remainder+' more · filter by seat';
+  return '+'+remainder+' more';
+}
+function openWorkDoor(key) {
+  const attention=$('attention-filter');
+  if(attention) {
+    if(key==='act_now') attention.value='act_now';
+    else if(key==='my_todos') attention.value='my_todos';
+    else if(key==='seat_backlog') attention.value='seat';
+  }
+  updateWorkFilters();
+}
+function bandIsOpen(attention, bandKey) {
+  if(bandKey==='act_now') return attention==='act_now' || attention==='decide' || attention==='read';
+  if(bandKey==='my_todos') return attention==='my_todos';
+  if(bandKey==='seat_backlog') return attention==='seat' || attention==='seat_only';
+  return false;
+}
+function renderWorkMore(host, remainder, key, mode) {
   if(!host) return;
   host.replaceChildren();
   if(remainder>0) {
     host.hidden=false;
-    const button=el('button','+'+remainder);button.type='button';
+    const button=el('button', mode==='window' ? '+'+remainder+' more' : remainderLabel(remainder, key));
+    button.type='button';
     button.addEventListener('click',()=>{
-      if(key==='seat_backlog') seatWindow+=SEAT_WINDOW;
-      else workBandExpanded[key]=true;
-      work();
+      if(mode==='window') {
+        bandWindow[key]=(bandWindow[key] || BAND_VIRTUAL_WINDOW)+BAND_VIRTUAL_WINDOW;
+        work();
+        return;
+      }
+      openWorkDoor(key);
     });
     host.append(button);
   } else {
@@ -1000,19 +1045,29 @@ function renderWorkMore(host, remainder, key) {
 }
 function groupSeatOrders(orders) {
   const groups=new Map();
+  const statusRank={Stalled:0,Ready:1,Live:2,Review:3,Open:4,Deferred:5};
   for(const order of orders) {
-    const key=order.project || 'unknown';
-    if(!groups.has(key)) groups.set(key,{project:key,name:order.project_name || key,orders:[]});
-    groups.get(key).orders.push(order);
+    const key=seatHand(order) || 'unassigned';
+    if(!groups.has(key)) groups.set(key,{id:key,name:seatDisplayName(key),orders:[],ready:0,stalled:0});
+    const group=groups.get(key);
+    group.orders.push(order);
+    const status=rowStatus(order);
+    if(status==='Ready') group.ready+=1;
+    if(status==='Stalled') group.stalled+=1;
   }
-  return [...groups.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  for(const group of groups.values()) {
+    group.orders.sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a));
+    group.orders.sort((a,b)=>(statusRank[rowStatus(a)] ?? 9)-(statusRank[rowStatus(b)] ?? 9));
+    group.total=group.orders.length;
+  }
+  return [...groups.values()].sort((a,b)=>(b.stalled-a.stalled)||(b.ready-a.ready)||String(a.name).localeCompare(String(b.name)));
 }
 function seatGroupRow(group) {
   const wrap=el('details',undefined,'bp-work-seat-group');
   wrap.open=true;
-  wrap.dataset.project=group.project;
+  wrap.dataset.seat=group.id;
   const summary=el('summary');
-  summary.append(el('strong',group.name),el('span',String(group.orders.length),'bp-work-count'));
+  summary.append(el('strong',group.name),el('span',String(group.total || group.orders.length),'bp-work-count'));
   wrap.append(summary);
   const list=el('div',undefined,'bp-work-seat-items');
   reconcileList(list, group.orders, o=>o.project+':'+o.id, orderRow, {});
@@ -1022,28 +1077,48 @@ function seatGroupRow(group) {
 function renderSeatBacklog(orders) {
   const host=$('work-seat-backlog');
   if(!host) return;
-  const visible=orders.slice(0,seatWindow);
-  const groups=groupSeatOrders(visible);
-  reconcileList(host, groups, group=>group.project, seatGroupRow, {emptyText:'No seat-drainable open work.'});
-  renderWorkMore($('work-seat-backlog-more'), orders.length-visible.length, 'seat_backlog');
+  const attention=$('attention-filter') && $('attention-filter').value;
+  const open=bandIsOpen(attention, 'seat_backlog');
+  const groups=groupSeatOrders(orders);
+  if(!open) {
+    const preview=[];
+    let painted=0;
+    for(const group of groups.slice(0, SEAT_PREVIEW_SEATS)) {
+      const rows=group.orders.slice(0, SEAT_PREVIEW_PER_SEAT);
+      preview.push(Object.assign({}, group, {orders:rows}));
+      painted+=rows.length;
+    }
+    reconcileList(host, preview, group=>group.id, seatGroupRow, {emptyText:'No seat backlog'});
+    renderWorkMore($('work-seat-backlog-more'), orders.length-painted, 'seat_backlog');
+    return;
+  }
+  const windowSize=bandWindow.seat_backlog || BAND_VIRTUAL_WINDOW;
+  let remaining=windowSize;
+  const visible=[];
+  let painted=0;
+  for(const group of groups) {
+    if(remaining<=0) break;
+    const rows=group.orders.slice(0, remaining);
+    visible.push(Object.assign({}, group, {orders:rows}));
+    remaining-=rows.length;
+    painted+=rows.length;
+  }
+  reconcileList(host, visible, group=>group.id, seatGroupRow, {emptyText:'No seat backlog'});
+  renderWorkMore($('work-seat-backlog-more'), orders.length-painted, 'seat_backlog', 'window');
 }
-function renderComfortBand(bandKey, orders, emptyText, withMute) {
+function renderComfortBand(bandKey, orders, emptyText) {
   const hostId=bandKey==='act_now'?'work-act-now':'work-my-todos';
   const host=$(hostId);
   if(!host) return;
-  const expanded=workBandExpanded[bandKey];
-  const visible=expanded ? orders : orders.slice(0,WORK_BAND_LIMIT);
-  reconcileList(host, visible, o=>o.project+':'+o.id, order=>workBoardRow(order, withMute), {emptyText});
-  renderWorkMore($(hostId+'-more'), orders.length-visible.length, bandKey);
+  const attention=$('attention-filter') && $('attention-filter').value;
+  const open=bandIsOpen(attention, bandKey);
+  const cap=open ? (bandWindow[bandKey] || BAND_VIRTUAL_WINDOW) : WORK_BAND_LIMIT;
+  const visible=orders.slice(0, cap);
+  reconcileList(host, visible, o=>o.project+':'+o.id, workBoardRow, {emptyText});
+  renderWorkMore($(hostId+'-more'), orders.length-visible.length, bandKey, open ? 'window' : 'door');
 }
 function renderWorkInbox() {
-  const orders=snapshot.orders || [];
-  let mutedCount=0;
-  for(const order of orders) if(Number(muted[muteKey(order)])>Date.now()) mutedCount+=1;
-  const muteStatus=$('mute-status');
-  if(muteStatus) muteStatus.textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
-  const restore=$('restore-muted');
-  if(restore) restore.hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
+  return;
 }
 function filterOptions() {
   const select=$('project-filter');
@@ -1138,7 +1213,7 @@ function flowStage(order) {
   return '';
 }
 function emptyWorkFlow(state) {
-  return {state:state || 'empty', flow:{Open:0,Ready:0,Live:0,Done:0}, seats:[], total:0};
+  return {state:state || 'empty', flow:{Open:0,Ready:0,Live:0,Done:0}, seats:[], chips:[], total:0};
 }
 function buildWorkFlow(orders, agents) {
   const flow={Open:0,Ready:0,Live:0,Done:0};
@@ -1163,35 +1238,40 @@ function buildWorkFlow(orders, agents) {
   });
   const total=flow.Open+flow.Ready+flow.Live+flow.Done;
   const loadTotal=list.reduce((n,seat)=>n+seat.ready+seat.claimed+seat.stalled,0);
-  return {state:(total || loadTotal) ? 'healthy' : 'empty', flow, seats:list, total};
+  return {state:(total || loadTotal) ? 'healthy' : 'empty', flow, seats:list, chips:seatLoadChips(list), total};
 }
 function workFlowFromOrders() {
   if(snapshot && snapshot.work_flow && snapshot.work_flow.state==='unavailable') return snapshot.work_flow;
   const scoped=(snapshot.orders || []).filter(order=>!selectedProject || order.project===selectedProject);
   return buildWorkFlow(scoped, snapshot && snapshot.agents);
 }
-function filterSeatLoad(seatId) {
+function seatLoadChips(seats) {
+  const ranked=[...seats].sort((a,b)=>(b.stalled-a.stalled)||(b.ready-a.ready)||String(a.name).localeCompare(String(b.name)));
+  const chips=ranked.slice(0,SEAT_CHIP_NAMED).map(seat=>({id:seat.id,name:seat.name,ready:seat.ready,stalled:seat.stalled,kind:'seat'}));
+  const rest=ranked.slice(SEAT_CHIP_NAMED);
+  if(rest.length) chips.push({
+    id:'others', name:'others', kind:'others', rolled:rest.length,
+    ready:rest.reduce((n,seat)=>n+seat.ready,0),
+    stalled:rest.reduce((n,seat)=>n+seat.stalled,0),
+  });
+  return chips;
+}
+function scopeSeatLoad(chip) {
+  const attention=$('attention-filter');
+  if(attention) attention.value='seat';
   const assignment=$('assignment-filter');
-  if(!assignment) return;
-  const value=seatId==='you' ? 'you' : 'worker:'+seatId;
-  if(!Array.from(assignment.options).some(option=>option.value===value)) assignment.add(new Option(seatId, value));
-  assignment.value=value;
+  if(assignment) {
+    if(!chip || chip.kind==='others' || !chip.id) assignment.value='';
+    else {
+      const value=chip.id==='you' ? 'you' : 'worker:'+chip.id;
+      if(!Array.from(assignment.options).some(option=>option.value===value)) assignment.add(new Option(chip.name || chip.id, value));
+      assignment.value=value;
+    }
+  }
   updateWorkFilters();
 }
-function flowBar(counts, keys, kind) {
-  const total=keys.reduce((n,key)=>n+(counts[key] || 0),0);
-  const bar=el('span',undefined,'bp-work-flow-bar');
-  bar.setAttribute('aria-hidden','true');
-  if(!total) return bar;
-  for(const key of keys) {
-    const n=counts[key] || 0;
-    if(!n) continue;
-    const seg=el('span');
-    seg.dataset[kind]=String(key).toLowerCase();
-    seg.setAttribute('style','flex-grow:'+n);
-    bar.append(seg);
-  }
-  return bar;
+function filterSeatLoad(seatId) {
+  scopeSeatLoad({id:seatId, name:seatDisplayName(seatId), kind:'seat'});
 }
 function paintWorkFlow() {
   const host=$('work-flow');
@@ -1202,32 +1282,25 @@ function paintWorkFlow() {
     host.append(document.createTextNode('Seat load unavailable'));
     return;
   }
-  if(data.state==='empty') {
+  if(data.state==='empty' || !(data.seats && data.seats.length)) {
     host.append(document.createTextNode('No seat drain right now'));
     return;
   }
-  const flow=el('div',undefined,'bp-work-flow-pipeline');
-  flow.append(el('p', FLOW_STAGES.map(stage=>stage+' '+data.flow[stage]).join(' → '), 'bp-muted'));
-  flow.append(flowBar(data.flow, FLOW_STAGES, 'stage'));
-  host.append(flow);
-  if(!data.seats.length) return;
+  const chips=(data.chips && data.chips.length) ? data.chips : seatLoadChips(data.seats);
   const list=el('div',undefined,'bp-work-seat-load');
-  list.append(el('p','Ready · claimed · stalled','bp-muted bp-work-flow-legend'));
-  const visible=data.seats.slice(0,SEAT_LOAD_LIMIT);
-  for(const seat of visible) {
-    const row=el('div',undefined,'bp-work-seat-load-row');
-    const button=el('button', seat.name, 'bp-work-seat-load-name');
+  list.setAttribute('aria-label','Seat load');
+  for(const chip of chips) {
+    const button=el('button',undefined,'bp-work-seat-chip');
     button.type='button';
-    const total=seat.ready+seat.claimed+seat.stalled;
-    const held=seat.claimed+seat.stalled;
-    const pct=total ? Math.round(held/total*100) : 0;
-    button.setAttribute('aria-label', `${seat.name}: ${seat.ready} ready, ${seat.claimed} claimed, ${seat.stalled} stalled`);
-    button.addEventListener('click',()=>filterSeatLoad(seat.id));
-    row.append(button, el('span', pct+'%', 'bp-work-seat-load-pct'), flowBar(seat, ['ready','claimed','stalled'], 'load'));
-    list.append(row);
+    button.dataset.seat=chip.id;
+    button.dataset.kind=chip.kind;
+    button.append(el('span', chip.name, 'bp-work-seat-chip-name'));
+    button.append(el('span', chip.ready+' ready', 'bp-work-seat-chip-ready'));
+    button.append(el('span', chip.stalled+' stalled', 'bp-work-seat-chip-stalled'));
+    button.setAttribute('aria-label', `${chip.name}: ${chip.ready} ready, ${chip.stalled} stalled`);
+    button.addEventListener('click',()=>scopeSeatLoad(chip));
+    list.append(button);
   }
-  const more=data.seats.length-visible.length;
-  if(more>0) list.append(link('+'+more+' more on Agents', '/agents', 'bp-work-flow-more'));
   host.append(list);
 }
 function isUnrouted(order) {
@@ -1271,19 +1344,18 @@ function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, kind=$('kind-filter').value, attention=$('attention-filter').value;
   const total=snapshot.orders.length;
   const orders=snapshot.orders.filter(o=>(!unroutedOnly || isUnrouted(o)) && (!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && matchesStatusFacet(o,status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && matchesAttentionFacet(o,attention) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
-  const unmuted=orders.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
-  const bands=partitionBands(unmuted);
+  const bands=partitionBands(orders);
   const act=$('work-band-act-now'), todos=$('work-band-my-todos'), seat=$('work-band-seat-backlog');
   if(act) act.hidden=!attentionShowsBand(attention,'act_now');
   if(todos) todos.hidden=!attentionShowsBand(attention,'my_todos');
   if(seat) seat.hidden=!attentionShowsBand(attention,'seat_backlog');
   if(act && !act.hidden) {
     $('work-act-now-count').textContent=String(bands.act_now.length);
-    renderComfortBand('act_now', bands.act_now, 'Nothing to decide or read.', true);
+    renderComfortBand('act_now', bands.act_now, 'Nothing for You');
   }
   if(todos && !todos.hidden) {
     $('work-my-todos-count').textContent=String(bands.my_todos.length);
-    renderComfortBand('my_todos', bands.my_todos, 'No personal todos.', false);
+    renderComfortBand('my_todos', bands.my_todos, 'Your list is clear');
   }
   if(seat && !seat.hidden) {
     $('work-seat-backlog-count').textContent=String(bands.seat_backlog.length);
@@ -2676,7 +2748,7 @@ async function refresh(manual) {
 }
 function updateFilters() {
   selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
-  workBandExpanded={act_now:false,my_todos:false};seatWindow=SEAT_WINDOW;
+  bandWindow={act_now:BAND_VIRTUAL_WINDOW,my_todos:BAND_VIRTUAL_WINDOW,seat_backlog:BAND_VIRTUAL_WINDOW};
   const params=new URLSearchParams();if(unroutedOnly)params.set('unrouted','1');if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('kind-filter').value)params.set('kind',$('kind-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('search').value)params.set('q',$('search').value);
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }

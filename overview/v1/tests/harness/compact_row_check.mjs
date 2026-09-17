@@ -93,6 +93,14 @@ function badge(state, text) {
 function date(value) { return value || 'Not reported'; }
 function workUrl(order) { return '/work-order?project=' + order.project + '&id=' + order.id; }
 function gateLabel(order) { return order.gate_type === 'human' ? 'Needs a decision' : ''; }
+let snapshot = {agents: []};
+function seatHand(order) {
+  for (const worker of (order.workers || [])) {
+    if (worker && worker !== 'you') return worker;
+  }
+  return order.assigned_you ? 'you' : '';
+}
+function scopeSeatLoad() {}
 `;
 const boot = new Function('Element', `${helpers}\n${body}\nreturn {assignmentSummary, orderUpdatedAt, isClosedOrder, orderRow, orderHasDetail, orderDetailBody, orderBadges};`);
 const {assignmentSummary, orderUpdatedAt, isClosedOrder, orderRow, orderHasDetail, orderDetailBody, orderBadges} = boot(Element);
@@ -132,21 +140,17 @@ const sample = {
 const row = orderRow(sample);
 const anchor = findByClass(row, 'bp-order-link');
 const details = findByClass(row, 'bp-order-detail');
-const moreOutsideLink = Boolean(anchor && details && !findByClass(anchor, 'bp-order-detail'));
-
-const container = new Element('div');
-reconcileList(container, [sample], o => `${o.project}:${o.id}`, orderRow);
-const firstDetails = findByClass(container.firstChild, 'bp-order-detail');
-firstDetails.open = true;
-const firstNode = container.firstChild;
-reconcileList(container, [sample], o => `${o.project}:${o.id}`, orderRow);
-const moreOpenSurvivesRepaint = firstNode === container.firstChild
-  && findByClass(container.firstChild, 'bp-order-detail').open === true;
+const mute = findByClass(row, 'bp-face-mute');
+const titleNode = anchor && anchor.children[0];
+const oneLineTitle = Boolean(anchor && titleNode && titleNode.textContent === 'Compact row sample')
+  && !findByClass(row, 'bp-order-meta')
+  && !findByClass(row, 'bp-order-note');
 
 process.stdout.write(JSON.stringify({
   persona_owner_shows_you: personaOwnerShowsYou,
   recent_sorts_by_real_time: recentSortsByRealTime,
   done_order_excluded: doneOrderExcluded,
-  more_outside_link: moreOutsideLink,
-  more_open_survives_repaint: moreOpenSurvivesRepaint,
+  one_line_title: oneLineTitle,
+  has_more: Boolean(details),
+  has_mute: Boolean(mute),
 }));

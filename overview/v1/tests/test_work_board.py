@@ -7,6 +7,7 @@ from server.work_board import (
     build_work_flow,
     empty_work_flow,
     flow_stage,
+    group_seat_backlog,
     is_act_now,
     is_my_todo,
     is_seat_backlog,
@@ -14,10 +15,16 @@ from server.work_board import (
     matches_attention_facet,
     matches_status_facet,
     partition_bands,
+    preview_seat_backlog,
     row_face,
     row_status,
     annotate_order,
     seat_hand,
+    seat_load_chips,
+    ACT_NOW_VISIBLE_CAP,
+    MY_TODOS_VISIBLE_CAP,
+    SEAT_PREVIEW_PER_SEAT,
+    SEAT_PREVIEW_SEATS,
 )
 
 
@@ -182,7 +189,7 @@ class OrthogonalFacetTests(unittest.TestCase):
 
 
 class WorkFlowStripTests(unittest.TestCase):
-    """#147: seat-load / flow is additive — bands and facets stay put."""
+    """#147 / #158: seat-load chips are the hero; flow stays in the payload."""
 
     def test_unreadable_is_unavailable_not_a_fake_zero_strip(self):
         payload = build_work_flow([order(workers=['pepper'], ready_for='pepper')], readable=False)
@@ -245,7 +252,63 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertEqual(flow_stage(row), 'Open')
         payload = build_work_flow([row])
         self.assertEqual(payload['seats'], [])
+        self.assertEqual(payload['chips'], [])
         self.assertEqual(payload['flow']['Open'], 1)
+
+    def test_seat_load_chips_name_two_seats_and_rollup_others(self):
+        seats = [
+            {'id': 'pepper', 'name': 'pepper', 'ready': 12, 'claimed': 0, 'stalled': 3},
+            {'id': 'lili', 'name': 'lili', 'ready': 7, 'claimed': 1, 'stalled': 1},
+            {'id': 'oak', 'name': 'oak', 'ready': 8, 'claimed': 0, 'stalled': 1},
+            {'id': 'ash', 'name': 'ash', 'ready': 7, 'claimed': 0, 'stalled': 1},
+        ]
+        chips = seat_load_chips(seats)
+        self.assertEqual([chip['id'] for chip in chips], ['pepper', 'oak', 'others'])
+        self.assertEqual(chips[0]['ready'], 12)
+        self.assertEqual(chips[0]['stalled'], 3)
+        self.assertNotIn('claimed', chips[0])
+        self.assertEqual(chips[2], {
+            'id': 'others', 'name': 'others', 'ready': 14, 'stalled': 2,
+            'kind': 'others', 'rolled': 2,
+        })
+
+    def test_seat_backlog_preview_is_three_by_three_not_a_flat_dump(self):
+        rows = []
+        for seat, count in (('pepper', 40), ('lili', 20), ('oak', 18)):
+            for index in range(count):
+                kwargs = {'id': f'{seat}-{index}', 'workers': [seat]}
+                if index % 5 == 0:
+                    kwargs['attention_face'] = 'watch'
+                    kwargs['status'] = 'in_progress'
+                elif index % 3 == 0:
+                    kwargs['ready_for'] = seat
+                rows.append(order(**kwargs))
+        self.assertEqual(len(rows), 78)
+        groups, remainder = preview_seat_backlog(rows)
+        self.assertEqual(len(groups), SEAT_PREVIEW_SEATS)
+        painted = sum(len(group['orders']) for group in groups)
+        self.assertLessEqual(painted, SEAT_PREVIEW_SEATS * SEAT_PREVIEW_PER_SEAT)
+        self.assertEqual(painted, 9)
+        self.assertEqual(remainder, 69)
+        self.assertEqual(ACT_NOW_VISIBLE_CAP, 8)
+        self.assertEqual(MY_TODOS_VISIBLE_CAP, 8)
+        ranked = group_seat_backlog(rows)
+        self.assertEqual(ranked[0]['id'], 'pepper')
+
+    def test_build_work_flow_includes_hero_chips(self):
+        rows = [
+            order(id='ready', workers=['pepper'], ready_for='pepper'),
+            order(id='stall', status='in_progress', attention_face='watch', workers=['lili']),
+            order(id='oak', workers=['oak'], ready_for='oak'),
+        ]
+        payload = build_work_flow(rows, agents=[
+            {'id': 'pepper', 'name': 'pepper', 'group': 'seat'},
+            {'id': 'lili', 'name': 'lili', 'group': 'seat'},
+            {'id': 'oak', 'name': 'oak', 'group': 'seat'},
+        ])
+        self.assertEqual([chip['id'] for chip in payload['chips']], ['lili', 'oak', 'others'])
+        self.assertEqual(payload['chips'][0]['stalled'], 1)
+        self.assertEqual(payload['chips'][2]['kind'], 'others')
 
 
 if __name__ == '__main__':
