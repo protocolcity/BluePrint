@@ -56,6 +56,7 @@ $('kind-filter').value = kindParam;
 $('attention-filter').value = attentionParam;
 let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
+let unroutedOnly = query.get('unrouted') === '1';
 let calendarDay = query.get('day') || '';
 let projectsFilter = query.get('q') || '';
 try { const saved=JSON.parse(localStorage.getItem('bp-projects') || '{}'); if(saved.filter) projectsFilter=saved.filter; } catch(error) { /* Unavailable storage uses defaults. */ }
@@ -751,12 +752,14 @@ function matchesAssignment(order, value) {
   if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
   return order.workers.includes(value.slice(7));
 }
-const UNROUTED_WORK_HREF = '/work?gate=none&assignment=unassigned';
+const UNROUTED_WORK_HREF = '/work?unrouted=1';
 function isUnrouted(order) {
   // Same slice as the per-row Needs routing chip: open backlog, ungated, no
-  // routable seat (ONE_DESK_STORY §The fact: Unrouted). The Work link keeps
-  // the saved Gate=none + Assignment=unassigned filter named in pc-1507.
+  // routable seat (ONE_DESK_STORY §The fact: Unrouted).
   return order.status === 'backlog' && Boolean(order.needs_routing);
+}
+function clearUnroutedPreset() {
+  unroutedOnly = false;
 }
 function matchesGate(order, value) {
   if(value==='none') return !order.gate_type && order.blocked_on==='clear';
@@ -765,6 +768,7 @@ function matchesGate(order, value) {
 }
 function filterChips() {
   const chips=[];
+  if(unroutedOnly) chips.push(['Unrouted',()=>{unroutedOnly=false;updateFilters();}]);
   if($('search').value) chips.push(['Search: '+$('search').value,()=>{$('search').value='';}]);
   if(selectedProject) { const opt=Array.from($('project-filter').options).find(o=>o.value===selectedProject); chips.push(['Project: '+(opt?opt.text:selectedProject),()=>{$('project-filter').value='';}]); }
   if(selectedAssignment) { const opt=Array.from($('assignment-filter').options).find(o=>o.value===selectedAssignment); chips.push(['Assignment: '+(opt?opt.text:selectedAssignment),()=>{$('assignment-filter').value='';}]); }
@@ -787,7 +791,7 @@ function renderActiveFilters() {
 function work() {
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, kind=$('kind-filter').value, attention=$('attention-filter').value;
   const total=snapshot.orders.length;
-  const orders=snapshot.orders.filter(o=>(!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const orders=snapshot.orders.filter(o=>(!unroutedOnly || isUnrouted(o)) && (!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
   reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, gate, or search.'});
   $('results').textContent=`${orders.length} of ${total} matching work order${orders.length===1?'':'s'}`;
@@ -1727,13 +1731,14 @@ async function refresh(manual) {
 }
 function updateFilters() {
   selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
-  const params=new URLSearchParams();if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('kind-filter').value)params.set('kind',$('kind-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('search').value)params.set('q',$('search').value);
+  const params=new URLSearchParams();if(unroutedOnly)params.set('unrouted','1');if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('kind-filter').value)params.set('kind',$('kind-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('search').value)params.set('q',$('search').value);
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }
 $('filters').addEventListener('submit',event=>event.preventDefault());
-$('search').addEventListener('input',updateFilters);$('project-filter').addEventListener('change',updateFilters);$('status-filter').addEventListener('change',updateFilters);$('gate-filter').addEventListener('change',updateFilters);$('kind-filter').addEventListener('change',updateFilters);$('attention-filter').addEventListener('change',updateFilters);$('assignment-filter').addEventListener('change',updateFilters);
+function updateWorkFilters() { clearUnroutedPreset(); updateFilters(); }
+$('search').addEventListener('input',updateWorkFilters);$('project-filter').addEventListener('change',updateWorkFilters);$('status-filter').addEventListener('change',updateWorkFilters);$('gate-filter').addEventListener('change',updateWorkFilters);$('kind-filter').addEventListener('change',updateWorkFilters);$('attention-filter').addEventListener('change',updateWorkFilters);$('assignment-filter').addEventListener('change',updateWorkFilters);
 if($('projects-filter')) $('projects-filter').addEventListener('input',()=>{projectsFilter=$('projects-filter').value;try{localStorage.setItem('bp-projects',JSON.stringify({filter:projectsFilter}));}catch(error){}projects();});
-$('clear-filters').addEventListener('click',()=>{$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('kind-filter').value='';$('attention-filter').value='';updateFilters();});
+$('clear-filters').addEventListener('click',()=>{unroutedOnly=false;$('search').value='';$('project-filter').value='';$('assignment-filter').value='';$('status-filter').value='';$('gate-filter').value='';$('kind-filter').value='';$('attention-filter').value='';updateFilters();});
 $('previous').addEventListener('click',()=>{pageIndex--;work();});$('next').addEventListener('click',()=>{pageIndex++;work();});
 if ($('calendar-filters')) {
   $('calendar-filters').addEventListener('submit', event => event.preventDefault());
