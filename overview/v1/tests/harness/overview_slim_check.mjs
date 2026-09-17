@@ -25,6 +25,7 @@ class Element {
     this.type = '';
     this.href = '';
     this.value = '';
+    this.style = {};
     this.selectedOptions = [{text: ''}];
     this.ownerDocument = {createElement: t => new Element(t), createTextNode: t => Object.assign(new Element('#text'), {_text: String(t), textContent: String(t)})};
     this.classList = {
@@ -115,7 +116,7 @@ const IDS = [
   'work-band-my-todos', 'work-my-todos', 'work-my-todos-count', 'work-my-todos-more',
   'work-band-seat-backlog', 'work-seat-backlog', 'work-seat-backlog-count', 'work-seat-backlog-more',
   'work-flow', 'work-list', 'mute-status',
-  'projects-list', 'projects-summary', 'projects-filter',
+  'projects-list', 'projects-summary', 'projects-compare', 'projects-compare-summary', 'projects-filter',
   'seat-list', 'job-list', 'agent-detail', 'supervisor-panel', 'coverage-list', 'agents-heartbeat',
   'agents-next-fire', 'agents-pulse', 'agents-floor-remainder', 'agents-floor-empty', 'agents-floor-spark',
   'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list', 'work-calendar-doors',

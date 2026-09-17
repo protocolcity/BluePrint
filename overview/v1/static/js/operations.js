@@ -7,7 +7,7 @@ const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Compare registered project stores — open work, seats, and what last moved.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
+const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
 const size = 25;
@@ -697,11 +697,116 @@ function projectBreakdown(project) {
   }
   return body;
 }
+function emptyPortfolio() {
+  return {state:'empty', peak_open:0, hot:0, quiet:0, blocked:0, projects:[]};
+}
+function portfolioFromSnapshot() {
+  const data=snapshot && snapshot.portfolio;
+  if(data && Array.isArray(data.projects)) return data;
+  return emptyPortfolio();
+}
+function projectPulseFromSnapshot(id) {
+  return (portfolioFromSnapshot().projects || []).find(row=>row.id===id) || null;
+}
+function stackedOpenBar(open, attention, peak) {
+  const wrap=el('span',undefined,'bp-projects-stack');
+  wrap.setAttribute('aria-hidden','true');
+  const scale=Math.max(1, peak || open || 1);
+  const bar=el('span',undefined,'bp-projects-stack-bar');
+  bar.style.width=Math.max(4, Math.round((Math.max(0, open)/scale)*100))+'%';
+  if(open>0) {
+    const youPct=Math.round((Math.min(attention, open)/open)*100);
+    const you=el('span',undefined,'bp-projects-stack-you');
+    you.style.width=youPct+'%';
+    const rest=el('span',undefined,'bp-projects-stack-open');
+    rest.style.width=(100-youPct)+'%';
+    bar.append(you, rest);
+  }
+  wrap.append(bar);
+  return wrap;
+}
+function projectSparkCell(project) {
+  const cell=el('div',undefined,'bp-projects-spark');
+  const pulse=projectPulseFromSnapshot(project.id);
+  if(project.state!=='available') {
+    cell.append(el('span','Store unavailable','bp-muted'));
+    return cell;
+  }
+  const data=pulse || {pulse:'quiet', open:project.open||0, attention:project.attention||0, hours:[], state:'empty'};
+  const chip=el('span', data.pulse, 'bp-projects-pulse');
+  chip.dataset.pulse=data.pulse;
+  cell.append(chip);
+  if(data.open) cell.append(stackedOpenBar(data.open, data.attention||0, portfolioFromSnapshot().peak_open));
+  const glyphs=throughputSpark(data.hours);
+  if(glyphs) {
+    const spark=el('span', glyphs, 'bp-projects-spark-line');
+    spark.setAttribute('aria-hidden','true');
+    cell.append(spark);
+  }
+  return cell;
+}
+function paintProjectsCompare() {
+  const host=$('projects-compare');
+  const summary=$('projects-compare-summary');
+  if(!host) return;
+  const data=portfolioFromSnapshot();
+  const filter=(projectsFilter || '').trim().toLowerCase();
+  const rows=(data.projects || []).filter(row=>{
+    if(filter && !(row.name||'').toLowerCase().includes(filter) && !(row.id||'').toLowerCase().includes(filter)) return false;
+    return row.pulse!=='quiet';
+  });
+  if(summary) {
+    if(data.state==='unavailable') summary.textContent='Portfolio unavailable';
+    else {
+      const bits=[];
+      if(data.hot) bits.push(data.hot===1 ? '1 hot' : `${data.hot} hot`);
+      if(data.blocked) bits.push(data.blocked===1 ? '1 blocked' : `${data.blocked} blocked`);
+      if(data.quiet) bits.push(data.quiet===1 ? '1 quiet' : `${data.quiet} quiet`);
+      summary.textContent=bits.join(' · ');
+    }
+  }
+  if(data.state==='unavailable') {
+    host.hidden=false;
+    host.replaceChildren(el('p','Portfolio unavailable','bp-muted'));
+    return;
+  }
+  if(!rows.length) {
+    host.hidden=true;
+    host.replaceChildren();
+    return;
+  }
+  host.hidden=false;
+  reconcileList(host, rows, row=>row.id, row=>{
+    const article=el('div',undefined,'bp-projects-compare-row');
+    article.dataset.pulse=row.pulse;
+    article.dataset.project=row.id;
+    const name=link(row.name || row.id, row.href || ('/work?project='+row.id), 'bp-projects-compare-name');
+    const meta=el('span',undefined,'bp-projects-compare-meta');
+    if(row.state==='unavailable') {
+      meta.append(el('span','Store unavailable','bp-muted'));
+      article.append(name, el('span','','bp-projects-stack'), meta);
+      return article;
+    }
+    const stack=row.open ? stackedOpenBar(row.open, row.attention||0, data.peak_open) : el('span',undefined,'bp-projects-stack');
+    meta.append(link((row.open||0)+' open', row.href || ('/work?project='+row.id)));
+    if(row.attention) meta.append(link(row.attention+' For You', row.attention_href || ('/work?project='+row.id+'&attention=any')));
+    if(row.map_href) meta.append(link('Map', row.map_href));
+    if(row.pulse==='blocked') meta.append(el('span','blocked','bp-muted'));
+    const glyphs=throughputSpark(row.hours);
+    if(glyphs) {
+      const spark=el('span', glyphs, 'bp-projects-spark-line');
+      spark.setAttribute('aria-hidden','true');
+      meta.append(spark);
+    }
+    article.append(name, stack, meta);
+    return article;
+  });
+}
 function projectComparisonRow(project) {
   const row=el('article',undefined,'bp-projects-row');
   row.dataset.project=project.id;
   const name=el('div',undefined,'bp-projects-name');
-  name.append(el('strong',project.name), el('span',project.id,'bp-muted'));
+  name.append(el('strong',project.name), el('span',project.id,'bp-muted'), projectSparkCell(project));
   row.append(name, projectCountCell(project,'open'), projectCountCell(project,'attention'),
     project.state==='available' ? projectCountCell(project,'deferred') : el('span','—','bp-muted'),
     el('span',projectLiveParkedText(project)), el('span',projectAgentsNowText(project),'bp-projects-agents'),
@@ -747,6 +852,7 @@ function projects() {
   const readable=(snapshot.projects || []).filter(p=>p.state==='available').length;
   const readAge=lastSuccess ? Math.max(0,Math.floor((Date.now()-lastSuccess)/1000)) : null;
   $('projects-summary').textContent=`${snapshot.projects.length} stores · ${unavailable ? `${unavailable} unavailable` : 'all readable'} · read ${readAge===null ? '…' : readAge+'s ago'}`;
+  paintProjectsCompare();
   const items=[...active];
   if(quiet.length) items.push({id:'__quiet__', rows:quiet});
   reconcileList($('projects-list'), items, item=>item.id, item=>{
