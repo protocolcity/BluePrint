@@ -1819,13 +1819,14 @@ class WorkDensityTests(unittest.TestCase):
 
 
 class WorkFlowStripTests(unittest.TestCase):
-    """Issue #160: thin Open→Ready→Live→Done companion under seat-load chips."""
+    """Issue #160 / #166: Work hero paint — colored flow + chips above facets."""
 
     def test_strip_host_sits_on_work_above_the_bands_only(self):
         work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
         overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
         self.assertIn('id="work-flow"', work)
-        self.assertLess(work.index('id="work-flow"'), work.index('id="work-band-act-now"'))
+        self.assertLess(work.index('id="work-flow"'), work.index('id="filters"'))
+        self.assertLess(work.index('id="filters"'), work.index('id="work-band-act-now"'))
         self.assertLess(work.index('id="work-band-act-now"'), work.index('id="work-band-my-todos"'))
         self.assertLess(work.index('id="work-band-my-todos"'), work.index('id="work-band-seat-backlog"'))
         self.assertEqual(_HTML.count('id="work-flow"'), 1)
@@ -1848,6 +1849,9 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertIn(' stalled', paint)
         self.assertIn('scopeSeatLoad', paint)
         self.assertIn('bp-work-flow-strip', paint)
+        self.assertIn('bp-work-flow-ticks', paint)
+        self.assertIn('bp-work-flow-label', paint)
+        self.assertIn('bp-work-flow-count', paint)
         self.assertIn('FLOW_STAGES', paint)
         self.assertIn('data.flow', paint)
         self.assertNotIn('bp-work-flow-bar', paint)
@@ -1887,6 +1891,48 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
         self.assertNotIn('n8n', _HTML.lower())
         self.assertNotIn('point of sale', _HTML.lower())
+
+
+class WorkVisualFinishTests(unittest.TestCase):
+    """Issue #166: paint-only Work hero — dots, chip cards, order, band scarcity."""
+
+    def test_hero_sits_above_the_filter_mast(self):
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertLess(work.index('id="work-flow"'), work.index('id="filters"'))
+        self.assertLess(work.index('id="filters"'), work.index('id="work-band-act-now"'))
+        self.assertIn('bp-work-facets', work)
+        self.assertIn('bp-work-facet-status', work)
+
+    def test_css_paints_stage_dots_chip_cards_and_band_weight(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        work = css[css.index('#work-view {'):css.index('.bp-work-row {')]
+        self.assertIn('.bp-work-flow-stage::before', work)
+        self.assertIn('[data-stage="Open"]', work)
+        self.assertIn('[data-stage="Ready"]', work)
+        self.assertIn('[data-stage="Live"]', work)
+        self.assertIn('[data-stage="Done"]', work)
+        self.assertIn('.bp-work-flow-ticks', work)
+        self.assertIn('.bp-work-flow-tick', work)
+        self.assertIn('border-radius: 8px', work)
+        self.assertIn('.bp-work-seat-chip-ready { color: var(--ov-link);', work)
+        self.assertIn('.bp-work-seat-chip-stalled { color: var(--ov-state-error);', work)
+        self.assertIn('font-weight: 600', work)
+        self.assertIn('.bp-work-band-act-now', work)
+        self.assertIn('var(--ov-state-scanning)', work)
+        self.assertIn('.bp-work-band-my-todos', work)
+        self.assertIn('.bp-work-band-seat-backlog', work)
+        self.assertIn('#work-view .bp-work-facets', work)
+        self.assertNotIn('#fff', work)
+        self.assertNotIn('bp-work-flow-bar', work)
+        self.assertNotIn('n8n', work.lower())
+
+    def test_paint_does_not_reopen_caps_or_membership(self):
+        self.assertIn('WORK_BAND_LIMIT=8', _SRC.replace(' ', ''))
+        self.assertIn('SEAT_PREVIEW_SEATS=3', _SRC.replace(' ', ''))
+        self.assertIn('SEAT_PREVIEW_PER_SEAT=3', _SRC.replace(' ', ''))
+        self.assertNotIn('SEAT_WINDOW=40', _SRC.replace(' ', ''))
+        self.assertNotIn('bp-work-flow-pipeline', _SRC)
+        self.assertNotIn('bp-work-flow-bar', _SRC)
 
 
 class WorkRepresentationV2Tests(unittest.TestCase):
