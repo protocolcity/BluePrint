@@ -24,7 +24,11 @@ class Element {
     this.style = {};
     this.options = [];
     this.selectedOptions = [{text: ''}];
-    this.ownerDocument = {createElement: t => new Element(t), createTextNode: t => Object.assign(new Element('#text'), {_text: String(t), textContent: String(t)})};
+    this.ownerDocument = {
+      createElement: t => new Element(t),
+      createElementNS: (_ns, t) => new Element(t),
+      createTextNode: t => Object.assign(new Element('#text'), {_text: String(t), textContent: String(t)}),
+    };
     this.classList = {
       add: name => { this.className = `${this.className} ${name}`.trim(); },
       remove: name => { this.className = this.className.split(/\s+/).filter(x => x && x !== name).join(' '); },
@@ -91,16 +95,26 @@ function match(node, sel) {
   return node.tagName === sel.toUpperCase();
 }
 
-function series(grain, periods, counts) {
+function series(grain, periods, counts, doors = {work_count: 0, delivery_count: 0}) {
   const origin = grain === 'hour'
     ? Date.parse('2026-09-16T16:00:00Z')
-    : Date.parse(periods === 7 ? '2026-09-11T00:00:00Z' : '2026-09-04T00:00:00Z');
+    : Date.parse(periods === 3 ? '2026-09-15T00:00:00Z' : periods === 7 ? '2026-09-11T00:00:00Z' : '2026-09-04T00:00:00Z');
   const step = grain === 'hour' ? 3600000 : 86400000;
   const buckets = Array.from({length: periods}, (_, index) => ({
     start: new Date(origin + index * step).toISOString().replace('.000Z', 'Z'),
     count: counts[index] || 0,
   }));
-  return {grain, buckets, total: buckets.reduce((sum, bucket) => sum + bucket.count, 0)};
+  return {
+    grain,
+    buckets,
+    total: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
+    doors: {
+      work_count: doors.work_count || 0,
+      work_href: '/work',
+      delivery_count: doors.delivery_count || 0,
+      delivery_href: '/delivery',
+    },
+  };
 }
 
 const hourCounts = Array(24).fill(0);
@@ -116,12 +130,14 @@ windowCounts[12] = 1;
 windowCounts[13] = 2;
 
 const busyActivity = {
-  day: series('hour', 24, hourCounts),
-  week: series('day', 7, weekCounts),
-  window: series('day', 14, windowCounts),
+  day: series('hour', 24, hourCounts, {work_count: 1, delivery_count: 2}),
+  three: series('day', 3, [0, 1, 2], {work_count: 1, delivery_count: 2}),
+  week: series('day', 7, weekCounts, {work_count: 1, delivery_count: 2}),
+  window: series('day', 14, windowCounts, {work_count: 2, delivery_count: 3}),
 };
 const quietActivity = {
   day: series('hour', 24, []),
+  three: series('day', 3, []),
   week: series('day', 7, []),
   window: series('day', 14, []),
 };
@@ -199,6 +215,7 @@ const context = {
 context.document = {
   getElementById: get,
   createElement: tag => new Element(tag),
+  createElementNS: (_ns, tag) => new Element(tag),
   addEventListener() {},
   dispatchEvent() { return true; },
   hidden: false,
@@ -259,16 +276,35 @@ assert.equal(weekBars, 7);
 get('timeline-period').value = '';
 get('timeline-period').selectedOptions = [{text: 'Last 14 days'}];
 runtime.setPeriod('');
+runtime.timeline();
+const doorText = node => (node.children || []).map(child => child.textContent || '').join('');
+const healthyDoors = get('timeline-doors').children;
+assert.equal(healthyDoors.length, 2);
+assert.equal(healthyDoors[0].dataset.kind, 'work');
+assert.equal(healthyDoors[1].dataset.kind, 'delivery');
+const healthyWork = doorText(healthyDoors[0]);
+const healthyDelivery = doorText(healthyDoors[1]);
+const workHref = healthyDoors[0].href;
+const deliveryHref = healthyDoors[1].href;
+const hasLine = get('timeline-activity-chart').querySelectorAll('.bp-timeline-hist-line').length > 0;
+assert.equal(healthyWork, 'Work2 events');
+assert.equal(healthyDelivery, 'Delivery3 events');
+assert.equal(hasLine, true);
+
 runtime.applyTimeline({rows: [], sources: [], next_cursor: null, activity: quietActivity});
 runtime.timeline();
 assert.equal(get('timeline-activity-summary').textContent, 'Quiet in this window.');
 assert.equal(get('timeline-activity-chart').hidden, true);
 assert.equal(get('timeline-activity-chart').querySelectorAll('.bp-timeline-hist-col').length, 0);
+const quietDoors = get('timeline-doors').children;
+assert.equal(doorText(quietDoors[0]), 'Worknone');
+assert.equal(doorText(quietDoors[1]), 'Deliverynone');
 
 runtime.applyTimeline(null);
 runtime.timeline();
 assert.equal(get('timeline-activity-summary').textContent, 'Timeline is unavailable right now.');
 assert.equal(get('timeline-activity-chart').hidden, true);
+const unavailableDoors = get('timeline-doors').children.map(doorText);
 
 process.stdout.write(JSON.stringify({
   default_summary: defaultSummary,
@@ -279,4 +315,13 @@ process.stdout.write(JSON.stringify({
   quiet_summary: 'Quiet in this window.',
   quiet_chart_hidden: true,
   unavailable_hidden: true,
+  kinds: ['work', 'delivery'],
+  healthy_work: healthyWork,
+  healthy_delivery: healthyDelivery,
+  work_href: workHref,
+  delivery_href: deliveryHref,
+  has_line: hasLine,
+  quiet_work: 'Worknone',
+  quiet_delivery: 'Deliverynone',
+  unavailable_doors: unavailableDoors,
 }));
