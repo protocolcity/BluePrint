@@ -1939,6 +1939,7 @@ class DeliveryCiSparkTests(unittest.TestCase):
         self.assertIn('id="work-band-act-now"', _HTML)
         self.assertIn('id="work-flow"', _HTML)
         self.assertIn('id="work-calendar-doors"', _HTML)
+        self.assertIn('id="calendar-load"', _HTML)
         self.assertIn('function paintOverviewThroughput()', _SRC)
         self.assertIn('function paintAgentsFloorSpark()', _SRC)
         self.assertIn('function paintProjectsCompare()', _SRC)
@@ -1972,6 +1973,91 @@ class DeliveryCiSparkTests(unittest.TestCase):
         self.assertEqual(result['not_configured'], 'CI not configured')
         self.assertIn('No CI runs in the last 14 days', result['merges_only'])
         self.assertIn('1 merge', result['merges_only'])
+
+
+class CalendarLoadBarTests(unittest.TestCase):
+    """Issue #153: load-by-day bars on Calendar. Doors stay; no WO dump."""
+
+    def test_hosts_live_on_calendar_view_only(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        delivery = _HTML.split('id="delivery-view"')[1].split('id="timeline-view"')[0]
+        self.assertIn('id="calendar-load"', calendar)
+        self.assertIn('id="calendar-load-chart"', calendar)
+        self.assertIn('id="calendar-load-summary"', calendar)
+        self.assertIn('id="calendar-doors"', calendar)
+        self.assertLess(calendar.index('id="calendar-doors"'), calendar.index('id="calendar-load"'))
+        self.assertLess(calendar.index('id="calendar-load"'), calendar.index('id="schedule-list"'))
+        self.assertEqual(_HTML.count('id="calendar-load"'), 1)
+        self.assertNotIn('id="calendar-load"', overview)
+        self.assertNotIn('id="calendar-load"', work)
+        self.assertNotIn('id="calendar-load"', agents)
+        self.assertNotIn('id="calendar-load"', delivery)
+        self.assertNotIn('wo-tile', calendar)
+        self.assertNotIn('id="agents-pulse"', calendar)
+        self.assertNotIn('week-grid', calendar)
+
+    def test_paint_uses_calendar_v1_host_and_keeps_doors(self):
+        self.assertIn("await import('/js/calendar.v1.js')", _SRC)
+        self.assertIn('function paintCalendarSchedule()', _SRC)
+        fn = _SRC.split('function calendar()')[1].split('function capabilities()')[0]
+        self.assertIn('paintCalendarSchedule()', fn)
+        paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
+        self.assertIn('buildLoadByDay(', paint)
+        self.assertIn('paintLoad(', paint)
+        self.assertIn('paintDoors(', paint)
+        self.assertIn('calendarDoorsFromSnapshot()', paint)
+        self.assertNotIn('n8n', paint.lower())
+        self.assertNotIn('histogram', paint.lower())
+        self.assertNotIn('wo-tile', paint)
+
+    def test_does_not_regress_neighbor_map_a_surfaces(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-calendar-load', css)
+        self.assertIn('.bp-calendar-doors', css)
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="agents-floor-spark"', _HTML)
+        self.assertIn('id="agents-next-fire"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+        self.assertIn('id="projects-compare"', _HTML)
+        self.assertIn('id="work-calendar-doors"', _HTML)
+        self.assertIn('id="delivery-ci-spark"', _HTML)
+        self.assertIn('function paintOverviewThroughput()', _SRC)
+        self.assertIn('function paintWorkFlow()', _SRC)
+        self.assertIn('function paintAgentsFloorSpark()', _SRC)
+        self.assertIn('function paintTimelineActivity()', _SRC)
+        self.assertIn('function paintProjectsCompare()', _SRC)
+        self.assertIn('function paintDeliverySpark(', _SRC)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('POS', _HTML)
+
+    def test_load_harness(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping calendar load harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'calendar_load_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'calendar load harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['origin'], '2026-09-14')
+        self.assertEqual(result['total'], 5)
+        self.assertEqual(result['counts'], [0, 0, 1, 1, 3, 0, 0])
+        self.assertEqual(result['summary'], '5 scheduled · this week')
+        self.assertEqual(result['bars'], 7)
+        self.assertTrue(result['quiet_hidden'])
+        self.assertEqual(result['unavailable'], 'Schedule load unavailable')
+        self.assertEqual(result['due_door'], 'Due · 2')
+        self.assertEqual(result['fire_door'], '/agents')
 
 
 if __name__ == '__main__':
