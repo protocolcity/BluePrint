@@ -59,6 +59,14 @@ class Element {
     if (idx >= 0) this.children.splice(idx, 1);
     return node;
   }
+  removeAttribute(name) {
+    delete this.attributes[name];
+    if (name === 'class') this.className = '';
+    if (name.startsWith('data-') && this.dataset) {
+      const key = name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      this.dataset[key] = '';
+    }
+  }
   get firstChild() { return this.children[0] || null; }
   get nextSibling() {
     if (!this.parent) return null;
@@ -110,6 +118,9 @@ const IDS = [
   'agents-floor-empty', 'agents-floor-spark', 'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list',
   'agents-face', 'agents-face-floor', 'agents-face-canvas', 'agents-floor-lists',
   'agents-canvas-wrap', 'agents-canvas', 'agents-canvas-empty',
+  'agents-canvas-empty-teach', 'agents-canvas-tour', 'agents-canvas-tour-kicker',
+  'agents-canvas-tour-copy', 'agents-canvas-tour-next', 'agents-canvas-tour-back',
+  'agents-canvas-tour-skip', 'agents-canvas-tour-start',
   'timeline-project', 'timeline-source',
 ];
 const nodes = new Map();
@@ -197,7 +208,12 @@ const context = {
   URL, URLSearchParams, console, JSON,
   Option: class { constructor(text, value) { this.text = text; this.value = value; } },
   location: new URL('/agents', 'https://desk.example'),
-  localStorage: {getItem() { return null; }, setItem() {}},
+  localStorage: {
+    _store: {},
+    getItem(key) { return Object.prototype.hasOwnProperty.call(this._store, key) ? this._store[key] : null; },
+    setItem(key, value) { this._store[key] = String(value); },
+    removeItem(key) { delete this._store[key]; },
+  },
   fetch: async () => ({ok: true, json: async () => fixture}),
   setInterval() { return 1; },
   clearInterval() {},
@@ -251,14 +267,19 @@ const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
 raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; lastSuccess = Date.now();`;
-const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {agents, setAgentsView, applySnapshot(next){ snapshot = next; }}; })();`);
+const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {agents, setAgentsView, startAgentsTour, advanceAgentsTour, retreatAgentsTour, endAgentsTour, applySnapshot(next){ snapshot = next; }}; })();`);
 const runtime = await boot(...Object.values(context));
+
+function fire(id) {
+  for (const fn of get(id).listeners.click || []) fn({preventDefault() {}});
+}
 
 runtime.agents();
 const pulse = get('agents-pulse').querySelectorAll('.bp-metric').map(n => n.textContent.replace(/\s+/g, ''));
 assert.deepEqual(pulse, ['1Working', '2Idle', '1Error']);
 assert.equal(get('agents-floor-lists').hidden, false);
 assert.equal(get('agents-canvas-wrap').hidden, true);
+assert.equal(get('agents-canvas-tour').hidden, true, 'tour stays off on Floor');
 assert.match(get('agents-floor-spark').textContent, /4 runs · last 24h/);
 
 runtime.setAgentsView('canvas');
@@ -301,6 +322,27 @@ assert.match(claimChip.textContent, /Live claim.*pc-9/);
 assert.equal(claimChip.href, '/work-order?project=blueprint&id=pc-9');
 assert.ok(!working.querySelectorAll('.bp-agents-canvas-chip').some(a => a.textContent === 'Work'), 'claim chip replaces the generic Work link once a WO is held');
 
+assert.equal(get('agents-canvas-tour').hidden, false, 'unseen canvas starts the acquaintance tour');
+assert.equal(get('agents-canvas-tour').dataset.step, 'strip');
+assert.equal(get('agents-pulse').dataset.tourFocus, 'true');
+assert.match(get('agents-canvas-tour-kicker').textContent, /1 of 3/);
+assert.match(get('agents-canvas-tour-copy').textContent, /Working, Idle, and Error/);
+assert.equal(get('agents-canvas-tour-next').textContent, 'Next');
+assert.equal(get('agents-canvas-empty-teach').hidden, true);
+fire('agents-canvas-tour-next');
+assert.equal(get('agents-canvas-tour').dataset.step, 'node');
+assert.equal(working.dataset.tourFocus, 'true', 'step 2 focuses a seat node');
+assert.equal(get('agents-pulse').dataset.tourFocus, '');
+assert.match(get('agents-canvas-tour-copy').textContent, /seat or a job/);
+fire('agents-canvas-tour-next');
+assert.equal(get('agents-canvas-tour').dataset.step, 'door');
+assert.equal(failedRun.dataset.tourFocus, 'true', 'step 3 focuses the Timeline last-run door');
+assert.equal(get('agents-canvas-tour-next').textContent, 'Done');
+assert.match(get('agents-canvas-tour-copy').textContent, /Work for a claim, Timeline/);
+fire('agents-canvas-tour-next');
+assert.equal(get('agents-canvas-tour').hidden, true);
+assert.equal(context.localStorage.getItem('bp-agents-canvas-tour'), 'seen');
+
 const emptyCanvas = {
   ...fixture,
   agents: [],
@@ -311,13 +353,26 @@ runtime.applySnapshot(emptyCanvas);
 runtime.agents();
 assert.equal(get('agents-canvas-empty').hidden, false);
 assert.equal(get('agents-canvas-empty').textContent, 'No seats or jobs on this roster.');
+assert.equal(get('agents-canvas-empty-teach').hidden, false, 'empty canvas teaches strip → node → door');
 assert.equal(get('agents-canvas').hidden, true);
+assert.equal(get('agents-canvas-tour').hidden, true, 'seen tour does not restart on the empty path');
 
 runtime.applySnapshot(fixture);
 runtime.setAgentsView('floor');
 assert.equal(get('agents-floor-lists').hidden, false);
 assert.equal(get('agents-canvas-wrap').hidden, true);
 assert.equal(get('agents-face-floor').attributes['aria-pressed'], 'true');
+assert.equal(get('agents-canvas-tour').hidden, true);
+
+runtime.setAgentsView('canvas');
+assert.equal(get('agents-canvas-wrap').hidden, false);
+assert.equal(get('agents-canvas-tour').hidden, true, 'seen tour stays dismissed on Canvas');
+fire('agents-canvas-tour-start');
+assert.equal(get('agents-canvas-tour').hidden, false);
+assert.equal(get('agents-canvas-tour').dataset.step, 'strip');
+runtime.setAgentsView('floor');
+assert.equal(get('agents-floor-lists').hidden, false);
+assert.equal(get('agents-canvas-tour').hidden, true, 'switching to Floor hides an in-progress tour');
 
 process.stdout.write(JSON.stringify({
   pulse,
@@ -333,5 +388,8 @@ process.stdout.write(JSON.stringify({
   work_chip: true,
   ticket_door: true,
   empty_roster: 'No seats or jobs on this roster.',
+  empty_teaches_floor: true,
+  tour_steps: ['strip', 'node', 'door'],
+  tour_seen: 'seen',
   floor_back: true,
 }));
