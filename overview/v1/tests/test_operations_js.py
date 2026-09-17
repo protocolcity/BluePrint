@@ -1553,14 +1553,18 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertIn('id="agents-quiet-list"', agents)
         self.assertIn('id="agents-floor-empty"', agents)
         self.assertIn('id="agents-next-fire"', agents)
+        self.assertIn('id="agents-floor-spark"', agents)
         work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
         self.assertNotIn('id="agents-pulse"', work)
+        self.assertNotIn('id="agents-floor-spark"', work)
 
     def test_agents_paints_pulse_then_reuses_calendar_next_fire(self):
         agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]
         self.assertIn('paintAgentsPulse()', agents)
+        self.assertIn('paintAgentsFloorSpark()', agents)
         self.assertIn('paintAgentsNextFire()', agents)
-        self.assertLess(agents.index('paintAgentsPulse()'), agents.index('paintAgentsNextFire()'))
+        self.assertLess(agents.index('paintAgentsPulse()'), agents.index('paintAgentsFloorSpark()'))
+        self.assertLess(agents.index('paintAgentsFloorSpark()'), agents.index('paintAgentsNextFire()'))
         self.assertIn("floorBucket(a)!=='quiet'", agents.replace(' ', ''))
         self.assertIn('Quiet ·', agents)
 
@@ -1620,6 +1624,61 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertTrue(result['working_has_cue'])
         self.assertEqual(result['empty_when_quiet'], 'No seats working right now.')
         self.assertIn('Next fire ·', result['next_fire'])
+        self.assertEqual(result['working_spark'], '2 runs')
+        self.assertEqual(result['failed_spark'], '1 run · 1 fail')
+        self.assertEqual(result['idle_spark'], '')
+        self.assertEqual(result['quiet_spark'], '')
+        self.assertIn('4 runs · last 24h', result['floor_spark'])
+        self.assertIn('1 fail', result['floor_spark'])
+        self.assertEqual(result['floor_spark_when_quiet'], '')
+
+
+class AgentsFloorSparkPaintTests(unittest.TestCase):
+    """Issue #140: seat throughput / fail-rate sparks. Pulse chrome stays."""
+
+    def test_spark_host_sits_under_pulse_not_inside_the_tiles(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        self.assertIn('id="agents-floor-spark"', agents)
+        self.assertLess(agents.index('id="agents-pulse"'), agents.index('id="agents-floor-spark"'))
+        self.assertLess(agents.index('id="agents-floor-spark"'), agents.index('id="agents-next-fire"'))
+        self.assertEqual(_HTML.count('id="agents-floor-spark"'), 1)
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        self.assertNotIn('id="agents-floor-spark"', overview)
+        self.assertIn('id="overview-throughput"', overview)
+
+    def test_rows_paint_spark_without_redoing_claim_or_pulse(self):
+        row = _SRC.split('function agentRow(agent)')[1].split('function jobRow(agent)')[0]
+        self.assertIn('seatSparkCell(agent)', row)
+        self.assertIn('heldLink(agent)', row)
+        self.assertIn('bp-shift-cue', row)
+        pulse = _SRC.split('function paintAgentsPulse()')[1].split('function paintAgentsNextFire()')[0]
+        self.assertIn("['Working',floor.working,'working']", pulse.replace(' ', ''))
+        self.assertIn("['Idle',floor.idle,'idle']", pulse.replace(' ', ''))
+        self.assertIn("['Error',floor.error,'last_run_failed']", pulse.replace(' ', ''))
+        self.assertNotIn('seatSparkCell', pulse)
+
+    def test_quiet_and_empty_stay_honest_and_timeline_keeps_the_histogram(self):
+        spark = _SRC.split('function seatSparkCell(agent)')[1].split('function paintAgentsFloorSpark()')[0]
+        self.assertIn("bucket==='quiet'", spark.replace(' ', ''))
+        self.assertIn('Runs unavailable', spark)
+        floor = _SRC.split('function paintAgentsFloorSpark()')[1].split('function paintAgentsPulse()')[0]
+        self.assertIn('No seat runs in the last 24h', floor)
+        self.assertIn("floorBucket(agent)!=='quiet'", floor.replace(' ', ''))
+        self.assertIn('/timeline?period=1', floor)
+        self.assertNotIn('n8n', floor.lower())
+        self.assertNotIn('histogram', floor.lower())
+        self.assertIn('function paintTimelineActivity(', _SRC)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+
+    def test_spark_css_does_not_add_a_fourth_pulse_tile(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-agents-floor-spark', css)
+        self.assertIn('.bp-agent-spark-line', css)
+        self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr))', css)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('EXECUTIONS', _HTML)
 
 
 class OverviewThroughputTests(unittest.TestCase):
