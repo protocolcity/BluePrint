@@ -576,7 +576,8 @@ class SlimOverviewTests(unittest.TestCase):
     def test_decide_act_now_is_capped_at_five_one_line_rows(self):
         fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
         compact = fn.replace(' ', '').replace('\n', '')
-        self.assertIn('.slice(0,5)', compact)
+        self.assertIn('OVERVIEW_DECIDE_LIMIT=5', _SRC.replace(' ', ''))
+        self.assertIn('.slice(0,OVERVIEW_DECIDE_LIMIT)', compact)
         self.assertIn('overviewDecideRow', compact)
         self.assertIn("emptyText:'Nothing for You'", fn)
         self.assertNotIn('faceEntry', compact)
@@ -1290,8 +1291,9 @@ class OverviewForYouChromeTests(unittest.TestCase):
 
 
 class SlimOverviewHarnessTests(unittest.TestCase):
-    """pc-1509: live-shaped paint — Overview chips + five Decide rows; Work
-    keeps full For You, Mute, More, and Recent."""
+    """pc-1509 / pc-1511: live-shaped paint — Overview chips + five Decide
+    rows and an honest remainder door; Work keeps full For You, Mute, More,
+    and Recent."""
 
     _HARNESS = Path(__file__).resolve().parent / 'harness' / 'overview_slim_check.mjs'
 
@@ -1312,12 +1314,27 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertEqual(self.result['decide_rows'], 5)
         self.assertFalse(self.result['overview_has_mute'])
         self.assertFalse(self.result['overview_has_more'])
+        self.assertEqual(self.result['decide_more'], '+1 more on Work')
+        self.assertEqual(self.result['decide_more_href'], '/work?attention=decide')
+        self.assertEqual(self.result['for_you_kpi'], 10)
 
     def test_read_watch_due_are_count_chips_to_work(self):
         self.assertEqual(self.result['chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
         self.assertEqual(self.result['chip_hrefs'], [
             '/work?attention=read', '/work?attention=watch', '/work?attention=due',
         ])
+
+    def test_fifteen_decide_keeps_five_rows_and_true_remainder_door(self):
+        self.assertEqual(self.result['overflow_rows'], 5)
+        self.assertEqual(self.result['overflow_more'], '+10 more on Work')
+        self.assertEqual(self.result['overflow_kpi'], 19)
+        self.assertEqual(self.result['overflow_chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
+
+    def test_zero_decide_is_nothing_for_you_without_remainder_door(self):
+        self.assertEqual(self.result['empty_decide_text'], 'Nothing for You')
+        self.assertFalse(self.result['empty_decide_more'])
+        self.assertEqual(self.result['empty_kpi'], 4)
+        self.assertEqual(self.result['empty_chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
 
     def test_work_keeps_full_for_you_mute_more_and_recent(self):
         self.assertEqual(self.result['work_decide'], 6)
@@ -1342,7 +1359,7 @@ class SlimOverviewFollowThroughTests(unittest.TestCase):
         self.assertNotIn('id="mute-status"', overview_html)
         self.assertNotIn('id="restore-muted"', overview_html)
         self.assertNotIn('Mute 24h', overview_fn)
-        self.assertNotIn('More', overview_fn)
+        self.assertNotIn("el('summary','More')", overview_fn)
         self.assertNotIn('faceEntry', overview_fn)
         decide = _SRC.split('function overviewDecideRow(order)')[1].split('function overviewFaceChip')[0]
         self.assertNotIn("el('summary','More')", decide)
@@ -1379,6 +1396,55 @@ class SlimOverviewFollowThroughTests(unittest.TestCase):
         self.assertIn('@media(max-width:900px){.bp-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}', compact)
         self.assertIn('@media(max-width:560px)', css)
         self.assertIn('grid-template-columns:repeat(5,minmax(0,1fr))', compact)
+
+
+class OverviewHonestyTests(unittest.TestCase):
+    """pc-1511: Designer Option D — true For You count, ≤5 Act-now rows,
+    always-visible Decide remainder door, chips stay doors to Work."""
+
+    def test_for_you_kpi_stays_the_true_attention_count(self):
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("['ForYou',forYou.length,'/work?attention=any']", compact)
+
+    def test_decide_remainder_door_uses_true_remainder_and_work_act_now(self):
+        self.assertIn("DECIDE_WORK_HREF='/work?attention=decide'", _SRC.replace(' ', ''))
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("remainder=decide.length-decideVisible.length", compact)
+        self.assertIn("'+'+remainder+'moreonWork'", compact)
+        self.assertIn('DECIDE_WORK_HREF', fn)
+        self.assertIn("emptyText:'Nothing for You'", fn)
+        self.assertIn('decideMore.hidden=true', compact)
+        self.assertNotIn('muted[muteKey', fn)
+
+    def test_remainder_door_host_sits_after_decide_rows_before_chips(self):
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        decide_pos = overview.index('id="for-you-decide"')
+        more_pos = overview.index('id="overview-decide-more"')
+        chips_pos = overview.index('id="overview-face-chips"')
+        self.assertLess(decide_pos, more_pos)
+        self.assertLess(more_pos, chips_pos)
+        self.assertNotIn('Needs you', overview)
+        self.assertNotIn('id="needs-you"', _HTML)
+
+    def test_decide_row_is_title_project_and_face_badge(self):
+        fn = _SRC.split('function overviewDecideRow(order)')[1].split('function overviewFaceChip')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("[order.title,order.project_name]", compact)
+        self.assertIn("join(' · ')", fn)
+        self.assertIn("badge('attention','Needsyou')", compact)
+
+    def test_ten_pages_stay_and_across_your_projects_stays_gone(self):
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('Across your projects', _HTML)
+        self.assertNotIn('id="project-summary"', _HTML)
+
+    def test_remainder_door_reuses_existing_type_tokens(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-overview-decide-more', css)
+        self.assertIn('font-variant-numeric: tabular-nums', css.split('.bp-overview-decide-more')[1].split('}')[0])
 
 
 if __name__ == '__main__':

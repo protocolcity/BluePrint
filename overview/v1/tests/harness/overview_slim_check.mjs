@@ -1,5 +1,6 @@
-// pc-1509: Overview Decide is ≤5 one-line rows; Read/Watch/Due are chips to
-// Work; Mute/More/Recent live on Work with the full For You faces.
+// pc-1509 / pc-1511: Overview Decide is ≤5 one-line rows with an honest
+// remainder door; Read/Watch/Due are chips to Work; Mute/More/Recent live
+// on Work with the full For You faces.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {reconcileList} from '../../static/js/dom-reconcile.mjs';
@@ -109,7 +110,7 @@ const IDS = [
   'active-filters', 'overview-view', 'work-view', 'agents-view', 'calendar-view',
   'timeline-view', 'connections-view', 'delivery-view', 'settings-view', 'overview-executions',
   'overview-exec-cue', 'metrics', 'overview-unrouted', 'overview-source-line',
-  'for-you-decide', 'overview-face-chips',
+  'for-you-decide', 'overview-decide-more', 'overview-face-chips',
   'work-for-you-decide', 'work-for-you-read', 'work-for-you-watch', 'work-for-you-due',
   'work-for-you-decide-details', 'work-for-you-read-details', 'work-for-you-watch-details',
   'work-for-you-due-details', 'work-for-you-decide-summary', 'work-for-you-read-summary',
@@ -233,8 +234,17 @@ const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
 raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; lastSuccess = Date.now();`;
-const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox}; })();`);
+const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox, applySnapshot(next){ snapshot = next; }}; })();`);
 const runtime = await boot(...Object.values(context));
+
+function kpiForYouCount() {
+  const tile = get('metrics').children[0];
+  const strong = (tile.children || []).find(child => child.tagName === 'STRONG');
+  return strong ? Number(strong.textContent) : NaN;
+}
+function decideMoreLink() {
+  return get('overview-decide-more').querySelector('a');
+}
 
 runtime.overview();
 const decideRows = get('for-you-decide').querySelectorAll('.bp-overview-decide');
@@ -243,10 +253,18 @@ const chipText = chips.map(c => c.textContent);
 const chipHrefs = chips.map(c => c.href);
 const overviewMute = get('for-you-decide').querySelector('.bp-face-mute');
 const overviewMore = get('for-you-decide').querySelector('.bp-order-detail');
+const sixMore = decideMoreLink();
 
 assert.equal(decideRows.length, 5, 'Overview Decide must cap at five one-line rows');
 assert.equal(overviewMute, null, 'Overview Decide must not paint Mute');
 assert.equal(overviewMore, null, 'Overview Decide must not paint More');
+assert.match(decideRows[0].textContent, /BluePrint/, 'Decide row shows project on the one line');
+assert.match(decideRows[0].textContent, /Needs you/, 'Decide row keeps the face badge');
+assert.equal(sixMore && sixMore.textContent, '+1 more on Work', '6 Decide must expose the remainder door');
+assert.equal(sixMore && sixMore.href, '/work?attention=decide');
+assert.equal(get('overview-decide-more').hidden, false);
+const sixKpi = kpiForYouCount();
+assert.equal(sixKpi, 10, 'For You KPI is the true pile, not the five-row cap');
 assert.deepEqual(chipText, ['Read · 2', 'Watch · 1', 'Due · 1']);
 assert.ok(chipHrefs.every(href => String(href).includes('/work?attention=')), 'chips must navigate to Work faces');
 assert.equal(get('work-recent').children.length, 0, 'overview() must not paint Recent on Work');
@@ -279,9 +297,60 @@ assert.match(get('work-for-you-decide-summary').textContent, /Decide · 6/);
 get('for-you-decide').replaceChildren();
 runtime.overview();
 assert.equal(get('for-you-decide').querySelectorAll('.bp-overview-decide').length, 5, 'repaint keeps the five-row cap');
+assert.equal(decideMoreLink() && decideMoreLink().textContent, '+1 more on Work', 'repaint keeps the remainder door');
+
+const overflowOrders = [
+  ...Array.from({length: 15}, (_, i) => order(`pc-d${i + 1}`, 'decide', {updated_at: `2026-09-16T${String(10 + i).padStart(2, '0')}:00:00Z`})),
+  order('pc-r1', 'read'),
+  order('pc-r2', 'read'),
+  order('pc-w1', 'watch'),
+  order('pc-due1', 'due'),
+];
+runtime.applySnapshot({...fixture, orders: overflowOrders});
+get('metrics').replaceChildren();
+get('for-you-decide').replaceChildren();
+get('overview-decide-more').replaceChildren();
+runtime.overview();
+const overflowRows = get('for-you-decide').querySelectorAll('.bp-overview-decide');
+const overflowMore = decideMoreLink();
+const overflowChips = get('overview-face-chips').querySelectorAll('.bp-face-chip').map(c => c.textContent);
+assert.equal(overflowRows.length, 5, '15 Decide still shows five Act-now rows');
+assert.equal(overflowMore && overflowMore.textContent, '+10 more on Work');
+assert.equal(overflowMore && overflowMore.href, '/work?attention=decide');
+assert.equal(get('overview-decide-more').hidden, false);
+const overflowKpi = kpiForYouCount();
+assert.equal(overflowKpi, 19, 'For You KPI stays the true total when Decide overflows');
+assert.deepEqual(overflowChips, ['Read · 2', 'Watch · 1', 'Due · 1']);
+
+const emptyDecideOrders = [
+  order('pc-r1', 'read'),
+  order('pc-r2', 'read'),
+  order('pc-w1', 'watch'),
+  order('pc-due1', 'due'),
+];
+runtime.applySnapshot({...fixture, orders: emptyDecideOrders});
+get('metrics').replaceChildren();
+get('for-you-decide').replaceChildren();
+get('overview-decide-more').replaceChildren();
+get('overview-decide-more').hidden = false;
+runtime.overview();
+const emptyNode = get('for-you-decide').querySelector('.bp-empty');
+const emptyMore = decideMoreLink();
+const emptyChips = get('overview-face-chips').querySelectorAll('.bp-face-chip').map(c => c.textContent);
+assert.equal(get('for-you-decide').querySelectorAll('.bp-overview-decide').length, 0);
+assert.equal(emptyNode && emptyNode.textContent, 'Nothing for You');
+assert.equal(emptyMore, null, 'no remainder door when Decide is empty');
+assert.equal(get('overview-decide-more').hidden, true);
+assert.equal(get('overview-decide-more').textContent, '');
+const emptyKpi = kpiForYouCount();
+assert.equal(emptyKpi, 4, 'For You KPI still counts Read/Watch/Due when Decide is 0');
+assert.deepEqual(emptyChips, ['Read · 2', 'Watch · 1', 'Due · 1']);
 
 process.stdout.write(JSON.stringify({
   decide_rows: decideRows.length,
+  decide_more: sixMore && sixMore.textContent,
+  decide_more_href: sixMore && sixMore.href,
+  for_you_kpi: sixKpi,
   chips: chipText,
   chip_hrefs: chipHrefs,
   overview_has_mute: Boolean(overviewMute),
@@ -294,4 +363,12 @@ process.stdout.write(JSON.stringify({
   unrouted: get('overview-unrouted').textContent,
   source_line: get('overview-source-line').textContent,
   kpis: get('metrics').children.length,
+  overflow_rows: overflowRows.length,
+  overflow_more: overflowMore && overflowMore.textContent,
+  overflow_kpi: overflowKpi,
+  overflow_chips: overflowChips,
+  empty_decide_text: emptyNode && emptyNode.textContent,
+  empty_decide_more: emptyMore && emptyMore.textContent,
+  empty_kpi: emptyKpi,
+  empty_chips: emptyChips,
 }));
