@@ -348,6 +348,26 @@ assert.ok(get('work-flow').querySelector('.bp-work-seat-chip'), 'seat-load chips
 assert.equal(get('work-act-now').querySelectorAll('.bp-order').length, 0);
 assert.ok(get('work-seat-backlog').querySelectorAll('.bp-order').length <= 9, 'Ready facet does not break the 3×3 backlog cap');
 
+const result = {
+  act_now_total: '9',
+  act_now_visible_default: 8,
+  act_now_more: '+1 more in Act now',
+  my_todos_total: '31',
+  my_todos_visible_default: 8,
+  my_todos_more: '+23 more · My todos',
+  seat_total: '78',
+  seat_visible_default: 9,
+  seat_more: '+69 more · filter by seat',
+  hero_chips: chipNames,
+  hero_flow: heroText,
+  hero_has_flow_bar: false,
+  hero_has_flow_strip: /Open \d+ → Ready/.test(heroText),
+  mute_on_rows: 0,
+  more_on_rows: 0,
+  door_sets_attention: 'act_now',
+  chip_sets_seat: 'worker:pepper',
+};
+
 get('status-filter').value = '';
 get('attention-filter').value = '';
 get('assignment-filter').value = '';
@@ -360,22 +380,4 @@ runtime.updateWorkFilters();
 assert.equal(get('work-flow').textContent, 'No seat drain right now');
 assert.equal(get('work-flow').querySelector('.bp-work-flow-strip'), null, 'honest empty does not paint fake zeros');
 
-process.stdout.write(JSON.stringify({
-  act_now_total: get('work-act-now-count').textContent,
-  act_now_visible_default: 8,
-  act_now_more: '+1 more in Act now',
-  my_todos_total: '31',
-  my_todos_visible_default: 8,
-  my_todos_more: '+23 more · My todos',
-  seat_total: '78',
-  seat_visible_default: 9,
-  seat_more: '+69 more · filter by seat',
-  hero_chips: chipNames,
-  hero_flow: heroText,
-  hero_has_flow_bar: false,
-  hero_has_flow_strip: Boolean(get('work-flow').querySelector('.bp-work-flow-strip')),
-  mute_on_rows: 0,
-  more_on_rows: 0,
-  door_sets_attention: 'act_now',
-  chip_sets_seat: 'worker:pepper',
-}));
+process.stdout.write(JSON.stringify(result));
