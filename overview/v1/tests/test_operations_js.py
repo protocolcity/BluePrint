@@ -536,11 +536,13 @@ class UnroutedOverviewTests(unittest.TestCase):
         self.assertNotIn('-heading', fn)
         self.assertIn('summary.textContent=text', compact)
 
-    def test_unrouted_link_opens_work_with_gate_none_and_assignment_unassigned(self):
-        self.assertIn("UNROUTED_WORK_HREF='/work?gate=none&assignment=unassigned'", _SRC.replace(' ', ''))
+    def test_unrouted_link_opens_work_with_the_same_predicate_as_the_count(self):
+        self.assertIn("UNROUTED_WORK_HREF='/work?unrouted=1'", _SRC.replace(' ', ''))
         fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
         self.assertIn("orders.filter(isUnrouted)", fn)
         self.assertIn("link(String(unrouted.length),UNROUTED_WORK_HREF)", fn.replace(' ', ''))
+        work_fn = _SRC.split('function work()')[1].split('function agentAction')[0]
+        self.assertIn('(!unroutedOnly||isUnrouted(o))', work_fn.replace(' ', ''))
 
     def test_unrouted_zero_renders_quiet_text_not_hidden(self):
         fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
