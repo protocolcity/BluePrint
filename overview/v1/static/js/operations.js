@@ -744,8 +744,12 @@ function overview() {
   }
   const chips=$('overview-face-chips');
   if(chips) {
+    const doors=calendarDoorsFromSnapshot();
     const faces=[['Read','read'],['Watch','watch'],['Due','due']];
-    reconcileList(chips, faces, face=>face[1], ([label,face])=>overviewFaceChip(label, forYou.filter(o=>o.attention_face===face).length, '/work?attention='+face));
+    reconcileList(chips, faces, face=>face[1], ([label,face])=>{
+      if(face==='due') return overviewFaceChip(label, doors.due_count, doors.due_href || '/calendar');
+      return overviewFaceChip(label, forYou.filter(o=>o.attention_face===face).length, '/work?attention='+face);
+    });
   }
   overviewSourceLine();
 }
@@ -1180,9 +1184,36 @@ function renderCoverage() {
   }, {emptyText:'No registered projects.'});
   refreshCoverageHireBodies($('coverage-list'));
 }
+function paintAgentsNextFire() {
+  const host=$('agents-next-fire');
+  if(!host) return;
+  const doors=calendarDoorsFromSnapshot();
+  host.replaceChildren();
+  host.append(link(doors.next_fire_line || 'Next fire · none reported', '/calendar'));
+}
+function scheduleDoorRow(item) {
+  const href=item.product && item.task_id
+    ? readerHref('/work-order?'+new URLSearchParams({project:item.product,id:item.task_id}))
+    : '/calendar';
+  const row=link('',href,'bp-order');
+  const details=el('div');
+  details.append(el('strong',item.title || 'Dated work'));
+  details.append(el('span',`${item.kind==='remind'?'Remind':'Due'} · ${item.source || 'Calendar'}`,'bp-order-meta'));
+  row.append(details,badge(item.kind==='remind'?'scheduled':'all_day', item.kind==='remind'?'Remind':'Due'));
+  return row;
+}
+function renderWorkCalendarDoors() {
+  const host=$('work-calendar-doors');
+  if(!host) return;
+  const items=(calendarDoorsFromSnapshot().items || []).slice(0,4);
+  host.hidden=!items.length;
+  if(!items.length) { host.replaceChildren(); return; }
+  reconcileList(host, items, item=>item.key, scheduleDoorRow);
+}
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
   $('agents-heartbeat').textContent=heartbeatLine();
+  paintAgentsNextFire();
   reconcileList($('seat-list'), seats, a=>a.id, agentRow, {emptyText:'No seats registered in the readable registry.'});
   reconcileList($('job-list'), jobs, a=>a.id, jobRow, {emptyText:'No jobs registered in the readable registry.'});
   agentDetail();
@@ -1353,6 +1384,76 @@ function localDayKey(value, allDay) {
   if(Number.isNaN(parsed.valueOf())) return raw.slice(0,10);
   return todayKey(parsed);
 }
+function countdownWords(seconds) {
+  if(seconds<=0) return 'now';
+  let minutes=Math.max(0,Math.floor(seconds/60));
+  let hours=Math.floor(minutes/60); minutes=minutes%60;
+  const days=Math.floor(hours/24); hours=hours%24;
+  if(days && hours) return `in ${days}d ${hours}h`;
+  if(days) return `in ${days}d`;
+  if(hours && minutes) return `in ${hours}h ${minutes}m`;
+  if(hours) return `in ${hours}h`;
+  if(minutes) return `in ${minutes}m`;
+  return 'in <1m';
+}
+function nextScheduleFire(agents, now) {
+  const instant=now || new Date();
+  const candidates=[];
+  for(const agent of agents || []) {
+    const ms=Date.parse(String(agent.next_fire || ''));
+    if(Number.isNaN(ms) || ms<=instant.valueOf()) continue;
+    candidates.push({
+      name:agent.name || agent.id || 'Scheduled job',
+      id:agent.id || '',
+      at:new Date(ms).toISOString(),
+      group:agent.group || '',
+      seconds:(ms-instant.valueOf())/1000,
+    });
+  }
+  candidates.sort((a,b)=>a.seconds-b.seconds);
+  return candidates[0] || null;
+}
+function nextFireLine(fire) {
+  if(!fire) return 'Next fire · none reported';
+  const name=fire.name || 'Scheduled job';
+  return Number.isFinite(fire.seconds) ? `Next fire · ${name} ${countdownWords(fire.seconds)}` : `Next fire · ${name}`;
+}
+function calendarDueItems(workDates, events, now) {
+  const origin=todayKey(now);
+  const items=new Map();
+  for(const row of workDates || []) {
+    if(row.kind!=='deadline' && row.kind!=='reminder') continue;
+    const day=localDayKey(row.dtstart, row.all_day);
+    if(!day || day>origin) continue;
+    const product=row.product || '', taskId=row.task_id || '';
+    const key=product || taskId ? `${product}:${taskId}` : `date:${row.dtstart}|${row.summary}`;
+    const kind=row.kind==='deadline'?'due':'remind';
+    const existing=items.get(key);
+    if(existing && existing.kind==='due') continue;
+    items.set(key,{key,kind,title:row.summary || 'Dated work',at:String(row.dtstart || ''),source:row.source || '',product,task_id:taskId});
+  }
+  for(const event of events || []) {
+    if(String(event.state || '').toLowerCase()!=='due') continue;
+    const title=event.title || 'Untitled event';
+    const at=String(event.at || '');
+    const key=`event:${title}|${at}`;
+    items.set(key,{key,kind:'due',title,at,source:event.source || 'Local calendar',product:'',task_id:''});
+  }
+  return [...items.values()];
+}
+function calendarDueHref(items) {
+  return items.some(item=>item.task_id) ? '/work?attention=due' : '/calendar';
+}
+function buildCalendarDoors(workDates, events, agents, now) {
+  const items=calendarDueItems(workDates, events, now);
+  const fire=nextScheduleFire(agents, now);
+  return {due_count:items.length, due_href:calendarDueHref(items), items, next_fire:fire, next_fire_line:nextFireLine(fire)};
+}
+function calendarDoorsFromSnapshot(now) {
+  const doors=snapshot && snapshot.calendar_doors;
+  if(doors && typeof doors.due_count==='number') return doors;
+  return buildCalendarDoors(snapshot?.work_dates || [], snapshot?.events || [], snapshot?.agents || [], now);
+}
 function allDayStamp(value) {
   const [y,m,d]=String(value).slice(0,10).split('-').map(Number);
   if(!y || !m || !d) return String(value);
@@ -1519,7 +1620,7 @@ function paint() {
   $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Delivery`;
   filterOptions();
   if(page==='overview') overview();
-  if(page==='work') work();
+  if(page==='work') { work(); renderWorkCalendarDoors(); }
   if(page==='projects') projects();
   if(page==='agents') agents();
   if(page==='calendar') calendar();

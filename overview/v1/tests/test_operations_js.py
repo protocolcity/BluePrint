@@ -604,6 +604,9 @@ class SlimOverviewTests(unittest.TestCase):
         self.assertIn("['Read','read'],['Watch','watch'],['Due','due']", compact)
         self.assertIn('overviewFaceChip', compact)
         self.assertIn("'/work?attention='+face", compact)
+        self.assertIn('calendarDoorsFromSnapshot()', fn)
+        self.assertIn('doors.due_count', compact)
+        self.assertIn('doors.due_href', compact)
         overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
         self.assertIn('id="overview-face-chips"', overview)
         self.assertNotIn('id="for-you-read"', overview)
@@ -1324,6 +1327,14 @@ class SlimOverviewHarnessTests(unittest.TestCase):
             '/work?attention=read', '/work?attention=watch', '/work?attention=due',
         ])
 
+    def test_due_chip_is_calendar_fed_not_an_attention_face_count(self):
+        self.assertEqual(self.result['event_due_chip'], 'Due · 1')
+        self.assertEqual(self.result['event_due_href'], '/calendar')
+        self.assertEqual(self.result['zero_due_chips'], ['Read · 2', 'Watch · 1', 'Due · 0'])
+        self.assertRegex(self.result['next_fire'], r'Next fire · loop-health in \d+m')
+        self.assertEqual(self.result['helper_due_count'], 1)
+        self.assertEqual(self.result['helper_next_fire'], 'Next fire · loop-health in 12m')
+
     def test_fifteen_decide_keeps_five_rows_and_true_remainder_door(self):
         self.assertEqual(self.result['overflow_rows'], 5)
         self.assertEqual(self.result['overflow_more'], '+10 more on Work')
@@ -1399,8 +1410,8 @@ class SlimOverviewFollowThroughTests(unittest.TestCase):
 
 
 class OverviewHonestyTests(unittest.TestCase):
-    """pc-1511: Designer Option D — true For You count, ≤5 Act-now rows,
-    always-visible Decide remainder door, chips stay doors to Work."""
+    """pc-1511 / pc-1512: true For You count, ≤5 Act-now rows, remainder
+    door, Read/Watch doors to Work, Due chip fed by Calendar."""
 
     def test_for_you_kpi_stays_the_true_attention_count(self):
         fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
@@ -1445,6 +1456,38 @@ class OverviewHonestyTests(unittest.TestCase):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
         self.assertIn('.bp-overview-decide-more', css)
         self.assertIn('font-variant-numeric: tabular-nums', css.split('.bp-overview-decide-more')[1].split('}')[0])
+
+
+class CalendarDoorsTests(unittest.TestCase):
+    """pc-1512: thin Calendar doors on Overview and Agents only."""
+
+    def test_due_chip_reads_calendar_doors_not_attention_face(self):
+        fn = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
+        self.assertIn('calendarDoorsFromSnapshot()', fn)
+        self.assertIn('doors.due_count', fn.replace(' ', ''))
+        self.assertIn("if(face==='due')", fn.replace(' ', ''))
+
+    def test_agents_paints_next_fire_one_liner_to_calendar(self):
+        self.assertIn('id="agents-next-fire"', _HTML)
+        self.assertIn('function paintAgentsNextFire()', _SRC)
+        self.assertIn('function nextScheduleFire(', _SRC)
+        agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]
+        self.assertIn('paintAgentsNextFire()', agents)
+        self.assertIn("link(doors.next_fire_line", _SRC.replace(' ', ''))
+        self.assertIn("'/calendar'", _SRC.split('function paintAgentsNextFire()')[1].split('function scheduleDoorRow')[0])
+
+    def test_work_calendar_doors_are_not_a_second_calendar(self):
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertIn('id="work-calendar-doors"', work)
+        self.assertNotIn('id="work-calendar-today"', _HTML)
+        self.assertNotIn('week-grid', _HTML)
+        self.assertNotIn('isometric', _SRC)
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        self.assertNotIn('wo-tile', calendar)
+
+    def test_ten_pages_unchanged(self):
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
 
 
 if __name__ == '__main__':

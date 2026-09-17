@@ -860,3 +860,21 @@ class TimestampAndParkMarkerTests(unittest.TestCase):
         self.assertTrue('2026-09-13 21:45:00' < '2026-09-13T21:30:00Z')
         self.assertGreater(ts_epoch('2026-09-13 21:45:00'), later)
 
+    def test_calendar_doors_count_arrived_deadlines_not_mentions(self):
+        self.seed()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_note=? WHERE id=1',
+                         (json.dumps(['worker:you', 'deadline:2026-09-01']),'', ''))
+        (self.root/'.blueprint').mkdir()
+        (self.root/'.blueprint'/'calendar.json').write_text(json.dumps({
+            'range': 'this week',
+            'events': [{'title': 'Standup', 'at': '2026-09-17T10:00:00Z', 'source': 'routine', 'state': 'due'}],
+        }))
+        result = operations_snapshot(self.root)
+        doors = result['calendar_doors']
+        self.assertGreaterEqual(doors['due_count'], 2)
+        self.assertIn(doors['due_href'], ('/work?attention=due', '/calendar'))
+        self.assertTrue(any(item.get('task_id') == 'pc-1' for item in doors['items']))
+        self.assertTrue(any(item.get('title') == 'Standup' for item in doors['items']))
+        self.assertEqual(doors['next_fire_line'], 'Next fire · none reported')
+

@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
+from .calendar_doors import build_calendar_doors, empty_calendar_doors
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
 
 # Fixed badge vocabulary (STATES_AND_TERMS.md §2, AGENTS_INTENT.md). Never
@@ -1224,6 +1225,7 @@ def operations_snapshot(binder):
     result = {'observed_at': now.isoformat(), 'build': build, 'workspace': None,
               'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
               'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
+              'calendar_doors': empty_calendar_doors(),
               'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
@@ -1539,4 +1541,7 @@ def operations_snapshot(binder):
             if isinstance(event, dict):
                 result['events'].append({key: str(event.get(key) or '') for key in ['title', 'at', 'source', 'state', 'notes']})
     result['orders'].sort(key=lambda x: (not x['attention'], x['priority'] if isinstance(x['priority'], int) else 99, x['project'], x['id']))
+    result['calendar_doors'] = build_calendar_doors(
+        result.get('work_dates') or [], result.get('events') or [],
+        result.get('agents') or [], now)
     return result
