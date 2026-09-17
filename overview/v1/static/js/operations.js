@@ -411,6 +411,22 @@ function sources(parent, details) {
   const rows=sortBySeverity(snapshot.sources || [], s=>s.name);
   reconcileList(parent, rows, s=>s.name, source=>connectionRow(source.name, source, details?'details':'compact'), {emptyText:'No data sources reported.'});
 }
+function overviewSourceLine() {
+  const host=$('overview-source-line');
+  if(!host) return;
+  const rows=snapshot.sources || [];
+  host.replaceChildren();
+  if(!rows.length) {
+    host.append(el('span','No data sources reported. '));
+    host.append(link('Connections','/connections'));
+    return;
+  }
+  const exceptions=rows.filter(isException);
+  const bits=[`${rows.length} source${rows.length===1?'':'s'}`];
+  if(exceptions.length) bits.push(`${exceptions.length} need attention`);
+  host.append(el('span', bits.join(' · ') + '. '));
+  host.append(link('Connections','/connections'));
+}
 function connectionExceptions() {
   const items=[];
   for(const source of snapshot.sources || []) if(isException(source)) items.push({id:'source:'+source.name, name:source.name, record:source});
@@ -634,9 +650,9 @@ function faceEntry(order) {
 function faceHeading(label, total, visible, href) {
   let text=`${label} · ${total}`;
   if(total > visible) text+=` · showing ${visible}`;
-  const heading=$(`for-you-${label.toLowerCase()}-heading`) || $(`for-you-${label.toLowerCase()}-summary`);
-  if(heading) heading.textContent=text;
-  const linkWrap=heading && heading.parentElement && heading.parentElement.querySelector('a');
+  const summary=$(`for-you-${label.toLowerCase()}-summary`);
+  if(summary) summary.textContent=text;
+  const linkWrap=summary && summary.parentElement && summary.parentElement.querySelector('a');
   if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
 }
 function bindForYouFaceToggle(face) {
@@ -687,7 +703,13 @@ function overview() {
   reconcileList($('overview-executions'), running, a=>a.id, executionRow, running.length ? {} : {emptyText:overviewExecutionEmpty()});
   const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
-  const faceLimit={decide:6,read:6,watch:4,note:4};
+  const unrouted=orders.filter(isUnrouted), unroutedHost=$('overview-unrouted');
+  if(unroutedHost) {
+    unroutedHost.replaceChildren();
+    unroutedHost.append(document.createTextNode('Unrouted '), link(String(unrouted.length), UNROUTED_WORK_HREF));
+    unroutedHost.append(el('span', unrouted.length ? ' — open, ungated orders with no seat' : ' — none right now'));
+  }
+  const faceLimit={decide:3,read:3,watch:4,due:4};
   let mutedCount=0;
   for(const face of ['decide','read','watch','due']) {
     const band=forYou.filter(o=>o.attention_face===face);
@@ -700,11 +722,9 @@ function overview() {
   }
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   $('restore-muted').hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,8);
+  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,4);
   reconcileList($('overview-recent'), recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
-  sources($('source-list'),false);
-  const projects=[...snapshot.projects].sort((a,b)=>b.attention-a.attention || b.open-a.open);
-  reconcileList($('project-summary'), projects.slice(0,6), p=>p.id, projectCard, {emptyText:'No project stores found. Inspect Connections for source details.'});
+  overviewSourceLine();
 }
 function filterOptions() {
   const select=$('project-filter');
@@ -730,6 +750,13 @@ function matchesAssignment(order, value) {
   if(value==='you') return order.assigned_you;
   if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
   return order.workers.includes(value.slice(7));
+}
+const UNROUTED_WORK_HREF = '/work?gate=none&assignment=unassigned';
+function isUnrouted(order) {
+  // Same slice as the per-row Needs routing chip: open backlog, ungated, no
+  // routable seat (ONE_DESK_STORY §The fact: Unrouted). The Work link keeps
+  // the saved Gate=none + Assignment=unassigned filter named in pc-1507.
+  return order.status === 'backlog' && Boolean(order.needs_routing);
 }
 function matchesGate(order, value) {
   if(value==='none') return !order.gate_type && order.blocked_on==='clear';
