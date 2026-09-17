@@ -491,15 +491,83 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-timeline-detail p { margin: 6px 0 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Timeline day/week activity histogram from the firings spine (issue 142).
-   Quiet windows stay copy-only — no decorative empty chart. */
+   C5 / pc-1544: histogram + line is the activity hero; Work / Delivery
+   doors sit above it. Quiet windows stay copy-only — no decorative empty
+   chart. */
+.bp-timeline-hero {
+  margin: 2px 0 14px;
+  padding: 0 0 4px;
+}
+.bp-timeline-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.bp-operations a.bp-timeline-door {
+  display: grid;
+  gap: 4px;
+  min-width: 148px;
+  padding: 12px 14px 10px;
+  text-align: left;
+  text-decoration: none;
+  color: var(--ov-fg);
+  background: var(--ov-tile-bg);
+  border: 1px solid var(--ov-tile-border-strong);
+  border-radius: 8px;
+}
+.bp-operations a.bp-timeline-door:hover { background: var(--ov-tile-border); }
+.bp-timeline-door-name {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ov-muted);
+}
+.bp-timeline-door-name::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--ov-muted);
+  vertical-align: middle;
+}
+.bp-timeline-door[data-kind="work"] .bp-timeline-door-name::before { background: var(--ov-link); }
+.bp-timeline-door[data-kind="delivery"] .bp-timeline-door-name::before { background: var(--ov-state-working); }
+.bp-timeline-door-primary { font-size: 20px; font-weight: 500; letter-spacing: -.03em; line-height: 1; color: var(--ov-fg); }
+.bp-timeline-door[data-tone="open"] .bp-timeline-door-primary { color: var(--ov-link); }
+.bp-timeline-door[data-tone="error"] .bp-timeline-door-primary { color: var(--ov-state-error); }
+.bp-timeline-door[data-tone="error"] .bp-timeline-door-name::before { background: var(--ov-state-error); }
+.bp-timeline-door[data-tone="muted"] { opacity: .92; }
+.bp-timeline-door[data-tone="muted"] .bp-timeline-door-primary { color: var(--ov-muted); font-size: 16px; }
+#timeline-view .bp-filters { padding: 4px 0 10px; gap: 12px; }
+#timeline-view .bp-filters input,
+#timeline-view .bp-filters select { min-height: 32px; padding: 6px 10px; }
 .bp-timeline-activity { padding: 14px 16px; }
 .bp-timeline-activity .bp-section-head { margin-bottom: 8px; }
 .bp-timeline-hist {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 2px;
-  height: 88px;
+  height: 112px;
   margin: 0;
+}
+.bp-timeline-hist-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(100% - 16px);
+  pointer-events: none;
+  color: var(--ov-state-working);
+}
+.bp-timeline-hist-line-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .bp-timeline-hist-col {
   flex: 1;
