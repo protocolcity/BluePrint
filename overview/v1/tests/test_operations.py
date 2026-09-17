@@ -510,6 +510,8 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(result['sources'][0]['state'],'unavailable')
         self.assertEqual(result['remote']['state'],'not_connected')
         self.assertEqual(result['agents_floor'], {'working': 0, 'idle': 0, 'error': 0, 'stale': 0, 'quiet': 0})
+        self.assertEqual(result['throughput']['state'], 'unavailable')
+        self.assertEqual(result['throughput']['closes'], 0)
 
     def test_placeholder_job_is_not_presented_as_working(self):
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
@@ -856,6 +858,26 @@ class OperationsTests(unittest.TestCase):
         self.assertTrue(any(item.get('task_id') == 'pc-1' for item in doors['items']))
         self.assertTrue(any(item.get('title') == 'Standup' for item in doors['items']))
         self.assertEqual(doors['next_fire_line'], 'Next fire · none reported')
+
+    def test_disposable_desk_counts_last_24h_closes(self):
+        self.seed()
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        old = (now - timedelta(hours=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT)')
+            conn.execute("INSERT INTO task_events VALUES(1,2,'status_change','done','seat',?)", (recent,))
+            conn.execute("INSERT INTO task_comments VALUES(10,2,'Completed: done','seat',?)", (recent,))
+            conn.execute("INSERT INTO tasks VALUES(3,NULL,'ancient','done',1,?,'[]',NULL,NULL)", (old,))
+            conn.execute("INSERT INTO task_events VALUES(2,3,'status_change','done','you',?)", (old,))
+        result = operations_snapshot(self.root)
+        self.assertEqual([order['id'] for order in result['orders']], ['pc-1'])
+        throughput = result['throughput']
+        self.assertEqual(throughput['closes'], 1)
+        self.assertEqual(throughput['state'], 'healthy')
+        self.assertEqual(throughput['href'], '/timeline?period=1')
+        self.assertEqual(sum(throughput['hours']), 1)
+        self.assertEqual(len(throughput['hours']), 24)
 
 class TimestampAndParkMarkerTests(unittest.TestCase):
     """pc-1495 second-pass findings: "Parked by" must count as a park marker and

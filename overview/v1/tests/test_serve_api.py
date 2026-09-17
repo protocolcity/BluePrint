@@ -25,11 +25,13 @@ import json
 import shutil
 import re
 import socket
+import sqlite3
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 import urllib.request
 from pathlib import Path
@@ -165,6 +167,8 @@ class HonestEmptyServeTests(unittest.TestCase):
         payload = json.loads(body)
         self.assertEqual(payload['sources'][0]['state'], 'unavailable')
         self.assertEqual(payload['orders'], [])
+        self.assertEqual(payload['throughput']['state'], 'unavailable')
+        self.assertEqual(payload['throughput']['closes'], 0)
 
     def test_overview_css_shares_focus_ring_across_interactive_elements(self) -> None:
         _, body, _ = _get(self.port, "/css/overview.css")
@@ -449,5 +453,60 @@ class CellarTipInjectionTests(unittest.TestCase):
         self.assertNotIn("protocolcity", st["cellar_tip"].lower())
 
 
+class DisposableDeskThroughputSmokeTests(unittest.TestCase):
+    """Issue #141: serve a throwaway binder and read the spark through HTTP."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix='bp-throughput-')
+        self.root = Path(self.temp.name)
+        manifest = self.root / 'product' / '.protocolcity' / 'desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': 'product', 'prefix': 'pc', 'display': 'Product'}))
+        data = self.root / 'worklane' / 'worklane' / 'local' / 'data'
+        data.mkdir(parents=True)
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        with sqlite3.connect(data / 'product.db') as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, '
+                'priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+                'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+            )
+            conn.execute("INSERT INTO tasks VALUES(1,NULL,'Live','in_progress',1,?,?,'human','Decide')",
+                         (recent, json.dumps(['worker:agent'])))
+            conn.execute("INSERT INTO tasks VALUES(2,NULL,'Closed','done',1,?,'[]',NULL,NULL)", (recent,))
+            conn.execute("INSERT INTO task_events VALUES(1,2,'status_change','done','seat',?)", (recent,))
+            conn.execute("INSERT INTO task_comments VALUES(1,2,'Completed: done','seat',?)", (recent,))
+        self.httpd, self.port, self.thread = _start_server(empty_state(), binder_root=self.root)
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.temp.cleanup()
+
+    def test_operations_html_hosts_the_spark_under_kpis(self) -> None:
+        status, body, _ = _get(self.port, '/')
+        text = body.decode()
+        self.assertEqual(status, 200)
+        self.assertIn('id="overview-throughput"', text)
+        self.assertLess(text.index('id="metrics"'), text.index('id="overview-throughput"'))
+        self.assertLess(text.index('id="overview-throughput"'), text.index('id="overview-unrouted"'))
+        self.assertIn('id="for-you-decide"', text)
+        self.assertIn('id="overview-decide-more"', text)
+
+    def test_operations_api_returns_last_24h_closes(self) -> None:
+        status, body, ctype = _get(self.port, '/api/operations')
+        self.assertEqual(status, 200)
+        self.assertIn('application/json', ctype)
+        payload = json.loads(body)
+        self.assertEqual(payload['throughput']['closes'], 1)
+        self.assertEqual(payload['throughput']['state'], 'healthy')
+        self.assertEqual(payload['throughput']['href'], '/timeline?period=1')
+        self.assertEqual(sum(payload['throughput']['hours']), 1)
+        self.assertEqual([order['id'] for order in payload['orders']], ['pc-1'])
+
+
 if __name__ == "__main__":
     unittest.main()
+
