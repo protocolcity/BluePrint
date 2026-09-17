@@ -346,6 +346,7 @@ const seatNames = seatChips.map(row => {
 });
 assert.match(flowText, /Open 1 → Ready 1 → Live 2 → Done 0/);
 assert.ok(get('work-flow').querySelector('.bp-work-flow-strip'), 'thin flow strip paints matching counts');
+assert.ok(get('work-flow').querySelector('.bp-work-flow-ticks'), 'cheap stage ticks paint');
 assert.equal(get('work-flow').querySelector('.bp-work-flow-bar'), null, 'no second hero flow bar');
 assert.deepEqual(seatNames.sort(), ['lili', 'pepper']);
 assert.match(flowText, /ready/);
