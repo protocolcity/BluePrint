@@ -1262,7 +1262,7 @@ class OverviewForYouChromeTests(unittest.TestCase):
     def test_all_faces_get_summary_counts_from_face_heading(self):
         overview_fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
         compact = overview_fn.replace(' ', '')
-        self.assertIn('faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,visible.length)', compact)
+        self.assertIn("faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,visible.length,'/work?attention='+face)", compact)
 
     def test_kpi_grid_is_five_columns_on_desktop(self):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
