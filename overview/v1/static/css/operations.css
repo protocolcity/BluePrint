@@ -30,7 +30,7 @@
 .bp-freshness { color: var(--ov-muted); font-size: 12px; white-space: nowrap; padding-top: 8px; font-variant-numeric: tabular-nums; }
 .bp-freshness[data-state="error"] { color: var(--ov-state-error); }
 .bp-warning { color: var(--ov-focus); padding: 12px 16px; border: 1px solid var(--ov-tile-border-strong); border-left: 3px solid var(--ov-focus); border-radius: 5px; margin-bottom: 20px !important; }
-.bp-metrics { display: grid; grid-template-columns: repeat(4,1fr); border: 1px solid var(--ov-tile-border); border-radius: 8px; margin-bottom: 24px; overflow: hidden; }
+.bp-metrics { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); border: 1px solid var(--ov-tile-border); border-radius: 8px; margin-bottom: 24px; overflow: hidden; }
 .bp-metrics-compact { margin-bottom: 16px; }
 .bp-overview-unrouted { margin: -6px 0 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .bp-overview-unrouted a { text-decoration: none; }
@@ -46,6 +46,11 @@
 .bp-panel-compact { padding: 14px 16px; margin-bottom: 14px; }
 .bp-panel-compact .bp-section-head { margin-bottom: 10px; }
 .bp-panel-compact h3 { margin: 10px 0 4px; font-size: 12px; color: var(--ov-muted); letter-spacing: .04em; text-transform: uppercase; }
+.bp-for-you-face { margin: 8px 0 2px; border: 0; }
+.bp-for-you-face > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--ov-muted); letter-spacing: .04em; text-transform: uppercase; list-style: none; padding: 6px 0; }
+.bp-for-you-face > summary::-webkit-details-marker { display: none; }
+.bp-for-you-face > summary::before { content: '▸ '; color: var(--ov-muted); }
+.bp-for-you-face[open] > summary::before { content: '▾ '; }
 .bp-section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 14px; }
 .bp-section-head a { white-space: nowrap; font-size: 12px; text-decoration: none; }
 .bp-order { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; padding: 15px 0; text-decoration: none; color: var(--ov-fg) !important; border-top: 1px solid var(--ov-tile-border); transition: background-color 150ms; }
