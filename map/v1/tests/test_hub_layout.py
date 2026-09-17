@@ -87,6 +87,7 @@ class HubLayoutTests(unittest.TestCase):
         self.assertIn("nodeState", self.host)
         self.assertIn("bp:map-operations", self.host)
         self.assertIn("indexNodeState", self.host)
+        self.assertIn("detail.portfolio", self.host)
 
     def test_file_label_gets_muted_class(self) -> None:
         # File dots on the inner ring get their own muted label class so the

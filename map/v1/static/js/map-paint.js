@@ -11,6 +11,8 @@
 // Nothing here polls or subscribes. The host wires state → paint.
 // If a paint function reads MapViewState directly it has drifted.
 
+import { motionAriaSuffix, motionClassName } from './map-motion.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // Reduce-motion check for the branch-item fan entrance (FOCUSED_PROJECT
@@ -208,12 +210,13 @@ function lotNodeState(lot, nodeState) {
   const fromOps = nodeState && lot && lot.relPath ? nodeState[lot.relPath] : null;
   if (fromOps) return fromOps;
   if (!lot) return null;
-  if (lot.open == null && lot.attention == null && lot.working == null && !lot.storeState) return null;
+  if (lot.open == null && lot.attention == null && lot.working == null && !lot.storeState && !lot.motion) return null;
   return {
     open: lot.open || 0,
     attention: lot.attention || 0,
     working: lot.working || 0,
     state: lot.storeState || 'available',
+    motion: lot.motion || null,
   };
 }
 
@@ -238,13 +241,15 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null, n
         ? 'read-only'
         : `${Number(state.open) || 0} · ${Number(state.attention) || 0} · ${Number(state.working) || 0}`)
       : '';
+    const motion = state && state.motion ? state.motion : null;
+    const motionClass = motionClassName(motion);
     const aria = countsLabel
       ? (countsLabel === 'read-only'
         ? `${lot.name}, read-only`
-        : `${lot.name}, ${Number(state.open) || 0} open, ${Number(state.attention) || 0} For You, ${Number(state.working) || 0} working`)
-      : lot.name;
+        : `${lot.name}, ${Number(state.open) || 0} open, ${Number(state.attention) || 0} For You, ${Number(state.working) || 0} working${motionAriaSuffix(motion)}`)
+      : `${lot.name}${motionAriaSuffix(motion)}`;
     const group = el('g', {
-      class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}${isSelected ? ' is-selected' : ''}${denseClass}`,
+      class: `map-hit map-lot map-lot-${kind}${lot.hasMd ? ' map-lot-md' : ''}${isSelected ? ' is-selected' : ''}${denseClass}${motionClass}`,
       transform: `translate(${pos.x.toFixed(2)},${pos.y.toFixed(2)})`,
       tabindex: '0',
       role: 'button',
@@ -254,6 +259,7 @@ export function paintLots(world, lots, { radius = 220, selectedRelPath = null, n
       'data-has-md': lot.hasMd ? '1' : '0',
       'data-is-dir': lot.isDir === false ? '0' : '1',
       'data-ring': pos.ring,
+      'data-motion': (motion && motion.stroke && motion.stroke !== 'none') ? motion.stroke : null,
     });
     if (kind === 'folder') {
       group.appendChild(el('rect', {
@@ -300,7 +306,7 @@ function truncateLabel(name) {
   return `${name.slice(0, DIG_LABEL_MAX - 1)}…`;
 }
 
-export function paintDigIn(world, digNode, children, { radius = 140, origin } = {}) {
+export function paintDigIn(world, digNode, children, { radius = 140, origin, nodeState = null } = {}) {
   const layer = world.querySelector('#dig-in-layer');
   layer.replaceChildren();
   if (!digNode || !children || children.length === 0) return;
@@ -316,16 +322,20 @@ export function paintDigIn(world, digNode, children, { radius = 140, origin } = 
     const { x, y } = positions[i];
     const kind = child.isDir === false ? 'file' : 'folder';
     const relPath = child.relPath || `${digNode.relPath}/${child.name}`;
+    const childState = nodeState && relPath ? nodeState[relPath] : null;
+    const motion = childState && childState.motion ? childState.motion : (child.motion || null);
+    const motionClass = motionClassName(motion);
     const group = el('g', {
-      class: `map-hit map-dig-child map-dig-${kind}${child.hasMd ? ' map-dig-md' : ''}${stagger ? ' map-dig-dense' : ''}`,
+      class: `map-hit map-dig-child map-dig-${kind}${child.hasMd ? ' map-dig-md' : ''}${stagger ? ' map-dig-dense' : ''}${motionClass}`,
       tabindex: '0',
       role: 'button',
-      'aria-label': child.name,
+      'aria-label': `${child.name}${motionAriaSuffix(motion)}`,
       transform: `translate(${(ox + x).toFixed(2)},${(oy + y).toFixed(2)})`,
       'data-rel-path': relPath,
       'data-name': child.name,
       'data-has-md': child.hasMd ? '1' : '0',
       'data-is-dir': child.isDir === false ? '0' : '1',
+      'data-motion': (motion && motion.stroke && motion.stroke !== 'none') ? motion.stroke : null,
     });
     if (kind === 'folder') {
       group.appendChild(el('rect', { x: -26, y: -18, width: 52, height: 36, rx: 4, class: 'map-dig-plate' }));
@@ -363,7 +373,7 @@ const BRANCH_ITEM_RADIUS = 130;
 const BRANCH_ITEM_MAX_SHOWN = 8;
 const BRANCH_ANGLE_SPAN = Math.PI / 2.4; // items fan within this arc of the chip
 
-export function paintProjectFocus(world, { project, branches = [], expandedBranch = null, selectedItem = null, flashBranches = [], tickBranches = [] } = {}) {
+export function paintProjectFocus(world, { project, branches = [], expandedBranch = null, selectedItem = null, flashBranches = [], tickBranches = [], motion = null } = {}) {
   const layer = world.querySelector('#project-focus-layer');
   if (!layer) return;
   layer.replaceChildren();
@@ -376,7 +386,14 @@ export function paintProjectFocus(world, { project, branches = [], expandedBranc
   // transition it declares actually runs to the base (opacity: 1) state.
   const enterNodes = [];
 
-  const center = el('g', { id: 'project-focus-node', class: 'map-hit map-project-node', 'data-hit-layer': 'hub', 'data-rel-path': project.relPath });
+  const motionClass = motionClassName(motion);
+  const center = el('g', {
+    id: 'project-focus-node',
+    class: `map-hit map-project-node${motionClass}`,
+    'data-hit-layer': 'hub',
+    'data-rel-path': project.relPath,
+    'data-motion': (motion && motion.stroke && motion.stroke !== 'none') ? motion.stroke : null,
+  });
   center.appendChild(el('circle', { cx: 0, cy: 0, r: 50, class: 'map-hub-disc' }));
   center.appendChild(el('text', { x: 0, y: 6, class: 'map-hub-label', 'text-anchor': 'middle' }, truncateLotLabel(project.name || project.relPath, 18)));
   layer.appendChild(center);
