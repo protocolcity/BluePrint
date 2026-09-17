@@ -508,6 +508,37 @@ class DisposableDeskThroughputSmokeTests(unittest.TestCase):
         self.assertEqual(sum(payload['throughput']['hours']), 1)
         self.assertEqual([order['id'] for order in payload['orders']], ['pc-1'])
 
+    def test_operations_html_hosts_portfolio_sparks_on_projects_only(self) -> None:
+        status, body, _ = _get(self.port, '/')
+        text = body.decode()
+        self.assertEqual(status, 200)
+        self.assertIn('id="projects-compare"', text)
+        self.assertIn('id="projects-compare-summary"', text)
+        projects = text.split('id="projects-view"', 1)[1].split('id="agents-view"', 1)[0]
+        work = text.split('id="work-view"', 1)[1].split('id="projects-view"', 1)[0]
+        self.assertIn('id="projects-compare"', projects)
+        self.assertNotIn('id="projects-compare"', work)
+        self.assertIn('id="overview-throughput"', text)
+        self.assertIn('id="agents-floor-spark"', text)
+        self.assertIn('id="timeline-activity-chart"', text)
+        self.assertIn('id="work-band-act-now"', text)
+
+    def test_operations_api_returns_portfolio_pulse(self) -> None:
+        status, body, ctype = _get(self.port, '/api/operations')
+        self.assertEqual(status, 200)
+        self.assertIn('application/json', ctype)
+        payload = json.loads(body)
+        portfolio = payload['portfolio']
+        self.assertEqual(portfolio['state'], 'healthy')
+        row = next(item for item in portfolio['projects'] if item['id'] == 'product')
+        self.assertEqual(row['pulse'], 'hot')
+        self.assertEqual(row['href'], '/work?project=product')
+        self.assertEqual(row['attention_href'], '/work?project=product&attention=any')
+        self.assertEqual(row['map_href'], '/map?project=product')
+        self.assertGreaterEqual(row['motion'], 1)
+        self.assertGreaterEqual(sum(row['hours']), 1)
+        self.assertNotIn('/delivery', row['href'])
+
 
 class DisposableDeskAgentsSparkSmokeTests(unittest.TestCase):
     """Issue #140: serve a throwaway binder and read seat sparks through HTTP."""
