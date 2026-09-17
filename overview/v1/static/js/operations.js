@@ -1303,6 +1303,10 @@ function scopeSeatLoad(chip) {
 function filterSeatLoad(seatId) {
   scopeSeatLoad({id:seatId, name:seatDisplayName(seatId), kind:'seat'});
 }
+function flowTickCount(count, peak) {
+  if(!count) return 0;
+  return Math.max(1, Math.min(12, Math.round((count / Math.max(peak, 1)) * 12)));
+}
 function paintWorkFlow() {
   const host=$('work-flow');
   if(!host) return;
@@ -1316,6 +1320,29 @@ function paintWorkFlow() {
   const chips=(data.chips && data.chips.length) ? data.chips : seatLoadChips(seats);
   const flow=data.flow || emptyFlowCounts();
   const stages=flowTotal(flow);
+  const peak=FLOW_STAGES.reduce((n,stage)=>Math.max(n, flow[stage] || 0),0);
+  if(stages) {
+    const strip=el('div',undefined,'bp-work-flow-strip');
+    strip.setAttribute('aria-label','Flow');
+    FLOW_STAGES.forEach((stage,index)=>{
+      if(index) strip.append(el('span',' → ','bp-work-flow-arrow'));
+      const count=flow[stage] || 0;
+      const item=el('span',undefined,'bp-work-flow-stage');
+      item.dataset.stage=stage;
+      item.append(el('span',stage,'bp-work-flow-label'));
+      item.append(document.createTextNode(' '));
+      item.append(el('span',String(count),'bp-work-flow-count'));
+      const ticks=flowTickCount(count, peak);
+      if(ticks) {
+        const spark=el('span',undefined,'bp-work-flow-ticks');
+        spark.setAttribute('aria-hidden','true');
+        for(let i=0;i<ticks;i+=1) spark.append(el('span',undefined,'bp-work-flow-tick'));
+        item.append(spark);
+      }
+      strip.append(item);
+    });
+    host.append(strip);
+  }
   if(seats.length) {
     const list=el('div',undefined,'bp-work-seat-load');
     list.setAttribute('aria-label','Seat load');
@@ -1332,17 +1359,6 @@ function paintWorkFlow() {
       list.append(button);
     }
     host.append(list);
-  }
-  if(stages) {
-    const strip=el('div',undefined,'bp-work-flow-strip');
-    strip.setAttribute('aria-label','Flow');
-    FLOW_STAGES.forEach((stage,index)=>{
-      if(index) strip.append(el('span',' → ','bp-work-flow-arrow'));
-      const item=el('span',stage+' '+(flow[stage] || 0),'bp-work-flow-stage');
-      item.dataset.stage=stage;
-      strip.append(item);
-    });
-    host.append(strip);
   }
   if(!seats.length && !stages) {
     host.append(document.createTextNode('No seat drain right now'));

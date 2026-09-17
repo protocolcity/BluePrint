@@ -664,6 +664,8 @@ class DisposableDeskWorkFlowSmokeTests(unittest.TestCase):
         text = body.decode()
         self.assertEqual(status, 200)
         self.assertIn('id="work-flow"', text)
+        self.assertLess(text.index('id="work-flow"'), text.index('id="filters"'))
+        self.assertLess(text.index('id="filters"'), text.index('id="work-band-act-now"'))
         self.assertLess(text.index('id="work-flow"'), text.index('id="work-band-act-now"'))
         self.assertIn('id="work-band-act-now"', text)
         self.assertIn('id="work-band-my-todos"', text)
