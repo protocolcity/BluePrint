@@ -22,6 +22,7 @@ class Element {
     this.type = '';
     this.href = '';
     this.value = '';
+    this.style = {};
     this.ownerDocument = {createElement: tag => new Element(tag)};
     this.classList = {
       add: name => { this.className = `${this.className} ${name}`.trim(); },
@@ -60,6 +61,9 @@ class Element {
     const walk = node => {
       if (sel === 'details' && node.tagName === 'DETAILS') return node;
       if (sel === 'summary' && node.tagName === 'SUMMARY') return node;
+      if (sel === '.bp-projects-spark' && node.className && node.className.includes('bp-projects-spark')) return node;
+      if (sel === '.bp-projects-pulse' && node.className && node.className.includes('bp-projects-pulse')) return node;
+      if (sel === '.bp-projects-stack' && node.className && node.className.includes('bp-projects-stack')) return node;
       if (sel.startsWith('a[href') && node.tagName === 'A') return node;
       for (const child of node.children || []) {
         const hit = walk(child);
@@ -73,6 +77,10 @@ class Element {
     const out = [];
     const walk = node => {
       if (sel === '.bp-projects-row' && node.className && node.className.includes('bp-projects-row') && !node.className.includes('bp-projects-head')) out.push(node);
+      if (sel === '.bp-projects-compare-row' && node.className && node.className.includes('bp-projects-compare-row')) out.push(node);
+      if (sel === '.bp-projects-spark' && node.className && node.className.includes('bp-projects-spark')) out.push(node);
+      if (sel === '.bp-projects-pulse' && node.className && node.className.includes('bp-projects-pulse')) out.push(node);
+      if (sel === '.bp-projects-stack' && node.className && node.className.includes('bp-projects-stack')) out.push(node);
       if (sel === 'details' && node.tagName === 'DETAILS') out.push(node);
       if (sel === 'a' && node.tagName === 'A') out.push(node);
       for (const child of node.children || []) walk(child);
@@ -126,7 +134,7 @@ function reconcileList(container, items, keyFn, buildRow, {emptyText = ''} = {})
 
 const IDS = [
   'page-title', 'page-description', 'eyebrow', 'freshness', 'source-warning', 'footer-status',
-  'projects-view', 'projects-summary', 'projects-filter', 'projects-list', 'projects-filters',
+  'projects-view', 'projects-summary', 'projects-compare', 'projects-compare-summary', 'projects-filter', 'projects-list', 'projects-filters',
   'refresh', 'desk-scope', 'desk-name', 'scope-path', 'restore-muted', 'refresh-preference',
   'motion-preference', 'preferences', 'preference-status', 'search', 'project-filter',
   'assignment-filter', 'status-filter', 'gate-filter', 'kind-filter', 'attention-filter',
@@ -206,6 +214,43 @@ const fixture = {
   ],
   truncated: false,
   observed_at: new Date().toISOString(),
+  portfolio: {
+    state: 'healthy',
+    peak_open: 31,
+    hot: 4,
+    quiet: 2,
+    blocked: 0,
+    projects: [
+      {id: 'blueprint', name: 'BluePrint', open: 31, attention: 4, deferred: 9,
+        hours: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2], motion: 3, pulse: 'hot',
+        href: '/work?project=blueprint', attention_href: '/work?project=blueprint&attention=any',
+        map_href: '/map?project=blueprint', state: 'healthy'},
+      {id: 'workforce', name: 'WorkForce', open: 6, attention: 1, deferred: 2,
+        hours: Array(24).fill(0), motion: 0, pulse: 'hot',
+        href: '/work?project=workforce', attention_href: '/work?project=workforce&attention=any',
+        map_href: '/map?project=workforce', state: 'empty'},
+      {id: 'worklane', name: 'WorkLane', open: 3, attention: 0, deferred: 0,
+        hours: Array(24).fill(0), motion: 0, pulse: 'hot',
+        href: '/work?project=worklane', attention_href: '/work?project=worklane&attention=any',
+        map_href: '/map?project=worklane', state: 'empty'},
+      {id: 'comms', name: 'Comms', open: 7, attention: 5, deferred: 1,
+        hours: Array(24).fill(0), motion: 0, pulse: 'hot',
+        href: '/work?project=comms', attention_href: '/work?project=comms&attention=any',
+        map_href: '/map?project=comms', state: 'empty'},
+      {id: 'tradeos', name: 'tradeOS', open: 0, attention: 0, deferred: 0,
+        hours: Array(24).fill(0), motion: 0, pulse: 'unavailable',
+        href: '/work?project=tradeos', attention_href: '/work?project=tradeos&attention=any',
+        map_href: '/map?project=tradeos', state: 'unavailable'},
+      {id: 'gridfinity', name: 'Gridfinity', open: 0, attention: 0, deferred: 0,
+        hours: Array(24).fill(0), motion: 0, pulse: 'quiet',
+        href: '/work?project=gridfinity', attention_href: '/work?project=gridfinity&attention=any',
+        map_href: '/map?project=gridfinity', state: 'empty'},
+      {id: 'recipes', name: 'Recipes', open: 0, attention: 0, deferred: 0,
+        hours: Array(24).fill(0), motion: 0, pulse: 'quiet',
+        href: '/work?project=recipes', attention_href: '/work?project=recipes&attention=any',
+        map_href: '/map?project=recipes', state: 'empty'},
+    ],
+  },
 };
 
 const context = {
@@ -325,6 +370,26 @@ assert.ok(domText(commsRow).includes('you · live'), 'human live claim must stil
 
 assert.ok(domText(commsRow).includes('partial (limited to 2,000)'), 'partial scan-derived counts must carry the limit marker');
 
+const spark = blueprintRow.querySelector('.bp-projects-spark');
+assert.ok(spark, 'active project row must host a per-card spark');
+assert.ok(domText(spark).includes('hot'), 'hot store must read as hot');
+assert.ok(blueprintRow.querySelector('.bp-projects-stack'), 'open store must paint a stacked open/For You bar');
+assert.ok(!domText(unavailableRow.querySelector('.bp-projects-spark') || unavailableRow).includes('0 open'), 'unavailable spark must not paint zero as open');
+assert.ok(domText(unavailableRow.querySelector('.bp-projects-spark') || unavailableRow).includes('Store unavailable'), 'unavailable spark stays honest');
+
+const compare = get('projects-compare');
+assert.equal(compare.hidden, false, 'workspace compare bars must show for active stores');
+const compareRows = compare.querySelectorAll('.bp-projects-compare-row');
+assert.ok(compareRows.length >= 4, 'compare bars must list non-quiet stores');
+assert.equal(compareRows[0] && compareRows[0].dataset.project, 'blueprint', 'compare bars must lead with the hottest store');
+assert.ok(!compareRows.some(row => (row.dataset && row.dataset.project) === 'gridfinity'), 'quiet stores stay out of compare bars');
+const compareText = domText(compare);
+assert.ok(compareText.includes('open'), 'compare bars must door open work');
+assert.ok(compareText.includes('For You'), 'compare bars must door For You');
+assert.ok(compareText.includes('Map'), 'compare bars must door Map');
+assert.ok(!compareText.includes('Delivery'), 'compare bars must not lead with git evidence');
+assert.match(get('projects-compare-summary').textContent, /hot/);
+
 console.log(JSON.stringify({
   active_row_count: activeRows.length,
   quiet_summary: collapsed.querySelector('summary').textContent,
@@ -337,4 +402,8 @@ console.log(JSON.stringify({
   human_live_claim: domText(commsRow).includes('you · live'),
   partial_counts_marked: domText(commsRow).includes('partial (limited to 2,000)'),
   breakdown_present: blueprintRow.querySelectorAll('details').length >= 1,
+  spark_hot: domText(spark).includes('hot'),
+  compare_rows: compareRows.length,
+  compare_has_work_door: compareText.includes('open'),
+  compare_skips_quiet: !compareRows.some(row => (row.dataset && row.dataset.project) === 'gridfinity'),
 }));

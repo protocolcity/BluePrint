@@ -515,6 +515,8 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(result['work_flow']['state'], 'unavailable')
         self.assertEqual(result['work_flow']['seats'], [])
         self.assertEqual(result['work_flow']['total'], 0)
+        self.assertEqual(result['portfolio']['state'], 'unavailable')
+        self.assertEqual(result['portfolio']['projects'], [])
 
     def test_placeholder_job_is_not_presented_as_working(self):
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
@@ -924,6 +926,27 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(by_id['lili']['claimed'], 1)
         self.assertEqual({order['board_band'] for order in result['orders']}, {'seat_backlog'})
         self.assertEqual({order['row_face'] for order in result['orders']}, {'none'})
+
+    def test_disposable_desk_builds_portfolio_pulse(self):
+        self.seed()
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT)')
+            conn.execute("INSERT INTO task_events VALUES(1,1,'status_change','in_progress','seat',?)", (recent,))
+        result = operations_snapshot(self.root)
+        portfolio = result['portfolio']
+        self.assertEqual(portfolio['state'], 'healthy')
+        self.assertGreaterEqual(portfolio['peak_open'], 1)
+        row = next(item for item in portfolio['projects'] if item['id'] == 'product')
+        self.assertEqual(row['pulse'], 'hot')
+        self.assertEqual(row['href'], '/work?project=product')
+        self.assertEqual(row['attention_href'], '/work?project=product&attention=any')
+        self.assertEqual(row['map_href'], '/map?project=product')
+        self.assertEqual(row['motion'], 1)
+        self.assertEqual(sum(row['hours']), 1)
+        self.assertNotIn('/delivery', row['href'])
+        self.assertNotIn('/agents', row['href'])
 
 class TimestampAndParkMarkerTests(unittest.TestCase):
     """pc-1495 second-pass findings: "Parked by" must count as a park marker and

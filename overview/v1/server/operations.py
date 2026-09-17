@@ -21,6 +21,7 @@ from .agents_floor import (
 )
 from .calendar_doors import build_calendar_doors, empty_calendar_doors
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
+from .portfolio import build_portfolio, empty_portfolio, store_motion_ticks
 from .throughput import build_throughput, empty_throughput, store_close_ticks
 from .work_board import annotate_order, build_work_flow, empty_work_flow
 
@@ -1237,11 +1238,13 @@ def operations_snapshot(binder):
               'agents_floor': empty_agents_floor(),
               'throughput': empty_throughput(),
               'work_flow': empty_work_flow(),
+              'portfolio': empty_portfolio(),
               'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
         result['throughput'] = empty_throughput('unavailable')
         result['work_flow'] = empty_work_flow('unavailable')
+        result['portfolio'] = empty_portfolio('unavailable')
         result['sources'].append({
             'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.',
             'reachable': False, 'usable': False, 'next_step': 'Start BluePrint with a workspace selected.',
@@ -1269,6 +1272,7 @@ def operations_snapshot(binder):
     status_by_id = {}
     store_available = {}
     close_ticks = []
+    motion_by_id = {}
     stores_read = False
     for path in paths:
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
@@ -1371,11 +1375,16 @@ def operations_snapshot(binder):
                     close_ticks.extend(store_close_ticks(conn, now))
                 except sqlite3.Error:
                     pass
+                try:
+                    motion_by_id[path.stem] = store_motion_ticks(conn, now)
+                except sqlite3.Error:
+                    motion_by_id[path.stem] = []
                 stores_read = True
             store_available[path.stem] = True
         except (OSError, sqlite3.Error):
             summary['state'] = 'unavailable'
             store_available[path.stem] = False
+            motion_by_id[path.stem] = None
         result['projects'].append(summary)
     found = {p.stem for p in paths}
     for slug, project in registry.items():
@@ -1384,6 +1393,7 @@ def operations_snapshot(binder):
                                        'running': 0, 'deferred': 0, 'parked': 0, 'state': 'unavailable',
                                        'partial': False, 'last_change': None})
             store_available[slug] = False
+            motion_by_id[slug] = None
     unavailable_slugs = {slug for slug, ok in store_available.items() if not ok}
     prefix_to_slug = {proj['prefix']: slug for slug, proj in registry.items() if proj.get('prefix')}
     open_ids = {o['id'] for o in result['orders']}
@@ -1582,4 +1592,14 @@ def operations_snapshot(binder):
         readable=stores_read or not paths,
         agents=result.get('agents') or [],
     )
+    stalled_by_id = {}
+    for order in result.get('orders') or []:
+        project_id = order.get('project')
+        if not project_id:
+            continue
+        if order.get('row_status') == 'Stalled' or order.get('blocked_on') == 'open':
+            stalled_by_id[project_id] = stalled_by_id.get(project_id, 0) + 1
+    result['portfolio'] = build_portfolio(
+        result.get('projects') or [], motion_by_id, now,
+        stalled_by_id=stalled_by_id)
     return result
