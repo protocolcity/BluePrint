@@ -1991,6 +1991,7 @@ function agents() {
   renderCoverage();
   syncAgentsFace();
   paintAgentsCanvas();
+  maybeStartAgentsTour();
 }
 function emptyAgentsCanvas() {
   return {nodes:[], edges:[], width:0, height:0, empty:true, empty_reason:'No seats or jobs on this roster.'};
@@ -2162,7 +2163,7 @@ function paintAgentsCanvasEdges(svg, canvas) {
   }
 }
 function paintAgentsCanvas() {
-  const host=$('agents-canvas'), empty=$('agents-canvas-empty');
+  const host=$('agents-canvas'), empty=$('agents-canvas-empty'), teach=$('agents-canvas-empty-teach');
   if(!host) return;
   if(agentsView!=='canvas') return;
   const canvas=agentsCanvasFromSnapshot();
@@ -2171,6 +2172,7 @@ function paintAgentsCanvas() {
     empty.hidden=!canvas.empty;
     empty.textContent=canvas.empty ? (canvas.empty_reason || 'No seats or jobs on this roster.') : '';
   }
+  if(teach) teach.hidden=!canvas.empty;
   host.hidden=!!canvas.empty;
   if(canvas.empty) return;
   const scene=el('div',undefined,'bp-agents-canvas-scene');
@@ -2185,6 +2187,112 @@ function paintAgentsCanvas() {
   for(const node of canvas.nodes || []) layer.append(paintAgentsCanvasNode(node));
   scene.append(svg, layer);
   host.append(scene);
+}
+const AGENTS_TOUR_KEY='bp-agents-canvas-tour';
+const AGENTS_TOUR_STEPS=[
+  {id:'strip', title:'Working / Idle strip', copy:'Working, Idle, and Error count this floor. Canvas reuses the same strip — it is not a second roster.'},
+  {id:'node', title:'A seat or job', copy:'A node is a seat or a job. Seats may hold a claim. Jobs never claim.'},
+  {id:'door', title:'A door', copy:'A door leaves the canvas: Work for a claim, Timeline for a last run.'},
+];
+let agentsTourStep=0, agentsTourActive=false, agentsTourSeenFlag=false, agentsTourForceConsumed=false, agentsTourFocus=null;
+try { agentsTourSeenFlag=localStorage.getItem(AGENTS_TOUR_KEY)==='seen'; } catch(error) { /* Unavailable storage uses the in-memory flag. */ }
+function agentsTourIsSeen() { return agentsTourSeenFlag; }
+function markAgentsTourSeen() {
+  agentsTourSeenFlag=true;
+  try { localStorage.setItem(AGENTS_TOUR_KEY,'seen'); } catch(error) { /* In-memory flag still hides the tour this session. */ }
+}
+function agentsTourForce() {
+  if(agentsTourForceConsumed) return false;
+  if(page!=='agents') return false;
+  if(new URLSearchParams(location.search).get('tour')!=='1') return false;
+  agentsTourForceConsumed=true;
+  return true;
+}
+function setAgentsTourFocus(node) {
+  if(agentsTourFocus) {
+    if(agentsTourFocus.removeAttribute) agentsTourFocus.removeAttribute('data-tour-focus');
+    if(agentsTourFocus.dataset) agentsTourFocus.dataset.tourFocus='';
+  }
+  agentsTourFocus=node || null;
+  if(!agentsTourFocus) return;
+  agentsTourFocus.setAttribute('data-tour-focus','true');
+  if(agentsTourFocus.dataset) agentsTourFocus.dataset.tourFocus='true';
+}
+function tourNodeTarget() {
+  const host=$('agents-canvas');
+  const nodes=host ? host.querySelectorAll('.bp-agents-canvas-node') : [];
+  for(const node of nodes) { if(node.dataset.kind==='seat' && node.dataset.bucket==='working') return node; }
+  for(const node of nodes) { if(node.dataset.kind==='seat' || node.dataset.kind==='job') return node; }
+  return $('agents-canvas-empty-teach') || $('agents-canvas-empty');
+}
+function tourDoorTarget() {
+  const host=$('agents-canvas');
+  const nodes=host ? host.querySelectorAll('.bp-agents-canvas-node') : [];
+  for(const kind of ['last_run','work','fire']) {
+    for(const node of nodes) { if(node.dataset.kind===kind) return node; }
+  }
+  if(host) {
+    const chip=host.querySelector('.bp-agents-canvas-claim') || host.querySelector('.bp-agents-canvas-chip');
+    if(chip) return chip;
+  }
+  return $('agents-canvas-empty-teach') || $('agents-canvas-empty');
+}
+function tourStepTarget(stepId) {
+  if(stepId==='strip') return $('agents-pulse');
+  if(stepId==='node') return tourNodeTarget();
+  return tourDoorTarget();
+}
+function paintAgentsTour() {
+  const host=$('agents-canvas-tour');
+  if(!host) return;
+  if(page!=='agents' || agentsView!=='canvas' || !agentsTourActive) {
+    host.hidden=true;
+    host.dataset.step='';
+    setAgentsTourFocus(null);
+    return;
+  }
+  const step=AGENTS_TOUR_STEPS[agentsTourStep] || AGENTS_TOUR_STEPS[0];
+  host.hidden=false;
+  host.dataset.step=step.id;
+  const kicker=$('agents-canvas-tour-kicker');
+  if(kicker) kicker.textContent=`Acquaintance · ${agentsTourStep+1} of ${AGENTS_TOUR_STEPS.length}`;
+  const copy=$('agents-canvas-tour-copy');
+  if(copy) copy.textContent=step.copy;
+  const next=$('agents-canvas-tour-next');
+  if(next) next.textContent=agentsTourStep>=AGENTS_TOUR_STEPS.length-1 ? 'Done' : 'Next';
+  const back=$('agents-canvas-tour-back');
+  if(back) back.hidden=agentsTourStep===0;
+  setAgentsTourFocus(tourStepTarget(step.id));
+}
+function startAgentsTour() {
+  agentsTourActive=true;
+  agentsTourStep=0;
+  paintAgentsTour();
+}
+function advanceAgentsTour() {
+  if(agentsTourStep>=AGENTS_TOUR_STEPS.length-1) { endAgentsTour(true); return; }
+  agentsTourStep+=1;
+  paintAgentsTour();
+}
+function retreatAgentsTour() {
+  if(agentsTourStep<=0) return;
+  agentsTourStep-=1;
+  paintAgentsTour();
+}
+function endAgentsTour(seen) {
+  agentsTourActive=false;
+  if(seen) markAgentsTourSeen();
+  paintAgentsTour();
+}
+function maybeStartAgentsTour() {
+  if(page!=='agents' || agentsView!=='canvas') {
+    if(agentsTourActive) agentsTourActive=false;
+    paintAgentsTour();
+    return;
+  }
+  if(agentsTourActive) { paintAgentsTour(); return; }
+  if(agentsTourForce() || !agentsTourIsSeen()) startAgentsTour();
+  else paintAgentsTour();
 }
 const SOURCE_LABEL = {worklane: 'WorkLane', workforce: 'WorkForce', supervisor: 'Supervisor', github: 'GitHub'};
 function timelineActionLabel(row) {
@@ -3221,10 +3329,18 @@ if ($('delivery-filters')) {
 }
 if($('agents-face-floor')) $('agents-face-floor').addEventListener('click',()=>setAgentsView('floor'));
 if($('agents-face-canvas')) $('agents-face-canvas').addEventListener('click',()=>setAgentsView('canvas'));
+if($('agents-canvas-tour-start')) $('agents-canvas-tour-start').addEventListener('click',()=>startAgentsTour());
+if($('agents-canvas-tour-next')) $('agents-canvas-tour-next').addEventListener('click',()=>advanceAgentsTour());
+if($('agents-canvas-tour-back')) $('agents-canvas-tour-back').addEventListener('click',()=>retreatAgentsTour());
+if($('agents-canvas-tour-skip')) $('agents-canvas-tour-skip').addEventListener('click',()=>endAgentsTour(true));
 syncAgentsFace();
 $('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false, {force: true});});
 document.addEventListener('keydown',event=>{
   if(event.key!=='Escape') return;
+  if(page==='agents' && agentsTourActive) {
+    endAgentsTour(true);
+    return;
+  }
   if(page==='agents' && selectedAgentId) {
     const closedId=selectedAgentId;
     selectAgent(closedId);
