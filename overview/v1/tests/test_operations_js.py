@@ -1883,5 +1883,96 @@ class ProjectsPortfolioSparkTests(unittest.TestCase):
         self.assertNotIn('POS', _HTML)
 
 
+class DeliveryCiSparkTests(unittest.TestCase):
+    """Issue #152: CI pass/fail spark (optional merge cadence) on Delivery."""
+
+    def test_spark_host_sits_on_delivery_under_status_only(self):
+        delivery = _HTML.split('id="delivery-view"')[1].split('id="timeline-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        projects = _HTML.split('id="projects-view"')[1].split('id="agents-view"')[0]
+        timeline = _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0]
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        self.assertIn('id="delivery-ci-spark"', delivery)
+        self.assertLess(delivery.index('id="remote-status"'), delivery.index('id="delivery-ci-spark"'))
+        self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="delivery-filters"'))
+        self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="remote-repositories"'))
+        self.assertEqual(_HTML.count('id="delivery-ci-spark"'), 1)
+        self.assertNotIn('id="delivery-ci-spark"', overview)
+        self.assertNotIn('id="delivery-ci-spark"', work)
+        self.assertNotIn('id="delivery-ci-spark"', agents)
+        self.assertNotIn('id="delivery-ci-spark"', projects)
+        self.assertNotIn('id="delivery-ci-spark"', timeline)
+        self.assertNotIn('id="delivery-ci-spark"', calendar)
+
+    def test_paint_uses_pass_fail_and_repo_pr_doors(self):
+        self.assertIn('function paintDeliverySpark(', _SRC)
+        self.assertIn('function deliverySparkFromRemote(', _SRC)
+        paint = _SRC.split('function paintDeliverySpark(')[1].split('function paintDelivery(')[0]
+        self.assertIn('CI not configured', paint)
+        self.assertIn('CI unavailable', paint)
+        self.assertIn('No CI runs in the ', paint)
+        self.assertIn('checks · ', paint)
+        self.assertIn('deliverySparkHref(\'workflow\')', paint.replace(' ', ''))
+        self.assertIn('deliverySparkHref(\'pull_request\')', paint.replace(' ', ''))
+        self.assertIn("target='_blank'", paint)
+        self.assertIn('Open failing check', paint)
+        self.assertIn('Open repository', paint)
+        self.assertNotIn('n8n', paint.lower())
+        self.assertNotIn('histogram', paint.lower())
+        self.assertNotIn('Needs you', paint)
+        self.assertNotIn('Act now', paint)
+        self.assertNotIn('seat', paint.lower())
+        delivery = _SRC.split('function paintDelivery(')[1].split('function remoteStatusText')[0]
+        self.assertIn('paintDeliverySpark(data)', delivery)
+
+    def test_does_not_regress_other_map_a_surfaces(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-delivery-ci-spark', css)
+        self.assertIn('.bp-delivery-ci-spark-line', css)
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="agents-floor-spark"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="projects-compare"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+        self.assertIn('id="work-band-act-now"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="work-calendar-doors"', _HTML)
+        self.assertIn('function paintOverviewThroughput()', _SRC)
+        self.assertIn('function paintAgentsFloorSpark()', _SRC)
+        self.assertIn('function paintProjectsCompare()', _SRC)
+        self.assertIn('function paintWorkFlow()', _SRC)
+        self.assertIn('function paintTimelineActivity()', _SRC)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('POS', _HTML)
+
+    def test_delivery_spark_harness(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping delivery spark harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'delivery_spark_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'delivery spark harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertIn('8 checks · last 14 days', result['healthy'])
+        self.assertIn('2 fails', result['healthy'])
+        self.assertIn('3 merges', result['healthy'])
+        self.assertEqual(result['healthy_href'], '/delivery?type=workflow')
+        self.assertEqual(result['merge_href'], '/delivery?type=pull_request')
+        self.assertEqual(result['out_href'], 'https://github.com/org/repo/actions/runs/9')
+        self.assertEqual(result['out_label'], 'Open failing check')
+        self.assertTrue(result['has_glyphs'])
+        self.assertEqual(result['empty'], 'No CI runs in the last 14 days')
+        self.assertEqual(result['unavailable'], 'CI unavailable')
+        self.assertEqual(result['not_configured'], 'CI not configured')
+        self.assertIn('No CI runs in the last 14 days', result['merges_only'])
+        self.assertIn('1 merge', result['merges_only'])
+
+
 if __name__ == '__main__':
     unittest.main()
