@@ -1490,5 +1490,75 @@ class CalendarDoorsTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
 
 
+class AgentsLiveFloorTests(unittest.TestCase):
+    """pc-1513: live floor pulse on Agents, not a dead Off wall."""
+
+    def test_pulse_strip_and_quiet_disclosure_are_on_agents_only(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        self.assertIn('id="agents-pulse"', agents)
+        self.assertIn('id="agents-quiet"', agents)
+        self.assertIn('id="agents-quiet-list"', agents)
+        self.assertIn('id="agents-floor-empty"', agents)
+        self.assertIn('id="agents-next-fire"', agents)
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertNotIn('id="agents-pulse"', work)
+
+    def test_agents_paints_pulse_then_reuses_calendar_next_fire(self):
+        agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]
+        self.assertIn('paintAgentsPulse()', agents)
+        self.assertIn('paintAgentsNextFire()', agents)
+        self.assertLess(agents.index('paintAgentsPulse()'), agents.index('paintAgentsNextFire()'))
+        self.assertIn("floorBucket(a)!=='quiet'", agents.replace(' ', ''))
+        self.assertIn('Quiet ·', agents)
+
+    def test_pulse_counts_come_from_state_not_roster_length(self):
+        fn = _SRC.split('function floorBucket(agent)')[1].split('function buildAgentsFloor')[0]
+        self.assertIn("state==='working'", fn.replace(' ', ''))
+        self.assertIn("state==='last_run_failed'", fn.replace(' ', ''))
+        self.assertIn("state==='idle'", fn.replace(' ', ''))
+        self.assertIn("return 'quiet'", fn)
+        self.assertNotIn('agents.length', _SRC.split('function buildAgentsFloor')[1].split('function agentsFloorFromSnapshot')[0])
+
+    def test_off_is_not_painted_as_idle_and_failed_stays_error(self):
+        self.assertIn("['Error',floor.error,'last_run_failed']", _SRC.replace(' ', ''))
+        self.assertIn("['Idle',floor.idle,'idle']", _SRC.replace(' ', ''))
+        remainder = _SRC.split('function paintAgentsPulse()')[1].split('function paintAgentsNextFire()')[0]
+        self.assertIn('stale shift', remainder)
+        self.assertIn('off or unknown', remainder)
+        self.assertIn('No seats working right now.', remainder)
+
+    def test_working_rows_keep_claim_and_live_cue(self):
+        row = _SRC.split('function agentRow(agent)')[1].split('function jobRow(agent)')[0]
+        self.assertIn('heldLink(agent)', row)
+        self.assertIn('bp-shift-cue', row)
+        self.assertIn("agent.state==='working'", row.replace(' ', ''))
+        self.assertIn('agentRowClass(agent)', row)
+
+    def test_ten_pages_and_no_invented_nav(self):
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('EXECUTIONS', _HTML)
+        self.assertNotIn('n8n', _SRC.lower())
+        self.assertNotIn('histogram', _SRC.lower())
+
+    def test_live_floor_harness(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping agents floor harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'agents_floor_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'agents floor harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['pulse'], ['1Working', '2Idle', '1Error'])
+        self.assertEqual(result['live_seats'], ['working-seat'])
+        self.assertEqual(result['quiet_seats'], ['off-seat'])
+        self.assertTrue(result['working_has_claim'])
+        self.assertTrue(result['working_has_cue'])
+        self.assertEqual(result['empty_when_quiet'], 'No seats working right now.')
+        self.assertIn('Next fire ·', result['next_fire'])
+
+
 if __name__ == '__main__':
     unittest.main()

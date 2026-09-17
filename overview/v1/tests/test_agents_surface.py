@@ -117,6 +117,11 @@ class AgentsSurfaceTests(unittest.TestCase):
         self.assertEqual(groups['seat-idle'], 'seat')
         self.assertEqual(groups['seat-working'], 'seat')
         self.assertEqual(groups['job-one'], 'job')
+        floor = result['agents_floor']
+        self.assertEqual(floor['working'], 1)
+        self.assertEqual(floor['idle'], 2)
+        self.assertEqual(floor['error'], 0)
+        self.assertEqual(floor['quiet'], 0)
 
     def test_rows_ordered_by_state_then_name(self):
         self._daemon(fresh=True)
