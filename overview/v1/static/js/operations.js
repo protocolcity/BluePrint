@@ -11,6 +11,7 @@ const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':
 const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
+let agentsView = 'floor';
 const size = 25;
 let muted={};try {muted=JSON.parse(localStorage.getItem('bp-attention-mutes') || '{}');}catch(error){}
 function muteKey(order){return JSON.stringify([snapshot?.workspace?.path,order.project,order.id]);}
@@ -26,6 +27,7 @@ try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,1
 $('refresh-preference').value=String(interval);$('motion-preference').value=motion;
 document.body.classList.toggle('bp-reduce-motion',motion==='off');
 const query = new URLSearchParams(location.search);
+if(page==='agents' && query.get('view')==='canvas') agentsView='canvas';
 timelineProject = query.get('project') || '';
 timelineSource = query.get('source') || '';
 timelineActor = query.get('actor') || '';
@@ -1983,6 +1985,183 @@ function agents() {
   agentDetail();
   supervisorPanel();
   renderCoverage();
+  syncAgentsFace();
+  paintAgentsCanvas();
+}
+function emptyAgentsCanvas() {
+  return {nodes:[], edges:[], width:0, height:0, empty:true, empty_reason:'No seats or jobs on this roster.'};
+}
+function futureFireAt(value, now) {
+  const ms=Date.parse(String(value || ''));
+  if(Number.isNaN(ms) || ms<=now) return null;
+  return ms;
+}
+function buildAgentsCanvas(agents, now) {
+  const stamp=now || Date.now();
+  const seats=[], jobs=[];
+  for(const agent of agents || []) {
+    if(!agent || !agent.id) continue;
+    if(agent.group==='seat') seats.push(agent);
+    else if(agent.group==='job') jobs.push(agent);
+  }
+  if(!seats.length && !jobs.length) return emptyAgentsCanvas();
+  const nodes=[], edges=[];
+  const nodeW=188, nodeH=58, gapY=16, padX=24, padY=24, colActor=24, colTarget=268, stackGap=10;
+  let y=padY;
+  const bands=[seats, jobs];
+  bands.forEach((rows, index)=>{
+    if(index && rows.length && nodes.length) y+=12;
+    for(const agent of rows) {
+      const actor={
+        id:agent.id, kind:agent.group, label:agent.name || agent.id,
+        badge:agent.badge || agent.state, bucket:floorBucket(agent), group:agent.group,
+        x:colActor, y, w:nodeW, h:nodeH, door:agent.group==='seat'?'person':'',
+      };
+      if(agent.group==='seat') actor.work_href='/work?'+new URLSearchParams({assignment:'worker:'+agent.id});
+      nodes.push(actor);
+      const targets=[];
+      const held=agent.group==='seat' && agent.held && agent.held.id && agent.held.project ? agent.held : null;
+      if(held) {
+        targets.push({
+          kind:'claim',
+          node:{
+            id:`work:${held.project}:${held.id}`, kind:'work',
+            label:`${held.title || held.id} · ${held.id}`, title:held.title || held.id,
+            href:'/work-order?'+new URLSearchParams({project:held.project,id:held.id}),
+            door:'ticket', bucket:'target',
+          },
+        });
+      }
+      const fireAt=futureFireAt(agent.next_fire, stamp);
+      if(fireAt!=null) {
+        targets.push({
+          kind:'next_fire',
+          node:{
+            id:`fire:${agent.id}`, kind:'fire', label:'Next fire', title:agent.name || agent.id,
+            href:'/calendar', door:'calendar', bucket:'target',
+          },
+        });
+      }
+      let targetY=y;
+      for(const target of targets) {
+        nodes.push({...target.node, x:colTarget, y:targetY, w:nodeW, h:nodeH});
+        edges.push({from:actor.id, to:target.node.id, kind:target.kind});
+        targetY+=nodeH+stackGap;
+      }
+      const rowBottom=targets.length ? targetY-stackGap : y+nodeH;
+      y=Math.max(y+nodeH, rowBottom)+gapY;
+    }
+  });
+  return {nodes, edges, width:colTarget+nodeW+padX, height:Math.max(y+padY-gapY, padY+nodeH), empty:false, empty_reason:''};
+}
+function agentsCanvasFromSnapshot() {
+  const canvas=snapshot && snapshot.agents_canvas;
+  if(canvas && Array.isArray(canvas.nodes)) return canvas;
+  return buildAgentsCanvas(snapshot?.agents || []);
+}
+function syncAgentsFace() {
+  const floorBtn=$('agents-face-floor'), canvasBtn=$('agents-face-canvas');
+  if(floorBtn) floorBtn.setAttribute('aria-pressed', String(agentsView==='floor'));
+  if(canvasBtn) canvasBtn.setAttribute('aria-pressed', String(agentsView==='canvas'));
+  const lists=$('agents-floor-lists'), wrap=$('agents-canvas-wrap');
+  if(lists) lists.hidden=agentsView==='canvas';
+  if(wrap) wrap.hidden=agentsView!=='canvas';
+}
+function setAgentsView(next) {
+  agentsView=next==='canvas'?'canvas':'floor';
+  if(page==='agents') {
+    const params=new URLSearchParams(location.search);
+    if(agentsView==='canvas') params.set('view','canvas');
+    else params.delete('view');
+    history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
+  }
+  syncAgentsFace();
+  if(snapshot) agents();
+}
+function paintAgentsCanvasNode(node) {
+  const card=el('article',undefined,'bp-agents-canvas-node');
+  card.dataset.kind=node.kind;
+  card.dataset.bucket=node.bucket || '';
+  card.dataset.id=node.id;
+  card.style.left=`${node.x || 0}px`;
+  card.style.top=`${node.y || 0}px`;
+  card.style.width=`${node.w || 188}px`;
+  card.style.minHeight=`${node.h || 58}px`;
+  if(node.kind==='seat' || node.kind==='job') {
+    if(node.kind==='seat') {
+      const person=el('button',undefined,'bp-agents-canvas-person');
+      person.type='button';
+      person.dataset.agentId=node.id;
+      person.setAttribute('aria-pressed', String(selectedAgentId===node.id));
+      if(selectedAgentId===node.id) card.dataset.selected='true';
+      const name=el('span',undefined,'bp-agents-canvas-label');
+      if(node.bucket==='working') {
+        const cue=el('span','','bp-shift-cue');
+        cue.setAttribute('aria-hidden','true');
+        name.append(cue);
+      }
+      name.append(node.label);
+      person.append(name);
+      person.addEventListener('click',()=>selectAgent(node.id));
+      card.append(person);
+    } else {
+      card.append(el('span',node.label,'bp-agents-canvas-label'));
+    }
+    const meta=el('div',undefined,'bp-agents-canvas-meta');
+    if(node.badge) meta.append(badge(node.bucket==='error'?'last_run_failed':(node.bucket || 'idle'), node.badge));
+    if(node.work_href) meta.append(link('Work', node.work_href, 'bp-agents-canvas-chip'));
+    card.append(meta);
+    return card;
+  }
+  const href=node.door==='ticket' ? readerHref(node.href || '/') : (node.href || '/calendar');
+  const door=link('', href, 'bp-agents-canvas-person');
+  door.append(el('span',node.label,'bp-agents-canvas-label'));
+  card.append(door);
+  return card;
+}
+function paintAgentsCanvasEdges(svg, canvas) {
+  const byId={};
+  for(const node of canvas.nodes || []) byId[node.id]=node;
+  for(const edge of canvas.edges || []) {
+    const from=byId[edge.from], to=byId[edge.to];
+    if(!from || !to) continue;
+    const line=document.createElementNS('http://www.w3.org/2000/svg','path');
+    const x1=(from.x || 0)+(from.w || 188);
+    const y1=(from.y || 0)+((from.h || 58)/2);
+    const x2=to.x || 0;
+    const y2=(to.y || 0)+((to.h || 58)/2);
+    const mid=(x1+x2)/2;
+    line.setAttribute('d',`M${x1} ${y1} C${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
+    line.setAttribute('class','bp-agents-canvas-edge');
+    line.className='bp-agents-canvas-edge';
+    line.dataset.kind=edge.kind || '';
+    svg.append(line);
+  }
+}
+function paintAgentsCanvas() {
+  const host=$('agents-canvas'), empty=$('agents-canvas-empty');
+  if(!host) return;
+  if(agentsView!=='canvas') return;
+  const canvas=agentsCanvasFromSnapshot();
+  host.replaceChildren();
+  if(empty) {
+    empty.hidden=!canvas.empty;
+    empty.textContent=canvas.empty ? (canvas.empty_reason || 'No seats or jobs on this roster.') : '';
+  }
+  host.hidden=!!canvas.empty;
+  if(canvas.empty) return;
+  const scene=el('div',undefined,'bp-agents-canvas-scene');
+  scene.style.width=`${canvas.width || 480}px`;
+  scene.style.height=`${canvas.height || 160}px`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('class','bp-agents-canvas-edges');
+  svg.setAttribute('viewBox',`0 0 ${canvas.width || 480} ${canvas.height || 160}`);
+  svg.setAttribute('aria-hidden','true');
+  paintAgentsCanvasEdges(svg, canvas);
+  const layer=el('div',undefined,'bp-agents-canvas-nodes');
+  for(const node of canvas.nodes || []) layer.append(paintAgentsCanvasNode(node));
+  scene.append(svg, layer);
+  host.append(scene);
 }
 const SOURCE_LABEL = {worklane: 'WorkLane', workforce: 'WorkForce', supervisor: 'Supervisor', github: 'GitHub'};
 function timelineActionLabel(row) {
@@ -2877,13 +3056,17 @@ if ($('delivery-filters')) {
   $('delivery-period').addEventListener('change', updateDeliveryPeriod);
   $('delivery-clear-filters').addEventListener('click', clearDeliveryFilters);
 }
+if($('agents-face-floor')) $('agents-face-floor').addEventListener('click',()=>setAgentsView('floor'));
+if($('agents-face-canvas')) $('agents-face-canvas').addEventListener('click',()=>setAgentsView('canvas'));
+syncAgentsFace();
 $('refresh').addEventListener('click',()=>{refresh(true);refreshRemote();if(page==='timeline')refreshTimeline(false, {force: true});});
 document.addEventListener('keydown',event=>{
   if(event.key!=='Escape') return;
   if(page==='agents' && selectedAgentId) {
     const closedId=selectedAgentId;
     selectAgent(closedId);
-    const row=document.querySelector(`.bp-agent-select[data-agent-id="${CSS.escape(closedId)}"]`);
+    const row=document.querySelector(`.bp-agent-select[data-agent-id="${CSS.escape(closedId)}"]`)
+      || document.querySelector(`.bp-agents-canvas-person[data-agent-id="${CSS.escape(closedId)}"]`);
     if(row) row.focus();
     return;
   }

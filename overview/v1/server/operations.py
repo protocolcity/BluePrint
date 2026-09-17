@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
+from .agents_canvas import build_agents_canvas, empty_agents_canvas
 from .agents_floor import (
     build_agents_floor,
     build_floor_sparks,
@@ -1239,6 +1240,7 @@ def operations_snapshot(binder):
               'calendar_doors': empty_calendar_doors(),
               'calendar_load': empty_calendar_load(),
               'agents_floor': empty_agents_floor(),
+              'agents_canvas': empty_agents_canvas(),
               'throughput': empty_throughput(),
               'work_flow': empty_work_flow(),
               'portfolio': empty_portfolio(),
@@ -1594,6 +1596,7 @@ def operations_snapshot(binder):
         result.get('agents') or [], ticks_by_id, now)
     result['agents_floor']['throughput'] = build_floor_throughput(
         result.get('agents') or [], result['agents_floor']['sparks'])
+    result['agents_canvas'] = build_agents_canvas(result.get('agents') or [], now)
     result['throughput'] = build_throughput(
         close_ticks, now, readable=stores_read or not paths)
     result['work_flow'] = build_work_flow(
