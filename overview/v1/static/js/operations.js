@@ -1785,19 +1785,37 @@ function agentsFloorFromSnapshot() {
   if(floor && typeof floor.working==='number') return floor;
   return buildAgentsFloor(snapshot?.agents || []);
 }
-function emptySeatSpark() {
-  return {hours:Array(24).fill(0), fails:Array(24).fill(0), runs:0, errors:0, fail_rate:null, state:'empty'};
+function emptySeatSpark(state) {
+  return {hours:Array(24).fill(0), fails:Array(24).fill(0), runs:0, errors:0, fail_rate:null, state:state||'empty'};
 }
 function seatSparkFromSnapshot(id) {
   const sparks=snapshot && snapshot.agents_floor && snapshot.agents_floor.sparks;
   if(sparks && sparks[id] && Array.isArray(sparks[id].hours)) return sparks[id];
   return emptySeatSpark();
 }
+function failRateText(rate) {
+  if(rate==null || !Number.isFinite(Number(rate))) return '';
+  const value=Number(rate);
+  if(value<0) return '';
+  const pct=Math.round(value*100);
+  if(pct===0 && value>0) return '<1%';
+  return pct+'%';
+}
+function failBits(errors, rate) {
+  if(!errors) return '';
+  const count=errors===1?'1 fail':`${errors} fails`;
+  const pct=failRateText(rate);
+  return pct ? `${count} (${pct})` : count;
+}
+function sparkTone(data, fallback) {
+  if(data && data.runs && data.errors && data.errors>=data.runs) return 'error';
+  return fallback || 'working';
+}
 function seatSparkLabel(data) {
-  const bits=[];
-  if(data.runs) bits.push(data.runs===1?'1 run':`${data.runs} runs`);
-  if(data.errors) bits.push(data.errors===1?'1 fail':`${data.errors} fails`);
-  return bits.join(' · ');
+  if(!data || !data.runs) return '';
+  const runs=data.runs===1?'1 run':`${data.runs} runs`;
+  const fail=failBits(data.errors, data.fail_rate);
+  return fail ? `${runs} · ${fail}` : runs;
 }
 function seatSparkCell(agent) {
   const cell=el('span',undefined,'bp-agent-cell bp-agent-spark-cell');
@@ -1811,25 +1829,23 @@ function seatSparkCell(agent) {
   const glyphs=throughputSpark(data.hours);
   if(glyphs) {
     const line=el('span',glyphs,'bp-agent-spark-line');
-    line.dataset.tone=data.errors?'error':(bucket==='working'?'working':'idle');
+    line.dataset.tone=sparkTone(data, bucket==='working'?'working':'idle');
     line.setAttribute('aria-hidden','true');
     cell.append(line);
   }
-  const label=seatSparkLabel(data);
-  if(label) {
-    cell.append(el('span',label,'bp-muted bp-agent-spark-label'));
-    cell.setAttribute('aria-label', label+' · last 24h');
+  if(data.runs) {
+    cell.append(el('span', data.runs===1?'1 run':`${data.runs} runs`, 'bp-muted bp-agent-spark-label'));
+    const fail=failBits(data.errors, data.fail_rate);
+    if(fail) cell.append(el('span', fail, 'bp-agent-spark-fail'));
+    cell.setAttribute('aria-label', seatSparkLabel(data)+' · last 24h');
   }
   return cell;
 }
-function paintAgentsFloorSpark() {
-  const host=$('agents-floor-spark');
-  if(!host) return;
-  host.replaceChildren();
+function floorThroughputFromSnapshot() {
   const floor=agentsFloorFromSnapshot();
+  if(floor.throughput && typeof floor.throughput.runs==='number') return floor.throughput;
   const sparks=floor.sparks || {};
   const live=(snapshot.agents || []).filter(agent=>floorBucket(agent)!=='quiet');
-  if(!live.length) return;
   const hours=Array(24).fill(0);
   let runs=0, errors=0, readable=0, unavailable=0;
   for(const agent of live) {
@@ -1841,21 +1857,32 @@ function paintAgentsFloorSpark() {
     errors+=spark.errors || 0;
     (spark.hours || []).forEach((n,index)=>{ if(index<24) hours[index]+=n || 0; });
   }
-  if(!readable && unavailable) {
+  if(!readable && unavailable) return emptySeatSpark('unavailable');
+  return {hours, fails:[], runs, errors, fail_rate:runs?errors/runs:null, state:runs?'healthy':'empty'};
+}
+function paintAgentsFloorSpark() {
+  const host=$('agents-floor-spark');
+  if(!host) return;
+  host.replaceChildren();
+  const live=(snapshot.agents || []).filter(agent=>floorBucket(agent)!=='quiet');
+  if(!live.length) return;
+  const data=floorThroughputFromSnapshot();
+  if(data.state==='unavailable') {
     host.textContent='Seat runs unavailable';
     return;
   }
-  if(!runs) {
+  if(!data.runs) {
     host.textContent='No seat runs in the last 24h';
     return;
   }
-  const count=runs===1?'1 run · last 24h':`${runs} runs · last 24h`;
+  const count=data.runs===1?'1 run · last 24h':`${data.runs} runs · last 24h`;
   host.append(link(count, '/timeline?period=1'));
-  if(errors) host.append(el('span', errors===1?' · 1 fail':` · ${errors} fails`));
-  const glyphs=throughputSpark(hours);
+  const fail=failBits(data.errors, data.fail_rate);
+  if(fail) host.append(el('span', fail, 'bp-agents-floor-fail'));
+  const glyphs=throughputSpark(data.hours);
   if(glyphs) {
     const spark=el('span',glyphs,'bp-agents-floor-spark-line');
-    spark.dataset.tone=errors?'error':'working';
+    spark.dataset.tone=sparkTone(data, 'working');
     spark.setAttribute('aria-hidden','true');
     host.append(spark);
   }

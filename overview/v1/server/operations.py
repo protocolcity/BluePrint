@@ -16,6 +16,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from .agents_floor import (
     build_agents_floor,
     build_floor_sparks,
+    build_floor_throughput,
     empty_agents_floor,
     ticks_from_ledger_lines,
 )
@@ -1591,6 +1592,8 @@ def operations_snapshot(binder):
         ticks_by_id[identity] = ticks_from_ledger_lines(lines)
     result['agents_floor']['sparks'] = build_floor_sparks(
         result.get('agents') or [], ticks_by_id, now)
+    result['agents_floor']['throughput'] = build_floor_throughput(
+        result.get('agents') or [], result['agents_floor']['sparks'])
     result['throughput'] = build_throughput(
         close_ticks, now, readable=stores_read or not paths)
     result['work_flow'] = build_work_flow(
