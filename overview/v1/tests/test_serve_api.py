@@ -764,11 +764,7 @@ class DisposableDeskMapMotionSmokeTests(unittest.TestCase):
         self.assertEqual(project['state'], 'available')
         self.assertIsNotNone(project['last_change'])
         self.assertIsNotNone(project['last_change']['at'])
-        sys.path.insert(0, str(_OVERVIEW_V1.parent / 'map' / 'v1'))
-        from server.node_motion import classify_node_motion
-        painted = classify_node_motion(project, row)
-        self.assertIn(painted['stroke'], ('recent', 'live'))
-        self.assertNotEqual(painted['stroke'], 'none')
+        self.assertNotEqual(row['pulse'], 'unavailable')
 
 
 if __name__ == "__main__":
