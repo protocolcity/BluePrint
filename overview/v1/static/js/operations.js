@@ -631,13 +631,11 @@ function faceEntry(order) {
   entry.append(mute);
   return entry;
 }
-function faceHeading(label, total, visible, href) {
+function faceHeading(label, total, visible) {
   let text=`${label} · ${total}`;
   if(total > visible) text+=` · showing ${visible}`;
-  const heading=$(`for-you-${label.toLowerCase()}-heading`) || $(`for-you-${label.toLowerCase()}-summary`);
-  if(heading) heading.textContent=text;
-  const linkWrap=heading && heading.parentElement && heading.parentElement.querySelector('a');
-  if(linkWrap && total > visible && href) linkWrap.textContent=`View all ${total}`;
+  const summary=$(`for-you-${label.toLowerCase()}-summary`);
+  if(summary) summary.textContent=text;
 }
 function bindForYouFaceToggle(face) {
   const details=$(`for-you-${face}-details`);
@@ -701,7 +699,7 @@ function overview() {
     const visible=unmuted.slice(0,faceLimit[face]);
     mutedCount+=band.length-unmuted.length;
     reconcileList($('for-you-'+face), visible, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
-    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length, '/work?attention='+face);
+    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, visible.length);
     syncForYouFaceOpen(face, band.length);
   }
   $('mute-status').textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
@@ -739,7 +737,10 @@ function matchesAssignment(order, value) {
 }
 const UNROUTED_WORK_HREF = '/work?gate=none&assignment=unassigned';
 function isUnrouted(order) {
-  return matchesAssignment(order, 'unassigned') && matchesGate(order, 'none');
+  // Same slice as the per-row Needs routing chip: open backlog, ungated, no
+  // routable seat (ONE_DESK_STORY §The fact: Unrouted). The Work link keeps
+  // the saved Gate=none + Assignment=unassigned filter named in pc-1507.
+  return order.status === 'backlog' && Boolean(order.needs_routing);
 }
 function matchesGate(order, value) {
   if(value==='none') return !order.gate_type && order.blocked_on==='clear';

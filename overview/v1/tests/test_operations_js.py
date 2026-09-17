@@ -524,10 +524,17 @@ class UnroutedOverviewTests(unittest.TestCase):
         self.assertLess(metrics_pos, unrouted_pos)
         self.assertLess(unrouted_pos, grid_pos)
 
-    def test_unrouted_matches_ungated_unassigned_work_filters(self):
+    def test_unrouted_matches_open_backlog_needs_routing_chip(self):
         self.assertIn("function isUnrouted(order)", _SRC)
         compact = _SRC.replace(' ', '')
-        self.assertIn("returnmatchesAssignment(order,'unassigned')&&matchesGate(order,'none')", compact)
+        self.assertIn("returnorder.status==='backlog'&&Boolean(order.needs_routing)", compact)
+
+    def test_face_heading_updates_summary_not_retired_heading_ids(self):
+        fn = _SRC.split('function faceHeading(')[1].split('function bindForYouFaceToggle')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('for-you-${label.toLowerCase()}-summary', fn)
+        self.assertNotIn('-heading', fn)
+        self.assertIn('summary.textContent=text', compact)
 
     def test_unrouted_link_opens_work_with_gate_none_and_assignment_unassigned(self):
         self.assertIn("UNROUTED_WORK_HREF='/work?gate=none&assignment=unassigned'", _SRC.replace(' ', ''))
@@ -1199,6 +1206,11 @@ class OverviewForYouChromeTests(unittest.TestCase):
         self.assertIn('function syncForYouFaceOpen', _SRC)
         self.assertIn("details.dataset.userToggled", _SRC)
         self.assertIn("details.open=count>0", _SRC.replace(' ', ''))
+
+    def test_all_faces_get_summary_counts_from_face_heading(self):
+        overview_fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = overview_fn.replace(' ', '')
+        self.assertIn('faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,visible.length)', compact)
 
     def test_kpi_grid_is_five_columns_on_desktop(self):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
