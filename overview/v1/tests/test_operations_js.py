@@ -263,7 +263,7 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'project-summary', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
+        for list_id in ('overview-executions', 'overview-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
@@ -509,6 +509,84 @@ class CompactRowTests(unittest.TestCase):
         fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
         compact = fn.replace(' ', '')
         self.assertIn('running.length?{}:{emptyText:overviewExecutionEmpty()}', compact)
+
+
+class UnroutedOverviewTests(unittest.TestCase):
+    """pc-1507: Unrouted is a read-only rollup beside metrics, not a sixth KPI
+    or a For You inflation. It uses the same Gate=none + Assignment=unassigned
+    slice as Work."""
+
+    def test_overview_unrouted_line_is_under_metrics_not_in_the_tile_row(self):
+        self.assertIn('id="overview-unrouted"', _HTML)
+        metrics_pos = _HTML.index('id="metrics"')
+        unrouted_pos = _HTML.index('id="overview-unrouted"')
+        grid_pos = _HTML.index('class="bp-overview-grid"')
+        self.assertLess(metrics_pos, unrouted_pos)
+        self.assertLess(unrouted_pos, grid_pos)
+
+    def test_unrouted_matches_open_backlog_needs_routing_chip(self):
+        self.assertIn("function isUnrouted(order)", _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn("returnorder.status==='backlog'&&Boolean(order.needs_routing)", compact)
+
+    def test_face_heading_updates_summary_not_retired_heading_ids(self):
+        fn = _SRC.split('function faceHeading(')[1].split('function bindForYouFaceToggle')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn('for-you-${label.toLowerCase()}-summary', fn)
+        self.assertNotIn('-heading', fn)
+        self.assertIn('summary.textContent=text', compact)
+
+    def test_unrouted_link_opens_work_with_gate_none_and_assignment_unassigned(self):
+        self.assertIn("UNROUTED_WORK_HREF='/work?gate=none&assignment=unassigned'", _SRC.replace(' ', ''))
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        self.assertIn("orders.filter(isUnrouted)", fn)
+        self.assertIn("link(String(unrouted.length),UNROUTED_WORK_HREF)", fn.replace(' ', ''))
+
+    def test_unrouted_zero_renders_quiet_text_not_hidden(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        self.assertIn("' — none right now'", fn)
+
+    def test_for_you_metric_is_unchanged(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("forYou=orders.filter(o=>o.attention_face)", compact)
+        self.assertIn("['ForYou',forYou.length,'/work?attention=any']", compact)
+
+    def test_overview_unrouted_styles_exist_for_narrow_viewports(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-overview-unrouted', css)
+        self.assertIn('@media(max-width:560px)', css)
+
+
+class SlimOverviewTests(unittest.TestCase):
+    """pc-1508: Overview = Now — short queues, no project grid, compact sources."""
+
+    def test_across_your_projects_section_removed_from_overview(self):
+        self.assertNotIn('Across your projects', _HTML)
+        self.assertNotIn('id="project-summary"', _HTML)
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        self.assertNotIn("reconcileList($('project-summary')", fn)
+
+    def test_decide_and_read_faces_show_at_most_three_rows(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        compact = fn.replace(' ', '').replace('\n', '')
+        self.assertIn('faceLimit={decide:3,read:3,watch:4,due:4}', compact)
+
+    def test_recent_changes_capped_at_four_rows(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        self.assertIn('.slice(0,4)', fn)
+
+    def test_source_status_is_one_compact_line_not_a_source_list(self):
+        self.assertIn('id="overview-source-line"', _HTML)
+        self.assertNotIn('id="source-list"', _HTML.split('id="overview-view"')[1].split('id="work-view"')[0])
+        self.assertIn('function overviewSourceLine()', _SRC)
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        self.assertIn('overviewSourceLine()', fn)
+        self.assertNotIn("sources($('source-list')", fn)
+
+    def test_face_heading_links_to_view_all_when_truncated(self):
+        fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
+        self.assertIn("faceHeading(face.charAt(0).toUpperCase()+face.slice(1),band.length,visible.length,'/work?attention='+face)", fn.replace(' ', ''))
 
 
 class CompactRowReviewFixTests(unittest.TestCase):
