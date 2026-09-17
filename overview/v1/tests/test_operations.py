@@ -506,6 +506,7 @@ class OperationsTests(unittest.TestCase):
         result=operations_snapshot(None)
         self.assertEqual(result['sources'][0]['state'],'unavailable')
         self.assertEqual(result['remote']['state'],'not_connected')
+        self.assertEqual(result['agents_floor'], {'working': 0, 'idle': 0, 'error': 0, 'stale': 0, 'quiet': 0})
 
     def test_placeholder_job_is_not_presented_as_working(self):
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)

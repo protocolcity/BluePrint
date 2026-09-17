@@ -7,7 +7,7 @@ const {reconcileList} = await import('/js/dom-reconcile.mjs');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Compare registered project stores — open work, seats, and what last moved.'],agents:['Agents',''],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
+const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Compare registered project stores — open work, seats, and what last moved.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
 const size = 25;
@@ -935,8 +935,15 @@ function selectAgent(id) {
   selectedAgentId=selectedAgentId===id ? '' : id;
   agents();
 }
+function agentRowClass(agent) {
+  const bucket=floorBucket(agent);
+  if(bucket==='working') return 'bp-agent-row bp-agent-row-live';
+  if(bucket==='error' || bucket==='stale') return 'bp-agent-row bp-agent-row-alert';
+  if(bucket==='quiet') return 'bp-agent-row bp-agent-row-quiet';
+  return 'bp-agent-row';
+}
 function agentRow(agent) {
-  const row=el('div',undefined,'bp-agent-row');
+  const row=el('div',undefined,agentRowClass(agent));
   // Selection and action are two independent controls, never nested: the
   // selectable region (name, provider, badge, held, elapsed, last update)
   // carries role=button, and the action cell — a real <button>/<a> — is a
@@ -949,6 +956,11 @@ function agentRow(agent) {
   select.setAttribute('aria-pressed',String(selected));
   select.append(el('span',agent.project_name || 'No project queue','bp-agent-cell'));
   const nameCell=el('span',undefined,'bp-agent-cell bp-agent-name');
+  if(agent.state==='working' && agent.shift && !agent.shift.stale) {
+    const cue=el('span','','bp-shift-cue');
+    cue.setAttribute('aria-hidden','true');
+    nameCell.append(cue);
+  }
   nameCell.append(el('strong',agent.name),el('span',` · ${agent.model}`,'bp-muted'));
   select.append(nameCell);
   const stateCell=el('span',undefined,'bp-agent-cell');stateCell.append(badge(agent.state,agent.badge));select.append(stateCell);
@@ -963,7 +975,7 @@ function agentRow(agent) {
   return row;
 }
 function jobRow(agent) {
-  const row=el('div',undefined,'bp-agent-row');
+  const row=el('div',undefined,agentRowClass(agent));
   const info=el('div',undefined,'bp-job-info');
   info.append(el('span',agent.name,'bp-agent-cell'));
   info.append(el('span',scheduleLabel(agent.schedule),'bp-agent-cell bp-muted'));
@@ -1184,6 +1196,60 @@ function renderCoverage() {
   }, {emptyText:'No registered projects.'});
   refreshCoverageHireBodies($('coverage-list'));
 }
+function emptyAgentsFloor() {
+  return {working:0, idle:0, error:0, stale:0, quiet:0};
+}
+function floorBucket(agent) {
+  const state=agent && agent.state;
+  if(state==='working') return 'working';
+  if(state==='last_run_failed') return 'error';
+  if(state==='stale_shift') return 'stale';
+  if(state==='idle') return 'idle';
+  return 'quiet';
+}
+function buildAgentsFloor(agents) {
+  const counts=emptyAgentsFloor();
+  for(const agent of agents || []) counts[floorBucket(agent)]++;
+  return counts;
+}
+function agentsFloorFromSnapshot() {
+  const floor=snapshot && snapshot.agents_floor;
+  if(floor && typeof floor.working==='number') return floor;
+  return buildAgentsFloor(snapshot?.agents || []);
+}
+function paintAgentsPulse() {
+  const host=$('agents-pulse');
+  if(!host) return;
+  const floor=agentsFloorFromSnapshot();
+  const items=[['Working',floor.working,'working'],['Idle',floor.idle,'idle'],['Error',floor.error,'last_run_failed']];
+  reconcileList(host, items, item=>item[0], ([label,count,state])=>{
+    const tile=el('div',undefined,'bp-metric');
+    tile.dataset.state=state;
+    tile.append(el('strong',String(count)),el('span',label));
+    return tile;
+  });
+  const remainder=$('agents-floor-remainder');
+  if(remainder) {
+    const bits=[];
+    if(floor.stale) bits.push(floor.stale===1 ? '1 stale shift' : `${floor.stale} stale shifts`);
+    if(floor.quiet) bits.push(floor.quiet===1 ? '1 off or unknown' : `${floor.quiet} off or unknown`);
+    remainder.textContent=bits.join(' · ');
+  }
+  const empty=$('agents-floor-empty');
+  if(empty) {
+    const seats=(snapshot.agents || []).filter(a=>a.group==='seat');
+    if(!seats.length && !(snapshot.agents || []).length) {
+      empty.hidden=false;
+      empty.textContent='No seats or jobs on this roster.';
+    } else if(floor.working===0) {
+      empty.hidden=false;
+      empty.textContent='No seats working right now.';
+    } else {
+      empty.hidden=true;
+      empty.textContent='';
+    }
+  }
+}
 function paintAgentsNextFire() {
   const host=$('agents-next-fire');
   if(!host) return;
@@ -1212,9 +1278,20 @@ function renderWorkCalendarDoors() {
 }
 function agents() {
   const seats=snapshot.agents.filter(a=>a.group==='seat'), jobs=snapshot.agents.filter(a=>a.group==='job');
+  const liveSeats=seats.filter(a=>floorBucket(a)!=='quiet');
+  const quietSeats=seats.filter(a=>floorBucket(a)==='quiet');
   $('agents-heartbeat').textContent=heartbeatLine();
+  paintAgentsPulse();
   paintAgentsNextFire();
-  reconcileList($('seat-list'), seats, a=>a.id, agentRow, {emptyText:'No seats registered in the readable registry.'});
+  const liveEmpty=seats.length ? 'No seats working or idle — quiet roster below.' : 'No seats registered in the readable registry.';
+  reconcileList($('seat-list'), liveSeats, a=>a.id, agentRow, liveSeats.length ? {} : {emptyText:liveEmpty});
+  const quietWrap=$('agents-quiet'), quietSummary=$('agents-quiet-summary'), quietList=$('agents-quiet-list');
+  if(quietWrap && quietList) {
+    quietWrap.hidden=!quietSeats.length;
+    if(quietSummary) quietSummary.textContent=quietSeats.length===1 ? 'Quiet · 1 off or unknown' : `Quiet · ${quietSeats.length} off or unknown`;
+    if(quietSeats.some(a=>a.id===selectedAgentId)) quietWrap.open=true;
+    reconcileList(quietList, quietSeats, a=>a.id, agentRow, {emptyText:'No quiet seats.'});
+  }
   reconcileList($('job-list'), jobs, a=>a.id, jobRow, {emptyText:'No jobs registered in the readable registry.'});
   agentDetail();
   supervisorPanel();
