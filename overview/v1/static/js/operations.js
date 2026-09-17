@@ -49,8 +49,18 @@ else if (statusParam === 'blocked') { gateParam = gateParam || 'blocked'; status
 if (query.get('deferred') === '1') { gateParam = gateParam || 'deferred'; legacyParam = true; }
 // Pre-D16 links used the retired Note face value; map it to Due (STATES_AND_TERMS.md §1.4).
 if (attentionParam === 'note') { attentionParam = 'due'; legacyParam = true; }
+if (attentionParam === 'any') { attentionParam = ''; }
+if (attentionParam === 'seat_only' || attentionParam === 'seat-only') { attentionParam = 'seat'; legacyParam = true; }
+if (attentionParam === 'my-todos') { attentionParam = 'my_todos'; legacyParam = true; }
+if (attentionParam === 'act-now') { attentionParam = 'act_now'; legacyParam = true; }
 if (query.get('blocked') === '1') { gateParam = gateParam || 'blocked'; legacyParam = true; }
-$('status-filter').value = statusParam;
+const statusLegacy={backlog:'Open',in_progress:'Live',in_review:'Review',done:'Done',canceled:'Done',cancelled:'Done'};
+const statusSelectValue = statusLegacy[statusParam] || statusParam;
+if (attentionParam && !Array.from($('attention-filter').options).some(option=>option.value===attentionParam)) {
+  const attentionLabels={decide:'Decide',read:'Read',watch:'Watch',due:'Due'};
+  $('attention-filter').add(new Option(attentionLabels[attentionParam] || attentionParam, attentionParam));
+}
+$('status-filter').value = statusSelectValue;
 $('gate-filter').value = gateParam;
 $('kind-filter').value = kindParam;
 $('attention-filter').value = attentionParam;
@@ -218,6 +228,97 @@ function isClosedOrder(order) {
   const status=order.status || '';
   return status==='done' || status==='canceled' || status==='cancelled';
 }
+const YOU_KINDS=new Set(['todo','note','reminder']);
+const WORK_BAND_LIMIT=8;
+const SEAT_WINDOW=40;
+let workBandExpanded={act_now:false,my_todos:false};
+let seatWindow=SEAT_WINDOW;
+function hasWorkerYou(order) {
+  return Boolean(order.assigned_you) || (order.workers || []).includes('you');
+}
+function hasSeatWorker(order) {
+  return (order.workers || []).some(worker=>worker!=='you');
+}
+function isYouKind(order) {
+  return YOU_KINDS.has(order.kind || '');
+}
+function isActNow(order) {
+  if(isClosedOrder(order)) return false;
+  if(order.attention_face==='decide' && order.gate_type==='human') return true;
+  return order.attention_face==='read';
+}
+function isMyTodo(order) {
+  if(isClosedOrder(order) || isActNow(order) || order.gate_type==='human') return false;
+  return hasWorkerYou(order) && isYouKind(order);
+}
+function isSeatBacklog(order) {
+  if(isClosedOrder(order) || isActNow(order) || isMyTodo(order)) return false;
+  if(order.status!=='backlog' && order.status!=='in_progress' && order.status!=='in_review') return false;
+  return order.gate_type!=='human';
+}
+function boardBand(order) {
+  if(order.board_band) return order.board_band;
+  if(isActNow(order)) return 'act_now';
+  if(isMyTodo(order)) return 'my_todos';
+  if(isSeatBacklog(order)) return 'seat_backlog';
+  return '';
+}
+function rowFace(order) {
+  if(order.row_face) return order.row_face;
+  if(order.attention_face==='decide') return 'Decide';
+  if(order.attention_face==='read') return 'Read';
+  if(order.attention_face==='watch') return 'Watch';
+  if(order.attention_face==='due' || isYouKind(order)) return 'Note';
+  if(order.you_host) return 'Host';
+  if((order.kind || 'work')==='work' && hasWorkerYou(order) && !hasSeatWorker(order)) return 'Host';
+  return 'none';
+}
+function watchIsStalled(order) {
+  return order.attention_face==='watch' && order.gate_type!=='timer';
+}
+function rowStatus(order) {
+  if(order.row_status) return order.row_status;
+  if(isClosedOrder(order)) return 'Done';
+  if(order.status==='in_progress') return watchIsStalled(order) ? 'Stalled' : 'Live';
+  if(order.status==='in_review') return watchIsStalled(order) ? 'Stalled' : 'Review';
+  if(order.gate_type==='deferred') return 'Deferred';
+  if(order.ready_for) return 'Ready';
+  if(watchIsStalled(order)) return 'Stalled';
+  return 'Open';
+}
+function matchesStatusFacet(order, value) {
+  if(!value) return true;
+  const mapped={backlog:'Open',in_progress:'Live',in_review:'Review',done:'Done',canceled:'Done',cancelled:'Done'}[value] || value;
+  return rowStatus(order)===mapped;
+}
+function matchesAttentionFacet(order, value) {
+  if(!value || value==='any') return true;
+  if(value==='act_now' || value==='decide' || value==='read') {
+    if(!isActNow(order)) return false;
+    if(value==='decide') return order.attention_face==='decide';
+    if(value==='read') return order.attention_face==='read';
+    return true;
+  }
+  if(value==='my_todos') return isMyTodo(order);
+  if(value==='seat' || value==='seat_only') return isSeatBacklog(order);
+  if(value==='watch' || value==='due') return order.attention_face===value;
+  return true;
+}
+function partitionBands(orders) {
+  const bands={act_now:[],my_todos:[],seat_backlog:[]};
+  for(const order of orders) {
+    const band=boardBand(order);
+    if(band && bands[band]) bands[band].push(order);
+  }
+  return bands;
+}
+function attentionShowsBand(attention, band) {
+  if(!attention || attention==='any' || attention==='watch' || attention==='due') return true;
+  if(band==='act_now') return attention==='act_now' || attention==='decide' || attention==='read';
+  if(band==='my_todos') return attention==='my_todos';
+  if(band==='seat_backlog') return attention==='seat' || attention==='seat_only';
+  return true;
+}
 function lifecycleSummary(order) {
   if(order.status==='in_progress' && order.live_with) return `Live · ${order.live_with}`;
   if(order.status==='in_review' && order.parked_by) return `Parked · ${order.parked_by}`;
@@ -253,22 +354,31 @@ function orderHasDetail(order) {
   return Boolean(order.parent || order.blocked_on==='open' || order.blocked_on==='unknown' || order.ready_for || order.persona || order.needs_routing || order.gate_note || !isBoilerplateNote(order.last_note) || (order.since && (order.live_with || order.parked_by)));
 }
 function orderBadges(order) {
-  const gateWord=gateLabel(order);
-  const badges=[badge(order.attention_face==='decide' ? 'attention' : order.status, order.attention_face==='decide' ? 'Needs you' : (order.status_word || undefined))];
-  if(gateWord) {
-    const gateKind=order.gate_type || ((order.blocked_on==='open' || order.blocked_on==='unknown') ? 'blocked' : '');
-    badges.push(badge(gateKind+(order.gate_expired?'-expired':''),gateWord));
-  }
-  return badges;
+  const face=rowFace(order);
+  const status=rowStatus(order);
+  const faceBadge=badge(face.toLowerCase(), face);
+  faceBadge.dataset.kind='face';
+  const statusBadge=badge(status.toLowerCase(), status);
+  statusBadge.dataset.kind='status';
+  return [faceBadge, statusBadge];
 }
-function orderRow(order) {
+function workBoardRow(order, withMute) {
   const row=el('div',undefined,'bp-order bp-order-compact');
   const anchor=link('',workUrl(order),'bp-order-link');
   const content=el('div');
   content.append(el('strong',order.title));
   content.append(el('span',compactMetaLine(order),'bp-order-meta'));
+  const action=nextActionText(order);
+  if(action) content.append(el('span',action,'bp-order-note'));
   anchor.append(content);
-  row.append(anchor,...orderBadges(order));
+  const badges=el('div',undefined,'bp-order-badges');
+  badges.append(...orderBadges(order));
+  row.append(anchor,badges);
+  if(withMute) {
+    const mute=el('button','Mute 24h');mute.type='button';mute.className='bp-face-mute';
+    mute.addEventListener('click',()=>{muted[muteKey(order)]=Date.now()+86400000;saveMutes();work();});
+    row.append(mute);
+  }
   if(orderHasDetail(order)) {
     const details=el('details',undefined,'bp-order-detail');
     details.append(el('summary','More'));
@@ -276,6 +386,9 @@ function orderRow(order) {
     row.append(details);
   }
   return row;
+}
+function orderRow(order) {
+  return workBoardRow(order, false);
 }
 function gateLabel(order) {
   if(order.gate_type==='deferred') return 'Deferred';
@@ -753,27 +866,68 @@ function overview() {
   }
   overviewSourceLine();
 }
-function renderWorkInbox() {
-  const orders=snapshot.orders || [], forYou=orders.filter(o=>o.attention_face);
-  let mutedCount=0;
-  for(const face of ['decide','read','watch','due']) {
-    const band=forYou.filter(o=>o.attention_face===face);
-    const unmuted=band.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
-    mutedCount+=band.length-unmuted.length;
-    const host=$('work-for-you-'+face);
-    if(!host) continue;
-    reconcileList(host, unmuted, o=>o.project+':'+o.id, faceEntry, {emptyText:'No '+face+' items visible in the readable stores.'});
-    faceHeading(face.charAt(0).toUpperCase()+face.slice(1), band.length, unmuted.length, '/work?attention='+face);
-    syncForYouFaceOpen(face, band.length);
+function renderWorkMore(host, remainder, key) {
+  if(!host) return;
+  host.replaceChildren();
+  if(remainder>0) {
+    host.hidden=false;
+    const button=el('button','+'+remainder);button.type='button';
+    button.addEventListener('click',()=>{
+      if(key==='seat_backlog') seatWindow+=SEAT_WINDOW;
+      else workBandExpanded[key]=true;
+      work();
+    });
+    host.append(button);
+  } else {
+    host.hidden=true;
   }
+}
+function groupSeatOrders(orders) {
+  const groups=new Map();
+  for(const order of orders) {
+    const key=order.project || 'unknown';
+    if(!groups.has(key)) groups.set(key,{project:key,name:order.project_name || key,orders:[]});
+    groups.get(key).orders.push(order);
+  }
+  return [...groups.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+}
+function seatGroupRow(group) {
+  const wrap=el('details',undefined,'bp-work-seat-group');
+  wrap.open=true;
+  wrap.dataset.project=group.project;
+  const summary=el('summary');
+  summary.append(el('strong',group.name),el('span',String(group.orders.length),'bp-work-count'));
+  wrap.append(summary);
+  const list=el('div',undefined,'bp-work-seat-items');
+  reconcileList(list, group.orders, o=>o.project+':'+o.id, orderRow, {});
+  wrap.append(list);
+  return wrap;
+}
+function renderSeatBacklog(orders) {
+  const host=$('work-seat-backlog');
+  if(!host) return;
+  const visible=orders.slice(0,seatWindow);
+  const groups=groupSeatOrders(visible);
+  reconcileList(host, groups, group=>group.project, seatGroupRow, {emptyText:'No seat-drainable open work.'});
+  renderWorkMore($('work-seat-backlog-more'), orders.length-visible.length, 'seat_backlog');
+}
+function renderComfortBand(bandKey, orders, emptyText, withMute) {
+  const hostId=bandKey==='act_now'?'work-act-now':'work-my-todos';
+  const host=$(hostId);
+  if(!host) return;
+  const expanded=workBandExpanded[bandKey];
+  const visible=expanded ? orders : orders.slice(0,WORK_BAND_LIMIT);
+  reconcileList(host, visible, o=>o.project+':'+o.id, order=>workBoardRow(order, withMute), {emptyText});
+  renderWorkMore($(hostId+'-more'), orders.length-visible.length, bandKey);
+}
+function renderWorkInbox() {
+  const orders=snapshot.orders || [];
+  let mutedCount=0;
+  for(const order of orders) if(Number(muted[muteKey(order)])>Date.now()) mutedCount+=1;
   const muteStatus=$('mute-status');
   if(muteStatus) muteStatus.textContent=(mutedCount ? mutedCount+' muted. ' : '')+'Mute only hides this inbox item in this browser; it does not change gates, reminders, or assignments.';
   const restore=$('restore-muted');
   if(restore) restore.hidden=!orders.some(o=>Number(muted[muteKey(o)])>Date.now());
-  const recentHost=$('work-recent');
-  if(!recentHost) return;
-  const recent=[...orders].filter(o=>!isClosedOrder(o)).sort((a,b)=>orderUpdatedAt(b)-orderUpdatedAt(a)).slice(0,8);
-  reconcileList(recentHost, recent, o=>o.project+':'+o.id, orderRow, {emptyText:'No recent updates in the readable stores.'});
 }
 function filterOptions() {
   const select=$('project-filter');
@@ -825,7 +979,7 @@ function filterChips() {
   if($('status-filter').value) chips.push(['Status: '+$('status-filter').selectedOptions[0].text,()=>{$('status-filter').value='';}]);
   if($('gate-filter').value) chips.push(['Gate: '+$('gate-filter').selectedOptions[0].text,()=>{$('gate-filter').value='';}]);
   if($('kind-filter').value) chips.push(['Kind: '+$('kind-filter').selectedOptions[0].text,()=>{$('kind-filter').value='';}]);
-  if($('attention-filter').value) chips.push(['For You: '+$('attention-filter').selectedOptions[0].text,()=>{$('attention-filter').value='';}]);
+  if($('attention-filter').value) chips.push(['Attention: '+$('attention-filter').selectedOptions[0].text,()=>{$('attention-filter').value='';}]);
   return chips;
 }
 function renderActiveFilters() {
@@ -842,13 +996,34 @@ function work() {
   renderWorkInbox();
   const q=$('search').value.trim().toLowerCase(), status=$('status-filter').value, gate=$('gate-filter').value, kind=$('kind-filter').value, attention=$('attention-filter').value;
   const total=snapshot.orders.length;
-  const orders=snapshot.orders.filter(o=>(!unroutedOnly || isUnrouted(o)) && (!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && (!status || o.status===status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && (!attention || (attention==='any' ? o.attention : o.attention_face===attention)) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const orders=snapshot.orders.filter(o=>(!unroutedOnly || isUnrouted(o)) && (!selectedProject || o.project===selectedProject) && (!selectedAssignment || matchesAssignment(o,selectedAssignment)) && matchesStatusFacet(o,status) && (!gate || matchesGate(o,gate)) && (!kind || o.kind===kind) && matchesAttentionFacet(o,attention) && (!q || `${o.id} ${o.title} ${o.project_name} ${o.owner}`.toLowerCase().includes(q)));
+  const unmuted=orders.filter(o=>!(Number(muted[muteKey(o)])>Date.now()));
+  const bands=partitionBands(unmuted);
+  const act=$('work-band-act-now'), todos=$('work-band-my-todos'), seat=$('work-band-seat-backlog');
+  if(act) act.hidden=!attentionShowsBand(attention,'act_now');
+  if(todos) todos.hidden=!attentionShowsBand(attention,'my_todos');
+  if(seat) seat.hidden=!attentionShowsBand(attention,'seat_backlog');
+  if(act && !act.hidden) {
+    $('work-act-now-count').textContent=String(bands.act_now.length);
+    renderComfortBand('act_now', bands.act_now, 'Nothing to decide or read.', true);
+  }
+  if(todos && !todos.hidden) {
+    $('work-my-todos-count').textContent=String(bands.my_todos.length);
+    renderComfortBand('my_todos', bands.my_todos, 'No personal todos.', false);
+  }
+  if(seat && !seat.hidden) {
+    $('work-seat-backlog-count').textContent=String(bands.seat_backlog.length);
+    renderSeatBacklog(bands.seat_backlog);
+  }
   const pages=Math.max(1,Math.ceil(orders.length/size));pageIndex=Math.min(pageIndex,pages-1);
-  reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, gate, or search.'});
+  if($('work-list') && !$('work-list').hidden) {
+    reconcileList($('work-list'), orders.slice(pageIndex*size,(pageIndex+1)*size), o=>o.project+':'+o.id, orderRow, {emptyText:'No matching open work. Try another project, assignment, status, gate, or search.'});
+  }
   $('results').textContent=`${orders.length} of ${total} matching work order${orders.length===1?'':'s'}`;
   renderActiveFilters();
-  $('page-count').textContent=`Page ${pageIndex+1} of ${pages}`;
-  $('previous').disabled=pageIndex===0;$('next').disabled=pageIndex>=pages-1;
+  if($('page-count')) $('page-count').textContent=`Page ${pageIndex+1} of ${pages}`;
+  if($('previous')) $('previous').disabled=pageIndex===0;
+  if($('next')) $('next').disabled=pageIndex>=pages-1;
 }
 function agentAction(agent, dispatchLabel) {
   const nodes=[];
@@ -1956,6 +2131,7 @@ async function refresh(manual) {
 }
 function updateFilters() {
   selectedProject=$('project-filter').value;selectedAssignment=$('assignment-filter').value;pageIndex=0;
+  workBandExpanded={act_now:false,my_todos:false};seatWindow=SEAT_WINDOW;
   const params=new URLSearchParams();if(unroutedOnly)params.set('unrouted','1');if(selectedProject)params.set('project',selectedProject);if(selectedAssignment)params.set('assignment',selectedAssignment);if($('status-filter').value)params.set('status',$('status-filter').value);if($('gate-filter').value)params.set('gate',$('gate-filter').value);if($('kind-filter').value)params.set('kind',$('kind-filter').value);if($('attention-filter').value)params.set('attention',$('attention-filter').value);if($('search').value)params.set('q',$('search').value);
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);if(snapshot)work();
 }
