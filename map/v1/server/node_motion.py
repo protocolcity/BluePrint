@@ -69,8 +69,12 @@ def classify_node_motion(
     """
     if not isinstance(project, dict):
         return empty_motion('quiet')
-    store_state = project.get('state') or project.get('storeState') or 'unavailable'
-    if readable is False or store_state != 'available':
+    store_state = project.get('state') or project.get('storeState')
+    # A nameless dict is not a place. Missing store identity stays quiet
+    # rather than painting a fake unavailable stroke.
+    if not store_state and not project.get('folder') and not project.get('id'):
+        return empty_motion('quiet')
+    if readable is False or (store_state or 'unavailable') != 'available':
         return empty_motion('unavailable')
 
     clock = now or datetime.now(timezone.utc)
@@ -79,7 +83,9 @@ def classify_node_motion(
     else:
         clock = clock.astimezone(timezone.utc)
 
-    running = _int_count(project.get('running') if project.get('running') is not None else project.get('working'))
+    # ``running`` is seat evidence on this place. ``working`` on lots is a
+    # count badge, not motion — do not promote an open pile to live paint.
+    running = _int_count(project.get('running'))
     last_change = project.get('last_change') if isinstance(project.get('last_change'), dict) else None
     last_at = last_change.get('at') if last_change else None
     last_stamp = parse_stamp(last_at)

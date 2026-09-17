@@ -118,9 +118,10 @@ class ClassifyNodeMotionTests(unittest.TestCase):
         self.assertEqual(painted['stroke'], 'live')
         self.assertEqual(painted['state'], 'live')
 
-    def test_working_alias_counts_as_running(self):
+    def test_working_count_badge_is_not_live_motion(self):
         painted = classify_node_motion(_project(running=0, working=2), None, now=NOW)
-        self.assertEqual(painted['stroke'], 'live')
+        self.assertEqual(painted['stroke'], 'none')
+        self.assertEqual(painted['state'], 'quiet')
 
     def test_missing_pulse_is_not_unavailable(self):
         painted = classify_node_motion(

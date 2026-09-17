@@ -34,11 +34,12 @@ function intCount(value) {
 
 export function classifyNodeMotion(project, pulse, now) {
   if (!project || typeof project !== 'object') return emptyMotion('quiet');
-  const storeState = project.state || project.storeState || 'unavailable';
-  if (storeState !== 'available') return emptyMotion('unavailable');
+  const storeState = project.state || project.storeState || '';
+  if (!storeState && !project.folder && !project.id) return emptyMotion('quiet');
+  if ((storeState || 'unavailable') !== 'available') return emptyMotion('unavailable');
 
   const clock = now instanceof Date ? now.getTime() : (Number.isFinite(now) ? now : Date.now());
-  const running = intCount(project.running != null ? project.running : project.working);
+  const running = intCount(project.running);
   const lastChange = project.last_change && typeof project.last_change === 'object'
     ? project.last_change
     : null;

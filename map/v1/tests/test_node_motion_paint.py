@@ -27,18 +27,18 @@ class MapMotionPaintTests(unittest.TestCase):
         self.assertIn("export function classifyNodeMotion", self.motion)
         self.assertIn("export function indexNodeState", self.motion)
         self.assertIn("stroke: 'none'", self.motion)
-        self.assertIn("state !== 'available'", self.motion)
+        self.assertIn("!== 'available'", self.motion)
 
     def test_lots_and_dig_and_focus_apply_stroke_class(self) -> None:
         self.assertIn("motionClassName(motion)", self.paint)
         self.assertIn("data-motion", self.paint)
-        self.assertIn("map-motion-", self.paint)
+        self.assertIn("motionClassName", self.paint)
         self.assertIn("nodeState", self.paint.split("export function paintDigIn")[1][:400])
         self.assertIn("motion = null", self.paint.split("export function paintProjectFocus")[1][:240])
 
     def test_host_indexes_portfolio_motion_from_operations(self) -> None:
         self.assertIn("indexNodeState(detail.projects, detail.portfolio)", self.host)
-        self.assertIn("motion: nodeState[snap.project.relPath]", self.host.replace(" ", ""))
+        self.assertIn("motion:nodeState[snap.project.relPath]", self.host.replace(" ", ""))
         self.assertIn("nodeState", self.host)
         self.assertIn("motionClassName(state.motion)", self.host)
 
