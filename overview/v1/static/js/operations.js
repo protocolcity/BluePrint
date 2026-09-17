@@ -4,7 +4,7 @@
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
 const {reconcileList} = await import('/js/dom-reconcile.mjs');
-const {buildLoadByDay, paintLoad, paintDoors} = await import('/js/calendar.v1.js');
+const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip} = await import('/js/calendar.v1.js');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -900,8 +900,10 @@ function overviewDecideRow(order) {
   row.append(anchor,badge('attention','Needs you'));
   return row;
 }
-function overviewFaceChip(label, count, href) {
-  return link(`${label} · ${count}`, href, 'bp-filter-chip bp-face-chip');
+function overviewFaceChip(label, count, href, face) {
+  const chip=link(`${label} · ${count}`, href, 'bp-filter-chip bp-face-chip');
+  if(face) chip.dataset.face=face;
+  return chip;
 }
 function faceHost(face, part) {
   return $(`work-for-you-${face}-${part}`) || $(`for-you-${face}-${part}`);
@@ -988,7 +990,9 @@ function overview() {
     decideMore.replaceChildren();
     if(remainder>0) {
       decideMore.hidden=false;
-      decideMore.append(link('+'+remainder+' more on Work', DECIDE_WORK_HREF));
+      const door=link('+'+remainder+' more on Work', DECIDE_WORK_HREF, 'bp-filter-chip bp-face-chip');
+      door.dataset.face='decide';
+      decideMore.append(door);
     } else {
       decideMore.hidden=true;
     }
@@ -998,8 +1002,8 @@ function overview() {
     const doors=calendarDoorsFromSnapshot();
     const faces=[['Read','read'],['Watch','watch'],['Due','due']];
     reconcileList(chips, faces, face=>face[1], ([label,face])=>{
-      if(face==='due') return overviewFaceChip(label, doors.due_count, doors.due_href || '/calendar');
-      return overviewFaceChip(label, forYou.filter(o=>o.attention_face===face).length, '/work?attention='+face);
+      if(face==='due') return overviewFaceChip(label, doors.due_count, doors.due_href || '/calendar', face);
+      return overviewFaceChip(label, forYou.filter(o=>o.attention_face===face).length, '/work?attention='+face, face);
     });
   }
   overviewSourceLine();
@@ -2566,6 +2570,9 @@ function paintCalendarSchedule() {
   const view=$('calendar-view');
   if(!view) return;
   paintDoors(view, calendarDoorsFromSnapshot());
+  const workLaneSource=(snapshot?.sources || []).find(source=>source.name==='WorkLane');
+  paintSourceStrip(view, {workLane: workLaneSource?.state==='available'});
+  paintOutboundStrip(view);
   paintLoad(view, buildLoadByDay({
     workDates: snapshot?.work_dates || [],
     events: snapshot?.events || [],

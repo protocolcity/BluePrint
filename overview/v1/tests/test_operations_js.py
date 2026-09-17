@@ -1536,6 +1536,57 @@ class OverviewHonestyTests(unittest.TestCase):
         self.assertIn('font-variant-numeric: tabular-nums', css.split('.bp-overview-decide-more')[1].split('}')[0])
 
 
+class OverviewNowPaintTests(unittest.TestCase):
+    """pc-1541 / CAP_ACQUAINTANCE_052 C3: overnight paint parity on Now.
+    Option D membership stays: ≤5 Decide rows, +N remainder door, Read /
+    Watch / Due chips. Paint only — no membership reopen."""
+
+    def test_due_and_decide_chips_carry_face_tokens(self):
+        chip = _SRC.split('function overviewFaceChip(')[1].split('function faceHost')[0]
+        compact = chip.replace(' ', '')
+        self.assertIn('chip.dataset.face=face', compact)
+        fn = _SRC.split('function overview()')[1].split('function remainderLabel')[0]
+        compact = fn.replace(' ', '')
+        self.assertIn("overviewFaceChip(label,doors.due_count,doors.due_href||'/calendar',face)", compact)
+        self.assertIn("'/work?attention='+face,face)", compact)
+        self.assertIn("door.dataset.face='decide'", compact)
+        self.assertIn("'bp-filter-chip bp-face-chip'", fn)
+
+    def test_now_hides_tall_mute_and_more_bodies(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        hide = css.split('#overview-view .bp-face-entry')[1].split('#overview-view .bp-face-chip')[0]
+        self.assertIn('.bp-face-mute', hide)
+        self.assertIn('.bp-order-detail', hide)
+        self.assertIn('display: none !important', hide)
+        overview_fn = _SRC.split('function overview()')[1].split('function remainderLabel')[0]
+        self.assertNotIn('Mute 24h', overview_fn)
+        self.assertNotIn("el('summary','More')", overview_fn)
+        self.assertNotIn('faceEntry', overview_fn)
+
+    def test_decide_rows_stay_one_line_on_narrow(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        compact = css.replace(' ', '')
+        self.assertIn('.bp-overview-decide{padding:5px0;align-items:center;gap:8px;grid-template-columns:minmax(0,1fr)auto;}', compact)
+        narrow = css.split('@media(max-width:560px)')[1]
+        self.assertIn('#overview-view .bp-overview-decide { grid-template-columns: minmax(0,1fr) auto', narrow)
+        self.assertIn('#overview-view .bp-overview-decide .bp-badge { justify-self: end; }', narrow)
+
+    def test_due_chip_uses_quiet_gold_not_alarm_red(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        due = css.split('.bp-face-chip[data-face="due"]')[1].split('}')[0]
+        self.assertIn('var(--ov-state-scanning)', due)
+        self.assertIn('var(--ov-badge-lit-border)', due)
+        self.assertNotIn('var(--ov-state-error)', due)
+        decide = css.split('.bp-face-chip[data-face="decide"]')[1].split('}')[0]
+        self.assertIn('var(--ov-focus)', decide)
+        self.assertIn('OVERVIEW_DECIDE_LIMIT = 5', _SRC)
+        self.assertIn("'+'+remainder+' more on Work'", _SRC)
+        self.assertIn('id="overview-decide-more"', _HTML)
+        self.assertIn('id="overview-face-chips"', _HTML)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+
+
 class CalendarDoorsTests(unittest.TestCase):
     """pc-1512: thin Calendar doors on Overview and Agents only."""
 
@@ -2210,6 +2261,66 @@ class CalendarLoadBarTests(unittest.TestCase):
         self.assertEqual(result['unavailable'], 'Schedule load unavailable')
         self.assertEqual(result['due_door'], 'Due · 2')
         self.assertEqual(result['fire_door'], '/agents')
+
+
+class CalendarHybridHonestyStripTests(unittest.TestCase):
+    """pc-1540 / Cap C2: reserved Hybrid source + outbound strips, and the
+    write door, stay honest — no fake MCP/Connector/Apple/Outlook live
+    state, and no write UI until the fabric exists."""
+
+    def test_source_and_outbound_strips_live_on_calendar_view_only(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertIn('data-role="cal-sources"', calendar)
+        self.assertIn('data-role="cal-outbound"', calendar)
+        self.assertIn('id="calendar-write-door"', calendar)
+        self.assertNotIn('data-role="cal-sources"', overview)
+        self.assertNotIn('data-role="cal-sources"', work)
+        self.assertLess(calendar.index('data-role="cal-sources"'), calendar.index('id="calendar-load"'))
+
+    def test_write_door_is_reserved_and_hidden(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        write_door = calendar.split('id="calendar-write-door"')[1].split('>')[0]
+        self.assertIn('hidden', write_door)
+        self.assertIn('disabled', write_door)
+        self.assertIn('aria-disabled="true"', write_door)
+
+    def test_paint_calendar_schedule_paints_both_strips(self):
+        paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
+        self.assertIn('paintSourceStrip(', paint)
+        self.assertIn('paintOutboundStrip(', paint)
+        import_line = _SRC.split("await import('/js/calendar.v1.js')")[0].splitlines()[-1]
+        self.assertIn('paintSourceStrip', import_line)
+        self.assertIn('paintOutboundStrip', import_line)
+
+    def test_source_strip_reads_worklane_from_sources_state_not_a_fake_mcp(self):
+        paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
+        self.assertIn("source.name==='WorkLane'", paint)
+        self.assertIn("workLane: workLaneSource?.state==='available'", paint)
+        self.assertNotIn('mcp: true', _SRC.lower())
+        self.assertNotIn('connector: true', _SRC.lower())
+
+    def test_css_dims_reserved_chips(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-cal-chip[data-state="reserved"]', css)
+        self.assertIn('.bp-cal-write-door[hidden]', css)
+
+    def test_load_harness_covers_strips(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping calendar load harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'calendar_load_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'calendar load harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['source_states'], ['live', 'live', 'reserved', 'reserved'])
+        self.assertEqual(result['source_states_no_worklane'], ['live', 'unavailable', 'reserved', 'reserved'])
+        self.assertEqual(result['outbound_states'], ['reserved', 'reserved'])
 
 
 class MapNodeMotionLeakTests(unittest.TestCase):

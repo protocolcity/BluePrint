@@ -246,7 +246,7 @@ raw = raw
   .replace("const {readerHref} = await import('/js/reader-navigation.mjs');", 'const {readerHref} = readerNav;')
   .replace("const {connectChanges} = await import('/js/change-feed.mjs');", 'const {connectChanges} = changeFeed;')
   .replace("const {reconcileList} = await import('/js/dom-reconcile.mjs');", 'const {reconcileList} = {reconcileList: reconcileListFn};')
-  .replace("const {buildLoadByDay, paintLoad, paintDoors} = await import('/js/calendar.v1.js');", 'const {buildLoadByDay, paintLoad, paintDoors} = {buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){}};');
+  .replace("const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip} = await import('/js/calendar.v1.js');", 'const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip} = {buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){},paintSourceStrip(){},paintOutboundStrip(){}};');
 const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
@@ -286,6 +286,11 @@ assert.deepEqual(chipText, ['Read · 2', 'Watch · 1', 'Due · 1']);
 assert.equal(chipHrefs[0], '/work?attention=read');
 assert.equal(chipHrefs[1], '/work?attention=watch');
 assert.equal(chipHrefs[2], '/work?attention=due', 'Calendar Due with a work-order clock routes to Work attention');
+assert.equal(chips[0].dataset.face, 'read');
+assert.equal(chips[1].dataset.face, 'watch');
+assert.equal(chips[2].dataset.face, 'due', 'Due chip carries the gold face token');
+assert.ok(sixMore && sixMore.hasClass('bp-face-chip'), '+N paints as a chip, not a tall body');
+assert.equal(sixMore && sixMore.dataset.face, 'decide');
 assert.equal(get('work-recent').children.length, 0, 'overview() must not paint Recent on Work');
 assert.equal(get('mute-status').textContent, '', 'overview() must not write mute status');
 assert.match(get('overview-unrouted').textContent, /Unrouted/);
