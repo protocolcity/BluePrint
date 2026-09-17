@@ -95,7 +95,7 @@ for(const target of [work,map,timeline,...unsafe.filter(x=>typeof x==='string')]
 {
   const env=environment(work);
   // Expose only the existing URL factory for assertion; the full script runs.
-  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace("await import('/js/dom-reconcile.mjs')",'reconcile').replace('function orderRow(order)', 'window.testWorkUrl = workUrl;\nfunction orderRow(order)');
+  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace("await import('/js/dom-reconcile.mjs')",'reconcile').replace("await import('/js/calendar.v1.js')",'{buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){}}').replace('function orderRow(order)', 'window.testWorkUrl = workUrl;\nfunction orderRow(order)');
   env.context.fetch=async()=>({ok:false});
   await vm.runInContext(source,env.context);await settle();
   const href=env.context.window.testWorkUrl({project:'example',id:'ex-1'});
@@ -107,7 +107,7 @@ for(const target of [work,map,timeline,...unsafe.filter(x=>typeof x==='string')]
 }
 {
   const env=environment(calendar);
-  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace("await import('/js/dom-reconcile.mjs')",'reconcile').replace('function datedHref(event)', 'window.testDatedHref = datedHref;\nfunction datedHref(event)');
+  const source=read('../../static/js/operations.js').replace("await import('/js/reader-navigation.mjs')",'navigation').replace("await import('/js/change-feed.mjs')",'{connectChanges(){return {stop(){}};}}').replace("await import('/js/dom-reconcile.mjs')",'reconcile').replace("await import('/js/calendar.v1.js')",'{buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){}}').replace('function datedHref(event)', 'window.testDatedHref = datedHref;\nfunction datedHref(event)');
   env.context.fetch=async()=>({ok:false});
   await vm.runInContext(source,env.context);await settle();
   const href=env.context.window.testDatedHref({product:'product',task_id:'pc-1'});

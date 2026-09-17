@@ -5,16 +5,25 @@
  * week list. Honest empty by default (`No events`) — never shimmer, never
  * fake a busy schedule. Calendar is time on **this desk**; nothing else.
  *
+ * Load-by-day bars (issue #153) count dated clocks, local events, and
+ * WorkForce next_fire onto a Monday–Sunday week. Open WO dumps and the
+ * Agents floor stay off this host.
+ *
  * Never speaks Map's verbs (dig, lot, hub, fan, trail, md-viewer, crumb).
  */
 
 const ENDPOINTS = {
   events: "/api/calendar/events",
   pulse: "/api/overview/pulse",
+  operations: "/api/operations",
 };
 
 const EVENT_SOURCES = new Set(["routine", "WO", "manual"]);
 const EVENT_STATES = new Set(["scheduled", "due", "done"]);
+const SCHEDULE_KINDS = new Set(["deadline", "reminder", "timer"]);
+const LOAD_DAYS = 7;
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const NONE_FIRE_LINE = "Next fire · none reported";
 
 async function fetchJson(url, fetcher) {
   const res = await fetcher(url, { cache: "no-store" });
@@ -52,6 +61,159 @@ function eventRecord(row) {
     state: st,
     notes: typeof row?.notes === "string" ? row.notes : "",
   };
+}
+
+export function dayKey(from) {
+  const d = from instanceof Date ? from : new Date();
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+export function shiftDay(key, days) {
+  const [y, m, d] = String(key).split("-").map(Number);
+  return dayKey(new Date(y, m - 1, d + days));
+}
+
+export function weekMonday(key) {
+  const [y, m, d] = String(key).split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dayKey(new Date(y, m - 1, d - ((dt.getDay() + 6) % 7)));
+}
+
+export function localDayKey(value, allDay) {
+  if (!value) return "";
+  const raw = String(value);
+  if (allDay || /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw.slice(0, 10);
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.valueOf())) return raw.slice(0, 10);
+  return dayKey(parsed);
+}
+
+export function emptyLoad(state = "empty") {
+  return { state, origin: "", days: [], total: 0 };
+}
+
+export function emptyDoors() {
+  return {
+    due_count: 0,
+    due_href: "/calendar",
+    items: [],
+    next_fire: null,
+    next_fire_line: NONE_FIRE_LINE,
+  };
+}
+
+export function buildLoadByDay(opts = {}) {
+  if (opts.readable === false) return emptyLoad("unavailable");
+  const origin = opts.origin || dayKey(opts.now || new Date());
+  const start = weekMonday(origin);
+  const project = opts.project || "";
+  const days = [];
+  for (let i = 0; i < LOAD_DAYS; i += 1) {
+    const day = shiftDay(start, i);
+    days.push({ day, label: WEEKDAYS[i], count: 0 });
+  }
+  const index = Object.fromEntries(days.map((row) => [row.day, row]));
+
+  for (const row of opts.workDates || []) {
+    if (!SCHEDULE_KINDS.has(String(row?.kind || "").trim())) continue;
+    if (project && String(row.product || "") !== project) continue;
+    const key = localDayKey(row.dtstart, row.all_day);
+    if (index[key]) index[key].count += 1;
+  }
+  for (const event of opts.events || []) {
+    const key = localDayKey(event?.at, false);
+    if (index[key]) index[key].count += 1;
+  }
+  for (const agent of opts.agents || []) {
+    const key = localDayKey(agent?.next_fire, false);
+    if (index[key]) index[key].count += 1;
+  }
+
+  const total = days.reduce((sum, row) => sum + row.count, 0);
+  return {
+    state: total ? "healthy" : "empty",
+    origin: start,
+    days,
+    total,
+  };
+}
+
+export function paintLoad(root, load) {
+  const host = root.querySelector('[data-role="cal-load"]');
+  if (!host) return;
+  const summary =
+    host.querySelector('[data-role="cal-load-summary"]') ||
+    root.querySelector('[data-role="cal-load-summary"]');
+  const chart =
+    host.querySelector('[data-role="cal-load-chart"]') ||
+    root.querySelector('[data-role="cal-load-chart"]');
+  const payload = load && typeof load === "object" ? load : emptyLoad();
+  if (summary) {
+    if (payload.state === "unavailable") {
+      summary.textContent = "Schedule load unavailable";
+    } else if (!payload.total) {
+      summary.textContent = "Quiet this week.";
+    } else {
+      const n = payload.total;
+      summary.textContent = `${n} scheduled · this week`;
+    }
+  }
+  if (!chart) return;
+  if (payload.state === "unavailable" || !payload.total || !payload.days?.length) {
+    chart.hidden = true;
+    clear(chart);
+    return;
+  }
+  const peak = Math.max(...payload.days.map((row) => Number(row.count) || 0), 1);
+  chart.hidden = false;
+  chart.setAttribute("role", "img");
+  if (summary) chart.setAttribute("aria-label", summary.textContent);
+  clear(chart);
+  for (const row of payload.days) {
+    const count = Number(row.count) || 0;
+    const col = document.createElement("div");
+    col.className = "ov-cal-load-col";
+    const track = document.createElement("div");
+    track.className = "ov-cal-load-track";
+    const bar = document.createElement("div");
+    bar.className = "ov-cal-load-bar";
+    bar.style.height = `${Math.round((count / peak) * 100)}%`;
+    bar.dataset.empty = count ? "false" : "true";
+    bar.title = `${count} · ${row.day}`;
+    track.appendChild(bar);
+    col.appendChild(track);
+    const label = document.createElement("span");
+    label.className = "ov-cal-load-label";
+    label.textContent = row.label || "";
+    col.appendChild(label);
+    chart.appendChild(col);
+  }
+}
+
+export function paintDoors(root, doors) {
+  const host = root.querySelector('[data-role="cal-doors"]');
+  if (!host) return;
+  const payload = doors && typeof doors === "object" ? doors : emptyDoors();
+  const dueCount = Number(payload.due_count) || 0;
+  const fireLine = payload.next_fire_line || NONE_FIRE_LINE;
+  clear(host);
+  const items = [
+    { text: dueCount ? `Due · ${dueCount}` : "Due · none", href: "/" },
+    { text: "Due / Remind", href: "/work?attention=due" },
+    { text: fireLine, href: "/agents" },
+    { text: "Firings", href: "/timeline" },
+  ];
+  for (const item of items) {
+    const a = document.createElement("a");
+    a.className = "ov-cal-door";
+    a.href = item.href;
+    a.textContent = item.text;
+    host.appendChild(a);
+  }
 }
 
 export function openSheet(root, event) {
@@ -179,14 +341,35 @@ export async function boot(opts = {}) {
   if (!root) throw new Error("calendar: missing #calendar-shell");
   const endpoints = { ...ENDPOINTS, ...(opts.endpoints || {}) };
   const fetcher = opts.fetcher || window.fetch.bind(window);
+  let events = [];
   try {
     const data = await fetchJson(endpoints.events, fetcher);
-    paintEvents(root, data?.events || []);
+    events = data?.events || [];
+    paintEvents(root, events);
     paintRange(root, data?.range || "");
   } catch (err) {
     // Local-only honesty: on error keep the `No events` copy on screen.
     console.warn("calendar: events unavailable", err);
   }
+  let doors = emptyDoors();
+  let load = buildLoadByDay({ events, origin: dayKey() });
+  try {
+    const ops = await fetchJson(endpoints.operations, fetcher);
+    if (ops?.calendar_doors && typeof ops.calendar_doors.due_count === "number") {
+      doors = ops.calendar_doors;
+    }
+    load = buildLoadByDay({
+      workDates: ops?.work_dates || [],
+      events: (ops?.events && ops.events.length ? ops.events : events),
+      agents: ops?.agents || [],
+      origin: dayKey(),
+      readable: Boolean(ops?.workspace),
+    });
+  } catch (err) {
+    console.warn("calendar: operations unavailable", err);
+  }
+  paintDoors(root, doors);
+  paintLoad(root, load);
   bindSheet(root);
   try {
     const pulse = await fetchJson(endpoints.pulse, fetcher);
@@ -197,5 +380,8 @@ export async function boot(opts = {}) {
 }
 
 if (typeof window !== "undefined" && !window.__CALENDAR_V1_NO_AUTO_BOOT__) {
-  boot();
+  const shell = typeof document !== "undefined"
+    ? document.getElementById("calendar-shell")
+    : null;
+  if (shell) boot({ root: shell });
 }

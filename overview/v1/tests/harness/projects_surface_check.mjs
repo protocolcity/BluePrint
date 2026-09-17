@@ -154,6 +154,7 @@ const IDS = [
   'calendar-project', 'calendar-today', 'calendar-next', 'calendar-past', 'calendar-prev-week',
   'calendar-next-week', 'calendar-today-btn', 'calendar-filters', 'calendar-today-heading',
   'calendar-next-heading', 'calendar-past-summary', 'calendar-past-wrap', 'calendar-range',
+  'calendar-load', 'calendar-load-chart', 'calendar-load-summary', 'calendar-doors',
   'schedule-list', 'event-list', 'connection-exceptions', 'connection-list', 'capability-list',
   'engine-list', 'excluded-store-list', 'remote-repositories', 'remote-status',
   'github-connection-status', 'refresh-description', 'build', 'workspace-path', 'settings-build',
@@ -304,7 +305,8 @@ raw = raw.slice(raw.indexOf("'use strict';"), raw.lastIndexOf('})();'));
 raw = raw
   .replace("const {readerHref} = await import('/js/reader-navigation.mjs');", 'const {readerHref} = readerNav;')
   .replace("const {connectChanges} = await import('/js/change-feed.mjs');", 'const {connectChanges} = changeFeed;')
-  .replace("const {reconcileList} = await import('/js/dom-reconcile.mjs');", 'const {reconcileList} = {reconcileList: reconcileListFn};');
+  .replace("const {reconcileList} = await import('/js/dom-reconcile.mjs');", 'const {reconcileList} = {reconcileList: reconcileListFn};')
+  .replace("const {buildLoadByDay, paintLoad, paintDoors} = await import('/js/calendar.v1.js');", 'const {buildLoadByDay, paintLoad, paintDoors} = {buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){}};');
 const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');

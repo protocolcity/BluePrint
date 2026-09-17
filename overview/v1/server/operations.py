@@ -20,6 +20,7 @@ from .agents_floor import (
     ticks_from_ledger_lines,
 )
 from .calendar_doors import build_calendar_doors, empty_calendar_doors
+from .calendar_load import build_calendar_load, empty_calendar_load
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
 from .portfolio import build_portfolio, empty_portfolio, store_motion_ticks
 from .throughput import build_throughput, empty_throughput, store_close_ticks
@@ -1235,6 +1236,7 @@ def operations_snapshot(binder):
               'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
               'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
               'calendar_doors': empty_calendar_doors(),
+              'calendar_load': empty_calendar_load(),
               'agents_floor': empty_agents_floor(),
               'throughput': empty_throughput(),
               'work_flow': empty_work_flow(),
@@ -1245,6 +1247,7 @@ def operations_snapshot(binder):
         result['throughput'] = empty_throughput('unavailable')
         result['work_flow'] = empty_work_flow('unavailable')
         result['portfolio'] = empty_portfolio('unavailable')
+        result['calendar_load'] = empty_calendar_load('unavailable')
         result['sources'].append({
             'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.',
             'reachable': False, 'usable': False, 'next_step': 'Start BluePrint with a workspace selected.',
@@ -1574,6 +1577,9 @@ def operations_snapshot(binder):
                 result['events'].append({key: str(event.get(key) or '') for key in ['title', 'at', 'source', 'state', 'notes']})
     result['orders'].sort(key=lambda x: (not x['attention'], x['priority'] if isinstance(x['priority'], int) else 99, x['project'], x['id']))
     result['calendar_doors'] = build_calendar_doors(
+        result.get('work_dates') or [], result.get('events') or [],
+        result.get('agents') or [], now)
+    result['calendar_load'] = build_calendar_load(
         result.get('work_dates') or [], result.get('events') or [],
         result.get('agents') or [], now)
     result['agents_floor'] = build_agents_floor(result.get('agents') or [])

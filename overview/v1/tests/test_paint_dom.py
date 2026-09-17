@@ -223,6 +223,14 @@ class CalendarGlassPaintTests(unittest.TestCase):
         self.assertEqual(c["title"], "Filed note")
         self.assertEqual(c["notes"], "")
 
+    def test_load_bars_and_doors_paint_on_the_calendar_host(self) -> None:
+        c = self.cases["calendar_load"]
+        self.assertEqual(c["summary"], "2 scheduled · this week")
+        self.assertFalse(c["hidden"])
+        self.assertEqual(c["bars"], 7)
+        self.assertEqual(c["due"], "Due · 1")
+        self.assertEqual(c["fire"], "/agents")
+
 
 class SettingsGlassPaintTests(unittest.TestCase):
     """Settings V1 glass DoD — Desk path + brew-face Cellar tip."""

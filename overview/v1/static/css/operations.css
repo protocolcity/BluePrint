@@ -345,6 +345,21 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
   overflow: hidden;
 }
 
+/* Calendar load-by-day bars + Due / Next-fire doors (issue #153).
+   Schedule truth only — not a WO dump or Agents floor. */
+.bp-calendar-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 16px;
+}
+.bp-calendar-doors a,
+.bp-calendar-doors .ov-cal-door { text-decoration: none; font-size: 13px; }
+.bp-calendar-doors a:hover,
+.bp-calendar-doors .ov-cal-door:hover { text-decoration: underline; }
+.bp-calendar-load { padding: 14px 16px; margin-bottom: 16px; }
+.bp-calendar-load .bp-section-head { margin-bottom: 8px; }
+
 /* Delivery: exception-first repository summary with grouped evidence (pc-1487). */
 .bp-delivery-summary { font-size: 14px; font-weight: 500; margin: 0 0 6px !important; }
 .bp-delivery-repo .bp-delivery-groups { margin-top: 8px; }
