@@ -4,6 +4,7 @@
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
 const {reconcileList} = await import('/js/dom-reconcile.mjs');
+const {buildLoadByDay, paintLoad, paintDoors} = await import('/js/calendar.v1.js');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -2219,7 +2220,22 @@ function updateCalendarContext() {
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
   if(snapshot) calendar();
 }
+function paintCalendarSchedule() {
+  const view=$('calendar-view');
+  if(!view) return;
+  paintDoors(view, calendarDoorsFromSnapshot());
+  paintLoad(view, buildLoadByDay({
+    workDates: snapshot?.work_dates || [],
+    events: snapshot?.events || [],
+    agents: snapshot?.agents || [],
+    origin: calendarOrigin(),
+    project: selectedProject,
+    now: new Date(),
+    readable: Boolean(snapshot?.workspace),
+  }));
+}
 function calendar() {
+  paintCalendarSchedule();
   const origin=calendarOrigin();
   const actualToday=todayKey();
   const datedItems=mergeDatedWork(snapshot.work_dates || []).filter(event=>!selectedProject || event.product===selectedProject);

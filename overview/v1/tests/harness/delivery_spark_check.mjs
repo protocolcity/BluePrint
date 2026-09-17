@@ -190,7 +190,8 @@ raw = raw.slice(raw.indexOf("'use strict';"), raw.lastIndexOf('})();'));
 raw = raw
   .replace("const {readerHref} = await import('/js/reader-navigation.mjs');", 'const {readerHref} = readerNav;')
   .replace("const {connectChanges} = await import('/js/change-feed.mjs');", 'const {connectChanges} = changeFeed;')
-  .replace("const {reconcileList} = await import('/js/dom-reconcile.mjs');", 'const {reconcileList} = {reconcileList: reconcileListFn};');
+  .replace("const {reconcileList} = await import('/js/dom-reconcile.mjs');", 'const {reconcileList} = {reconcileList: reconcileListFn};')
+  .replace("const {buildLoadByDay, paintLoad, paintDoors} = await import('/js/calendar.v1.js');", 'const {buildLoadByDay, paintLoad, paintDoors} = {buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){}};');
 const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');

@@ -171,6 +171,8 @@ class HonestEmptyServeTests(unittest.TestCase):
         self.assertEqual(payload['throughput']['closes'], 0)
         self.assertEqual(payload['work_flow']['state'], 'unavailable')
         self.assertEqual(payload['work_flow']['seats'], [])
+        self.assertEqual(payload['calendar_load']['state'], 'unavailable')
+        self.assertEqual(payload['calendar_load']['days'], [])
 
     def test_overview_css_shares_focus_ring_across_interactive_elements(self) -> None:
         _, body, _ = _get(self.port, "/css/overview.css")
@@ -522,6 +524,11 @@ class DisposableDeskThroughputSmokeTests(unittest.TestCase):
         self.assertIn('id="agents-floor-spark"', text)
         self.assertIn('id="timeline-activity-chart"', text)
         self.assertIn('id="work-band-act-now"', text)
+        self.assertIn('id="calendar-load"', text)
+        self.assertIn('id="calendar-doors"', text)
+        calendar = text.split('id="calendar-view"', 1)[1].split('id="settings-view"', 1)[0]
+        self.assertIn('id="calendar-load"', calendar)
+        self.assertNotIn('id="calendar-load"', work)
 
     def test_operations_api_returns_portfolio_pulse(self) -> None:
         status, body, ctype = _get(self.port, '/api/operations')
