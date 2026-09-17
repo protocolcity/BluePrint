@@ -263,8 +263,10 @@ class RowReconciliationTests(unittest.TestCase):
             self.assertNotIn(f"$('{list_id}').replaceChildren", _SRC)
 
     def test_reconcile_list_used_for_the_named_lists(self):
-        for list_id in ('overview-executions', 'work-recent', 'metrics', 'work-list', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
+        for list_id in ('overview-executions', 'metrics', 'work-list', 'seat-list', 'job-list', 'projects-list', 'calendar-today', 'calendar-next', 'calendar-past', 'schedule-list', 'event-list', 'engine-list', 'capability-list', 'excluded-store-list', 'remote-repositories', 'connection-exceptions'):
             self.assertIn(f"reconcileList($('{list_id}')", _SRC)
+        self.assertIn("recentHost=$('work-recent')", _SRC.replace(' ', ''))
+        self.assertIn('reconcileList(recentHost', _SRC.replace(' ', ''))
 
     def test_delivery_no_longer_replaces_all_repository_children(self):
         """pc-1483/pc-1487: delivery painting must reconcile repository and
@@ -486,7 +488,8 @@ class CompactRowTests(unittest.TestCase):
         self.assertIn('id="overview-executions"', _HTML)
         self.assertIn('id="work-recent"', _HTML)
         self.assertNotIn('id="overview-recent"', _HTML)
-        self.assertIn("reconcileList($('work-recent')", _SRC)
+        self.assertIn("recentHost=$('work-recent')", _SRC.replace(' ', ''))
+        self.assertIn('reconcileList(recentHost', _SRC.replace(' ', ''))
 
     def test_for_you_uses_overview_face_row_not_full_order_row(self):
         self.assertIn('function overviewFaceRow(order)', _SRC)
@@ -575,7 +578,7 @@ class SlimOverviewTests(unittest.TestCase):
         compact = fn.replace(' ', '').replace('\n', '')
         self.assertIn('.slice(0,5)', compact)
         self.assertIn('overviewDecideRow', compact)
-        self.assertIn("emptyText:'Nothing for You'", compact)
+        self.assertIn("emptyText:'Nothing for You'", fn)
         self.assertNotIn('faceEntry', compact)
 
     def test_recent_changes_live_on_work_not_overview(self):
@@ -1284,6 +1287,49 @@ class OverviewForYouChromeTests(unittest.TestCase):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
         self.assertIn('grid-template-columns: repeat(5,minmax(0,1fr))', css)
         self.assertNotIn('grid-template-columns: repeat(4,1fr)', css)
+
+
+class SlimOverviewHarnessTests(unittest.TestCase):
+    """pc-1509: live-shaped paint — Overview chips + five Decide rows; Work
+    keeps full For You, Mute, More, and Recent."""
+
+    _HARNESS = Path(__file__).resolve().parent / 'harness' / 'overview_slim_check.mjs'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping overview slim harness')
+        proc = subprocess.run([node, str(cls._HARNESS)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'overview slim harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        cls.result = json.loads(proc.stdout)
+
+    def test_overview_decide_is_five_one_line_rows_without_mute_or_more(self):
+        self.assertEqual(self.result['decide_rows'], 5)
+        self.assertFalse(self.result['overview_has_mute'])
+        self.assertFalse(self.result['overview_has_more'])
+
+    def test_read_watch_due_are_count_chips_to_work(self):
+        self.assertEqual(self.result['chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
+        self.assertEqual(self.result['chip_hrefs'], [
+            '/work?attention=read', '/work?attention=watch', '/work?attention=due',
+        ])
+
+    def test_work_keeps_full_for_you_mute_more_and_recent(self):
+        self.assertEqual(self.result['work_decide'], 6)
+        self.assertEqual(self.result['work_read'], 2)
+        self.assertEqual(self.result['work_mutes'], 6)
+        self.assertGreaterEqual(self.result['work_more'], 1)
+        self.assertGreaterEqual(self.result['recent_count'], 1)
+
+    def test_unrouted_kpis_and_source_line_still_paint(self):
+        self.assertIn('Unrouted', self.result['unrouted'])
+        self.assertIn('2 sources', self.result['source_line'])
+        self.assertEqual(self.result['kpis'], 5)
 
 
 class SlimOverviewFollowThroughTests(unittest.TestCase):
