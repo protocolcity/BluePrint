@@ -17,6 +17,7 @@ import {
 import { createHitRouter } from './map-hit-router.js';
 import { createMdViewer } from './md-viewer.js';
 import { buildBranches, branchLabel, BRANCH_ITEM_LIMIT } from './project-focus.js';
+import { indexNodeState, motionClassName } from './map-motion.js';
 
 const CONFIG = {
   worldId: 'world',
@@ -40,26 +41,12 @@ const CONFIG = {
   remoteEndpoint: '/api/remote-activity',
 };
 
-function indexNodeState(projects) {
-  const map = {};
-  for (const project of projects || []) {
-    if (project && project.folder) {
-      map[project.folder] = {
-        open: project.open || 0,
-        attention: project.attention || 0,
-        working: project.working || 0,
-        state: project.state || 'unavailable',
-      };
-    }
-  }
-  return map;
-}
-
 let nodeState = {};
 let lastNodeStateJson = null;
 let paintNodeState = null;
 document.addEventListener('bp:map-operations', event => {
-  const next = indexNodeState(event.detail && event.detail.projects);
+  const detail = event.detail || {};
+  const next = indexNodeState(detail.projects, detail.portfolio);
   const json = JSON.stringify(next);
   // Identical reads must not repaint (Done-when: "Only actual evidence
   // changes receive brief feedback") — a poll that reports the same sibling
@@ -358,6 +345,7 @@ export async function boot(opts = {}) {
         selectedItem: snap.item,
         flashBranches: liveFlashBranches(),
         tickBranches,
+        motion: nodeState[snap.project.relPath] ? nodeState[snap.project.relPath].motion : null,
       });
       applyLiveFlash();
       if (tickBranches.length) scheduleCountTickClear();
@@ -609,7 +597,7 @@ export async function boot(opts = {}) {
       // (#project-focus-layer) already owns the visual, and Papers browses
       // via the sidebar list only; painting the fan underneath would leave
       // stray, clickable folder chips in the gaps around the branch layout.
-      if (snap.dig && !snap.project) { clearDigIn(world); paintDigIn(world, snap.dig, nodes.slice(page * pageSize, (page + 1) * pageSize), {radius:220}); }
+      if (snap.dig && !snap.project) { clearDigIn(world); paintDigIn(world, snap.dig, nodes.slice(page * pageSize, (page + 1) * pageSize), {radius:220, nodeState}); }
       else if (snap.project) { clearDigIn(world); }
       list.replaceChildren();
       let lastGroup = '';
@@ -631,6 +619,8 @@ export async function boot(opts = {}) {
         button.append(icon, label);
         const state = node.isDir && !snap.dig ? nodeState[node.relPath] : null;
         if (state) {
+          const motionClass = motionClassName(state.motion);
+          if (motionClass) button.className = (button.className + motionClass).trim();
           const counts = document.createElement('span');
           counts.className = 'map-browser-counts';
           counts.textContent = state.state && state.state !== 'available'
@@ -696,7 +686,7 @@ export async function boot(opts = {}) {
     // router ranks dig-in above branch items so they could steal input.
     clearDigIn(world);
     if (!viewState.snapshot().project) {
-      paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220 });
+      paintDigIn(world, node, kids.slice(0, pageSize), { radius: 220, nodeState });
     }
     renderTrail();
   }
@@ -811,7 +801,7 @@ export async function boot(opts = {}) {
         if (top) {
           const kids = visibleChildren(await tree.childrenAt(top.relPath));
           clearDigIn(world);
-          paintDigIn(world, top, kids.slice(0, pageSize), { radius: 220 });
+          paintDigIn(world, top, kids.slice(0, pageSize), { radius: 220, nodeState });
         }
         renderTrail();
         scheduleRepaint();
@@ -957,7 +947,7 @@ export async function boot(opts = {}) {
     if (popped && !viewState.snapshot().project) {
       const kids = visibleChildren(await tree.childrenAt(popped.relPath));
       clearDigIn(world);
-      paintDigIn(world, popped, kids.slice(0, pageSize), { radius: 220 });
+      paintDigIn(world, popped, kids.slice(0, pageSize), { radius: 220, nodeState });
     }
     renderTrail();
     // Trail root may have changed (or gone empty) → refresh the focus ring.

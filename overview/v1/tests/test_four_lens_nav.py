@@ -95,6 +95,10 @@ class FourLensNavTests(unittest.TestCase):
         js_status, js_body, _ = _get(self.port, "/map/js/workspace_map_app.v1.js")
         self.assertEqual(js_status, 200)
         self.assertGreater(len(js_body), 0)
+        motion_status, motion_body, _ = _get(self.port, "/map/js/map-motion.js")
+        self.assertEqual(motion_status, 200)
+        self.assertIn("classifyNodeMotion", motion_body.decode("utf-8"))
+        self.assertIn(".map-lot.map-motion-live .map-lot-plate", css_body.decode("utf-8"))
 
     def test_calendar_lens_paints(self) -> None:
         status, body, _ = _get(self.port, "/calendar")

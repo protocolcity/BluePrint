@@ -13,11 +13,14 @@ from .map_tree import (
     load_binder,
     render_file,
 )
+from .node_motion import classify_node_motion, empty_motion
 
 __all__ = [
     "attach_project_state",
     "build_tree",
     "children_at",
+    "classify_node_motion",
+    "empty_motion",
     "load_binder",
     "render_file",
 ]
