@@ -83,6 +83,24 @@ class AgentsCanvasTests(unittest.TestCase):
         self.assertIn('pc-9', work['label'])
         self.assertEqual(work['bucket'], 'target')
 
+    def test_claimed_wo_is_visible_directly_on_the_seat_node(self):
+        canvas = build_agents_canvas([
+            _agent('working-seat', 'seat', 'working', held={
+                'id': 'pc-9', 'project': 'blueprint', 'title': 'Live claim',
+            }),
+            _agent('idle-seat', 'seat', 'idle'),
+            _agent('loop-health', 'job', 'idle', held={
+                'id': 'pc-1', 'project': 'blueprint', 'title': 'Jobs never claim',
+            }),
+        ], now=NOW)
+        by_id = {node['id']: node for node in canvas['nodes'] if node['kind'] in ('seat', 'job')}
+        self.assertEqual(by_id['working-seat']['claim'], {
+            'label': 'Live claim · pc-9',
+            'href': '/work-order?project=blueprint&id=pc-9',
+        })
+        self.assertNotIn('claim', by_id['idle-seat'])
+        self.assertNotIn('claim', by_id['loop-health'])
+
     def test_next_fire_ticks_are_future_only(self):
         later = (NOW + timedelta(minutes=12)).isoformat()
         past = (NOW - timedelta(minutes=3)).isoformat()
