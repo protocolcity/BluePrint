@@ -29,3 +29,7 @@ namespaces = true
 
 [tool.setuptools.package-data]
 "*" = ["*.html", "*.css", "*.js", "*.json", "*.md", "*.svg", "*.png", "*.ico", "*.woff2", "templates/**/*", "static/**/*", "components/**/*", "brand/**/*"]
+
+# Host MCP / env files must never ride along even though *.json is shipped.
+[tool.setuptools.exclude-package-data]
+"*" = [".mcp.json", ".env", ".env.*"]
