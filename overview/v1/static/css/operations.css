@@ -32,6 +32,9 @@
 .bp-warning { color: var(--ov-focus); padding: 12px 16px; border: 1px solid var(--ov-tile-border-strong); border-left: 3px solid var(--ov-focus); border-radius: 5px; margin-bottom: 20px !important; }
 .bp-metrics { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); border: 1px solid var(--ov-tile-border); border-radius: 8px; margin-bottom: 24px; overflow: hidden; }
 .bp-metrics-compact { margin-bottom: 16px; }
+.bp-overview-unrouted { margin: -6px 0 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bp-overview-unrouted a { text-decoration: none; }
+.bp-overview-unrouted a:hover { text-decoration: underline; }
 .bp-metrics-compact .bp-metric { padding: 12px 16px; }
 .bp-metrics-compact .bp-metric strong { font-size: 22px; }
 .bp-metric { color: var(--ov-fg) !important; text-decoration: none; padding: 18px 22px; border-right: 1px solid var(--ov-tile-border); background: var(--ov-tile-bg); }
