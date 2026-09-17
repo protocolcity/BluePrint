@@ -2602,7 +2602,8 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertIn('A seat or job would sit here', agents)
         self.assertIn('Work or Timeline opens from a node', agents)
         self.assertLess(agents.index('id="agents-canvas-empty"'), agents.index('id="agents-canvas-empty-teach"'))
-        self.assertLess(agents.index('id="agents-canvas"'), agents.index('id="agents-canvas-tour"'))
+        self.assertLess(agents.index('id="agents-canvas-empty-teach"'), agents.index('id="agents-canvas-tour"'))
+        self.assertLess(agents.index('id="agents-canvas-tour"'), agents.index('id="agents-canvas"'))
 
     def test_paint_reuses_floor_truth_and_has_doors_not_an_editor(self):
         agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]

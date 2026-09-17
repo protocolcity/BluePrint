@@ -187,7 +187,7 @@
 .bp-agents-tour-teach li { margin: 6px 0; }
 .bp-agents-tour-teach strong { color: var(--ov-fg); font-weight: 500; }
 .bp-agents-tour {
-  margin-top: 12px;
+  margin: 0 0 12px;
   padding: 12px 14px;
   border: 1px solid var(--ov-tile-border-strong);
   border-left: 3px solid var(--ov-focus);
