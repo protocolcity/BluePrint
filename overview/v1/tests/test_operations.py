@@ -879,6 +879,31 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(sum(throughput['hours']), 1)
         self.assertEqual(len(throughput['hours']), 24)
 
+    def test_disposable_desk_counts_seat_runs_and_fails(self):
+        started = self._stamp(timedelta(hours=4))
+        stopped = self._stamp(timedelta(hours=3))
+        failed = self._stamp(timedelta(hours=1))
+        old = self._stamp(timedelta(hours=30))
+        self._runtime_with_ledger(
+            f'{old} START identity=agent kind=lane budget_secs=1500\n'
+            f'{old} STOP reason="too old"\n'
+            f'{started} START identity=agent kind=lane budget_secs=1500\n'
+            f'{stopped} DONE rc=0\n'
+            f'{stopped} STOP reason="single-pass complete"\n'
+            f'{failed} START identity=agent kind=lane budget_secs=1500\n'
+            f'{failed} ERROR reason="agent exit" rc=1\n'
+        )
+        result = operations_snapshot(self.root)
+        spark = result['agents_floor']['sparks']['agent']
+        self.assertEqual(spark['runs'], 2)
+        self.assertEqual(spark['errors'], 1)
+        self.assertEqual(spark['fail_rate'], 0.5)
+        self.assertEqual(spark['state'], 'healthy')
+        self.assertEqual(sum(spark['hours']), 2)
+        self.assertEqual(sum(spark['fails']), 1)
+        self.assertEqual(len(spark['hours']), 24)
+        self.assertEqual(result['agents_floor']['error'], 1)
+
 class TimestampAndParkMarkerTests(unittest.TestCase):
     """pc-1495 second-pass findings: "Parked by" must count as a park marker and
     park times must compare as instants across the two timestamp formats."""
