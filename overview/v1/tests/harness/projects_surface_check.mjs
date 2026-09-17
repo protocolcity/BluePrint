@@ -154,6 +154,7 @@ const IDS = [
   'calendar-project', 'calendar-today', 'calendar-next', 'calendar-past', 'calendar-prev-week',
   'calendar-next-week', 'calendar-today-btn', 'calendar-filters', 'calendar-today-heading',
   'calendar-next-heading', 'calendar-past-summary', 'calendar-past-wrap', 'calendar-range',
+  'calendar-load', 'calendar-load-chart', 'calendar-load-summary', 'calendar-doors',
   'schedule-list', 'event-list', 'connection-exceptions', 'connection-list', 'capability-list',
   'engine-list', 'excluded-store-list', 'remote-repositories', 'remote-status',
   'github-connection-status', 'refresh-description', 'build', 'workspace-path', 'settings-build',

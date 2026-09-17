@@ -290,6 +290,18 @@ function makeCalendarShell() {
   const range = new El("span");
   range.setAttribute("data-role", "cal-range");
   root.appendChild(range);
+  const doors = new El("nav");
+  doors.setAttribute("data-role", "cal-doors");
+  root.appendChild(doors);
+  const load = new El("div");
+  load.setAttribute("data-role", "cal-load");
+  const loadSummary = new El("p");
+  loadSummary.setAttribute("data-role", "cal-load-summary");
+  const loadChart = new El("div");
+  loadChart.setAttribute("data-role", "cal-load-chart");
+  loadChart.hidden = true;
+  load.append(loadSummary, loadChart);
+  root.appendChild(load);
   const sheet = new El("dialog");
   sheet.setAttribute("data-role", "cal-sheet");
   sheet.hidden = true;
@@ -415,6 +427,27 @@ const settings = await import(
   cases.calendar_sheet_empty_notes = {
     title: root.querySelector('[data-role="cal-sheet-title"]').textContent,
     notes: root.querySelector('[data-role="cal-sheet-notes"]').textContent,
+  };
+}
+
+{
+  const root = makeCalendarShell();
+  const load = cal.buildLoadByDay({
+    events: [
+      { title: "Standup", at: "2026-09-16" },
+      { title: "Ship peel", at: "2026-09-17" },
+    ],
+    origin: "2026-09-17",
+  });
+  cal.paintLoad(root, load);
+  cal.paintDoors(root, { due_count: 1, next_fire_line: "Next fire · none reported" });
+  const chart = root.querySelector('[data-role="cal-load-chart"]');
+  cases.calendar_load = {
+    summary: root.querySelector('[data-role="cal-load-summary"]').textContent,
+    hidden: chart.hidden,
+    bars: chart.children.length,
+    due: root.querySelector('[data-role="cal-doors"]').children[0].textContent,
+    fire: root.querySelector('[data-role="cal-doors"]').children[2].href,
   };
 }
 

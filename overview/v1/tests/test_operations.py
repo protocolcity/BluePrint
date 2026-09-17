@@ -517,6 +517,9 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(result['work_flow']['total'], 0)
         self.assertEqual(result['portfolio']['state'], 'unavailable')
         self.assertEqual(result['portfolio']['projects'], [])
+        self.assertEqual(result['calendar_load']['state'], 'unavailable')
+        self.assertEqual(result['calendar_load']['days'], [])
+        self.assertEqual(result['calendar_load']['total'], 0)
 
     def test_placeholder_job_is_not_presented_as_working(self):
         runtime=self.root/'workforce/local';runtime.mkdir(parents=True)
@@ -863,6 +866,11 @@ class OperationsTests(unittest.TestCase):
         self.assertTrue(any(item.get('task_id') == 'pc-1' for item in doors['items']))
         self.assertTrue(any(item.get('title') == 'Standup' for item in doors['items']))
         self.assertEqual(doors['next_fire_line'], 'Next fire · none reported')
+        load = result['calendar_load']
+        self.assertIn(load['state'], ('healthy', 'empty'))
+        self.assertEqual(len(load['days']), 7)
+        self.assertEqual(load['total'], sum(row['count'] for row in load['days']))
+        self.assertNotIn('orders', load)
 
     def test_disposable_desk_counts_last_24h_closes(self):
         self.seed()
@@ -947,6 +955,25 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(sum(row['hours']), 1)
         self.assertNotIn('/delivery', row['href'])
         self.assertNotIn('/agents', row['href'])
+
+    def test_disposable_desk_builds_calendar_load_from_schedule_clocks(self):
+        self.seed()
+        today = datetime.now().astimezone().date().isoformat()
+        with sqlite3.connect(self.root/'worklane/worklane/local/data/product.db') as conn:
+            conn.execute('UPDATE tasks SET labels=?, gate_type=?, gate_note=? WHERE id=1',
+                         (json.dumps(['worker:you', f'deadline:{today}']), '', ''))
+        (self.root/'.blueprint').mkdir(exist_ok=True)
+        (self.root/'.blueprint'/'calendar.json').write_text(json.dumps({
+            'range': 'this week',
+            'events': [{'title': 'Standup', 'at': today, 'source': 'routine', 'state': 'scheduled'}],
+        }))
+        result = operations_snapshot(self.root)
+        load = result['calendar_load']
+        self.assertEqual(load['state'], 'healthy')
+        self.assertEqual(len(load['days']), 7)
+        self.assertGreaterEqual(load['total'], 2)
+        self.assertTrue(any(row['count'] for row in load['days']))
+        self.assertEqual(result['calendar_doors']['due_count'] >= 1, True)
 
 class TimestampAndParkMarkerTests(unittest.TestCase):
     """pc-1495 second-pass findings: "Parked by" must count as a park marker and

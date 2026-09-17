@@ -485,6 +485,65 @@ html, body {
   gap: 8px;
 }
 .ov-cal-hint { color: var(--ov-muted); font-size: 12px; }
+.ov-cal-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.ov-cal-door {
+  color: var(--ov-link);
+  font-size: 12px;
+  text-decoration: none;
+}
+.ov-cal-door:hover { text-decoration: underline; }
+.ov-cal-load { min-width: 0; }
+.ov-cal-load-summary {
+  margin: 0 0 8px;
+  color: var(--ov-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ov-cal-load-chart {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 72px;
+  margin: 0;
+}
+.ov-cal-load-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.ov-cal-load-track {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+}
+.ov-cal-load-bar {
+  width: 100%;
+  max-width: 16px;
+  margin-inline: auto;
+  background: var(--ov-link);
+  border-radius: 2px 2px 0 0;
+}
+.ov-cal-load-bar[data-empty="true"] {
+  background: var(--ov-tile-border);
+  min-height: 2px;
+}
+.ov-cal-load-label {
+  font-size: 10px;
+  color: var(--ov-muted);
+  text-align: center;
+  line-height: 1;
+  height: 12px;
+  overflow: hidden;
+}
 .ov-cal-list { min-width: 0; }
 .ov-cal-events { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .ov-cal-event {
