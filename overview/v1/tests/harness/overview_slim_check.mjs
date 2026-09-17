@@ -117,7 +117,7 @@ const IDS = [
   'work-list', 'mute-status',
   'projects-list', 'projects-summary', 'projects-filter',
   'seat-list', 'job-list', 'agent-detail', 'supervisor-panel', 'coverage-list', 'agents-heartbeat',
-  'agents-next-fire', 'agents-pulse', 'agents-floor-remainder', 'agents-floor-empty',
+  'agents-next-fire', 'agents-pulse', 'agents-floor-remainder', 'agents-floor-empty', 'agents-floor-spark',
   'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list', 'work-calendar-doors',
   'timeline-project', 'timeline-source', 'timeline-actor', 'timeline-list', 'timeline-sources',
   'timeline-more', 'timeline-new-events', 'timeline-activity', 'timeline-activity-chart',

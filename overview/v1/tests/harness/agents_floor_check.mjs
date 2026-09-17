@@ -108,7 +108,7 @@ const IDS = [
   'active-filters', 'overview-view', 'work-view', 'agents-view', 'calendar-view',
   'seat-list', 'job-list', 'agent-detail', 'supervisor-panel', 'coverage-list',
   'agents-heartbeat', 'agents-next-fire', 'agents-pulse', 'agents-floor-remainder',
-  'agents-floor-empty', 'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list',
+  'agents-floor-empty', 'agents-floor-spark', 'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list',
   'timeline-project', 'timeline-source',
 ];
 const nodes = new Map();
@@ -145,7 +145,16 @@ const fixture = {
     agent('off-seat', 'off', {badge: 'OFF'}),
     agent('loop-health', 'idle', {group: 'job', schedule: '5,35 * * * *', next_fire: later, badge: 'IDLE'}),
   ],
-  agents_floor: {working: 1, idle: 2, error: 1, stale: 0, quiet: 1},
+  agents_floor: {
+    working: 1, idle: 2, error: 1, stale: 0, quiet: 1,
+    sparks: {
+      'working-seat': {hours: Array.from({length: 24}, (_, i) => i === 4 || i === 23 ? 1 : 0), fails: Array(24).fill(0), runs: 2, errors: 0, fail_rate: 0, state: 'healthy'},
+      'idle-seat': {hours: Array(24).fill(0), fails: Array(24).fill(0), runs: 0, errors: 0, fail_rate: null, state: 'empty'},
+      'failed-seat': {hours: Array.from({length: 24}, (_, i) => i === 22 ? 1 : 0), fails: Array.from({length: 24}, (_, i) => i === 22 ? 1 : 0), runs: 1, errors: 1, fail_rate: 1, state: 'healthy'},
+      'off-seat': {hours: Array(24).fill(0), fails: Array(24).fill(0), runs: 0, errors: 0, fail_rate: null, state: 'empty'},
+      'loop-health': {hours: Array.from({length: 24}, (_, i) => i === 10 ? 1 : 0), fails: Array(24).fill(0), runs: 1, errors: 0, fail_rate: 0, state: 'healthy'},
+    },
+  },
   coverage: [],
   supervisor: null,
   sources: [{name: 'WorkForce heartbeat', state: 'fresh', last_at: new Date().toISOString()}],
@@ -235,10 +244,29 @@ assert.match(working.textContent, /pc-9|Live claim/);
 assert.ok(working.querySelector('.bp-shift-cue'), 'open in-budget shift keeps the live cue');
 assert.match(get('agents-next-fire').textContent, /Next fire · loop-health/);
 
+const sparkOf = (host, id) => {
+  const select = host.querySelectorAll('.bp-agent-select').find(node => node.dataset.agentId === id);
+  if (!select) return '';
+  const label = select.querySelector('.bp-agent-spark-label');
+  return label ? label.textContent : '';
+};
+const workingSpark = sparkOf(get('seat-list'), 'working-seat');
+const idleSpark = sparkOf(get('seat-list'), 'idle-seat');
+const failedSpark = sparkOf(get('seat-list'), 'failed-seat');
+const quietSpark = sparkOf(get('agents-quiet-list'), 'off-seat');
+assert.equal(workingSpark, '2 runs');
+assert.ok(get('seat-list').querySelector('.bp-agent-spark-line'), 'working seat paints a throughput spark');
+assert.equal(idleSpark, '', 'idle with no ticks stays honest empty');
+assert.equal(failedSpark, '1 run · 1 fail');
+assert.equal(quietSpark, '', 'off seats do not invent spark motion');
+assert.match(get('agents-floor-spark').textContent, /4 runs · last 24h/);
+assert.match(get('agents-floor-spark').textContent, /1 fail/);
+assert.equal(get('agents-floor-spark').querySelector('a') && get('agents-floor-spark').querySelector('a').href, '/timeline?period=1');
+
 const quietOnly = {
   ...fixture,
   agents: [agent('off-seat', 'off', {badge: 'OFF'}), agent('held-seat', 'not_configured', {badge: 'NOT CONFIGURED'})],
-  agents_floor: {working: 0, idle: 0, error: 0, stale: 0, quiet: 2},
+  agents_floor: {working: 0, idle: 0, error: 0, stale: 0, quiet: 2, sparks: {}},
   calendar_doors: {due_count: 0, due_href: '/calendar', items: [], next_fire: null, next_fire_line: 'Next fire · none reported'},
 };
 runtime.applySnapshot(quietOnly);
@@ -251,6 +279,7 @@ assert.equal(get('agents-floor-empty').hidden, false);
 assert.equal(get('agents-floor-empty').textContent, 'No seats working right now.');
 assert.match(get('seat-list').textContent, /quiet roster below/);
 assert.equal(get('agents-next-fire').textContent, 'Next fire · none reported');
+assert.equal(get('agents-floor-spark').textContent, '');
 
 process.stdout.write(JSON.stringify({
   pulse,
@@ -260,4 +289,10 @@ process.stdout.write(JSON.stringify({
   working_has_cue: Boolean(working.querySelector('.bp-shift-cue')),
   empty_when_quiet: get('agents-floor-empty').textContent,
   next_fire: 'Next fire · loop-health in 12m',
+  working_spark: workingSpark,
+  failed_spark: failedSpark,
+  idle_spark: idleSpark,
+  quiet_spark: quietSpark,
+  floor_spark: '4 runs · last 24h · 1 fail',
+  floor_spark_when_quiet: get('agents-floor-spark').textContent,
 }));

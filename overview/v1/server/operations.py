@@ -13,7 +13,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
-from .agents_floor import build_agents_floor, empty_agents_floor
+from .agents_floor import (
+    build_agents_floor,
+    build_floor_sparks,
+    empty_agents_floor,
+    ticks_from_ledger_lines,
+)
 from .calendar_doors import build_calendar_doors, empty_calendar_doors
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
 from .throughput import build_throughput, empty_throughput, store_close_ticks
@@ -1560,6 +1565,14 @@ def operations_snapshot(binder):
         result.get('work_dates') or [], result.get('events') or [],
         result.get('agents') or [], now)
     result['agents_floor'] = build_agents_floor(result.get('agents') or [])
+    ticks_by_id = {}
+    for agent in result.get('agents') or []:
+        identity = agent.get('id')
+        # A missing ledger tail is empty evidence, not an unavailable spark.
+        lines = _ledger_tail_lines(daemon_path, root, identity) or []
+        ticks_by_id[identity] = ticks_from_ledger_lines(lines)
+    result['agents_floor']['sparks'] = build_floor_sparks(
+        result.get('agents') or [], ticks_by_id, now)
     result['throughput'] = build_throughput(
         close_ticks, now, readable=stores_read or not paths)
     return result

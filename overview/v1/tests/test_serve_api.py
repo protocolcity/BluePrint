@@ -507,6 +507,71 @@ class DisposableDeskThroughputSmokeTests(unittest.TestCase):
         self.assertEqual([order['id'] for order in payload['orders']], ['pc-1'])
 
 
+class DisposableDeskAgentsSparkSmokeTests(unittest.TestCase):
+    """Issue #140: serve a throwaway binder and read seat sparks through HTTP."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix='bp-agents-spark-')
+        self.root = Path(self.temp.name)
+        runtime = self.root / 'workforce' / 'local'
+        runtime.mkdir(parents=True)
+        (runtime / 'ledger').mkdir()
+        (runtime / 'roster.json').write_text(json.dumps({
+            'workers': {
+                'seat': {'display': 'Seat', 'command': ['example-agent'], 'identity': 'seat', 'kind': 'lane'},
+                'off-seat': {'display': 'Off', 'command': ['example-agent'], 'identity': 'off-seat', 'kind': 'lane', 'enabled': False},
+            }
+        }))
+        now = datetime.now(timezone.utc)
+        (runtime / 'daemon.json').write_text(json.dumps({
+            'last_tick': now.isoformat(), 'in_flight': [],
+        }))
+        stopped = (now - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        failed = (now - timedelta(minutes=40)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        (runtime / 'ledger' / 'seat.log').write_text(
+            f'{stopped} START identity=seat kind=lane budget_secs=1500\n'
+            f'{stopped} DONE rc=0\n'
+            f'{stopped} STOP reason="single-pass complete"\n'
+            f'{failed} START identity=seat kind=lane budget_secs=1500\n'
+            f'{failed} ERROR reason="agent exit" rc=1\n'
+        )
+        self.httpd, self.port, self.thread = _start_server(empty_state(), binder_root=self.root)
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.temp.cleanup()
+
+    def test_operations_html_hosts_the_floor_spark_under_pulse(self) -> None:
+        status, body, _ = _get(self.port, '/')
+        text = body.decode()
+        self.assertEqual(status, 200)
+        self.assertIn('id="agents-view"', text)
+        self.assertIn('id="agents-pulse"', text)
+        self.assertIn('id="agents-floor-spark"', text)
+        self.assertLess(text.index('id="agents-pulse"'), text.index('id="agents-floor-spark"'))
+        self.assertLess(text.index('id="agents-floor-spark"'), text.index('id="agents-next-fire"'))
+        self.assertIn('id="overview-throughput"', text)
+        self.assertIn('id="timeline-activity-chart"', text)
+
+    def test_operations_api_returns_seat_run_and_fail_sparks(self) -> None:
+        status, body, ctype = _get(self.port, '/api/operations')
+        self.assertEqual(status, 200)
+        self.assertIn('application/json', ctype)
+        payload = json.loads(body)
+        spark = payload['agents_floor']['sparks']['seat']
+        self.assertEqual(spark['runs'], 2)
+        self.assertEqual(spark['errors'], 1)
+        self.assertEqual(spark['fail_rate'], 0.5)
+        self.assertEqual(spark['state'], 'healthy')
+        self.assertEqual(sum(spark['hours']), 2)
+        self.assertEqual(payload['agents_floor']['error'], 1)
+        self.assertEqual(payload['agents_floor']['quiet'], 1)
+        off = payload['agents_floor']['sparks']['off-seat']
+        self.assertEqual(off['state'], 'empty')
+        self.assertEqual(off['runs'], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
 
