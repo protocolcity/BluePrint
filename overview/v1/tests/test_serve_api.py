@@ -679,6 +679,8 @@ class DisposableDeskWorkFlowSmokeTests(unittest.TestCase):
         self.assertEqual(by_id['pepper']['ready'], 1)
         self.assertEqual(by_id['pepper']['name'], 'pepper')
         self.assertEqual(by_id['lili']['claimed'], 1)
+        self.assertTrue(any(chip.get('id') in ('pepper', 'lili') for chip in flow['chips']))
+        self.assertTrue(all('ready' in chip and 'stalled' in chip for chip in flow['chips']))
         self.assertEqual({order['row_status'] for order in payload['orders']}, {'Ready', 'Live'})
         self.assertTrue(all(order.get('board_band') == 'seat_backlog' for order in payload['orders']))
 

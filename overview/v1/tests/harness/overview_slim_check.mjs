@@ -312,16 +312,16 @@ assert.equal(workAct.length, 8, 'Act now is Decide+Read at the comfortable cap')
 assert.equal(get('work-act-now-count').textContent, '8');
 assert.equal(workTodos.length, 1, 'Due reminder lands in My todos');
 assert.ok(workSeat.length >= 1, 'Seat backlog shows agent-drainable open work');
-assert.equal(workMutes.length, 8, 'Mute lives on Work Act now rows');
-assert.ok(workMore.length >= 1, 'More disclosure lives on Work rows');
+assert.equal(workMutes.length, 0, 'Mute is gone from Work Act now rows');
+assert.equal(workMore.length, 0, 'More disclosure is gone from Work rows');
 assert.equal(workBadges.length, 2, 'every Work row has dual Face + Status badges');
 assert.ok(workBadgeText.includes('Decide'), 'Face badge is Decide, not Needs you');
 assert.ok(workBadgeText.includes('Open'), 'Status badge stays on its own pill');
 assert.equal(workNeedsYou, false, 'Work rows never paint a primary Needs you chip');
-assert.match(get('mute-status').textContent, /Mute only hides this inbox item/);
+assert.equal(get('mute-status').textContent, '');
 assert.equal(get('work-recent') && get('work-recent').children.length, 0);
-assert.match(get('work-flow').textContent, /Ready/, 'Work paints a flow strip above the bands');
-assert.ok(get('work-flow').querySelector('.bp-work-flow-bar'), 'flow bar is present');
+assert.equal(get('work-flow').querySelector('.bp-work-flow-bar'), null, 'flow bars are held');
+assert.ok(get('work-flow').querySelector('.bp-work-seat-chip') || get('work-flow').textContent.includes('seat'), 'seat-load hero is present or honest empty');
 
 runtime.applySnapshot({
   ...fixture,
@@ -339,16 +339,19 @@ runtime.applySnapshot({
 get('work-flow').replaceChildren();
 runtime.work();
 const flowText = get('work-flow').textContent;
-const seatRows = get('work-flow').querySelectorAll('.bp-work-seat-load-row');
-const seatNames = seatRows.map(row => {
-  const name = row.querySelector('.bp-work-seat-load-name');
+const seatChips = get('work-flow').querySelectorAll('.bp-work-seat-chip');
+const seatNames = seatChips.map(row => {
+  const name = row.querySelector('.bp-work-seat-chip-name');
   return name ? name.textContent : '';
 });
-assert.match(flowText, /Open 1 → Ready 1 → Live 2 → Done 0/);
+assert.doesNotMatch(flowText, /Open 1 → Ready 1 → Live 2 → Done 0/);
+assert.equal(get('work-flow').querySelector('.bp-work-flow-bar'), null, 'no second hero flow bar');
 assert.deepEqual(seatNames.sort(), ['lili', 'pepper']);
+assert.match(flowText, /ready/);
+assert.match(flowText, /stalled/);
 assert.equal(get('work-act-now').querySelectorAll('.bp-order').length, 0, 'flow fixture does not invent Act now');
 assert.equal(get('work-band-act-now').hidden, false, 'empty Act now band stays visible');
-assert.ok(get('work-flow').querySelector('.bp-work-seat-load'), 'per-seat ready/claimed/stalled rows paint');
+assert.ok(get('work-flow').querySelector('.bp-work-seat-load'), 'per-seat ready/stalled chips paint');
 runtime.applySnapshot({...fixture, orders: [], work_flow: runtime.emptyWorkFlow()});
 get('work-flow').replaceChildren();
 runtime.work();
