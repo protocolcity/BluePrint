@@ -8,7 +8,7 @@ const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStr
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','Pull requests, CI and releases reported by GitHub; not agent activity.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
+const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
 let agentsView = 'floor';
@@ -2886,6 +2886,77 @@ function deliverySparkGlyphs(values) {
   if(!peak) return '';
   return series.map(n=>SPARK_BLOCKS[Math.min(7, Math.round((n/peak)*7))]).join('');
 }
+function deliveryHeroRepos(data) {
+  return (data.repositories || []).filter(repo=>!deliveryRepo || repo.repo===deliveryRepo);
+}
+function deliveryHeroFromRemote(data) {
+  if(!data) return {state:'unavailable', remote_state:'unavailable', open_prs:0, merges:0, checks:0, failures:0, remotes:0};
+  const remoteState=String(data.state || 'unknown');
+  if(remoteState==='not_configured') return {state:'not_configured', remote_state:remoteState, open_prs:0, merges:0, checks:0, failures:0, remotes:0};
+  if(remoteState==='unavailable' || remoteState==='invalid_config') return {state:'unavailable', remote_state:'unavailable', open_prs:0, merges:0, checks:0, failures:0, remotes:0};
+  const spark=deliverySparkFromRemote(data);
+  if(spark.state==='unavailable') return {state:'unavailable', remote_state:remoteState, open_prs:0, merges:0, checks:0, failures:0, remotes:deliveryHeroRepos(data).length};
+  let open=0, merges=0;
+  for(const repo of deliveryHeroRepos(data)) {
+    const summary=repo.summary || {};
+    open += Number(summary.open_prs) || 0;
+    merges += Number(summary.recent_merges) || 0;
+  }
+  if(!merges) merges=Number(spark.merges_total) || 0;
+  return {
+    state: spark.state==='empty' && !open ? 'empty' : 'healthy',
+    remote_state: remoteState,
+    open_prs: open,
+    merges,
+    checks: Number(spark.checks) || 0,
+    failures: Number(spark.failures) || 0,
+    remotes: deliveryHeroRepos(data).length,
+  };
+}
+function deliveryHeroChip(kind, name, primary, secondary, href, tone) {
+  const node=href ? link('', href, 'bp-delivery-hero-chip') : el('div', undefined, 'bp-delivery-hero-chip');
+  node.dataset.kind=kind;
+  if(tone) node.dataset.tone=tone;
+  node.append(el('span', name, 'bp-delivery-hero-chip-name'));
+  node.append(el('span', primary, 'bp-delivery-hero-chip-primary'));
+  if(secondary) node.append(el('span', secondary, 'bp-delivery-hero-chip-secondary'));
+  return node;
+}
+function paintDeliveryHero(data) {
+  const host=$('delivery-hero-chips');
+  if(!host) return;
+  host.replaceChildren();
+  if(!data) {
+    host.append(deliveryHeroChip('remote','Remote','unavailable','', '/connections', 'error'));
+    return;
+  }
+  if(data.state==='loading' && !(data.repositories || []).length) return;
+  const hero=deliveryHeroFromRemote(data);
+  if(hero.state==='not_configured') {
+    host.append(deliveryHeroChip('pr','PR','not configured','', deliverySparkHref('pull_request'), 'muted'));
+    host.append(deliveryHeroChip('ci','CI','not configured','', deliverySparkHref('workflow'), 'muted'));
+    host.append(deliveryHeroChip('remote','Remote','not configured','', '/connections', 'muted'));
+    return;
+  }
+  if(hero.state==='unavailable') {
+    host.append(deliveryHeroChip('pr','PR','unavailable','', deliverySparkHref('pull_request'), 'error'));
+    host.append(deliveryHeroChip('ci','CI','unavailable','', deliverySparkHref('workflow'), 'error'));
+    host.append(deliveryHeroChip('remote','Remote','unavailable','', '/connections', 'error'));
+    return;
+  }
+  const prPrimary=hero.open_prs ? (hero.open_prs===1?'1 open':`${hero.open_prs} open`) : (hero.merges ? (hero.merges===1?'1 merged':`${hero.merges} merged`) : 'none');
+  const prSecondary=hero.open_prs && hero.merges ? (hero.merges===1?'1 merged':`${hero.merges} merged`) : '';
+  const prTone=hero.open_prs ? 'open' : (hero.merges ? 'working' : 'muted');
+  host.append(deliveryHeroChip('pr','PR', prPrimary, prSecondary, deliverySparkHref('pull_request'), prTone));
+  const ciPrimary=hero.checks ? (hero.checks===1?'1 check':`${hero.checks} checks`) : 'no runs';
+  const ciSecondary=hero.failures ? (hero.failures===1?'1 fail':`${hero.failures} fails`) : '';
+  const ciTone=hero.failures ? 'error' : (hero.checks ? 'working' : 'muted');
+  host.append(deliveryHeroChip('ci','CI', ciPrimary, ciSecondary, deliverySparkHref('workflow'), ciTone));
+  const remoteLabel=hero.remote_state.replaceAll('_',' ');
+  const remoteSecondary=hero.remotes===1 ? '1 remote' : `${hero.remotes} remotes`;
+  const remoteTone=hero.remote_state==='connected' ? 'working' : (hero.remote_state==='partial' ? 'partial' : 'muted');
+  host.append(deliveryHeroChip('remote','Remote', remoteLabel, remoteSecondary, '/connections', remoteTone));
+}
 function paintDeliverySpark(data) {
   const host=$('delivery-ci-spark');
   if(!host) return;
@@ -2949,6 +3020,7 @@ function paintDelivery(data) {
       {emptyText: repo.quiet ? 'Quiet in the last 14 days.' : 'No verified delivery available.'});
   }
   deliveryFilters();
+  paintDeliveryHero(data);
   paintDeliverySpark(data);
 }
 function remoteStatusText(data) {
