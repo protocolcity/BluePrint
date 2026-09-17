@@ -137,7 +137,7 @@ const canvas = {
   width: 480,
   height: 320,
   nodes: [
-    {id: 'working-seat', kind: 'seat', label: 'working-seat', badge: 'WORKING', bucket: 'working', group: 'seat', x: 24, y: 24, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:working-seat'},
+    {id: 'working-seat', kind: 'seat', label: 'working-seat', badge: 'WORKING', bucket: 'working', group: 'seat', x: 24, y: 24, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:working-seat', claim: {label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9'}},
     {id: 'work:blueprint:pc-9', kind: 'work', label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9', door: 'ticket', bucket: 'target', x: 268, y: 24, w: 188, h: 58},
     {id: 'idle-seat', kind: 'seat', label: 'idle-seat', badge: 'IDLE', bucket: 'idle', group: 'seat', x: 24, y: 98, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:idle-seat'},
     {id: 'failed-seat', kind: 'seat', label: 'failed-seat', badge: 'LAST RUN FAILED', bucket: 'error', group: 'seat', x: 24, y: 172, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:failed-seat'},
@@ -283,10 +283,16 @@ assert.ok(edges.some(edge => edge.dataset.kind === 'claim'));
 assert.ok(edges.some(edge => edge.dataset.kind === 'next_fire'));
 
 const links = get('agents-canvas').querySelectorAll('a');
-assert.ok(links.some(a => String(a.href).includes('/work?assignment=worker:working-seat')));
+assert.ok(links.some(a => String(a.href).includes('/work?assignment=worker:idle-seat')), 'seats without a held WO still get the generic Work link');
 assert.ok(links.some(a => String(a.href).includes('/work-order?project=blueprint&id=pc-9')));
 assert.ok(links.some(a => String(a.href) === '/calendar'));
 assert.ok(!cards.some(n => n.draggable), 'canvas nodes are not an editor');
+
+const claimChip = working.querySelectorAll('.bp-agents-canvas-claim')[0];
+assert.ok(claimChip, 'claimed WO is visible directly on the seat node');
+assert.match(claimChip.textContent, /Live claim.*pc-9/);
+assert.equal(claimChip.href, '/work-order?project=blueprint&id=pc-9');
+assert.ok(!working.querySelectorAll('.bp-agents-canvas-chip').some(a => a.textContent === 'Work'), 'claim chip replaces the generic Work link once a WO is held');
 
 const emptyCanvas = {
   ...fixture,
