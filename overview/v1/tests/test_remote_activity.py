@@ -187,11 +187,12 @@ class RemoteTests(unittest.TestCase):
             (root / '.blueprint/connections.json').write_text(json.dumps({
                 'github': {'repositories': [{'repo': 'org/repo'}]}}))
             remote._CACHE.clear()
+            specs = [{'repo': 'org/repo'}]
+            key = (str(root.resolve()), json.dumps(specs, sort_keys=True), remote._WINDOW_SECONDS)
+            remote._CACHE[key] = {'checked': 0, 'busy': False, 'data': {'state': 'loading', 'repositories': []}}
             with patch.object(remote, 'shutil') as shutil_mod, patch.object(remote, '_github', side_effect=values):
                 shutil_mod.which.return_value = 'gh'
-                remote.remote_snapshot(root)
-                key = next(iter(remote._CACHE))
-                remote._refresh(key, 'gh', [{'repo': 'org/repo'}], root)
+                remote._refresh(key, 'gh', specs, root)
                 payload = remote.remote_snapshot(root)
         self.assertEqual(payload['ci_spark']['state'], 'healthy')
         self.assertEqual(payload['ci_spark']['checks'], 2)
