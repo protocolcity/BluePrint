@@ -16,6 +16,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from .agents_floor import build_agents_floor, empty_agents_floor
 from .calendar_doors import build_calendar_doors, empty_calendar_doors
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
+from .throughput import build_throughput, empty_throughput, store_close_ticks
 from .work_board import annotate_order
 
 # Fixed badge vocabulary (STATES_AND_TERMS.md §2, AGENTS_INTENT.md). Never
@@ -1229,9 +1230,11 @@ def operations_snapshot(binder):
               'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
               'calendar_doors': empty_calendar_doors(),
               'agents_floor': empty_agents_floor(),
+              'throughput': empty_throughput(),
               'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
+        result['throughput'] = empty_throughput('unavailable')
         result['sources'].append({
             'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.',
             'reachable': False, 'usable': False, 'next_step': 'Start BluePrint with a workspace selected.',
@@ -1258,6 +1261,8 @@ def operations_snapshot(binder):
                          if isinstance(row, dict) and (row.get('kind') or 'agent') == 'lane'}
     status_by_id = {}
     store_available = {}
+    close_ticks = []
+    stores_read = False
     for path in paths:
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
         summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'claimed': 0,
@@ -1355,6 +1360,11 @@ def operations_snapshot(binder):
                     # the same as a fresh agent shift. 'running' below is the
                     # separate, agent-evidence-only signal (pc-1483).
                     summary['claimed'] += int(status == 'in_progress' and marker is not None)
+                try:
+                    close_ticks.extend(store_close_ticks(conn, now))
+                except sqlite3.Error:
+                    pass
+                stores_read = True
             store_available[path.stem] = True
         except (OSError, sqlite3.Error):
             summary['state'] = 'unavailable'
@@ -1550,4 +1560,6 @@ def operations_snapshot(binder):
         result.get('work_dates') or [], result.get('events') or [],
         result.get('agents') or [], now)
     result['agents_floor'] = build_agents_floor(result.get('agents') or [])
+    result['throughput'] = build_throughput(
+        close_ticks, now, readable=stores_read or not paths)
     return result

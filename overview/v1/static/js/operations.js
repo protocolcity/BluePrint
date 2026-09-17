@@ -832,6 +832,7 @@ function overview() {
   reconcileList($('overview-executions'), running, a=>a.id, executionRow, running.length ? {} : {emptyText:overviewExecutionEmpty()});
   const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
+  paintOverviewThroughput();
   const unrouted=orders.filter(isUnrouted), unroutedHost=$('overview-unrouted');
   if(unroutedHost) {
     unroutedHost.replaceChildren();
@@ -957,6 +958,44 @@ function matchesAssignment(order, value) {
 const OVERVIEW_DECIDE_LIMIT = 5;
 const DECIDE_WORK_HREF = '/work?attention=decide';
 const UNROUTED_WORK_HREF = '/work?unrouted=1';
+const THROUGHPUT_HREF = '/timeline?period=1';
+const SPARK_BLOCKS = '▁▂▃▄▅▆▇█';
+function emptyThroughput() {
+  return {closes:0, hours:Array(24).fill(0), href:THROUGHPUT_HREF, state:'empty'};
+}
+function throughputFromSnapshot() {
+  const data=snapshot && snapshot.throughput;
+  if(data && Array.isArray(data.hours) && typeof data.closes==='number') return data;
+  return emptyThroughput();
+}
+function throughputSpark(hours) {
+  const values=Array.isArray(hours) ? hours.slice(0,24) : [];
+  while(values.length<24) values.push(0);
+  const peak=Math.max(0, ...values);
+  if(!peak) return '';
+  return values.map(n=>SPARK_BLOCKS[Math.min(7, Math.round((n/peak)*7))]).join('');
+}
+function paintOverviewThroughput() {
+  const host=$('overview-throughput');
+  if(!host) return;
+  const data=throughputFromSnapshot();
+  host.replaceChildren();
+  if(data.state==='unavailable') {
+    host.append(document.createTextNode('Throughput unavailable'));
+    return;
+  }
+  if(!data.closes) {
+    host.append(document.createTextNode('No closes in the last 24h'));
+    return;
+  }
+  host.append(link(data.closes+' closes · last 24h', data.href || THROUGHPUT_HREF));
+  const glyphs=throughputSpark(data.hours);
+  if(glyphs) {
+    const spark=el('span', glyphs, 'bp-overview-spark');
+    spark.setAttribute('aria-hidden','true');
+    host.append(spark);
+  }
+}
 function isUnrouted(order) {
   // Same slice as the per-row Needs routing chip: open backlog, ungated, no
   // routable seat (ONE_DESK_STORY §The fact: Unrouted).

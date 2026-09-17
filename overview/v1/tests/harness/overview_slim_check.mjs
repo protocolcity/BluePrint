@@ -109,7 +109,7 @@ const IDS = [
   'filters', 'work-list', 'results', 'page-count', 'previous', 'next', 'clear-filters',
   'active-filters', 'overview-view', 'work-view', 'agents-view', 'calendar-view',
   'timeline-view', 'connections-view', 'delivery-view', 'settings-view', 'overview-executions',
-  'overview-exec-cue', 'metrics', 'overview-unrouted', 'overview-source-line',
+  'overview-exec-cue', 'metrics', 'overview-throughput', 'overview-unrouted', 'overview-source-line',
   'for-you-decide', 'overview-decide-more', 'overview-face-chips',
   'work-band-act-now', 'work-act-now', 'work-act-now-count', 'work-act-now-more',
   'work-band-my-todos', 'work-my-todos', 'work-my-todos-count', 'work-my-todos-more',
@@ -182,6 +182,12 @@ const fixture = {
   excluded_stores: [],
   truncated: false,
   observed_at: new Date().toISOString(),
+  throughput: {
+    closes: 3,
+    hours: [0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+    href: '/timeline?period=1',
+    state: 'healthy',
+  },
 };
 
 const context = {
@@ -241,7 +247,7 @@ const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
 raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; lastSuccess = Date.now();`;
-const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox, agents, applySnapshot(next){ snapshot = next; }, calendarDueItems, nextScheduleFire, nextFireLine, buildCalendarDoors}; })();`);
+const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {overview, work, renderWorkInbox, agents, applySnapshot(next){ snapshot = next; }, calendarDueItems, nextScheduleFire, nextFireLine, buildCalendarDoors, throughputSpark, emptyThroughput}; })();`);
 const runtime = await boot(...Object.values(context));
 
 function kpiForYouCount() {
@@ -281,6 +287,12 @@ assert.equal(get('mute-status').textContent, '', 'overview() must not write mute
 assert.match(get('overview-unrouted').textContent, /Unrouted/);
 assert.match(get('overview-source-line').textContent, /2 sources/);
 assert.ok(get('metrics').children.length === 5, 'five KPI tiles');
+const sparkHost = get('overview-throughput');
+assert.match(sparkHost.textContent, /3 closes · last 24h/, 'healthy spark is a count door');
+assert.equal(sparkHost.querySelector('a') && sparkHost.querySelector('a').href, '/timeline?period=1');
+assert.ok(sparkHost.querySelector('.bp-overview-spark'), 'unicode spark sits beside the count');
+assert.equal(runtime.throughputSpark([0,0,0,0]), '', 'all-zero hours paint no spark glyphs');
+assert.ok(runtime.throughputSpark([0,2,0,1]).length > 0, 'nonzero hours paint a spark');
 
 runtime.work();
 const workAct = get('work-act-now').querySelectorAll('.bp-order');
@@ -389,6 +401,18 @@ assert.equal(helperDoors.next_fire_line, 'Next fire · loop-health in 12m');
 assert.equal(runtime.nextFireLine(null), 'Next fire · none reported');
 assert.equal(runtime.calendarDueItems([], [{title: 'Standup', at: '2026-09-17T10:00:00Z', state: 'due'}], helperNow).length, 1);
 
+runtime.applySnapshot({...fixture, throughput: runtime.emptyThroughput()});
+get('overview-throughput').replaceChildren();
+runtime.overview();
+assert.equal(get('overview-throughput').textContent, 'No closes in the last 24h');
+assert.equal(get('overview-throughput').querySelector('a'), null, 'empty spark is not a fake door');
+assert.equal(get('for-you-decide').querySelectorAll('.bp-overview-decide').length, 5, 'empty spark does not touch Option D');
+runtime.applySnapshot({...fixture, throughput: {closes: 0, hours: Array(24).fill(0), href: '/timeline?period=1', state: 'unavailable'}});
+get('overview-throughput').replaceChildren();
+runtime.overview();
+assert.equal(get('overview-throughput').textContent, 'Throughput unavailable');
+assert.equal(get('metrics').children.length, 5, 'unavailable spark is not a sixth KPI');
+
 process.stdout.write(JSON.stringify({
   decide_rows: decideRows.length,
   decide_more: sixMore && sixMore.textContent,
@@ -422,4 +446,8 @@ process.stdout.write(JSON.stringify({
   next_fire: nextFireText,
   helper_due_count: helperDoors.due_count,
   helper_next_fire: helperDoors.next_fire_line,
+  throughput: '3 closes · last 24h',
+  throughput_href: '/timeline?period=1',
+  throughput_empty: 'No closes in the last 24h',
+  throughput_unavailable: 'Throughput unavailable',
 }));
