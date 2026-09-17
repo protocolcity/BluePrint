@@ -59,6 +59,9 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-overview-decide { padding: 7px 0; }
 .bp-overview-decide .bp-order-link { min-width: 0; }
 .bp-overview-decide strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-overview-decide-more { margin: 6px 0 4px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bp-overview-decide-more a { text-decoration: none; }
+.bp-overview-decide-more a:hover { text-decoration: underline; }
 .bp-section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 14px; }
 .bp-section-head a { white-space: nowrap; font-size: 12px; text-decoration: none; }
 .bp-order { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; padding: 15px 0; text-decoration: none; color: var(--ov-fg) !important; border-top: 1px solid var(--ov-tile-border); transition: background-color 150ms; }

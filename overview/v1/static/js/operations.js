@@ -645,7 +645,7 @@ function overviewDecideRow(order) {
   const row=el('div',undefined,'bp-order bp-order-compact bp-overview-decide');
   const anchor=link('',workUrl(order),'bp-order-link');
   const content=el('div');
-  content.append(el('strong',order.title));
+  content.append(el('strong',[order.title,order.project_name].filter(Boolean).join(' · ')));
   anchor.append(content);
   row.append(anchor,badge('attention','Needs you'));
   return row;
@@ -725,9 +725,23 @@ function overview() {
     unroutedHost.append(document.createTextNode('Unrouted '), link(String(unrouted.length), UNROUTED_WORK_HREF));
     unroutedHost.append(el('span', unrouted.length ? ' — open, ungated orders with no seat' : ' — none right now'));
   }
+  // Overview Act-now is the true Decide pile (Mute lives on Work). Cap the
+  // visible rows and always paint the remainder door — never silent truncate
+  // (pc-1511).
   const decide=forYou.filter(o=>o.attention_face==='decide');
-  const decideVisible=decide.filter(o=>!(Number(muted[muteKey(o)])>Date.now())).slice(0,5);
+  const decideVisible=decide.slice(0,OVERVIEW_DECIDE_LIMIT);
   reconcileList($('for-you-decide'), decideVisible, o=>o.project+':'+o.id, overviewDecideRow, {emptyText:'Nothing for You'});
+  const decideMore=$('overview-decide-more');
+  if(decideMore) {
+    const remainder=decide.length-decideVisible.length;
+    decideMore.replaceChildren();
+    if(remainder>0) {
+      decideMore.hidden=false;
+      decideMore.append(link('+'+remainder+' more on Work', DECIDE_WORK_HREF));
+    } else {
+      decideMore.hidden=true;
+    }
+  }
   const chips=$('overview-face-chips');
   if(chips) {
     const faces=[['Read','read'],['Watch','watch'],['Due','due']];
@@ -782,6 +796,8 @@ function matchesAssignment(order, value) {
   if(value==='unassigned') return !order.assigned_you && !order.workers.filter(w=>w!=='you').length;
   return order.workers.includes(value.slice(7));
 }
+const OVERVIEW_DECIDE_LIMIT = 5;
+const DECIDE_WORK_HREF = '/work?attention=decide';
 const UNROUTED_WORK_HREF = '/work?unrouted=1';
 function isUnrouted(order) {
   // Same slice as the per-row Needs routing chip: open backlog, ungated, no
