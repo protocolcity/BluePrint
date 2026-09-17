@@ -238,6 +238,12 @@ export function outboundStripChips() {
   ];
 }
 
+const CHIP_STATE_LABELS = {
+  live: "Live",
+  unavailable: "Unavailable",
+  reserved: "Reserved",
+};
+
 function paintChipStrip(root, role, chips, reservedTitle) {
   const host = root.querySelector(`[data-role="${role}"]`);
   if (!host) return;
@@ -246,10 +252,10 @@ function paintChipStrip(root, role, chips, reservedTitle) {
     const span = document.createElement("span");
     span.className = "bp-cal-chip";
     span.dataset.state = chip.state;
-    span.textContent = chip.label;
+    const stateLabel = CHIP_STATE_LABELS[chip.state] || chip.state;
+    span.textContent = `${chip.label} · ${stateLabel}`;
     if (chip.state === "reserved") {
       span.title = reservedTitle || `${chip.label} — reserved, not connected yet`;
-      span.setAttribute("aria-disabled", "true");
     } else if (chip.state === "unavailable") {
       span.title = `${chip.label} — unavailable`;
     }

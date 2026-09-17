@@ -2566,7 +2566,8 @@ function paintCalendarSchedule() {
   const view=$('calendar-view');
   if(!view) return;
   paintDoors(view, calendarDoorsFromSnapshot());
-  paintSourceStrip(view, {workLane: Boolean(snapshot?.workspace)});
+  const workLaneSource=(snapshot?.sources || []).find(source=>source.name==='WorkLane');
+  paintSourceStrip(view, {workLane: workLaneSource?.state==='available'});
   paintOutboundStrip(view);
   paintLoad(view, buildLoadByDay({
     workDates: snapshot?.work_dates || [],

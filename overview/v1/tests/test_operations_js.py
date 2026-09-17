@@ -2243,9 +2243,10 @@ class CalendarHybridHonestyStripTests(unittest.TestCase):
         self.assertIn('paintSourceStrip', import_line)
         self.assertIn('paintOutboundStrip', import_line)
 
-    def test_source_strip_reads_worklane_from_workspace_not_a_fake_mcp(self):
+    def test_source_strip_reads_worklane_from_sources_state_not_a_fake_mcp(self):
         paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
-        self.assertIn('workLane: Boolean(snapshot?.workspace)', paint)
+        self.assertIn("source.name==='WorkLane'", paint)
+        self.assertIn("workLane: workLaneSource?.state==='available'", paint)
         self.assertNotIn('mcp: true', _SRC.lower())
         self.assertNotIn('connector: true', _SRC.lower())
 
