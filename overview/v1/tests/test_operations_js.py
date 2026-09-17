@@ -2249,5 +2249,109 @@ class MapNodeMotionLeakTests(unittest.TestCase):
         self.assertNotIn('POS', _HTML)
 
 
+class AgentsCanvasPeelTests(unittest.TestCase):
+    """pc-1534 / issue #168: Floor | Canvas toggle. Read-only spatial twin."""
+
+    def test_toggle_and_canvas_host_live_on_agents_only(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertIn('id="agents-face"', agents)
+        self.assertIn('id="agents-face-floor"', agents)
+        self.assertIn('id="agents-face-canvas"', agents)
+        self.assertIn('>Floor<', agents)
+        self.assertIn('>Canvas<', agents)
+        self.assertIn('id="agents-canvas"', agents)
+        self.assertIn('id="agents-canvas-empty"', agents)
+        self.assertIn('id="agents-floor-lists"', agents)
+        self.assertLess(agents.index('id="agents-floor-spark"'), agents.index('id="agents-face"'))
+        self.assertLess(agents.index('id="agents-face"'), agents.index('id="agents-next-fire"'))
+        self.assertLess(agents.index('id="agents-floor-lists"'), agents.index('id="agents-canvas-wrap"'))
+        self.assertLess(agents.index('id="agents-canvas-wrap"'), agents.index('id="agent-detail"'))
+        self.assertEqual(_HTML.count('id="agents-canvas"'), 1)
+        self.assertNotIn('id="agents-canvas"', overview)
+        self.assertNotIn('id="agents-canvas"', work)
+        self.assertNotIn('id="agents-face"', overview)
+        self.assertNotIn('id="agents-face"', work)
+        self.assertIn('id="agents-pulse"', agents)
+        self.assertIn('id="agents-floor-spark"', agents)
+
+    def test_paint_reuses_floor_truth_and_has_doors_not_an_editor(self):
+        agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]
+        self.assertIn('paintAgentsPulse()', agents)
+        self.assertIn('paintAgentsFloorSpark()', agents)
+        self.assertIn('paintAgentsNextFire()', agents)
+        self.assertIn('syncAgentsFace()', agents)
+        self.assertIn('paintAgentsCanvas()', agents)
+        self.assertLess(agents.index('paintAgentsPulse()'), agents.index('paintAgentsCanvas()'))
+        paint = _SRC.split('function paintAgentsCanvas()')[1].split('function timelineActionLabel')[0]
+        self.assertIn('agentsCanvasFromSnapshot()', paint)
+        self.assertIn('No seats or jobs on this roster.', paint)
+        self.assertNotIn('draggable', paint)
+        self.assertNotIn('dragstart', paint)
+        self.assertNotIn('rewire', paint)
+        self.assertNotIn('line.className', _SRC)
+        edges = _SRC.split('function paintAgentsCanvasEdges')[1].split('function paintAgentsCanvas()')[0]
+        self.assertIn("setAttribute('class','bp-agents-canvas-edge')", edges.replace(' ', ''))
+        self.assertNotIn('.className', edges)
+        builder = _SRC.split('function buildAgentsCanvas(agents, now)')[1].split('function agentsCanvasFromSnapshot')[0]
+        self.assertIn('floorBucket(agent)', builder)
+        self.assertIn("group==='seat'", builder.replace(' ', ''))
+        self.assertIn('agent.held', builder)
+        self.assertIn('next_fire', builder)
+        self.assertIn("kind:'claim'", builder.replace(' ', ''))
+        self.assertIn("kind:'next_fire'", builder.replace(' ', ''))
+        node = _SRC.split('function paintAgentsCanvasNode(node)')[1].split('function paintAgentsCanvasEdges')[0]
+        self.assertIn('selectAgent(node.id)', node.replace(' ', ''))
+        self.assertIn('work_href', node)
+        self.assertIn("door==='ticket'", node.replace(' ', ''))
+        self.assertIn('readerHref(', node)
+        self.assertIn("'/calendar'", node)
+        self.assertNotIn('n8n', _SRC.lower())
+        self.assertNotIn('histogram', paint.lower())
+
+    def test_does_not_add_a_page_or_regress_floor_and_work(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-agents-face', css)
+        self.assertIn('.bp-agents-canvas-node', css)
+        self.assertIn('.bp-agents-canvas-edge', css)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('EXECUTIONS', _HTML)
+        self.assertNotIn('id="work-canvas"', _HTML)
+        self.assertNotIn('id="overview-canvas"', _HTML)
+        work = _SRC.split('function work()')[1].split('function agentAction')[0]
+        self.assertIn('paintWorkFlow()', work)
+        self.assertNotIn('paintAgentsCanvas', work)
+        self.assertIn('function paintAgentsFloorSpark()', _SRC)
+        self.assertIn('function paintWorkFlow()', _SRC)
+        self.assertIn("['Working',floor.working,'working']", _SRC.replace(' ', ''))
+
+    def test_canvas_harness(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping agents canvas harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'agents_canvas_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'agents canvas harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['pulse'], ['1Working', '2Idle', '1Error'])
+        self.assertTrue(result['floor_lists_visible'])
+        self.assertTrue(result['canvas_hidden_on_floor'])
+        self.assertTrue(result['canvas_visible'])
+        self.assertTrue(result['floor_lists_hidden_on_canvas'])
+        self.assertEqual(result['seat_ids'], ['working-seat', 'idle-seat', 'failed-seat', 'off-seat'])
+        self.assertEqual(result['job_ids'], ['loop-health'])
+        self.assertEqual(result['working_bucket'], 'working')
+        self.assertTrue(result['has_claim_edge'])
+        self.assertTrue(result['has_next_fire_edge'])
+        self.assertTrue(result['work_chip'])
+        self.assertTrue(result['ticket_door'])
+        self.assertEqual(result['empty_roster'], 'No seats or jobs on this roster.')
+        self.assertTrue(result['floor_back'])
+
+
 if __name__ == '__main__':
     unittest.main()

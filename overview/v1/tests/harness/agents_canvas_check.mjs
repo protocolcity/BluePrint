@@ -1,4 +1,4 @@
-// pc-1513: Agents live floor — pulse counts, claim cards, quiet Off, next fire.
+// pc-1534: Agents Floor | Canvas toggle — read-only spatial twin.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {reconcileList} from '../../static/js/dom-reconcile.mjs';
@@ -16,6 +16,7 @@ class Element {
     this.attributes = {};
     this.className = '';
     this.dataset = {};
+    this.style = {};
     this.hidden = false;
     this.open = false;
     this.disabled = false;
@@ -24,7 +25,11 @@ class Element {
     this.href = '';
     this.value = '';
     this.selectedOptions = [{text: ''}];
-    this.ownerDocument = {createElement: t => new Element(t), createTextNode: t => Object.assign(new Element('#text'), {_text: String(t), textContent: String(t)})};
+    this.ownerDocument = {
+      createElement: t => new Element(t),
+      createElementNS: (_ns, t) => new Element(t),
+      createTextNode: t => Object.assign(new Element('#text'), {_text: String(t), textContent: String(t)}),
+    };
     this.classList = {
       add: name => { this.className = `${this.className} ${name}`.trim(); },
       remove: name => { this.className = this.className.split(/\s+/).filter(x => x && x !== name).join(' '); },
@@ -63,30 +68,24 @@ class Element {
   replaceChildren(...nodes) { this.children.length = 0; this.childNodes = this.children; this.append(...nodes); }
   hasAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name); }
   getAttribute(name) { return this.attributes[name] ?? null; }
-  setAttribute(name, value) { this.attributes[name] = String(value); }
-  removeAttribute(name) { delete this.attributes[name]; }
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+    if (name === 'class') this.className = String(value);
+  }
   hasClass(name) {
     return String(this.className || '').split(/\s+/).includes(name);
   }
   querySelector(sel) {
-    const walk = node => {
-      if (sel === 'a' && node.tagName === 'A') return node;
-      if (sel === 'strong' && node.tagName === 'STRONG') return node;
-      if (sel.startsWith('.') && node.hasClass(sel.slice(1))) return node;
-      if (sel.startsWith('[data-agent-id=') && node.dataset && node.dataset.agentId === sel.slice(16, -2)) return node;
-      for (const child of node.children || []) {
-        const hit = walk(child);
-        if (hit) return hit;
-      }
-      return null;
-    };
-    return walk(this);
+    return this.querySelectorAll(sel)[0] || null;
   }
   querySelectorAll(sel) {
     const out = [];
     const walk = node => {
       if (sel === 'a' && node.tagName === 'A') out.push(node);
       if (sel.startsWith('.') && node.hasClass(sel.slice(1))) out.push(node);
+      if (sel.startsWith('[data-kind=') && node.dataset && node.dataset.kind === sel.slice(12, -2)) out.push(node);
+      if (sel.startsWith('[data-id=') && node.dataset && node.dataset.id === sel.slice(10, -2)) out.push(node);
+      if (sel.startsWith('[data-agent-id=') && node.dataset && node.dataset.agentId === sel.slice(16, -2)) out.push(node);
       for (const child of node.children || []) walk(child);
     };
     walk(this);
@@ -132,6 +131,25 @@ function agent(id, state, extra = {}) {
 }
 
 const later = new Date(Date.now() + 12 * 60 * 1000).toISOString();
+const canvas = {
+  empty: false,
+  empty_reason: '',
+  width: 480,
+  height: 320,
+  nodes: [
+    {id: 'working-seat', kind: 'seat', label: 'working-seat', badge: 'WORKING', bucket: 'working', group: 'seat', x: 24, y: 24, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:working-seat'},
+    {id: 'work:blueprint:pc-9', kind: 'work', label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9', door: 'ticket', bucket: 'target', x: 268, y: 24, w: 188, h: 58},
+    {id: 'idle-seat', kind: 'seat', label: 'idle-seat', badge: 'IDLE', bucket: 'idle', group: 'seat', x: 24, y: 98, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:idle-seat'},
+    {id: 'failed-seat', kind: 'seat', label: 'failed-seat', badge: 'LAST RUN FAILED', bucket: 'error', group: 'seat', x: 24, y: 172, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:failed-seat'},
+    {id: 'off-seat', kind: 'seat', label: 'off-seat', badge: 'OFF', bucket: 'quiet', group: 'seat', x: 24, y: 246, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:off-seat'},
+    {id: 'loop-health', kind: 'job', label: 'loop-health', badge: 'IDLE', bucket: 'idle', group: 'job', x: 24, y: 332, w: 188, h: 58, door: ''},
+    {id: 'fire:loop-health', kind: 'fire', label: 'Next fire · in 12m', href: '/calendar', door: 'calendar', bucket: 'target', x: 268, y: 332, w: 188, h: 58},
+  ],
+  edges: [
+    {from: 'working-seat', to: 'work:blueprint:pc-9', kind: 'claim'},
+    {from: 'loop-health', to: 'fire:loop-health', kind: 'next_fire'},
+  ],
+};
 const fixture = {
   workspace: {name: 'Desk', path: '/tmp/desk'},
   build: '0.1.51',
@@ -139,7 +157,7 @@ const fixture = {
   orders: [{id: 'pc-9', project: 'blueprint', project_name: 'BluePrint', title: 'Live claim'}],
   agents: [
     agent('working-seat', 'working', {
-      held: {id: 'pc-9', project: 'blueprint'},
+      held: {id: 'pc-9', project: 'blueprint', title: 'Live claim'},
       shift: {started_at: '2026-09-17T03:00:00Z', age_seconds: 120, budget_secs: 1500, stale: false, lock_held: true, source: 'ledger'},
     }),
     agent('idle-seat', 'idle'),
@@ -162,6 +180,7 @@ const fixture = {
       runs: 4, errors: 1, fail_rate: 0.25, state: 'healthy',
     },
   },
+  agents_canvas: canvas,
   coverage: [],
   supervisor: null,
   sources: [{name: 'WorkForce heartbeat', state: 'fresh', last_at: new Date().toISOString()}],
@@ -187,6 +206,7 @@ const context = {
 context.document = {
   getElementById: get,
   createElement: tag => new Element(tag),
+  createElementNS: (_ns, tag) => new Element(tag),
   createTextNode: text => Object.assign(new Element('#text'), {_text: String(text), textContent: String(text)}),
   addEventListener() {},
   hidden: false,
@@ -229,88 +249,76 @@ const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
 raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; lastSuccess = Date.now();`;
-const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {agents, applySnapshot(next){ snapshot = next; }}; })();`);
+const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {agents, setAgentsView, applySnapshot(next){ snapshot = next; }}; })();`);
 const runtime = await boot(...Object.values(context));
 
 runtime.agents();
 const pulse = get('agents-pulse').querySelectorAll('.bp-metric').map(n => n.textContent.replace(/\s+/g, ''));
-assert.deepEqual(pulse, ['1Working', '2Idle', '1Error'], 'strip counts Working/Idle/Error from state; jobs count, Off does not');
-assert.match(get('agents-floor-remainder').textContent, /1 off or unknown/);
-assert.equal(get('agents-floor-empty').hidden, true);
-
-const liveIds = get('seat-list').querySelectorAll('.bp-agent-select').map(n => n.dataset.agentId);
-assert.deepEqual(liveIds, ['working-seat', 'idle-seat', 'failed-seat']);
-assert.ok(!liveIds.includes('off-seat'), 'Off seats leave the live floor');
-assert.equal(get('agents-quiet').hidden, false);
-assert.match(get('agents-quiet-summary').textContent, /Quiet · 1 off or unknown/);
-const quietIds = get('agents-quiet-list').querySelectorAll('.bp-agent-select').map(n => n.dataset.agentId);
-assert.deepEqual(quietIds, ['off-seat']);
-
-const working = get('seat-list').querySelectorAll('.bp-agent-row-live')[0];
-assert.ok(working, 'working seat is a live card');
-assert.match(working.textContent, /pc-9|Live claim/);
-assert.ok(working.querySelector('.bp-shift-cue'), 'open in-budget shift keeps the live cue');
-assert.match(get('agents-next-fire').textContent, /Next fire · loop-health/);
-
-const sparkOf = (host, id) => {
-  const select = host.querySelectorAll('.bp-agent-select').find(node => node.dataset.agentId === id);
-  if (!select) return '';
-  const label = select.querySelector('.bp-agent-spark-label');
-  const fail = select.querySelector('.bp-agent-spark-fail');
-  return [label ? label.textContent : '', fail ? fail.textContent : ''].filter(Boolean).join(' · ');
-};
-const sparkToneOf = (host, id) => {
-  const select = host.querySelectorAll('.bp-agent-select').find(node => node.dataset.agentId === id);
-  const line = select && select.querySelector('.bp-agent-spark-line');
-  return line ? line.dataset.tone : '';
-};
-const workingSpark = sparkOf(get('seat-list'), 'working-seat');
-const idleSpark = sparkOf(get('seat-list'), 'idle-seat');
-const failedSpark = sparkOf(get('seat-list'), 'failed-seat');
-const quietSpark = sparkOf(get('agents-quiet-list'), 'off-seat');
-assert.equal(workingSpark, '2 runs');
-assert.ok(get('seat-list').querySelector('.bp-agent-spark-line'), 'working seat paints a throughput spark');
-assert.equal(idleSpark, '', 'idle with no ticks stays honest empty');
-assert.equal(failedSpark, '1 run · 1 fail (100%)');
-assert.equal(quietSpark, '', 'off seats do not invent spark motion');
-assert.equal(sparkToneOf(get('seat-list'), 'working-seat'), 'working');
-assert.equal(sparkToneOf(get('seat-list'), 'failed-seat'), 'error');
+assert.deepEqual(pulse, ['1Working', '2Idle', '1Error']);
+assert.equal(get('agents-floor-lists').hidden, false);
+assert.equal(get('agents-canvas-wrap').hidden, true);
 assert.match(get('agents-floor-spark').textContent, /4 runs · last 24h/);
-assert.match(get('agents-floor-spark').textContent, /1 fail \(25%\)/);
-assert.ok(get('agents-floor-spark').querySelector('.bp-agents-floor-fail'), 'strip fail rate is its own glanceable chip');
-assert.equal(get('agents-floor-spark').querySelector('.bp-agents-floor-spark-line') && get('agents-floor-spark').querySelector('.bp-agents-floor-spark-line').dataset.tone, 'working', 'mixed fail does not paint the whole strip as error');
-assert.equal(get('agents-floor-spark').querySelector('a') && get('agents-floor-spark').querySelector('a').href, '/timeline?period=1');
 
-const quietOnly = {
+runtime.setAgentsView('canvas');
+assert.equal(get('agents-face-canvas').attributes['aria-pressed'], 'true');
+assert.equal(get('agents-face-floor').attributes['aria-pressed'], 'false');
+assert.equal(get('agents-floor-lists').hidden, true);
+assert.equal(get('agents-canvas-wrap').hidden, false);
+assert.equal(get('agents-canvas').hidden, false);
+assert.equal(get('agents-canvas-empty').hidden, true);
+assert.match(get('agents-pulse').textContent.replace(/\s+/g, ''), /1Working/);
+assert.match(get('agents-floor-spark').textContent, /4 runs · last 24h/);
+
+const cards = get('agents-canvas').querySelectorAll('.bp-agents-canvas-node');
+const seatIds = cards.filter(n => n.dataset.kind === 'seat').map(n => n.dataset.id);
+const jobIds = cards.filter(n => n.dataset.kind === 'job').map(n => n.dataset.id);
+const working = cards.find(n => n.dataset.id === 'working-seat');
+assert.deepEqual(seatIds, ['working-seat', 'idle-seat', 'failed-seat', 'off-seat']);
+assert.deepEqual(jobIds, ['loop-health']);
+assert.equal(working.dataset.bucket, 'working');
+assert.ok(working.querySelector('.bp-shift-cue'));
+
+const edges = get('agents-canvas').querySelectorAll('.bp-agents-canvas-edge');
+assert.ok(edges.some(edge => edge.dataset.kind === 'claim'));
+assert.ok(edges.some(edge => edge.dataset.kind === 'next_fire'));
+
+const links = get('agents-canvas').querySelectorAll('a');
+assert.ok(links.some(a => String(a.href).includes('/work?assignment=worker:working-seat')));
+assert.ok(links.some(a => String(a.href).includes('/work-order?project=blueprint&id=pc-9')));
+assert.ok(links.some(a => String(a.href) === '/calendar'));
+assert.ok(!cards.some(n => n.draggable), 'canvas nodes are not an editor');
+
+const emptyCanvas = {
   ...fixture,
-  agents: [agent('off-seat', 'off', {badge: 'OFF'}), agent('held-seat', 'not_configured', {badge: 'NOT CONFIGURED'})],
-  agents_floor: {working: 0, idle: 0, error: 0, stale: 0, quiet: 2, sparks: {}},
-  calendar_doors: {due_count: 0, due_href: '/calendar', items: [], next_fire: null, next_fire_line: 'Next fire · none reported'},
+  agents: [],
+  agents_floor: {working: 0, idle: 0, error: 0, stale: 0, quiet: 0, sparks: {}},
+  agents_canvas: {nodes: [], edges: [], width: 0, height: 0, empty: true, empty_reason: 'No seats or jobs on this roster.'},
 };
-runtime.applySnapshot(quietOnly);
-get('agents-pulse').replaceChildren();
-get('seat-list').replaceChildren();
-get('agents-quiet-list').replaceChildren();
+runtime.applySnapshot(emptyCanvas);
 runtime.agents();
-assert.equal(get('agents-pulse').querySelectorAll('.bp-metric').map(n => n.textContent.replace(/\s+/g, '')).join('|'), '0Working|0Idle|0Error');
-assert.equal(get('agents-floor-empty').hidden, false);
-assert.equal(get('agents-floor-empty').textContent, 'No seats working right now.');
-assert.match(get('seat-list').textContent, /quiet roster below/);
-assert.equal(get('agents-next-fire').textContent, 'Next fire · none reported');
-assert.equal(get('agents-floor-spark').textContent, '');
+assert.equal(get('agents-canvas-empty').hidden, false);
+assert.equal(get('agents-canvas-empty').textContent, 'No seats or jobs on this roster.');
+assert.equal(get('agents-canvas').hidden, true);
+
+runtime.applySnapshot(fixture);
+runtime.setAgentsView('floor');
+assert.equal(get('agents-floor-lists').hidden, false);
+assert.equal(get('agents-canvas-wrap').hidden, true);
+assert.equal(get('agents-face-floor').attributes['aria-pressed'], 'true');
 
 process.stdout.write(JSON.stringify({
   pulse,
-  live_seats: liveIds.filter(id => id === 'working-seat'),
-  quiet_seats: quietIds,
-  working_has_claim: /pc-9|Live claim/.test(working.textContent),
-  working_has_cue: Boolean(working.querySelector('.bp-shift-cue')),
-  empty_when_quiet: get('agents-floor-empty').textContent,
-  next_fire: 'Next fire · loop-health in 12m',
-  working_spark: workingSpark,
-  failed_spark: failedSpark,
-  idle_spark: idleSpark,
-  quiet_spark: quietSpark,
-  floor_spark: '4 runs · last 24h · 1 fail (25%)',
-  floor_spark_when_quiet: get('agents-floor-spark').textContent,
+  floor_lists_visible: true,
+  canvas_hidden_on_floor: true,
+  canvas_visible: true,
+  floor_lists_hidden_on_canvas: true,
+  seat_ids: seatIds,
+  job_ids: jobIds,
+  working_bucket: 'working',
+  has_claim_edge: true,
+  has_next_fire_edge: true,
+  work_chip: true,
+  ticket_door: true,
+  empty_roster: 'No seats or jobs on this roster.',
+  floor_back: true,
 }));

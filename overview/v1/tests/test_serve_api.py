@@ -591,6 +591,8 @@ class DisposableDeskAgentsSparkSmokeTests(unittest.TestCase):
         self.assertIn('id="agents-floor-spark"', text)
         self.assertLess(text.index('id="agents-pulse"'), text.index('id="agents-floor-spark"'))
         self.assertLess(text.index('id="agents-floor-spark"'), text.index('id="agents-next-fire"'))
+        self.assertIn('id="agents-face"', text)
+        self.assertIn('id="agents-canvas"', text)
         self.assertIn('id="overview-throughput"', text)
         self.assertIn('id="timeline-activity-chart"', text)
 
@@ -615,6 +617,11 @@ class DisposableDeskAgentsSparkSmokeTests(unittest.TestCase):
         self.assertEqual(throughput['errors'], 1)
         self.assertEqual(throughput['fail_rate'], 0.5)
         self.assertEqual(throughput['state'], 'healthy')
+        canvas = payload['agents_canvas']
+        self.assertFalse(canvas['empty'])
+        seat_ids = [node['id'] for node in canvas['nodes'] if node['kind'] == 'seat']
+        self.assertEqual(set(seat_ids), {'seat', 'off-seat'})
+        self.assertEqual(next(node['bucket'] for node in canvas['nodes'] if node['id'] == 'off-seat'), 'quiet')
 
 
 class DisposableDeskWorkFlowSmokeTests(unittest.TestCase):
