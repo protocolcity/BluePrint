@@ -1412,6 +1412,10 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertEqual(self.result['throughput_href'], '/timeline?period=1')
         self.assertEqual(self.result['throughput_empty'], 'No closes in the last 24h')
         self.assertEqual(self.result['throughput_unavailable'], 'Throughput unavailable')
+        self.assertIn('Open 1 → Ready 1 → Live 2 → Done 0', self.result['work_flow'])
+        self.assertEqual(self.result['work_flow_seats'], ['lili', 'pepper'])
+        self.assertEqual(self.result['work_flow_empty'], 'No seat drain right now')
+        self.assertEqual(self.result['work_flow_unavailable'], 'Seat load unavailable')
 
 
 class SlimOverviewFollowThroughTests(unittest.TestCase):
@@ -1760,6 +1764,56 @@ class WorkDensityTests(unittest.TestCase):
         self.assertIn('.bp-work-seat-virt', css)
         self.assertIn('.bp-order-badges', css)
         self.assertNotIn('#fff', css.split('.bp-work-seat-virt')[1].split('}')[0])
+
+
+class WorkFlowStripTests(unittest.TestCase):
+    """Issue #147: thin seat-load / flow strip secondary to the three bands."""
+
+    def test_strip_host_sits_on_work_above_the_bands_only(self):
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        self.assertIn('id="work-flow"', work)
+        self.assertLess(work.index('id="work-flow"'), work.index('id="work-band-act-now"'))
+        self.assertLess(work.index('id="work-band-act-now"'), work.index('id="work-band-my-todos"'))
+        self.assertLess(work.index('id="work-band-my-todos"'), work.index('id="work-band-seat-backlog"'))
+        self.assertEqual(_HTML.count('id="work-flow"'), 1)
+        self.assertNotIn('id="work-flow"', overview)
+        self.assertNotIn('id="work-flow"', _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0])
+        self.assertNotIn('id="work-flow"', _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0])
+        self.assertNotIn('id="work-flow"', _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0])
+
+    def test_paint_uses_ready_claimed_stalled_and_honest_empty(self):
+        self.assertIn('function paintWorkFlow()', _SRC)
+        self.assertIn('function buildWorkFlow(', _SRC)
+        work_fn = _SRC.split('function work()')[1].split('function agentAction')[0]
+        self.assertIn('paintWorkFlow()', work_fn)
+        paint = _SRC.split('function paintWorkFlow()')[1].split('function isUnrouted')[0]
+        self.assertIn('Seat load unavailable', paint)
+        self.assertIn('No seat drain right now', paint)
+        self.assertIn('Ready · claimed · stalled', paint)
+        self.assertIn('filterSeatLoad', paint)
+        self.assertNotIn('n8n', paint.lower())
+        self.assertNotIn('histogram', paint.lower())
+        self.assertNotIn('Needs you', paint)
+
+    def test_strip_does_not_retouch_density_or_neighbor_doors(self):
+        self.assertIn("dataset.kind='face'", _SRC)
+        self.assertIn("dataset.kind='status'", _SRC)
+        self.assertIn('function matchesStatusFacet', _SRC)
+        self.assertIn('function matchesAttentionFacet', _SRC)
+        self.assertIn('id="work-band-act-now"', _HTML)
+        self.assertIn('id="work-calendar-doors"', _HTML)
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="timeline-activity"', _HTML)
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-work-flow', css)
+        self.assertIn('.bp-work-seat-load', css)
+        self.assertNotIn('#fff', css.split('.bp-work-flow')[1].split('.bp-badge')[0])
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('point of sale', _HTML.lower())
 
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ from .agents_floor import (
 from .calendar_doors import build_calendar_doors, empty_calendar_doors
 from .local_projectors import worklane_data_dir, resolve_roster_path, resolve_daemon_path, engine_open_shift
 from .throughput import build_throughput, empty_throughput, store_close_ticks
-from .work_board import annotate_order
+from .work_board import annotate_order, build_work_flow, empty_work_flow
 
 # Fixed badge vocabulary (STATES_AND_TERMS.md §2, AGENTS_INTENT.md). Never
 # invent a badge word outside this map.
@@ -1236,10 +1236,12 @@ def operations_snapshot(binder):
               'calendar_doors': empty_calendar_doors(),
               'agents_floor': empty_agents_floor(),
               'throughput': empty_throughput(),
+              'work_flow': empty_work_flow(),
               'engines': _unavailable_engines('No workspace selected.'),
               'remote': {'state': 'not_connected', 'message': 'Remote AI execution is not configured. GitHub delivery is reported separately in Activity.'}}
     if binder is None:
         result['throughput'] = empty_throughput('unavailable')
+        result['work_flow'] = empty_work_flow('unavailable')
         result['sources'].append({
             'name': 'Workspace', 'state': 'unavailable', 'detail': 'No workspace selected.',
             'reachable': False, 'usable': False, 'next_step': 'Start BluePrint with a workspace selected.',
@@ -1575,4 +1577,9 @@ def operations_snapshot(binder):
         result.get('agents') or [], ticks_by_id, now)
     result['throughput'] = build_throughput(
         close_ticks, now, readable=stores_read or not paths)
+    result['work_flow'] = build_work_flow(
+        result.get('orders') or [],
+        readable=stores_read or not paths,
+        agents=result.get('agents') or [],
+    )
     return result

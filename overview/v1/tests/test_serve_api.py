@@ -169,6 +169,8 @@ class HonestEmptyServeTests(unittest.TestCase):
         self.assertEqual(payload['orders'], [])
         self.assertEqual(payload['throughput']['state'], 'unavailable')
         self.assertEqual(payload['throughput']['closes'], 0)
+        self.assertEqual(payload['work_flow']['state'], 'unavailable')
+        self.assertEqual(payload['work_flow']['seats'], [])
 
     def test_overview_css_shares_focus_ring_across_interactive_elements(self) -> None:
         _, body, _ = _get(self.port, "/css/overview.css")
@@ -570,6 +572,77 @@ class DisposableDeskAgentsSparkSmokeTests(unittest.TestCase):
         off = payload['agents_floor']['sparks']['off-seat']
         self.assertEqual(off['state'], 'empty')
         self.assertEqual(off['runs'], 0)
+
+
+class DisposableDeskWorkFlowSmokeTests(unittest.TestCase):
+    """Issue #147: serve a throwaway binder and read the Work strip."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix='bp-workflow-')
+        self.root = Path(self.temp.name)
+        manifest = self.root / 'product' / '.protocolcity' / 'desk-join.json'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({'slug': 'product', 'prefix': 'pc', 'display': 'Product'}))
+        data = self.root / 'worklane' / 'worklane' / 'local' / 'data'
+        data.mkdir(parents=True)
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        with sqlite3.connect(data / 'product.db') as conn:
+            conn.executescript(
+                'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, '
+                'priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+                'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute(
+                "INSERT INTO tasks VALUES(1,NULL,'Ready peel','backlog',1,?,?,'','')",
+                (recent, json.dumps(['worker:pepper'])),
+            )
+            conn.execute(
+                "INSERT INTO tasks VALUES(2,NULL,'Live peel','in_progress',1,?,?,'','')",
+                (recent, json.dumps(['worker:lili'])),
+            )
+        roster = self.root / 'workforce' / 'local' / 'roster.json'
+        roster.parent.mkdir(parents=True)
+        roster.write_text(json.dumps({
+            'workers': {
+                'pepper': {'kind': 'lane', 'display': 'pepper', 'command': ['true']},
+                'lili': {'kind': 'lane', 'display': 'lili', 'command': ['true']},
+            }
+        }))
+        self.httpd, self.port, self.thread = _start_server(empty_state(), binder_root=self.root)
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.temp.cleanup()
+
+    def test_work_html_hosts_the_strip_above_the_bands(self) -> None:
+        status, body, _ = _get(self.port, '/work')
+        text = body.decode()
+        self.assertEqual(status, 200)
+        self.assertIn('id="work-flow"', text)
+        self.assertLess(text.index('id="work-flow"'), text.index('id="work-band-act-now"'))
+        self.assertIn('id="work-band-act-now"', text)
+        self.assertIn('id="work-band-my-todos"', text)
+        self.assertIn('id="work-band-seat-backlog"', text)
+        self.assertIn('id="work-calendar-doors"', text)
+        self.assertNotIn('n8n', text.lower())
+
+    def test_operations_api_returns_seat_load_and_flow(self) -> None:
+        status, body, ctype = _get(self.port, '/api/operations')
+        self.assertEqual(status, 200)
+        self.assertIn('application/json', ctype)
+        payload = json.loads(body)
+        flow = payload['work_flow']
+        self.assertEqual(flow['state'], 'healthy')
+        self.assertGreaterEqual(flow['flow']['Ready'], 1)
+        self.assertGreaterEqual(flow['flow']['Live'], 1)
+        by_id = {seat['id']: seat for seat in flow['seats']}
+        self.assertEqual(by_id['pepper']['ready'], 1)
+        self.assertEqual(by_id['pepper']['name'], 'pepper')
+        self.assertEqual(by_id['lili']['claimed'], 1)
+        self.assertEqual({order['row_status'] for order in payload['orders']}, {'Ready', 'Live'})
+        self.assertTrue(all(order.get('board_band') == 'seat_backlog' for order in payload['orders']))
 
 
 if __name__ == "__main__":
