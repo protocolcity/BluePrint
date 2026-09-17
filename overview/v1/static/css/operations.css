@@ -183,7 +183,7 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
   min-width: 148px;
   padding: 12px 14px 10px;
   text-align: left;
-  background: var(--ov-bg);
+  background: var(--ov-tile-bg);
   border: 1px solid var(--ov-tile-border-strong);
   border-radius: 8px;
 }
