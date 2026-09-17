@@ -115,6 +115,9 @@ def check_metadata() -> List[str]:
         for pin in ENGINE_PINS:
             if pin not in engines:
                 failures.append(f"{label}: engines missing {pin}")
+    preferred = _read(PREFERRED_PYPROJECT)
+    if ".mcp.json" not in preferred or "exclude-package-data" not in preferred:
+        failures.append("protocolcity-blueprint: exclude-package-data must name .mcp.json")
     return failures
 
 
