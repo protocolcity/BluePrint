@@ -2,7 +2,8 @@
 
 Presentation only — never changes stored status, gates, or eligibility.
 Keep the client helpers in operations.js aligned with these predicates.
-Seat-load / flow strip (#147) is additive and does not change band membership.
+Seat-load chips (#158) are the Work hero. Flow Open→Ready→Live→Done stays
+in the payload for a later peel and does not change band membership.
 """
 
 YOU_KINDS = frozenset({'todo', 'note', 'reminder'})
@@ -209,6 +210,20 @@ def annotate_order(order):
 FLOW_STAGES = ('Open', 'Ready', 'Live', 'Done')
 LOAD_BUCKETS = ('ready', 'claimed', 'stalled')
 SEAT_LOAD_LIMIT = 8
+SEAT_CHIP_NAMED = 2
+SEAT_PREVIEW_SEATS = 3
+SEAT_PREVIEW_PER_SEAT = 3
+ACT_NOW_VISIBLE_CAP = 8
+MY_TODOS_VISIBLE_CAP = 8
+BAND_VIRTUAL_WINDOW = 50
+SEAT_STATUS_RANK = {
+    'Stalled': 0,
+    'Ready': 1,
+    'Live': 2,
+    'Review': 3,
+    'Open': 4,
+    'Deferred': 5,
+}
 
 
 def seat_hand(order):
@@ -256,12 +271,97 @@ def empty_work_flow(state='empty'):
         'state': state,
         'flow': {stage: 0 for stage in FLOW_STAGES},
         'seats': [],
+        'chips': [],
         'total': 0,
     }
 
 
+def _seat_updated_at(order):
+    value = order.get('updated_at') or ''
+    return str(value)
+
+
+def group_seat_backlog(orders):
+    """Group drainable seat work by hand. Seats rank stalled, then ready."""
+    groups = {}
+    for order in orders or []:
+        hand = seat_hand(order) or 'unassigned'
+        row = groups.setdefault(hand, {
+            'id': hand,
+            'name': 'You' if hand == 'you' else ('Unassigned' if hand == 'unassigned' else hand),
+            'orders': [],
+            'ready': 0,
+            'stalled': 0,
+        })
+        row['orders'].append(order)
+        status = row_status(order)
+        if status == 'Ready':
+            row['ready'] += 1
+        elif status == 'Stalled':
+            row['stalled'] += 1
+    for row in groups.values():
+        row['orders'].sort(key=_seat_updated_at, reverse=True)
+        row['orders'].sort(key=lambda order: SEAT_STATUS_RANK.get(row_status(order), 9))
+        row['total'] = len(row['orders'])
+    return sorted(
+        groups.values(),
+        key=lambda item: (-item['stalled'], -item['ready'], str(item['name'])),
+    )
+
+
+def preview_seat_backlog(orders, *, seats=SEAT_PREVIEW_SEATS, per_seat=SEAT_PREVIEW_PER_SEAT):
+    """Default Seat backlog paint: first N seats × M rows. Never a flat dump."""
+    groups = group_seat_backlog(orders)
+    painted = []
+    visible = 0
+    for group in groups[:seats]:
+        rows = group['orders'][:per_seat]
+        painted.append({
+            'id': group['id'],
+            'name': group['name'],
+            'orders': rows,
+            'total': group['total'],
+            'ready': group['ready'],
+            'stalled': group['stalled'],
+        })
+        visible += len(rows)
+    return painted, max(0, len(orders or []) - visible)
+
+
+def seat_load_chips(seats, *, named=SEAT_CHIP_NAMED):
+    """Hero chips: named seats + others rollup. Ready vs stalled only."""
+    ranked = sorted(
+        seats or [],
+        key=lambda item: (-item.get('stalled', 0), -item.get('ready', 0), str(item.get('name') or '')),
+    )
+    chips = []
+    for seat in ranked[:named]:
+        chips.append({
+            'id': seat.get('id'),
+            'name': seat.get('name') or seat.get('id'),
+            'ready': seat.get('ready', 0),
+            'stalled': seat.get('stalled', 0),
+            'kind': 'seat',
+        })
+    rest = ranked[named:]
+    if rest:
+        chips.append({
+            'id': 'others',
+            'name': 'others',
+            'ready': sum(item.get('ready', 0) for item in rest),
+            'stalled': sum(item.get('stalled', 0) for item in rest),
+            'kind': 'others',
+            'rolled': len(rest),
+        })
+    return chips
+
+
 def build_work_flow(orders, *, readable=True, agents=None):
-    """Secondary Work drain strip. Does not change bands, badges, or facets."""
+    """Work drain payload. Hero chips are ready vs stalled.
+
+    Flow Open→Ready→Live→Done is held in this object for a later peel and
+    is not painted on Work.
+    """
     if not readable:
         return empty_work_flow('unavailable')
     flow = {stage: 0 for stage in FLOW_STAGES}
@@ -301,5 +401,6 @@ def build_work_flow(orders, *, readable=True, agents=None):
         'state': 'healthy' if (total or load_total) else 'empty',
         'flow': flow,
         'seats': seat_list,
+        'chips': seat_load_chips(seat_list),
         'total': total,
     }
