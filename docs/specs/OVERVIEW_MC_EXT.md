@@ -42,8 +42,8 @@ Charter drawer + Crew paint, over the Agents · Jobs · Pulse spine — the thre
 4. **Peer tiles preserved** — the drawer sits **alongside** Agents · Jobs · Pulse, never inside them. On narrow viewports the drawer stacks below, still not replacing the three-tile spine.
 
 ## Peel fence
-- CLI under `~/.bots/blueprint` → `protocolcity/BluePrint` → Path B Cellar after glass DoD
-- HARD HOLD `:8801` suite Map (0.1.47 pin)
+- CLI under a local tools home → `protocolcity/BluePrint` → Cellar after glass DoD
+- Historical suite Map on `:8801` is retired; the consolidated app serves on `:8803`
 - No Map JS · no Wall · no LLC cream · no sparklines · no cinema
 
 ## Soft polish (Brand)

@@ -93,6 +93,10 @@ _SKIP_FILE_NAMES = {
     "check_no_host_paths.py",
     "check_no_host_paths.exceptions",
     "host_paths.py",
+    # Denylist self-test seeds a banned personal-path sample so the scrub
+    # patterns stay live; do not treat that seed as a host fingerprint.
+    "check_export_scrub.py",
+    "check_release_artifacts.py",
 }
 
 

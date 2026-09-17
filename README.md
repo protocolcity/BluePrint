@@ -177,9 +177,10 @@ Rough routing:
 
 ## Status
 
-**v0.1.x pre-release.** Install path (Homebrew / PyPI) is live. Suite UX is
-map-first and still sharpening. Expect the shell and ship words to move
-quickly as first-user feedback lands.
+**v0.1.50 public cut (pre-release).** Install path (Homebrew / PyPI) is live.
+Suite UX is map-first and still sharpening. Expect the shell and ship words
+to move quickly as first-user feedback lands. Release notes:
+[docs/releases/0.1.50.md](docs/releases/0.1.50.md).
 
 ## License
 
