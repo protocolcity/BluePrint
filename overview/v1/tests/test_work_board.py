@@ -189,7 +189,7 @@ class OrthogonalFacetTests(unittest.TestCase):
 
 
 class WorkFlowStripTests(unittest.TestCase):
-    """#147 / #158: seat-load chips are the hero; flow stays in the payload."""
+    """#147 / #158 / #160: seat-load chips stay the drain hero; flow is companion SoT."""
 
     def test_unreadable_is_unavailable_not_a_fake_zero_strip(self):
         payload = build_work_flow([order(workers=['pepper'], ready_for='pepper')], readable=False)
@@ -309,6 +309,23 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertEqual([chip['id'] for chip in payload['chips']], ['lili', 'oak', 'others'])
         self.assertEqual(payload['chips'][0]['stalled'], 1)
         self.assertEqual(payload['chips'][2]['kind'], 'others')
+
+    def test_flow_counts_follow_the_matching_filter(self):
+        rows = [
+            order(id='open', workers=['lili']),
+            order(id='ready', workers=['pepper'], ready_for='pepper'),
+            order(id='live', status='in_progress', workers=['pepper']),
+            order(id='done', status='done', workers=['lili']),
+        ]
+        full = build_work_flow(rows)
+        self.assertEqual(full['flow'], {'Open': 1, 'Ready': 1, 'Live': 1, 'Done': 1})
+        ready_only = build_work_flow(apply_facets(rows, status='Ready'))
+        self.assertEqual(ready_only['flow'], {'Open': 0, 'Ready': 1, 'Live': 0, 'Done': 0})
+        self.assertEqual(ready_only['total'], 1)
+        self.assertEqual(ready_only['chips'][0]['id'], 'pepper')
+        empty = build_work_flow(apply_facets(rows, status='Review'))
+        self.assertEqual(empty['state'], 'empty')
+        self.assertEqual(empty['flow'], {'Open': 0, 'Ready': 0, 'Live': 0, 'Done': 0})
 
 
 if __name__ == '__main__':

@@ -265,7 +265,7 @@ const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
 raw = raw.slice(0, bootAt) + `snapshot = ${JSON.stringify(fixture)}; lastSuccess = Date.now();`;
-const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {work, applySnapshot(next){ snapshot = next; }, paintWorkFlow, filterOptions}; })();`);
+const boot = new Function(...Object.keys(context), `return (async () => { ${raw} return {work, applySnapshot(next){ snapshot = next; }, paintWorkFlow, filterOptions, updateWorkFilters}; })();`);
 const runtime = await boot(...Object.values(context));
 
 runtime.filterOptions();
@@ -303,8 +303,9 @@ assert.equal(seatVisible.length, 9, 'default paint is 3 seats × 3');
 assert.ok(seatGroups.length <= 3);
 assert.equal(seatMore, '+69 more · filter by seat');
 assert.equal(get('work-flow').querySelector('.bp-work-flow-bar'), null, 'no flow-bar second hero');
-assert.doesNotMatch(heroText, /Open \d+ → Ready/);
-assert.ok(chips.length >= 2, 'seat-load chips are the hero');
+assert.match(heroText, /Open \d+ → Ready \d+ → Live \d+ → Done \d+/);
+assert.ok(get('work-flow').querySelector('.bp-work-flow-strip'), 'flow strip is the thin companion');
+assert.ok(chips.length >= 2, 'seat-load chips stay the drain hero');
 assert.ok(chipNames.includes('pepper'));
 assert.ok(chipNames.includes('others') || chipNames.includes('lili') || chipNames.includes('oak'));
 assert.match(heroText, /ready/);
@@ -320,10 +321,12 @@ assert.equal(get('attention-filter').value, 'act_now', '+N opens the Act now fac
 assert.equal(get('work-act-now').querySelectorAll('.bp-order').length, 9, 'facet shows the full Act now list');
 assert.equal(get('work-band-my-todos').hidden, true);
 assert.equal(get('work-band-seat-backlog').hidden, true);
+assert.match(get('work-flow').textContent, /Open 9 → Ready 0 → Live 0 → Done 0/, 'flow follows the Act now matching filter');
+assert.ok(get('work-flow').querySelector('.bp-work-seat-chip'), 'seat-load chips stay while the facet is open');
 
 get('attention-filter').value = '';
 get('assignment-filter').value = '';
-runtime.work();
+runtime.updateWorkFilters();
 const pepper = chips.find(chip => chip.dataset.seat === 'pepper') || get('work-flow').querySelectorAll('.bp-work-seat-chip').find(chip => chip.dataset.seat === 'pepper');
 assert.ok(pepper, 'pepper chip remains clickable');
 pepper.click();
@@ -333,6 +336,29 @@ const scoped = get('work-seat-backlog').querySelectorAll('.bp-order');
 assert.ok(scoped.length > 0, 'seat chip scopes Seat backlog');
 assert.ok(scoped.length < 78, 'scoped list is not the flat 78');
 assert.equal(get('work-band-act-now').hidden, true);
+assert.match(get('work-flow').textContent, /Open 26 → Ready 8 → Live 6 → Done 0/, 'flow follows the pepper matching filter');
+assert.ok(get('work-flow').querySelectorAll('.bp-work-seat-chip').length >= 2, 'seat-load chips stay after a seat door');
+
+get('attention-filter').value = '';
+get('assignment-filter').value = '';
+get('status-filter').value = 'Ready';
+runtime.updateWorkFilters();
+assert.match(get('work-flow').textContent, /Open 0 → Ready 16 → Live 0 → Done 0/, 'Ready facet recounts flow from matching work');
+assert.ok(get('work-flow').querySelector('.bp-work-seat-chip'), 'seat-load chips are not removed by a status facet');
+assert.equal(get('work-act-now').querySelectorAll('.bp-order').length, 0);
+assert.ok(get('work-seat-backlog').querySelectorAll('.bp-order').length <= 9, 'Ready facet does not break the 3×3 backlog cap');
+
+get('status-filter').value = '';
+get('attention-filter').value = '';
+get('assignment-filter').value = '';
+runtime.applySnapshot({
+  ...fixture,
+  orders: [],
+  work_flow: {state: 'empty', flow: {Open: 0, Ready: 0, Live: 0, Done: 0}, seats: [], chips: [], total: 0},
+});
+runtime.updateWorkFilters();
+assert.equal(get('work-flow').textContent, 'No seat drain right now');
+assert.equal(get('work-flow').querySelector('.bp-work-flow-strip'), null, 'honest empty does not paint fake zeros');
 
 process.stdout.write(JSON.stringify({
   act_now_total: get('work-act-now-count').textContent,
@@ -345,7 +371,9 @@ process.stdout.write(JSON.stringify({
   seat_visible_default: 9,
   seat_more: '+69 more · filter by seat',
   hero_chips: chipNames,
+  hero_flow: heroText,
   hero_has_flow_bar: false,
+  hero_has_flow_strip: Boolean(get('work-flow').querySelector('.bp-work-flow-strip')),
   mute_on_rows: 0,
   more_on_rows: 0,
   door_sets_attention: 'act_now',

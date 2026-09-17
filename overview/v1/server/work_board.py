@@ -2,8 +2,9 @@
 
 Presentation only — never changes stored status, gates, or eligibility.
 Keep the client helpers in operations.js aligned with these predicates.
-Seat-load chips (#158) are the Work hero. Flow Open→Ready→Live→Done stays
-in the payload for a later peel and does not change band membership.
+Seat-load chips (#158) stay the Work drain hero. Flow Open→Ready→Live→Done
+(#160) is a thin companion painted from work_flow.flow and does not change
+band membership.
 """
 
 YOU_KINDS = frozenset({'todo', 'note', 'reminder'})
@@ -359,8 +360,8 @@ def seat_load_chips(seats, *, named=SEAT_CHIP_NAMED):
 def build_work_flow(orders, *, readable=True, agents=None):
     """Work drain payload. Hero chips are ready vs stalled.
 
-    Flow Open→Ready→Live→Done is held in this object for a later peel and
-    is not painted on Work.
+    Flow Open→Ready→Live→Done is the companion count strip (#160). Paint
+    reads this object; do not invent a second stage mapping.
     """
     if not readable:
         return empty_work_flow('unavailable')
