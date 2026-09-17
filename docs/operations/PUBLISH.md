@@ -5,6 +5,22 @@ separate action.** Agents and CI on this repository must not upload.
 
 No API tokens belong in git, CI logs, release notes, or PR bodies.
 
+## Org / repo gate — secret scanning (pc-1517)
+
+GitHub **secret_scanning** and **push_protection** are a required org/repo
+gate **before public publish**. A pull request cannot enable them.
+
+| Check | Status for this cut |
+|---|---|
+| secret_scanning + push_protection | **FAIL until a human confirms they are enabled** on `protocolcity/BluePrint` (Settings → Code security). Delivery agents see `security_and_analysis: null` and cannot flip the toggle. |
+| In-repo scrub CI (`public-cut`) | Required and shipping — does **not** replace the org gate. |
+| Twine / PyPI | **FAIL / not publish-ready** until the org gate is confirmed **and** an authorized human uploads. No agent twine. |
+
+A later land-bar may claim the org toggle was enabled. Treat that as
+unverified here until a person with repo admin opens the security page
+and records the enablement. Until then this cut stays **FAIL** on the
+org gate and must not be called publish-ready.
+
 ## Packages
 
 | Distro | Path | Version | Engines extra |
