@@ -2540,9 +2540,12 @@ class CalendarHybridHonestyStripTests(unittest.TestCase):
         self.assertIn('data-role="cal-sources"', calendar)
         self.assertIn('data-role="cal-outbound"', calendar)
         self.assertIn('id="calendar-write-door"', calendar)
+        self.assertIn('id="calendar-local-line"', calendar)
+        self.assertIn('id="calendar-app-facet"', calendar)
         self.assertNotIn('data-role="cal-sources"', overview)
         self.assertNotIn('data-role="cal-sources"', work)
         self.assertLess(calendar.index('data-role="cal-sources"'), calendar.index('id="calendar-load"'))
+        self.assertLess(calendar.index('id="calendar-local-line"'), calendar.index('id="calendar-load"'))
 
     def test_write_door_is_reserved_and_hidden(self):
         calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
@@ -2555,6 +2558,8 @@ class CalendarHybridHonestyStripTests(unittest.TestCase):
         paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
         self.assertIn('paintSourceStrip(', paint)
         self.assertIn('paintOutboundStrip(', paint)
+        self.assertIn('paintCalendarLocalLine(', paint)
+        self.assertIn('bindCalendarClock(', paint)
         import_line = _SRC.split("await import('/js/calendar.v1.js')")[0].splitlines()[-1]
         self.assertIn('paintSourceStrip', import_line)
         self.assertIn('paintOutboundStrip', import_line)
@@ -2583,9 +2588,72 @@ class CalendarHybridHonestyStripTests(unittest.TestCase):
                 f'stdout={proc.stdout}\nstderr={proc.stderr}'
             )
         result = json.loads(proc.stdout)
-        self.assertEqual(result['source_states'], ['live', 'live', 'reserved', 'reserved'])
-        self.assertEqual(result['source_states_no_worklane'], ['live', 'unavailable', 'reserved', 'reserved'])
+        self.assertEqual(result['source_states'], ['live', 'reserved', 'reserved'])
+        self.assertEqual(result['source_states_no_worklane'], ['unavailable', 'reserved', 'reserved'])
         self.assertEqual(result['outbound_states'], ['reserved', 'reserved'])
+
+
+class CalendarOneAgendaVisualFinishTests(unittest.TestCase):
+    """Calendar One Agenda mock-parity: factory clock, not a quiet list."""
+
+    def test_hero_clock_and_one_agenda_are_first_read(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        self.assertIn('id="calendar-hero"', calendar)
+        self.assertIn('One Agenda factory clock', calendar)
+        self.assertIn('>One Agenda<', calendar)
+        self.assertIn('id="calendar-app-facet"', calendar)
+        self.assertIn('BluePrint · SoT', calendar)
+        self.assertLess(calendar.index('id="calendar-hero"'), calendar.index('id="calendar-doors"'))
+        self.assertLess(calendar.index('id="calendar-doors"'), calendar.index('id="calendar-load"'))
+        self.assertLess(calendar.index('id="calendar-load"'), calendar.index('id="calendar-filters"'))
+        self.assertLess(calendar.index('id="calendar-filters"'), calendar.index('id="dated-work"'))
+        self.assertLess(calendar.index('id="dated-work"'), calendar.index('id="schedule-list"'))
+        self.assertLess(calendar.index('id="schedule-list"'), calendar.index('id="event-list"'))
+
+    def test_facets_do_not_open_a_second_list(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        self.assertIn('bp-cal-facets', calendar)
+        self.assertIn('id="calendar-project"', calendar)
+        self.assertIn('id="calendar-app-facet"', calendar)
+        self.assertNotIn('id="apple-events"', calendar)
+        self.assertNotIn('id="outlook-events"', calendar)
+        self.assertNotIn('id="mcp-events"', calendar)
+        self.assertEqual(calendar.count('id="dated-work"'), 1)
+        self.assertNotIn('Google', calendar)
+        self.assertNotIn('google', calendar)
+
+    def test_write_door_stays_reserved_and_copy_never_implies_mcp_write(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        write_door = calendar.split('id="calendar-write-door"')[1].split('>')[0]
+        self.assertIn('hidden', write_door)
+        self.assertIn('disabled', write_door)
+        self.assertNotIn('mcp write', calendar.lower())
+        self.assertNotIn('publish to apple', calendar.lower())
+
+    def test_css_weights_doors_and_week_strip(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-calendar-hero', css)
+        self.assertIn('.bp-cal-door-primary', css)
+        self.assertIn('#calendar-view .ov-cal-load-chart', css)
+        self.assertIn('.bp-cal-app-facet', css)
+        self.assertIn('.bp-calendar-agenda', css)
+
+    def test_operations_paints_local_line_and_selectable_clock(self):
+        self.assertIn('function paintCalendarLocalLine(', _SRC)
+        self.assertIn('Local schedule · WorkLane clocks on this desk.', _SRC)
+        self.assertIn('Local schedule · no dated clocks this week.', _SRC)
+        self.assertNotIn('Google', _SRC)
+        self.assertIn("calendarDay=col.dataset.day", _SRC.replace(' ', ''))
+        self.assertIn('One Agenda — the factory clock', _SRC)
+
+    def test_does_not_regress_neighbor_surfaces(self):
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="delivery-hero"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('POS', _HTML)
 
 
 class MapNodeMotionLeakTests(unittest.TestCase):

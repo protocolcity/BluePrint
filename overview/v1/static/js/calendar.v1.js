@@ -1,9 +1,10 @@
 /**
  * calendar.v1.js — Calendar lens host (Designer IA, Overview four-lens).
  *
- * Reads local desk events from /api/calendar/events and paints a quiet
- * week list. Honest empty by default (`No events`) — never shimmer, never
- * fake a busy schedule. Calendar is time on **this desk**; nothing else.
+ * Reads local desk events from /api/calendar/events and paints the
+ * One Agenda factory clock: weighted doors, week/day spine, Hybrid
+ * source honesty. Honest empty by default (`No events`) — never shimmer,
+ * never fake Google/MCP. Calendar is time on **this desk**; nothing else.
  *
  * Load-by-day bars (issue #153) count dated clocks, local events, and
  * WorkForce next_fire onto a Monday–Sunday week. Open WO dumps and the
@@ -111,10 +112,18 @@ export function buildLoadByDay(opts = {}) {
   const origin = opts.origin || dayKey(opts.now || new Date());
   const start = weekMonday(origin);
   const project = opts.project || "";
+  const today = opts.today || dayKey(opts.now || new Date());
+  const selected = opts.selected || opts.origin || today;
   const days = [];
   for (let i = 0; i < LOAD_DAYS; i += 1) {
     const day = shiftDay(start, i);
-    days.push({ day, label: WEEKDAYS[i], count: 0 });
+    days.push({
+      day,
+      label: WEEKDAYS[i],
+      count: 0,
+      today: day === today,
+      selected: day === selected,
+    });
   }
   const index = Object.fromEntries(days.map((row) => [row.day, row]));
 
@@ -175,8 +184,16 @@ export function paintLoad(root, load) {
   clear(chart);
   for (const row of payload.days) {
     const count = Number(row.count) || 0;
-    const col = document.createElement("div");
+    const col = document.createElement("button");
+    col.type = "button";
     col.className = "ov-cal-load-col";
+    col.dataset.day = row.day || "";
+    if (row.today) col.dataset.today = "true";
+    if (row.selected) col.dataset.selected = "true";
+    const countEl = document.createElement("span");
+    countEl.className = "ov-cal-load-count";
+    countEl.textContent = String(count);
+    col.appendChild(countEl);
     const track = document.createElement("div");
     track.className = "ov-cal-load-track";
     const bar = document.createElement("div");
@@ -200,31 +217,62 @@ export function paintDoors(root, doors) {
   const payload = doors && typeof doors === "object" ? doors : emptyDoors();
   const dueCount = Number(payload.due_count) || 0;
   const fireLine = payload.next_fire_line || NONE_FIRE_LINE;
+  const firePrimary = fireLine.replace(/^Next fire · /, "") || "none reported";
   clear(host);
   const items = [
-    { text: dueCount ? `Due · ${dueCount}` : "Due · none", href: "/" },
-    { text: "Due / Remind", href: "/work?attention=due" },
-    { text: fireLine, href: "/agents" },
-    { text: "Firings", href: "/timeline" },
+    {
+      kind: "due",
+      name: "Due",
+      primary: dueCount ? String(dueCount) : "none",
+      href: "/",
+      tone: dueCount ? "open" : "muted",
+    },
+    {
+      kind: "remind",
+      name: "Due / Remind",
+      primary: "My todos",
+      href: "/work?attention=my_todos",
+      tone: dueCount ? "open" : "muted",
+    },
+    {
+      kind: "next-fire",
+      name: "Next fire",
+      primary: firePrimary,
+      href: "/agents",
+      tone: payload.next_fire ? "open" : "muted",
+    },
+    {
+      kind: "firings",
+      name: "Firings",
+      primary: "Timeline",
+      href: "/timeline",
+      tone: "open",
+    },
   ];
   for (const item of items) {
     const a = document.createElement("a");
-    a.className = "ov-cal-door";
+    a.className = "ov-cal-door bp-cal-door";
     a.href = item.href;
-    a.textContent = item.text;
+    a.dataset.kind = item.kind;
+    a.dataset.tone = item.tone;
+    const name = document.createElement("span");
+    name.className = "bp-cal-door-name";
+    name.textContent = item.name;
+    const primary = document.createElement("span");
+    primary.className = "bp-cal-door-primary";
+    primary.textContent = item.primary;
+    a.append(name, primary);
     host.appendChild(a);
   }
 }
 
-// Hybrid honesty (CAP_ACQUAINTANCE_052 C2): the Agenda week strip is the
-// WorkLane schedule spine. Local and WorkLane are the only live sources
-// today — MCP and Connector are reserved slots, never painted as live
-// until that fabric actually exists. Apple/Outlook are reserved outbound
-// readers: BluePrint stays the source of truth, those apps do not write
-// here yet.
+// Hybrid honesty (CAP_ACQUAINTANCE_052 C2 / One Agenda): WorkLane is the
+// live schedule spine. MCP and Connector stay dim / not-wired until that
+// fabric exists. Local schedule is an honesty line, not a fourth live
+// source. Apple/Outlook are reserved outbound readers — BluePrint stays
+// the source of truth.
 export function sourceStripChips(opts = {}) {
   return [
-    { id: "local", label: "Local", state: "live" },
     { id: "worklane", label: "WorkLane", state: opts.workLane ? "live" : "unavailable" },
     { id: "mcp", label: "MCP", state: "reserved" },
     { id: "connector", label: "Connector", state: "reserved" },
@@ -233,15 +281,15 @@ export function sourceStripChips(opts = {}) {
 
 export function outboundStripChips() {
   return [
-    { id: "apple", label: "Apple", state: "reserved" },
-    { id: "outlook", label: "Outlook", state: "reserved" },
+    { id: "apple", label: "Apple · reader", state: "reserved" },
+    { id: "outlook", label: "Outlook · reader", state: "reserved" },
   ];
 }
 
 const CHIP_STATE_LABELS = {
   live: "Live",
   unavailable: "Unavailable",
-  reserved: "Reserved",
+  reserved: "not wired",
 };
 
 function paintChipStrip(root, role, chips, reservedTitle) {
@@ -255,7 +303,7 @@ function paintChipStrip(root, role, chips, reservedTitle) {
     const stateLabel = CHIP_STATE_LABELS[chip.state] || chip.state;
     span.textContent = `${chip.label} · ${stateLabel}`;
     if (chip.state === "reserved") {
-      span.title = reservedTitle || `${chip.label} — reserved, not connected yet`;
+      span.title = reservedTitle || `${chip.label} — not wired yet`;
     } else if (chip.state === "unavailable") {
       span.title = `${chip.label} — unavailable`;
     }
