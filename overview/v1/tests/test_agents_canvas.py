@@ -76,7 +76,9 @@ class AgentsCanvasTests(unittest.TestCase):
             }),
         ], now=NOW)
         edges = canvas['edges']
-        self.assertEqual(edges, [{'from': 'working-seat', 'to': 'work:blueprint:pc-9', 'kind': 'claim'}])
+        self.assertEqual(edges, [{
+            'from': 'working-seat', 'to': 'work:blueprint:pc-9', 'kind': 'claim', 'tone': 'working',
+        }])
         work = next(node for node in canvas['nodes'] if node['kind'] == 'work')
         self.assertEqual(work['door'], 'ticket')
         self.assertEqual(work['href'], '/work-order?project=blueprint&id=pc-9')
@@ -100,6 +102,8 @@ class AgentsCanvasTests(unittest.TestCase):
         })
         self.assertNotIn('claim', by_id['idle-seat'])
         self.assertNotIn('claim', by_id['loop-health'])
+        self.assertNotIn('fire', by_id['working-seat'])
+        self.assertNotIn('fire', by_id['loop-health'])
 
     def test_next_fire_ticks_are_future_only(self):
         later = (NOW + timedelta(minutes=12)).isoformat()
@@ -116,8 +120,15 @@ class AgentsCanvasTests(unittest.TestCase):
         self.assertEqual(fires[0]['door'], 'calendar')
         self.assertIn('Next fire', fires[0]['label'])
         self.assertEqual(canvas['edges'], [{
-            'from': 'loop-health', 'to': 'fire:loop-health', 'kind': 'next_fire',
+            'from': 'loop-health', 'to': 'fire:loop-health', 'kind': 'next_fire', 'tone': 'next_fire',
         }])
+        by_id = {node['id']: node for node in canvas['nodes'] if node['kind'] in ('seat', 'job')}
+        self.assertEqual(by_id['loop-health']['fire'], {
+            'label': fires[0]['label'],
+            'href': '/calendar',
+        })
+        self.assertNotIn('fire', by_id['spent'])
+        self.assertNotIn('fire', by_id['manual'])
 
     def test_seat_can_carry_claim_and_next_fire(self):
         later = (NOW + timedelta(hours=1)).isoformat()
@@ -129,6 +140,9 @@ class AgentsCanvasTests(unittest.TestCase):
         kinds = sorted(edge['kind'] for edge in canvas['edges'])
         self.assertEqual(kinds, ['claim', 'next_fire'])
         self.assertEqual({node['kind'] for node in canvas['nodes']}, {'seat', 'work', 'fire'})
+        seat = next(node for node in canvas['nodes'] if node['kind'] == 'seat')
+        self.assertIn('pc-2', seat['claim']['label'])
+        self.assertIn('Next fire', seat['fire']['label'])
 
     def test_last_run_targets_seats_with_a_timeline_door(self):
         canvas = build_agents_canvas([
@@ -153,9 +167,11 @@ class AgentsCanvasTests(unittest.TestCase):
         self.assertEqual(ok['bucket'], 'target')
         self.assertNotIn('run:skip-seat', by_id)
         self.assertNotIn('run:quiet-seat', by_id)
-        edges = {(edge['from'], edge['to']): edge['kind'] for edge in canvas['edges']}
-        self.assertEqual(edges[('failed-seat', 'run:failed-seat')], 'last_run')
-        self.assertEqual(edges[('ok-seat', 'run:ok-seat')], 'last_run')
+        edges = {(edge['from'], edge['to']): edge for edge in canvas['edges']}
+        self.assertEqual(edges[('failed-seat', 'run:failed-seat')]['kind'], 'last_run')
+        self.assertEqual(edges[('failed-seat', 'run:failed-seat')]['tone'], 'error')
+        self.assertEqual(edges[('ok-seat', 'run:ok-seat')]['kind'], 'last_run')
+        self.assertEqual(edges[('ok-seat', 'run:ok-seat')]['tone'], 'last_run')
 
     def test_last_run_never_shown_on_jobs(self):
         canvas = build_agents_canvas([
