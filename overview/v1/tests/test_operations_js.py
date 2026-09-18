@@ -1917,7 +1917,8 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
         self.assertNotIn('WORKFLOWS', _HTML)
         self.assertNotIn('EXECUTIONS', _HTML)
-        self.assertNotIn('n8n', _SRC.lower())
+        self.assertIn('n8n-style factory', _SRC.lower())
+        self.assertNotIn('n8n editor', _SRC.lower())
         # Activity histogram is native on Timeline only (representation brief §6).
         overview = _SRC.split('function overview()')[1].split('function renderWorkInbox')[0]
         work = _SRC.split('function work()')[1].split('function agentAction')[0]
@@ -2924,6 +2925,9 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertIn('id="agents-canvas-empty-teach"', agents)
         self.assertIn('id="agents-canvas-tour"', agents)
         self.assertIn('id="agents-canvas-tour-start"', agents)
+        self.assertIn('id="agents-canvas-legend"', agents)
+        self.assertIn('Claim edge', agents)
+        self.assertIn('Next-fire edge', agents)
         self.assertIn('id="agents-floor-lists"', agents)
         self.assertLess(agents.index('id="agents-floor-spark"'), agents.index('id="agents-face"'))
         self.assertLess(agents.index('id="agents-face"'), agents.index('id="agents-next-fire"'))
@@ -2993,7 +2997,8 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertIn("dataset.motion='pulse'", edges.replace(' ', ''))
         self.assertIn('dataset.tone', edges)
         self.assertIn('function paintAgentsFireTicks()', _SRC)
-        self.assertNotIn('n8n', _SRC.lower())
+        self.assertIn('n8n-style factory', _SRC.lower())
+        self.assertNotIn('n8n editor', _SRC.lower())
         self.assertNotIn('histogram', paint.lower())
 
     def test_does_not_add_a_page_or_regress_floor_and_work(self):
@@ -3221,8 +3226,9 @@ class AgentsCanvasMotionTests(unittest.TestCase):
         self.assertIn('.bp-agents-canvas-ticks', css)
         self.assertIn('.bp-agents-canvas-tick', css)
         self.assertIn('var(--ov-state-scanning)', css[css.index('.bp-agents-canvas-edge[data-kind="next_fire"]'):css.index('.bp-agents-canvas-edge[data-kind="last_run"]')])
-        self.assertIn('Live twin of this floor', _HTML)
+        self.assertIn('Live factory window of this floor', _HTML)
         self.assertIn('Next-fire ticks sit on the job or seat', _HTML)
+        self.assertIn('this is not an editor', _HTML)
 
     def test_soft_poll_and_tour_and_floor_scarcity_stay(self):
         agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]
@@ -3238,6 +3244,78 @@ class AgentsCanvasMotionTests(unittest.TestCase):
         self.assertNotIn('draggable', _SRC.split('function paintAgentsCanvas()')[1].split('function timelineActionLabel')[0])
         nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+
+
+class AgentsCanvasCap1Tests(unittest.TestCase):
+    """pc-1564 Cap 1 — n8n-feel acquaintance canvas. Read-only factory window."""
+
+    def test_full_bleed_stage_legend_and_distinct_shapes(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        self.assertIn('class="bp-agents-canvas-stage"', agents)
+        self.assertIn('id="agents-canvas-legend"', agents)
+        self.assertLess(agents.index('id="agents-canvas-legend"'), agents.index('id="agents-canvas"'))
+        self.assertIn('>Working<', agents.split('id="agents-canvas-legend"', 1)[1])
+        self.assertIn('>Idle<', agents.split('id="agents-canvas-legend"', 1)[1])
+        self.assertIn('>Error<', agents.split('id="agents-canvas-legend"', 1)[1])
+        self.assertIn('Claim edge', agents.split('id="agents-canvas-legend"', 1)[1])
+        self.assertIn('Next-fire edge', agents.split('id="agents-canvas-legend"', 1)[1])
+        self.assertIn('Live factory window of this floor', agents)
+        self.assertIn('this is not an editor', agents)
+        self.assertIn('This factory window is not an editor', agents)
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-agents-canvas-stage', css)
+        self.assertIn('min-height: min(70vh, 780px)', css)
+        self.assertIn('.bp-agents-canvas-node[data-kind="seat"]', css)
+        self.assertIn('.bp-agents-canvas-node[data-kind="job"]', css)
+        self.assertIn('clip-path: polygon(', css)
+        self.assertIn('.bp-agents-canvas-legend', css)
+        self.assertNotIn('resize: both', css[css.index('.bp-agents-canvas-node {'):css.index('.bp-agents-canvas-person')])
+
+    def test_face_deep_link_and_tour_name_the_factory_not_an_editor(self):
+        self.assertIn("query.get('face')==='canvas'", _SRC.replace(' ', ''))
+        self.assertIn("params.set('face','canvas')", _SRC.replace(' ', ''))
+        self.assertIn("params.delete('view')", _SRC.replace(' ', ''))
+        self.assertIn('n8n-style factory', _SRC)
+        self.assertIn('property inspector', _SRC)
+        self.assertNotIn('n8n editor', _SRC.lower())
+        node = _SRC.split('function paintAgentsCanvasNode(node)')[1].split('function paintAgentsCanvasEdges')[0]
+        self.assertIn('dataset.shape', node)
+        self.assertIn('bp-agents-canvas-project', node)
+        self.assertIn('paintAgentsCanvasSpark(node.id)', node.replace(' ', ''))
+        self.assertIn('selectAgent(node.id)', node.replace(' ', ''))
+        self.assertNotIn('draggable', node)
+        self.assertNotIn('addNode', node)
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertNotIn('id="agents-canvas-legend"', overview)
+        self.assertNotIn('id="agents-canvas-legend"', work)
+        self.assertNotIn('id="agents-canvas"', overview)
+        self.assertNotIn('id="agents-canvas"', work)
+        self.assertLess(
+            _HTML.split('id="agents-view"')[1].index('id="agents-coverage-door"'),
+            _HTML.split('id="agents-view"')[1].index('id="agents-canvas-wrap"'),
+        )
+        door = _HTML.split('id="agents-coverage-door"', 1)[1].split('id="agents-canvas-wrap"', 1)[0]
+        self.assertIn('id="coverage-list"', door)
+
+    def test_canvas_cap1_harness(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping agents canvas harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'agents_canvas_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(f'agents canvas harness failed ({proc.returncode}):\nstdout={proc.stdout}\nstderr={proc.stderr}')
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['working_shape'], 'rounded')
+        self.assertEqual(result['job_shape'], 'diamond')
+        self.assertTrue(result['has_legend'])
+        self.assertTrue(result['has_project_label'])
+        self.assertTrue(result['has_optional_spark'])
+        self.assertIn('face=canvas', result['canvas_href'])
+        self.assertNotIn('view=canvas', result['canvas_href'])
+        self.assertTrue(result['person_sheet'])
+        self.assertIn('n8n-style factory', result['tour_factory'])
 
 
 if __name__ == '__main__':

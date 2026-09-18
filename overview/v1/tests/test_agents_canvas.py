@@ -54,6 +54,8 @@ class AgentsCanvasTests(unittest.TestCase):
         self.assertEqual(by_id['off-seat']['bucket'], 'quiet')
         self.assertEqual(by_id['loop-health']['kind'], 'job')
         self.assertEqual(by_id['working-seat']['door'], 'person')
+        self.assertEqual(by_id['working-seat']['shape'], 'rounded')
+        self.assertEqual(by_id['loop-health']['shape'], 'diamond')
         self.assertEqual(by_id['working-seat']['work_href'], '/work?assignment=worker%3Aworking-seat')
         self.assertNotIn('work_href', by_id['loop-health'])
         for node in actors:
@@ -99,6 +101,7 @@ class AgentsCanvasTests(unittest.TestCase):
         self.assertEqual(by_id['working-seat']['claim'], {
             'label': 'Live claim · pc-9',
             'href': '/work-order?project=blueprint&id=pc-9',
+            'order_id': 'pc-9',
         })
         self.assertNotIn('claim', by_id['idle-seat'])
         self.assertNotIn('claim', by_id['loop-health'])
@@ -190,6 +193,17 @@ class AgentsCanvasTests(unittest.TestCase):
         kinds = sorted(edge['kind'] for edge in canvas['edges'])
         self.assertEqual(kinds, ['claim', 'last_run', 'next_fire'])
         self.assertEqual({node['kind'] for node in canvas['nodes']}, {'seat', 'work', 'last_run', 'fire'})
+
+    def test_seat_carries_project_label_separate_from_job_shape(self):
+        canvas = build_agents_canvas([
+            _agent('working-seat', 'seat', 'working', name='lane', project_name='BluePrint'),
+            _agent('loop-health', 'job', 'idle'),
+        ], now=NOW)
+        by_id = {node['id']: node for node in canvas['nodes'] if node['kind'] in ('seat', 'job')}
+        self.assertEqual(by_id['working-seat']['project'], 'BluePrint')
+        self.assertEqual(by_id['working-seat']['shape'], 'rounded')
+        self.assertEqual(by_id['loop-health']['project'], '')
+        self.assertEqual(by_id['loop-health']['shape'], 'diamond')
 
     def test_layout_places_targets_to_the_right(self):
         later = (NOW + timedelta(minutes=8)).isoformat()
