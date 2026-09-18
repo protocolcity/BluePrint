@@ -262,8 +262,11 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
   justify-content: space-between;
   align-items: center;
   gap: 16px 28px;
-  margin: 2px 0 6px;
-  padding: 6px 0 18px;
+  margin: 2px 0 14px;
+  padding: 16px 18px 20px;
+  border: 1px solid var(--ov-tile-border-strong);
+  border-radius: 8px;
+  background: var(--ov-tile-bg);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   color: var(--ov-fg);
@@ -331,7 +334,13 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-work-seat-chip[data-kind="others"] { opacity: .96; }
 #work-view .bp-work-facets { padding: 4px 0 10px; gap: 12px; }
 #work-view .bp-work-facets input,
-#work-view .bp-work-facets select { min-height: 32px; padding: 6px 10px; }
+#work-view .bp-work-facets select {
+  min-height: 32px;
+  padding: 6px 10px;
+  background: transparent;
+  border-color: var(--ov-tile-border);
+}
+#work-view .bp-work-facets label { color: var(--ov-muted); }
 #work-view .bp-work-facet-status { margin-bottom: 12px; }
 .bp-work-band-act-now {
   border-left: 3px solid var(--ov-state-scanning);
