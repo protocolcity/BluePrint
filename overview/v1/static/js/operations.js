@@ -1774,7 +1774,7 @@ function paintCoverageDoor(rows) {
   if(!summary) return;
   const list=rows || [];
   // pc-1559 first-glance: closed face is a quiet project count, never a
-  // staffing bulletin. Missing / Hire / legend stay behind the open door.
+  // staffing bulletin. Staffing detail stays behind the open door.
   if(!list.length) {
     summary.textContent='Coverage · none reported';
     return;

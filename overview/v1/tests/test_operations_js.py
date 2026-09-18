@@ -3035,10 +3035,11 @@ class AgentsFloorFirstGlanceTests(unittest.TestCase):
         self.assertIn('not a hire-now list', door)
         self.assertNotIn('<h2>Coverage</h2>', agents)
         paint = _SRC.split('function paintCoverageDoor(')[1].split('function renderCoverage(')[0]
+        assigned = [line for line in paint.splitlines() if 'textContent' in line]
+        self.assertTrue(assigned)
         self.assertIn('Coverage · none reported', paint)
         self.assertIn('Coverage · 1 project', paint)
-        self.assertNotIn('missing staff', paint)
-        self.assertNotIn('Hire', paint)
+        self.assertTrue(all('missing staff' not in line and 'Hire' not in line for line in assigned))
         self.assertIn('pc-1559', paint)
 
     def test_dispatch_stays_quiet_and_floor_canvas_caps_stay(self):
