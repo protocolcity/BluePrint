@@ -149,6 +149,17 @@ class OperationsHangTests(unittest.TestCase):
             for sock in streams:
                 sock.close()
 
+    def test_snapshot_exception_returns_json_not_empty_close(self) -> None:
+        def boom(binder):
+            raise RuntimeError('projection exploded')
+
+        self.httpd, port = _start_server(self.root)
+        with patch('server.operations.operations_snapshot', side_effect=boom):
+            status, body = _get(port, '/api/operations', timeout=2.0)
+        self.assertEqual(status, 503)
+        self.assertTrue(body)
+        self.assertIn(b'Workspace sources could not be read', body)
+
     def test_self_origin_receipt_does_not_nest_a_probe(self) -> None:
         (self.root / 'local' / 'worklane').mkdir(parents=True)
         self.httpd, port = _start_server(self.root)
