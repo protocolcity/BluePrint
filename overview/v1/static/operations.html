@@ -99,12 +99,19 @@
       </details>
     </div>
     <div id="agents-canvas-wrap" hidden>
-      <div class="bp-panel bp-agents-canvas-panel">
-        <div class="bp-section-head"><div><h2>Canvas</h2><p class="bp-muted">Live twin of this floor. Claim edges pulse. Claimed work sits on the seat. Next-fire ticks sit on the job or seat when Calendar has a door.</p></div><button type="button" id="agents-canvas-tour-start">Tour</button></div>
+      <div class="bp-agents-canvas-stage">
+        <div class="bp-section-head bp-agents-canvas-chrome"><div><h2>Canvas</h2><p class="bp-muted">Live factory window of this floor. Claim edges pulse. Claimed work sits on the seat. Next-fire ticks sit on the job or seat when Calendar has a door. Watch the factory — this is not an editor.</p></div><button type="button" id="agents-canvas-tour-start">Tour</button></div>
+        <ol id="agents-canvas-legend" class="bp-agents-canvas-legend" aria-label="Canvas legend">
+          <li data-kind="working">Working</li>
+          <li data-kind="idle">Idle</li>
+          <li data-kind="error">Error</li>
+          <li data-kind="claim">Claim edge</li>
+          <li data-kind="next_fire">Next-fire edge</li>
+        </ol>
         <p id="agents-canvas-empty" class="bp-muted" hidden></p>
         <ol id="agents-canvas-empty-teach" class="bp-agents-tour-teach" hidden>
           <li><strong>Strip</strong> — Working / Idle / Error counts this floor. Zero is still a count.</li>
-          <li><strong>Node</strong> — A seat or job would sit here. Seats can hold a claim; jobs never claim.</li>
+          <li><strong>Node</strong> — A seat or job would sit here. Seats can hold a claim; jobs never claim. This factory window is not an editor.</li>
           <li><strong>Door</strong> — Work or Timeline opens from a node. Lists stay one hop away.</li>
         </ol>
         <aside id="agents-canvas-tour" class="bp-agents-tour" hidden>
