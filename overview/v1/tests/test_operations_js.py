@@ -3006,6 +3006,37 @@ class MapNodeMotionLeakTests(unittest.TestCase):
         self.assertNotIn('POS', _HTML)
 
 
+class Pc1561MapMotionVerifyTests(unittest.TestCase):
+    """pc-1561 — Map motion verify. Neighbor peels stay off Map; 10 pages freeze."""
+
+    def test_map_a_nav_stays_ten_pages(self):
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        hrefs = re.findall(r'<a href="([^"]+)"', nav)
+        self.assertEqual(hrefs, [
+            '/', '/work', '/projects', '/agents', '/delivery',
+            '/timeline', '/map', '/calendar', '/connections', '/settings',
+        ])
+        self.assertEqual(len(hrefs), 10)
+
+    def test_wo_wall_stays_on_work_not_map(self):
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertIn('id="work-band-act-now"', work)
+        self.assertIn('id="work-band-my-todos"', work)
+        self.assertIn('id="work-band-seat-backlog"', work)
+        self.assertIn('id="work-list"', work)
+        self.assertNotIn('map-motion-live', work)
+        self.assertNotIn('classifyNodeMotion', _SRC)
+
+    def test_overview_dump_stays_on_overview(self):
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        self.assertIn('id="overview-throughput"', overview)
+        self.assertIn('id="overview-face-chips"', overview)
+        self.assertIn('id="for-you-decide"', overview)
+        self.assertIn('id="metrics"', overview)
+        self.assertNotIn('map-motion-live', overview)
+        self.assertNotIn('map-lot-plate', overview)
+
+
 class AgentsCanvasPeelTests(unittest.TestCase):
     """pc-1534 / issue #168: Floor | Canvas toggle. Read-only spatial twin."""
 
