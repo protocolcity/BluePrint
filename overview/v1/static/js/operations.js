@@ -4,7 +4,7 @@
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
 const {reconcileList} = await import('/js/dom-reconcile.mjs');
-const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip} = await import('/js/calendar.v1.js');
+const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip, applyHybridMarks, paintHybridMark, capAgendaDay} = await import('/js/calendar.v1.js');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
@@ -75,6 +75,7 @@ let selectedProject = query.get('project') || '';
 let selectedAssignment = query.get('assignment') || '';
 let unroutedOnly = query.get('unrouted') === '1';
 let calendarDay = query.get('day') || '';
+let calendarHybrid = query.get('hybrid') || '';
 let projectsFilter = query.get('q') || '';
 try { const saved=JSON.parse(localStorage.getItem('bp-projects') || '{}'); if(saved.filter) projectsFilter=saved.filter; } catch(error) { /* Unavailable storage uses defaults. */ }
 if (legacyParam) {
@@ -2919,10 +2920,15 @@ function clockLabel(clock) {
   return 'Mentioned date';
 }
 function datedHref(event) {
+  if(event.hybrid?.fixture) return '/calendar';
   return readerHref('/work-order?'+new URLSearchParams({project:event.product,id:event.task_id}));
 }
+function hybridScenesOn() {
+  return calendarHybrid==='scenes' || calendarHybrid==='1';
+}
 function datedRow(event) {
-  const row=link('', datedHref(event),'bp-order');
+  const fixture=Boolean(event.hybrid?.fixture);
+  const row=fixture ? el('div',undefined,'bp-order bp-cal-hybrid-row') : link('', datedHref(event),'bp-order');
   const details=el('div');
   details.append(el('strong',event.summary || 'Untitled work'));
   const clocks=rowClocks(event);
@@ -2932,6 +2938,7 @@ function datedRow(event) {
     details.append(el('span', bits.join(' · '),'bp-order-meta'));
   }
   details.append(el('span', event.product,'bp-order-meta'));
+  if(event.hybrid) paintHybridMark(details, event.hybrid);
   const decide=event.attention_face==='decide';
   const hold=clocks.find(clock=>clock.kind==='hold');
   const state=decide?'attention':(hold && hold.expired?'expired':(event.due?'all_day':(event.reminder?'scheduled':'dated')));
@@ -2949,6 +2956,7 @@ function updateCalendarContext() {
   const params=new URLSearchParams();
   if(selectedProject) params.set('project', selectedProject);
   if(calendarDay) params.set('day', calendarDay);
+  if(hybridScenesOn()) params.set('hybrid', calendarHybrid==='1' ? '1' : 'scenes');
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
   if(snapshot) calendar();
 }
@@ -3003,14 +3011,30 @@ function paintCalendarSchedule() {
   paintCalendarLocalLine(load);
   bindCalendarClock();
 }
+function paintCalendarDayMore(remainder) {
+  const host=$('calendar-today-more');
+  if(!host) return;
+  host.replaceChildren();
+  if(remainder>0) {
+    host.hidden=false;
+    const door=link('+'+remainder+' on Timeline','/timeline','bp-filter-chip bp-cal-day-remainder');
+    host.append(door);
+    return;
+  }
+  host.hidden=true;
+}
 function calendar() {
   paintCalendarSchedule();
   const origin=calendarOrigin();
   const actualToday=todayKey();
-  const datedItems=mergeDatedWork(snapshot.work_dates || []).filter(event=>!selectedProject || event.product===selectedProject);
+  const datedItems=applyHybridMarks(
+    mergeDatedWork(snapshot.work_dates || []).filter(event=>!selectedProject || event.product===selectedProject),
+    {marks: snapshot.hybrid_marks || [], scenes: hybridScenesOn(), origin},
+  );
   const todayItems=datedItems.filter(event=>agendaGroup(event, origin)==='today').sort((a,b)=>String(a.dtstart).localeCompare(String(b.dtstart)));
   const nextItems=datedItems.filter(event=>agendaGroup(event, origin)==='next').sort((a,b)=>String(a.dtstart).localeCompare(String(b.dtstart)));
   const pastItems=datedItems.filter(event=>agendaGroup(event, origin)==='past').sort((a,b)=>String(b.dtstart).localeCompare(String(a.dtstart)));
+  const dayDig=capAgendaDay(todayItems);
   $('calendar-today-heading').textContent=origin===actualToday ? 'Today' : formatDayHeading(origin);
   $('calendar-next-heading').textContent='Next';
   $('calendar-past-summary').textContent=(origin===actualToday ? 'Past and overdue' : 'Before this day')+' · '+pastItems.length;
@@ -3024,7 +3048,8 @@ function calendar() {
     if(current && !snapshot.projects.some(project=>project.id===current)) select.add(new Option(current+' (unavailable)', current));
     select.value=current;
   }
-  reconcileList($('calendar-today'), todayItems, event=>event.product+':'+event.task_id, datedRow, {emptyText:origin===actualToday ? 'Nothing dated today.' : 'Nothing dated on this day.'});
+  reconcileList($('calendar-today'), dayDig.shown, event=>event.product+':'+event.task_id, datedRow, {emptyText:origin===actualToday ? 'Nothing dated today.' : 'Nothing dated on this day.'});
+  paintCalendarDayMore(dayDig.remainder);
   reconcileList($('calendar-next'), nextItems, event=>event.product+':'+event.task_id, datedRow, {emptyText:'No upcoming dated work.'});
   reconcileList($('calendar-past'), pastItems, event=>event.product+':'+event.task_id, datedRow, {emptyText:'No past dated work.'});
   const demand=snapshot.agents.filter(onDemandSeat);

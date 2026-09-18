@@ -1212,9 +1212,10 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-cal-secondary > summary { cursor: pointer; color: var(--ov-muted); font-size: 13px; }
 .bp-cal-secondary[open] > summary { margin-bottom: 8px; }
 
-/* Hybrid honesty strips (CAP_ACQUAINTANCE_052 C2): WorkLane is the live
-   schedule spine; MCP/Connector and outbound Apple/Outlook readers are
-   reserved slots, dimmed / not-wired until that fabric exists. */
+/* Hybrid honesty strips (CAP_ACQUAINTANCE_052 C2 + pc-1563 Phase 3):
+   WorkLane is the live schedule spine; MCP/Connector stay reserved.
+   Apple/Outlook reader/publish chips read as honesty (BP SoT; apps are
+   ties/readers), not hollow reserved dashes and not live writers. */
 .bp-cal-strip { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .bp-cal-strip-label { color: var(--ov-muted); font-size: 12px; min-width: 52px; }
 .bp-cal-strip-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1230,7 +1231,50 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-cal-chip[data-state="unavailable"]::before { background: var(--ov-state-error); }
 .bp-cal-chip[data-state="reserved"] { color: var(--ov-muted); border-style: dashed; opacity: 0.65; }
 .bp-cal-chip[data-state="reserved"]::before { background: var(--ov-state-off); }
+.bp-cal-chip[data-state="honesty"] {
+  color: var(--ov-muted);
+  border-color: var(--ov-tile-border-strong);
+  opacity: 0.92;
+}
+.bp-cal-chip[data-state="honesty"]::before { background: var(--ov-state-idle); }
 .bp-cal-write-door[hidden] { display: none; }
+
+/* pc-1563: soft-conflict marks on One Agenda rows. Soft chrome only —
+   dim twin / also-on / app precedes / You win / rejected / proposes.
+   Never a blocking control, never a second SoT Agenda. */
+.bp-cal-soft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+.bp-cal-soft-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--ov-muted);
+}
+.bp-cal-soft-chip[data-kind="you-win"] { color: var(--ov-link); border-color: var(--ov-tile-border-strong); }
+.bp-cal-soft-chip[data-kind="precedes"] { color: var(--ov-focus); }
+.bp-cal-soft-chip[data-kind="rejected"],
+.bp-cal-soft-chip[data-kind="proposes"] { color: var(--ov-state-scanning); }
+.bp-cal-twin,
+.bp-cal-bp-event {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ov-muted);
+  opacity: 0.55;
+}
+.bp-cal-hybrid-row { cursor: default; }
+.bp-cal-day-more { margin: 8px 0 4px; }
+.bp-cal-day-more[hidden] { display: none; }
+.bp-cal-day-remainder { text-decoration: none; }
 
 /* Delivery: exception-first repository summary with grouped evidence (pc-1487).
    Hero (PR · CI · Remote + thin CI spark) sits above this quieter ledger. */
