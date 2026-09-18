@@ -23,6 +23,8 @@ def _pick_port() -> int:
 
 
 def _start_server():
+    from server.operations_cache import reset_operations_cache
+    reset_operations_cache()
     overview_serve.Handler.state = empty_state()
     overview_serve.Handler.binder_overview = None
     overview_serve.Handler.binder_root = None

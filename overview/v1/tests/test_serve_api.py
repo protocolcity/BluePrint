@@ -69,12 +69,17 @@ def _start_server(
 ) -> tuple[object, int, threading.Thread]:
     # Handler carries truth on the class — reset each knob on every boot so
     # one test class can't leak a binder into the next.
+    from server.operations import set_listen_port
+    from server.operations_cache import reset_operations_cache
+    reset_operations_cache()
     overview_serve.Handler.state = state
     overview_serve.Handler.binder_overview = binder_overview
     overview_serve.Handler.binder_root = binder_root
     overview_serve.Handler.change_feed = change_feed
     port = _pick_port()
+    set_listen_port(port)
     httpd = overview_serve.ThreadingHTTPServer(("127.0.0.1", port), overview_serve.Handler)
+    httpd.daemon_threads = True
     thread = threading.Thread(target=httpd.serve_forever, name=f"ov-v1-{port}", daemon=True)
     thread.start()
     for _ in range(50):
