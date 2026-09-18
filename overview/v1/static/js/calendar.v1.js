@@ -3,8 +3,10 @@
  *
  * Reads local desk events from /api/calendar/events and paints the
  * One Agenda factory clock: weighted doors, week/day spine, Hybrid
- * source honesty. Honest empty by default (`No events`) — never shimmer,
- * never fake Google/MCP. Calendar is time on **this desk**; nothing else.
+ * source honesty. pc-1563 adds thin Phase 3 soft-conflict marks and
+ * outbound honesty weight so Hybrid slots are not hollow. Honest empty
+ * by default (`No events`) — never shimmer, never fake Google/MCP.
+ * Calendar is time on **this desk**; nothing else.
  *
  * Load-by-day bars (issue #153) count dated clocks, local events, and
  * WorkForce next_fire onto a Monday–Sunday week. Open WO dumps and the
@@ -269,8 +271,9 @@ export function paintDoors(root, doors) {
 // Hybrid honesty (CAP_ACQUAINTANCE_052 C2 / One Agenda): WorkLane is the
 // live schedule spine. MCP and Connector stay dim / not-wired until that
 // fabric exists. Local schedule is an honesty line, not a fourth live
-// source. Apple/Outlook are reserved outbound readers — BluePrint stays
-// the source of truth.
+// source. Apple/Outlook are outbound reader/publish ties — BluePrint stays
+// the source of truth. pc-1563 paints those chips as honesty weight so
+// the Hybrid slots are not hollow reserved dashes.
 export function sourceStripChips(opts = {}) {
   return [
     { id: "worklane", label: "WorkLane", state: opts.workLane ? "live" : "unavailable" },
@@ -281,8 +284,10 @@ export function sourceStripChips(opts = {}) {
 
 export function outboundStripChips() {
   return [
-    { id: "apple", label: "Apple · reader", state: "reserved" },
-    { id: "outlook", label: "Outlook · reader", state: "reserved" },
+    { id: "apple-reader", label: "Apple · reader", state: "honesty" },
+    { id: "apple-publish", label: "Apple · publish", state: "honesty" },
+    { id: "outlook-reader", label: "Outlook · reader", state: "honesty" },
+    { id: "outlook-publish", label: "Outlook · publish", state: "honesty" },
   ];
 }
 
@@ -290,7 +295,193 @@ const CHIP_STATE_LABELS = {
   live: "Live",
   unavailable: "Unavailable",
   reserved: "not wired",
+  honesty: "honesty",
 };
+
+export const AGENDA_DAY_LIMIT = 8;
+export const HYBRID_SCENES = ["A", "B2", "C1", "D1"];
+
+const SCENE_KINDS = {
+  A: "app_precedes",
+  B2: "human_wins",
+  C1: "reject_propose",
+  D1: "also_on",
+};
+
+function sceneApp(scene, fallback) {
+  if (fallback) return fallback;
+  return scene === "C1" ? "Outlook" : "Apple";
+}
+
+export function hybridMarkChips(mark = {}) {
+  const scene = String(mark.scene || "").toUpperCase();
+  const kind = mark.kind || SCENE_KINDS[scene] || "";
+  const app = sceneApp(scene, mark.app);
+  if (scene === "A" || kind === "app_precedes") {
+    return [
+      { kind: "also-on", label: `also on ${app}` },
+      { kind: "precedes", label: "app precedes" },
+    ];
+  }
+  if (scene === "B2" || kind === "human_wins") {
+    return [{ kind: "you-win", label: "You win" }];
+  }
+  if (scene === "C1" || kind === "reject_propose") {
+    return [
+      { kind: "rejected", label: "rejected" },
+      { kind: "proposes", label: "proposes" },
+    ];
+  }
+  if (scene === "D1" || kind === "also_on") {
+    return [{ kind: "also-on", label: `also on ${app}` }];
+  }
+  return [];
+}
+
+export function hybridMarkRecord(raw = {}) {
+  const scene = String(raw.scene || "").toUpperCase();
+  const kind = raw.kind || SCENE_KINDS[scene] || "";
+  const app = sceneApp(scene, raw.app);
+  const chips = Array.isArray(raw.chips) && raw.chips.length
+    ? raw.chips
+    : hybridMarkChips({ scene, kind, app });
+  return {
+    scene,
+    kind,
+    app,
+    chips,
+    dimTwin: Boolean(raw.dimTwin || kind === "app_precedes" || kind === "reject_propose"),
+    twin: typeof raw.twin === "string" ? raw.twin : "",
+    bp_event_id: typeof raw.bp_event_id === "string" ? raw.bp_event_id : "",
+    fixture: Boolean(raw.fixture),
+  };
+}
+
+export function lockedHybridScenes(origin) {
+  const day = origin || "";
+  return [
+    {
+      product: "blueprint",
+      task_id: "pc-1563-A",
+      summary: "A · hosted standup",
+      dtstart: day,
+      due: day,
+      due_all_day: true,
+      hybrid: hybridMarkRecord({
+        scene: "A",
+        kind: "app_precedes",
+        app: "Apple",
+        fixture: true,
+        dimTwin: true,
+        twin: "Apple copy · hosted 09:00",
+      }),
+    },
+    {
+      product: "blueprint",
+      task_id: "pc-1563-B2",
+      summary: "B2 · slot you kept",
+      dtstart: day,
+      due: day,
+      due_all_day: true,
+      hybrid: hybridMarkRecord({
+        scene: "B2",
+        kind: "human_wins",
+        app: "Apple",
+        fixture: true,
+      }),
+    },
+    {
+      product: "blueprint",
+      task_id: "pc-1563-C1",
+      summary: "C1 · review slot",
+      dtstart: day,
+      due: day,
+      due_all_day: true,
+      hybrid: hybridMarkRecord({
+        scene: "C1",
+        kind: "reject_propose",
+        app: "Outlook",
+        fixture: true,
+        dimTwin: true,
+        twin: "Outlook proposes · Fri 15:00",
+      }),
+    },
+    {
+      product: "blueprint",
+      task_id: "pc-1563-D1",
+      summary: "D1 · shared checkpoint",
+      dtstart: day,
+      due: day,
+      due_all_day: true,
+      hybrid: hybridMarkRecord({
+        scene: "D1",
+        kind: "also_on",
+        app: "Apple",
+        fixture: true,
+        bp_event_id: "bp_evt_d1",
+      }),
+    },
+  ];
+}
+
+export function applyHybridMarks(items, opts = {}) {
+  const rows = Array.isArray(items) ? items : [];
+  const marks = Array.isArray(opts.marks) ? opts.marks : [];
+  const withMarks = rows.map((row) => {
+    const mark = marks.find((entry) => (
+      (entry.task_id && entry.task_id === row.task_id)
+      || (entry.bp_event_id && entry.bp_event_id && entry.bp_event_id === row.bp_event_id)
+    ));
+    if (!mark && row.hybrid) return { ...row, hybrid: hybridMarkRecord(row.hybrid) };
+    if (!mark) return row;
+    return { ...row, hybrid: hybridMarkRecord({ ...mark, ...row.hybrid }) };
+  });
+  if (!opts.scenes) return withMarks;
+  const seen = new Set(
+    withMarks.map((row) => row.hybrid?.scene).filter(Boolean),
+  );
+  const extras = lockedHybridScenes(opts.origin).filter((row) => !seen.has(row.hybrid.scene));
+  return extras.concat(withMarks);
+}
+
+export function capAgendaDay(items, limit = AGENDA_DAY_LIMIT) {
+  const rows = Array.isArray(items) ? items : [];
+  const cap = Number(limit) > 0 ? Number(limit) : AGENDA_DAY_LIMIT;
+  if (rows.length <= cap) return { shown: rows, remainder: 0, total: rows.length };
+  return { shown: rows.slice(0, cap), remainder: rows.length - cap, total: rows.length };
+}
+
+export function paintHybridMark(host, mark) {
+  if (!host) return null;
+  const rec = hybridMarkRecord(mark || {});
+  if (!rec.chips.length) return null;
+  const wrap = document.createElement("div");
+  wrap.className = "bp-cal-soft";
+  wrap.dataset.scene = rec.scene;
+  wrap.dataset.kind = rec.kind;
+  if (rec.bp_event_id) wrap.dataset.bpEventId = rec.bp_event_id;
+  for (const chip of rec.chips) {
+    const span = document.createElement("span");
+    span.className = "bp-cal-soft-chip";
+    span.dataset.kind = chip.kind;
+    span.textContent = chip.label;
+    wrap.appendChild(span);
+  }
+  if (rec.dimTwin && rec.twin) {
+    const twin = document.createElement("span");
+    twin.className = "bp-cal-twin";
+    twin.textContent = rec.twin;
+    wrap.appendChild(twin);
+  }
+  if (rec.bp_event_id) {
+    const id = document.createElement("span");
+    id.className = "bp-cal-bp-event";
+    id.textContent = `bp_event_id · ${rec.bp_event_id}`;
+    wrap.appendChild(id);
+  }
+  host.appendChild(wrap);
+  return wrap;
+}
 
 function paintChipStrip(root, role, chips, reservedTitle) {
   const host = root.querySelector(`[data-role="${role}"]`);
@@ -302,7 +493,9 @@ function paintChipStrip(root, role, chips, reservedTitle) {
     span.dataset.state = chip.state;
     const stateLabel = CHIP_STATE_LABELS[chip.state] || chip.state;
     span.textContent = `${chip.label} · ${stateLabel}`;
-    if (chip.state === "reserved") {
+    if (chip.state === "honesty") {
+      span.title = reservedTitle || "BluePrint stays source of truth — apps are readers/ties, not writers of SoT";
+    } else if (chip.state === "reserved") {
       span.title = reservedTitle || `${chip.label} — not wired yet`;
     } else if (chip.state === "unavailable") {
       span.title = `${chip.label} — unavailable`;
@@ -320,7 +513,7 @@ export function paintOutboundStrip(root) {
     root,
     "cal-outbound",
     outboundStripChips(),
-    "Reserved outbound reader — BluePrint stays source of truth",
+    "BluePrint stays source of truth — Apple/Outlook are readers/ties, not writers of SoT",
   );
 }
 
