@@ -58,7 +58,34 @@
 .bp-for-you-face > summary::-webkit-details-marker { display: none; }
 .bp-for-you-face > summary::before { content: '▸ '; color: var(--ov-muted); }
 .bp-for-you-face[open] > summary::before { content: '▾ '; }
-.bp-overview-face-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.bp-overview-face-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 6px; }
+.bp-overview-due-fed { margin: 0 0 10px; font-size: 12px; }
+.bp-overview-exec {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 2px 0 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.bp-overview-exec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ov-state-working);
+  display: inline-block;
+}
+.bp-overview-exec-seats { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bp-overview-exec-seats .bp-empty { padding: 0; margin: 0; display: inline; font-size: 13px; }
+.bp-overview-exec-line { font-variant-numeric: tabular-nums; }
+.bp-overview-exec-cue { color: var(--ov-muted); font-size: 12px; }
+.bp-overview-exec a { text-decoration: none; font-size: 12px; white-space: nowrap; }
+.bp-overview-exec a:hover { text-decoration: underline; }
+.bp-overview-act { margin: 8px 0 0; }
+.bp-overview-act h2 { font-size: 13px; font-weight: 600; margin: 0 0 2px; }
+#for-you-decide .bp-overview-decide:first-child { border-top: 0; }
+#for-you-decide .bp-empty { padding: 8px 0; }
 .bp-agents-next-fire { margin: 6px 0 0; font-variant-numeric: tabular-nums; }
 .bp-agents-next-fire a { text-decoration: none; }
 .bp-agents-next-fire a:hover { text-decoration: underline; }
@@ -206,7 +233,7 @@
 .bp-work-calendar-doors { margin: 8px 0 2px; }
 .bp-work-calendar-doors .bp-order { padding: 8px 0; }
 a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-fg); }
-/* pc-1541: Now paint — one-line Decide/+N, gold Due chip, no tall Mute/More. */
+/* pc-1549: Now paint — KPI + chips + compact exec, one-line Decide/+N. */
 .bp-overview-decide { padding: 5px 0; align-items: center; gap: 8px; grid-template-columns: minmax(0,1fr) auto; }
 .bp-overview-decide .bp-order-link { min-width: 0; }
 .bp-overview-decide strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -216,7 +243,10 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-overview-decide-more a:hover { text-decoration: none; }
 #overview-view .bp-face-entry,
 #overview-view .bp-face-mute,
-#overview-view .bp-order-detail { display: none !important; }
+#overview-view .bp-order-detail,
+#overview-view .bp-execution-row,
+#overview-view .bp-execution-actions { display: none !important; }
+#overview-view .bp-face-chip { font-variant-numeric: tabular-nums; }
 #overview-view .bp-face-chip[data-face="decide"] { color: var(--ov-focus); border-color: var(--ov-badge-lit-border); font-weight: 600; }
 #overview-view .bp-face-chip[data-face="due"] { color: var(--ov-state-scanning); border-color: var(--ov-badge-lit-border); }
 .bp-section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 14px; }
