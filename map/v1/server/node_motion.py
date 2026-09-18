@@ -1,8 +1,9 @@
 """Map node motion paint — stroke = recent place activity.
 
-Issue #156. Quiet nodes stay quiet; unavailable stores are distinct from
-an empty motion count. Open / For You piles are not motion. Do not invent
-pulses for unmatched folders.
+Issue #156 / pc-1561 verify. Quiet nodes stay quiet; unavailable stores
+are distinct from an empty motion count. Open / For You piles are not
+motion. Do not invent pulses, a WO wall, an Overview dump, or a density
+overlay for unmatched folders.
 """
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
-// map-motion.js — stroke = recent place activity (issue #156).
+// map-motion.js — stroke = recent place activity (issue #156 / pc-1561).
 //
 // Pure classifier. Paint hosts apply the returned stroke; nothing here
 // invents pulses for unmatched folders or paints a fake zero spark.
-// Mirrors map/v1/server/node_motion.py.
+// No WO wall, Overview dump, or density overlay. Mirrors node_motion.py.
 
 export const WINDOW_MS = 24 * 60 * 60 * 1000;
 export const LIVE_MOTION = 3;
