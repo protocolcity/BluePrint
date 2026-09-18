@@ -393,9 +393,9 @@ class Handler(BaseHTTPRequestHandler):
             from server.operations_cache import cached_operations_snapshot
             try:
                 self._send_json(200, cached_operations_snapshot(self.binder_root))
-            except TimeoutError:
-                self._send_json(503, {"error": "Workspace sources could not be read."})
-            except (OSError, ValueError):
+            except Exception:
+                # An uncaught snapshot error used to drop the socket with 0
+                # bytes — the dogfood hang (pc-1554). Always answer.
                 self._send_json(503, {"error": "Workspace sources could not be read."})
             return
         if route == "/api/changes":
