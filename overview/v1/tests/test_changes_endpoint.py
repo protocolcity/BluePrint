@@ -34,12 +34,17 @@ def _pick_port() -> int:
 
 
 def _start_server(root: Path, poll_interval: float = 0.05):
+    from server.operations import set_listen_port
+    from server.operations_cache import reset_operations_cache
+    reset_operations_cache()
     overview_serve.Handler.state = empty_state()
     overview_serve.Handler.binder_overview = None
     overview_serve.Handler.binder_root = root
     overview_serve.Handler.change_feed = ChangeFeed(root, poll_interval=poll_interval)
     port = _pick_port()
+    set_listen_port(port)
     httpd = overview_serve.ThreadingHTTPServer(("127.0.0.1", port), overview_serve.Handler)
+    httpd.daemon_threads = True
     thread = threading.Thread(target=httpd.serve_forever, name=f"ov-changes-{port}", daemon=True)
     thread.start()
     for _ in range(50):

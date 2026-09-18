@@ -97,5 +97,105 @@ class ActivateTests(unittest.TestCase):
         self.assertEqual(self.activate_calls[0]['legacy_ports'], [8802, 8803])
 
 
+class BootstrapIoMissTests(unittest.TestCase):
+    """pc-1554: launchctl bootstrap I/O miss must not leave a wedged job."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name).resolve()
+        self.workspace = self.root / 'workspace'
+        self.workspace.mkdir()
+        self.executable = self.root / 'blueprint-overview'
+        self.executable.write_text('#!/bin/sh\n')
+        self.executable.chmod(0o755)
+        (self.root / 'Library' / 'LaunchAgents').mkdir(parents=True)
+
+    def test_io_error_is_uncertain(self):
+        class Result:
+            def __init__(self, code, stderr='', stdout=''):
+                self.returncode = code
+                self.stderr = stderr
+                self.stdout = stdout
+        self.assertTrue(deploy_mod.bootstrap_may_have_started(Result(1, 'Input/output error\n')))
+        self.assertTrue(deploy_mod.bootstrap_may_have_started(Result(1, '', '')))
+        self.assertFalse(deploy_mod.bootstrap_may_have_started(Result(0, '')))
+        self.assertFalse(deploy_mod.bootstrap_may_have_started(Result(1, 'Bootstrap failed: already loaded\n')))
+
+    def test_register_agent_boots_out_before_retry_on_io_error(self):
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(list(args))
+            class Result:
+                returncode = 1
+                stderr = 'Input/output error\n'
+                stdout = ''
+            if args[1] == 'bootstrap' and sum(1 for row in calls if row[1] == 'bootstrap') >= 2:
+                Result.returncode = 0
+                Result.stderr = ''
+            if args[1] == 'print':
+                Result.returncode = 1
+            if args[1] == 'bootout':
+                Result.returncode = 0
+            return Result()
+
+        with patch('subprocess.run', side_effect=fake_run):
+            deploy_mod.register_agent('gui/501', Path('/tmp/x.plist'), deploy_mod.LABEL)
+        verbs = [row[1] for row in calls]
+        self.assertEqual(verbs[:4], ['bootstrap', 'print', 'bootout', 'bootstrap'])
+
+    def test_stop_process_kills_a_wedged_candidate(self):
+        class FakeProc:
+            def __init__(self):
+                self.pid = 4242
+                self._alive = True
+                self.kills = []
+            def poll(self):
+                return None if self._alive else 0
+            def terminate(self):
+                self.kills.append('terminate')
+            def kill(self):
+                self.kills.append('kill')
+                self._alive = False
+            def wait(self, timeout=None):
+                if self._alive:
+                    raise deploy_mod.subprocess.TimeoutExpired(cmd='x', timeout=timeout)
+                return 0
+
+        proc = FakeProc()
+        deploy_mod.stop_process(proc, timeout=0.01)
+        self.assertIn('terminate', proc.kills)
+        self.assertIn('kill', proc.kills)
+        self.assertEqual(proc.poll(), 0)
+
+    def test_activate_agent_failure_boots_out_twice(self):
+        bootouts = []
+
+        def fake_run(args, **kwargs):
+            class Result:
+                returncode = 0
+                stderr = ''
+                stdout = ''
+            if list(args)[:2] == ['launchctl', 'bootout']:
+                bootouts.append(list(args))
+            return Result()
+
+        class FakeProc:
+            def poll(self):
+                return 0
+
+        with patch('subprocess.run', side_effect=fake_run), \
+             patch('subprocess.Popen', return_value=FakeProc()), \
+             patch.object(deploy_mod, 'probe', return_value={'projects': []}), \
+             patch.object(deploy_mod, 'register_agent', side_effect=RuntimeError('Input/output error')), \
+             patch('pathlib.Path.home', return_value=self.root), \
+             self.assertRaises(RuntimeError):
+            deploy_mod.activate_agent(
+                self.executable, {'version': '1.0.0-test'}, self.workspace, 8801,
+                legacy_ports=[], probe_timeout=1.0)
+        self.assertGreaterEqual(len(bootouts), 2)
+
+
 if __name__ == '__main__':
     unittest.main()

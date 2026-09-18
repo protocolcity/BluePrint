@@ -101,13 +101,74 @@ def stage(source, workspace, python):
     return release
 
 
+_BOOTSTRAP_UNCERTAIN = (
+    'input/output error',
+    'i/o error',
+    'io error',
+    'resource temporarily unavailable',
+)
+
+
+def bootstrap_may_have_started(result):
+    """True when launchctl bootstrap failed in a way that may still have started the job.
+
+    An I/O miss (pc-1554) can leave a wedged overview process listening while
+    activate believes registration failed. Callers must bootout before retry.
+    """
+    if getattr(result, 'returncode', 1) == 0:
+        return False
+    text = f"{getattr(result, 'stderr', '') or ''} {getattr(result, 'stdout', '') or ''}".lower()
+    if not text.strip():
+        return True
+    return any(marker in text for marker in _BOOTSTRAP_UNCERTAIN)
+
+
+def stop_process(process, timeout=5):
+    """Terminate a preflight overview process; escalate to kill / process-group.
+
+    Activate must not leave a candidate listener after probe failure or a
+    bootstrap I/O miss (pc-1554).
+    """
+    if process is None or process.poll() is not None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=timeout)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    except OSError:
+        pass
+    try:
+        process.kill()
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        pid = getattr(process, 'pid', None)
+        if pid:
+            try:
+                os.killpg(pid, 9)
+            except OSError:
+                pass
+            try:
+                process.wait(timeout=2)
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+    except OSError:
+        pass
+
+
 def register_agent(domain, agent, label):
+    result = None
     for attempt in range(8):
         result=subprocess.run(['launchctl','bootstrap',domain,str(agent)],capture_output=True,text=True,timeout=15)
         if result.returncode==0: return
         if subprocess.run(['launchctl','print',domain+'/'+label],capture_output=True,timeout=5).returncode==0: return
+        # I/O miss: the job may already be running. Boot it out before the
+        # next bootstrap so activate cannot stack a wedged listener (pc-1554).
+        if bootstrap_may_have_started(result):
+            subprocess.run(['launchctl','bootout',domain+'/'+label], capture_output=True, timeout=30)
         time.sleep(.5)
-    raise RuntimeError('Service registration did not settle: '+result.stderr.strip())
+    raise RuntimeError('Service registration did not settle: '+(result.stderr.strip() if result else ''))
 
 
 def deployment_matches(agent_path, deployment_path, executable, version, port, legacy_ports):
@@ -142,13 +203,13 @@ def activate_agent(executable, receipt, workspace, port, legacy_ports=None, back
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0)); candidate_port = sock.getsockname()[1]
     with tempfile.TemporaryFile() as log:
-        process = subprocess.Popen([str(executable),'--binder',str(workspace),'--port',str(candidate_port)], stdout=log, stderr=log)
+        process = subprocess.Popen(
+            [str(executable),'--binder',str(workspace),'--port',str(candidate_port)],
+            stdout=log, stderr=log, start_new_session=True)
         try:
             probe(candidate_port, receipt['version'], workspace=workspace, timeout=min(probe_timeout, 30))
         finally:
-            process.terminate()
-            try: process.wait(timeout=10)
-            except subprocess.TimeoutExpired: process.kill(); process.wait()
+            stop_process(process, timeout=5)
     agent = Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist'
     previous = agent.read_bytes() if agent.exists() else None
     config = plistlib.loads(previous) if previous else {'Label':LABEL,'RunAtLoad':True,'KeepAlive':True}
@@ -173,6 +234,10 @@ def activate_agent(executable, receipt, workspace, port, legacy_ports=None, back
         register_agent(domain,agent,LABEL)
         snapshot = probe(port, receipt['version'], workspace=workspace, timeout=probe_timeout)
     except Exception:
+        # Bootstrap I/O miss can leave the new job running. Boot out twice
+        # so a wedged listener does not survive the rollback (pc-1554).
+        subprocess.run(['launchctl','bootout',domain+'/'+LABEL], capture_output=True, timeout=30)
+        time.sleep(0.2)
         subprocess.run(['launchctl','bootout',domain+'/'+LABEL], capture_output=True, timeout=30)
         if previous:
             agent.write_bytes(previous)

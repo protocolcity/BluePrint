@@ -37,6 +37,8 @@ def _pick_port() -> int:
 
 
 def _start_server(state: dict, binder: Path | None = None):
+    from server.operations_cache import reset_operations_cache
+    reset_operations_cache()
     bp_serve.Handler.state = state
     bp_serve.Handler.binder_overview = None
     bp_serve.Handler.binder_root = binder

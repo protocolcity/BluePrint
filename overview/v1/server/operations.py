@@ -535,6 +535,27 @@ def verified_local_origin(receipt):
 # documented API; an HTTP 404 there is reachable, not a usable capability.
 WORKLANE_API_PATH = '/api/admin/products'
 _SUPERVISOR_FAILED = frozenset({'failed', 'provider_failed', 'escalated'})
+# Bound engine probes so a hung WorkLane/WorkForce cannot push /api/operations
+# past the browser's 10s abort (pc-1554). Two sequential 3s probes plus a
+# full projection was enough to paint "Unable to read workspace".
+PROBE_TIMEOUT_SECS = 1.0
+_LISTEN_PORT = None
+
+
+def set_listen_port(port):
+    """Record the desk's own listen port so probes never nest on this process."""
+    global _LISTEN_PORT
+    try:
+        _LISTEN_PORT = int(port) if port is not None else None
+    except (TypeError, ValueError):
+        _LISTEN_PORT = None
+
+
+def origin_is_self(origin):
+    if _LISTEN_PORT is None or not origin:
+        return False
+    parsed = urlparse(origin)
+    return parsed.hostname in ('127.0.0.1', 'localhost') and parsed.port == _LISTEN_PORT
 
 
 def _read_bounded(stream, limit=65536):
@@ -587,11 +608,16 @@ def probe_local_http(origin, path):
 
     Any HTTP reply means the origin responded (reachable). That is not
     usability; callers must interpret ``status`` and ``body``.
+    A probe whose origin is this desk's own listen port is refused — a
+    nested /api/operations during activate or a mis-pointed receipt must
+    not deadlock the request thread (pc-1554).
     """
+    if origin_is_self(origin):
+        return {'ok': False, 'self': True}
     request = Request(origin.rstrip('/') + path)
     opener = build_opener(_NoRedirect())
     try:
-        with opener.open(request, timeout=3) as response:
+        with opener.open(request, timeout=PROBE_TIMEOUT_SECS) as response:
             status = getattr(response, 'status', None) or getattr(response, 'code', 200)
             return {'ok': True, 'status': status, 'body': _read_bounded(response)}
     except HTTPError as exc:
@@ -616,6 +642,10 @@ def supervisor_snapshot(root):
         return {'state': 'unavailable', 'detail': 'A verified local WorkForce connection is required.',
                 'passes': [], 'reachable': False, 'http_status': None, 'probed': False}
     probe = probe_local_http(origin, '/api/supervisor?limit=3')
+    if probe.get('self'):
+        return {'state': 'unavailable',
+                'detail': 'WorkForce origin matches this BluePrint listen port; refusing a nested probe.',
+                'passes': [], 'reachable': False, 'http_status': None, 'probed': True}
     if probe.get('redirect'):
         return {'state': 'unavailable', 'detail': 'WorkForce redirected the supervisor read; refusing to leave the verified origin.',
                 'passes': [], 'reachable': False, 'http_status': probe.get('status'), 'probed': True}
@@ -710,6 +740,12 @@ def _worklane_reachability(root, now):
     source = origin + WORKLANE_API_PATH
     probe = probe_local_http(origin, WORKLANE_API_PATH)
     observed = now.isoformat()
+    if probe.get('self'):
+        return _engine_record(
+            state='unavailable', source=source, observed_at=observed,
+            reachable=False, usable=False,
+            next_step='Use this workspace installation receipt; do not fall back to another workspace or a default port.',
+            detail='WorkLane origin matches this BluePrint listen port; refusing a nested probe.')
     if probe.get('redirect'):
         return _engine_record(
             state='unavailable', source=source, observed_at=observed,
