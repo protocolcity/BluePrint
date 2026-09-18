@@ -54,6 +54,8 @@ import argparse
 import json
 import queue
 import re
+import select
+import socket
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -350,11 +352,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(503, {"error": "Project papers could not be read."})
             return
         if route == "/calendar.ics":
-            from server.operations import operations_snapshot
             from suite.api.calendar import render_vcalendar
             from datetime import date, datetime
             from urllib.parse import urlencode
-            snapshot = operations_snapshot(self.binder_root)
+            from server.operations_cache import cached_operations_snapshot
+            snapshot = cached_operations_snapshot(self.binder_root)
             lane = next((s for s in snapshot["sources"] if s["name"] == "WorkLane"), {})
             if lane.get("state") != "available" or snapshot.get("truncated"):
                 self._send_json(503, {"error": "Calendar cannot be exported while work-order sources are incomplete."})
@@ -388,9 +390,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(503, {"error": "Timeline could not be read."})
             return
         if route == "/api/operations":
-            from server.operations import operations_snapshot
+            from server.operations_cache import cached_operations_snapshot
             try:
-                self._send_json(200, operations_snapshot(self.binder_root))
+                self._send_json(200, cached_operations_snapshot(self.binder_root))
+            except TimeoutError:
+                self._send_json(503, {"error": "Workspace sources could not be read."})
             except (OSError, ValueError):
                 self._send_json(503, {"error": "Workspace sources could not be read."})
             return
@@ -508,6 +512,25 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._send_text(400, str(exc))
 
+    def _client_gone(self) -> bool:
+        """True when the peer has half-closed (Tailscale drop, tab gone).
+
+        An SSE slot held by a dead socket is what turns 2–3 browser clients
+        into /api/changes 503s (pc-1554). Peek instead of waiting for the
+        20s heartbeat write to fail.
+        """
+        conn = getattr(self, "connection", None)
+        if conn is None:
+            return False
+        try:
+            ready, _, _ = select.select([conn], [], [], 0)
+            if not ready:
+                return False
+            data = conn.recv(1, socket.MSG_PEEK)
+            return not data
+        except (OSError, ValueError, AttributeError):
+            return True
+
     # ── change feed (D2) — text/event-stream, one connection per client ─
     def _serve_changes(self) -> None:
         feed = self.change_feed
@@ -517,6 +540,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         client_id, inbox = subscription
         try:
+            try:
+                self.connection.settimeout(HEARTBEAT_SECS + 10)
+            except OSError:
+                pass
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-store")
@@ -524,10 +551,14 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             last_sent = time.monotonic()
             while True:
+                if self._client_gone():
+                    break
                 try:
                     event = inbox.get(timeout=1.0)
                     self.wfile.write(f"event: changed\ndata: {json.dumps(event)}\n\n".encode("utf-8"))
                 except queue.Empty:
+                    if self._client_gone():
+                        break
                     if time.monotonic() - last_sent < HEARTBEAT_SECS:
                         continue
                     self.wfile.write(b": heartbeat\n\n")
@@ -668,7 +699,13 @@ def main(argv: list[str] | None = None) -> int:
     Handler.binder_root = binder
     Handler.change_feed = ChangeFeed(binder)
 
+    from server.operations import set_listen_port
+    from server.operations_cache import reset_operations_cache
+    reset_operations_cache()
+    set_listen_port(args.port)
+
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
+    httpd.daemon_threads = True
     redirects = []
     try:
         from server.legacy_redirect import listener

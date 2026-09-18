@@ -112,8 +112,8 @@ def enrich_work_order(binder, order: dict) -> dict:
     if not binder:
         return order
     try:
-        from .operations import operations_snapshot
-        snap = operations_snapshot(binder)
+        from .operations_cache import cached_operations_snapshot
+        snap = cached_operations_snapshot(binder)
         ext_id = order.get('ext_id') or order.get('id')
         project = order.get('project')
         projected = next(
