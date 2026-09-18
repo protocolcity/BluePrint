@@ -1197,13 +1197,19 @@ class TimelineActivityChartTests(unittest.TestCase):
         self.assertTrue(result['quiet_chart_hidden'])
         self.assertTrue(result['unavailable_hidden'])
         self.assertEqual(result['kinds'], ['work', 'delivery'])
-        self.assertEqual(result['healthy_work'], 'Work2 events')
-        self.assertEqual(result['healthy_delivery'], 'Delivery3 events')
+        self.assertEqual(result['healthy_work'], 'Work2 eventsWorkLane firings')
+        self.assertEqual(result['healthy_delivery'], 'Delivery3 eventsGitHub firings')
         self.assertEqual(result['work_href'], '/work')
         self.assertEqual(result['delivery_href'], '/delivery')
         self.assertTrue(result['has_line'])
-        self.assertEqual(result['quiet_work'], 'Worknone')
-        self.assertEqual(result['quiet_delivery'], 'Deliverynone')
+        self.assertEqual(result['hist_counts'], 4)
+        self.assertEqual(result['day_count'], 2)
+        self.assertTrue(result['has_rail'])
+        self.assertEqual(result['event_times'], 2)
+        self.assertEqual(result['source_labels'], 2)
+        self.assertEqual(result['quiet_work'], 'WorknoneWorkLane firings')
+        self.assertEqual(result['quiet_delivery'], 'DeliverynoneGitHub firings')
+        self.assertEqual(result['quiet_stream'], 'No timeline rows in the readable window.')
         self.assertEqual(result['unavailable_doors'], ['Workunavailable', 'Deliveryunavailable'])
 
 
@@ -1220,13 +1226,18 @@ class TimelineHeroTests(unittest.TestCase):
         delivery = _HTML.split('id="delivery-view"')[1].split('id="timeline-view"')[0]
         calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
         self.assertIn('id="timeline-hero"', timeline)
+        self.assertIn('Timeline time spine', timeline)
+        self.assertIn('>Firings<', timeline)
         self.assertIn('id="timeline-doors"', timeline)
         self.assertIn('id="timeline-activity"', timeline)
         self.assertIn('id="timeline-activity-chart"', timeline)
+        self.assertIn('bp-timeline-facets', timeline)
+        self.assertIn('bp-timeline-stream', timeline)
         self.assertLess(timeline.index('id="timeline-hero"'), timeline.index('id="timeline-filters"'))
         self.assertLess(timeline.index('id="timeline-doors"'), timeline.index('id="timeline-activity"'))
         self.assertLess(timeline.index('id="timeline-activity"'), timeline.index('id="timeline-filters"'))
         self.assertLess(timeline.index('id="timeline-filters"'), timeline.index('id="timeline-list"'))
+        self.assertLess(timeline.index('id="timeline-list"'), timeline.index('id="timeline-source-strip"'))
         self.assertEqual(_HTML.count('id="timeline-hero"'), 1)
         self.assertEqual(_HTML.count('id="timeline-doors"'), 1)
         self.assertNotIn('id="timeline-hero"', overview)
@@ -1247,6 +1258,8 @@ class TimelineHeroTests(unittest.TestCase):
         compact = paint.replace(' ', '')
         self.assertIn("'Work'", paint)
         self.assertIn("'Delivery'", paint)
+        self.assertIn("'WorkLane firings'", paint)
+        self.assertIn("'GitHub firings'", paint)
         self.assertIn("timelineWorkHref()", compact)
         self.assertIn("'/delivery'", paint)
         self.assertIn('unavailable', paint)
@@ -1270,6 +1283,8 @@ class TimelineHeroTests(unittest.TestCase):
         self.assertIn('.bp-timeline-hero', css)
         self.assertIn('.bp-timeline-doors', css)
         self.assertIn('.bp-timeline-hist-line', css)
+        self.assertIn('.bp-timeline-hist-count', css)
+        self.assertIn('.bp-timeline-stream', css)
         self.assertIn('#timeline-view .bp-filters', css)
         primary = css.split('.bp-timeline-door-primary')[1].split('}')[0]
         self.assertIn('font-size: 20px', primary)
@@ -1302,6 +1317,73 @@ class TimelineHeroTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
         self.assertNotIn('deferred', nav.lower())
         self.assertNotIn('later', nav.lower())
+
+
+class TimelineTimeSpineVisualFinishTests(unittest.TestCase):
+    """Timeline time-spine mock-parity: firings histogram + line is the
+    first-read hero. Stream is events by time. Not a quiet list."""
+
+    def test_first_read_is_time_spine_hero_not_a_quiet_list(self):
+        timeline = _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0]
+        self.assertIn('Timeline time spine', timeline)
+        self.assertIn('>Firings<', timeline)
+        self.assertIn('id="timeline-activity-chart"', timeline)
+        self.assertIn('bp-timeline-facets', timeline)
+        self.assertIn('bp-timeline-stream', timeline)
+        self.assertIn('id="timeline-note"', timeline)
+        self.assertLess(timeline.index('id="timeline-hero"'), timeline.index('id="timeline-filters"'))
+        self.assertLess(timeline.index('id="timeline-filters"'), timeline.index('id="timeline-list"'))
+        self.assertLess(timeline.index('id="timeline-activity"'), timeline.index('id="timeline-list"'))
+        self.assertLess(timeline.index('id="timeline-list"'), timeline.index('id="timeline-source-strip"'))
+        self.assertNotIn('id="work-band-act-now"', timeline)
+        self.assertNotIn('id="for-you-decide"', timeline)
+        self.assertNotIn('wo-tile', timeline)
+        self.assertNotIn('Act now', timeline)
+
+    def test_css_weights_firings_hero_over_quiet_filters_and_stream(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-timeline-hero', css)
+        self.assertIn('.bp-timeline-hist-count', css)
+        self.assertIn('.bp-timeline-facets', css)
+        self.assertIn('.bp-timeline-stream', css)
+        self.assertIn('.bp-timeline-rail', css)
+        self.assertIn('.bp-timeline-event', css)
+        hero = css.split('.bp-timeline-door-primary')[1].split('}')[0]
+        self.assertIn('font-size: 20px', hero)
+        hist = css.split('.bp-timeline-hist {')[1].split('}')[0]
+        self.assertIn('height: 128px', hist)
+        filters = css.split('#timeline-view .bp-filters input')[1].split('}')[0]
+        self.assertIn('min-height: 32px', filters)
+
+    def test_paint_keeps_c5_doors_and_groups_the_stream_by_time(self):
+        self.assertIn('function paintTimelineDoors(', _SRC)
+        self.assertIn('function paintTimelineActivityLine(', _SRC)
+        self.assertIn('function buildTimelineDays(', _SRC)
+        self.assertIn('function timelineDayNode(', _SRC)
+        self.assertIn('function timelineClock(', _SRC)
+        self.assertIn("'WorkLane firings'", _SRC)
+        self.assertIn("'GitHub firings'", _SRC)
+        self.assertIn('bp-timeline-event', _SRC)
+        self.assertIn('Quiet in this window.', _SRC)
+        self.assertIn('Timeline is unavailable right now.', _SRC)
+        self.assertIn('No timeline rows in the readable window.', _SRC)
+        paint = _SRC.split('function paintTimelineDoors(')[1].split('function paintTimelineActivityLine(')[0]
+        self.assertNotIn('Needs you', paint)
+        self.assertNotIn('Act now', paint)
+        self.assertNotIn('For You', paint)
+        timeline = _SRC.split('function timeline()')[1].split('function timelineFilterParams')[0]
+        self.assertIn('buildTimelineDays(', timeline)
+        self.assertLess(timeline.index('paintTimelineDoors'), timeline.index('paintTimelineActivity'))
+
+    def test_does_not_regress_neighbor_surfaces(self):
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="delivery-hero"', _HTML)
+        self.assertIn('id="calendar-hero"', _HTML)
+        self.assertIn('id="delivery-ci-spark"', _HTML)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('POS', _HTML)
 
 
 class ProjectsReturnAndFinishingTests(unittest.TestCase):
