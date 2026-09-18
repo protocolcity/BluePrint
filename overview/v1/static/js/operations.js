@@ -27,7 +27,7 @@ try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,1
 $('refresh-preference').value=String(interval);$('motion-preference').value=motion;
 document.body.classList.toggle('bp-reduce-motion',motion==='off');
 const query = new URLSearchParams(location.search);
-if(page==='agents' && query.get('view')==='canvas') agentsView='canvas';
+if(page==='agents' && (query.get('face')==='canvas' || query.get('view')==='canvas')) agentsView='canvas';
 timelineProject = query.get('project') || '';
 timelineSource = query.get('source') || '';
 timelineActor = query.get('actor') || '';
@@ -1529,6 +1529,10 @@ function lastUpdateText(agent) {
 function selectAgent(id) {
   selectedAgentId=selectedAgentId===id ? '' : id;
   agents();
+  const detail=$('agent-detail');
+  if(selectedAgentId && agentsView==='canvas' && detail && !detail.hidden && detail.scrollIntoView) {
+    detail.scrollIntoView({block:'nearest'});
+  }
 }
 function agentRowClass(agent) {
   const bucket=floorBucket(agent);
@@ -2043,7 +2047,7 @@ function buildAgentsCanvas(agents, now) {
   }
   if(!seats.length && !jobs.length) return emptyAgentsCanvas();
   const nodes=[], edges=[];
-  const nodeW=188, nodeH=58, gapY=16, padX=24, padY=24, colActor=24, colTarget=268, stackGap=10;
+  const nodeW=196, nodeH=64, gapY=18, padX=24, padY=24, colActor=24, colTarget=286, stackGap=12;
   let y=padY;
   const bands=[seats, jobs];
   bands.forEach((rows, index)=>{
@@ -2051,13 +2055,14 @@ function buildAgentsCanvas(agents, now) {
     for(const agent of rows) {
       const actor={
         id:agent.id, kind:agent.group, label:agent.name || agent.id,
+        shape:agent.group==='job'?'diamond':'rounded', project:agent.project_name || '',
         badge:agent.badge || agent.state, bucket:floorBucket(agent), group:agent.group,
         x:colActor, y, w:nodeW, h:nodeH, door:agent.group==='seat'?'person':'',
       };
       const held=agent.group==='seat' && agent.held && agent.held.id && agent.held.project ? agent.held : null;
       if(agent.group==='seat') {
         actor.work_href='/work?'+new URLSearchParams({assignment:'worker:'+agent.id});
-        if(held) actor.claim={label:`${held.title || held.id} · ${held.id}`, href:'/work-order?'+new URLSearchParams({project:held.project,id:held.id})};
+        if(held) actor.claim={label:`${held.title || held.id} · ${held.id}`, href:'/work-order?'+new URLSearchParams({project:held.project,id:held.id}), order_id:held.id};
       }
       const targets=[];
       if(held) {
@@ -2085,7 +2090,7 @@ function buildAgentsCanvas(agents, now) {
         actor.fire={label:fire.label, href:fire.href};
         targets.push({kind:'next_fire', node:fire});
       }
-      if(actor.claim || actor.fire) actor.h=72;
+      if(actor.claim || actor.fire || actor.project) actor.h=92;
       nodes.push(actor);
       let targetY=y;
       for(const target of targets) {
@@ -2109,16 +2114,18 @@ function syncAgentsFace() {
   const floorBtn=$('agents-face-floor'), canvasBtn=$('agents-face-canvas');
   if(floorBtn) floorBtn.setAttribute('aria-pressed', String(agentsView==='floor'));
   if(canvasBtn) canvasBtn.setAttribute('aria-pressed', String(agentsView==='canvas'));
-  const lists=$('agents-floor-lists'), wrap=$('agents-canvas-wrap');
+  const lists=$('agents-floor-lists'), wrap=$('agents-canvas-wrap'), view=$('agents-view');
   if(lists) lists.hidden=agentsView==='canvas';
   if(wrap) wrap.hidden=agentsView!=='canvas';
+  if(view) view.dataset.face=agentsView;
 }
 function setAgentsView(next) {
   agentsView=next==='canvas'?'canvas':'floor';
   if(page==='agents') {
     const params=new URLSearchParams(location.search);
-    if(agentsView==='canvas') params.set('view','canvas');
-    else params.delete('view');
+    if(agentsView==='canvas') params.set('face','canvas');
+    else params.delete('face');
+    params.delete('view');
     history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
   }
   syncAgentsFace();
@@ -2136,15 +2143,25 @@ function paintAgentsFireChip(fire) {
   wrap.append(paintAgentsFireTicks());
   return wrap;
 }
+function paintAgentsCanvasSpark(id) {
+  const data=seatSparkFromSnapshot(id);
+  const glyphs=throughputSpark(data.hours);
+  if(!glyphs) return null;
+  const line=el('span',glyphs,'bp-agents-canvas-spark');
+  line.dataset.tone=sparkTone(data, 'idle');
+  line.setAttribute('aria-hidden','true');
+  return line;
+}
 function paintAgentsCanvasNode(node) {
   const card=el('article',undefined,'bp-agents-canvas-node');
   card.dataset.kind=node.kind;
+  card.dataset.shape=node.shape || (node.kind==='job'?'diamond':'rounded');
   card.dataset.bucket=node.bucket || '';
   card.dataset.id=node.id;
   card.style.left=`${node.x || 0}px`;
   card.style.top=`${node.y || 0}px`;
-  card.style.width=`${node.w || 188}px`;
-  card.style.minHeight=`${node.h || 58}px`;
+  card.style.width=`${node.w || 196}px`;
+  card.style.minHeight=`${node.h || 64}px`;
   if(node.kind==='seat' || node.kind==='job') {
     if(node.kind==='seat') {
       const person=el('button',undefined,'bp-agents-canvas-person');
@@ -2160,6 +2177,7 @@ function paintAgentsCanvasNode(node) {
       }
       name.append(node.label);
       person.append(name);
+      if(node.project) person.append(el('span',node.project,'bp-agents-canvas-project'));
       person.addEventListener('click',()=>selectAgent(node.id));
       card.append(person);
     } else {
@@ -2170,6 +2188,10 @@ function paintAgentsCanvasNode(node) {
     if(node.claim) meta.append(link(node.claim.label, readerHref(node.claim.href), 'bp-agents-canvas-chip bp-agents-canvas-claim'));
     else if(node.work_href) meta.append(link('Work', node.work_href, 'bp-agents-canvas-chip'));
     if(node.fire) meta.append(paintAgentsFireChip(node.fire));
+    if(node.kind==='seat') {
+      const spark=paintAgentsCanvasSpark(node.id);
+      if(spark) meta.append(spark);
+    }
     card.append(meta);
     return card;
   }
@@ -2229,9 +2251,9 @@ function paintAgentsCanvas() {
 }
 const AGENTS_TOUR_KEY='bp-agents-canvas-tour';
 const AGENTS_TOUR_STEPS=[
-  {id:'strip', title:'Working / Idle strip', copy:'Working, Idle, and Error count this floor. Canvas reuses the same strip — it is not a second roster.'},
-  {id:'node', title:'A seat or job', copy:'A node is a seat or a job. Seats may hold a claim. Jobs never claim.'},
-  {id:'door', title:'A door', copy:'A door leaves the canvas: Work for a claim, Timeline for a last run.'},
+  {id:'strip', title:'Working / Idle strip', copy:'Working, Idle, and Error count this floor. Canvas is an n8n-style factory window of that same strip — not a second roster and not an editor.'},
+  {id:'node', title:'A seat or job', copy:'A node is a seat or a job. Seats may hold a claim. Jobs never claim. Watch the factory; you do not edit the graph.'},
+  {id:'door', title:'A door', copy:'A door leaves the canvas: Work for a claim, Timeline for a last run. Click a seat for the person sheet — nothing here is a property inspector.'},
 ];
 let agentsTourStep=0, agentsTourActive=false, agentsTourSeenFlag=false, agentsTourForceConsumed=false, agentsTourFocus=null;
 try { agentsTourSeenFlag=localStorage.getItem(AGENTS_TOUR_KEY)==='seen'; } catch(error) { /* Unavailable storage uses the in-memory flag. */ }

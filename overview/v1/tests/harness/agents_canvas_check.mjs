@@ -18,6 +18,7 @@ class Element {
     this.dataset = {};
     this.style = {};
     this.hidden = false;
+    this.scrollIntoView = () => {};
     this.open = false;
     this.disabled = false;
     this._text = '';
@@ -118,7 +119,7 @@ const IDS = [
   'agents-hero', 'agents-coverage-door', 'agents-coverage-summary', 'agents-legend',
   'agents-floor-empty', 'agents-floor-spark', 'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list',
   'agents-face', 'agents-face-floor', 'agents-face-canvas', 'agents-floor-lists',
-  'agents-canvas-wrap', 'agents-canvas', 'agents-canvas-empty',
+  'agents-canvas-wrap', 'agents-canvas', 'agents-canvas-empty', 'agents-canvas-legend',
   'agents-canvas-empty-teach', 'agents-canvas-tour', 'agents-canvas-tour-kicker',
   'agents-canvas-tour-copy', 'agents-canvas-tour-next', 'agents-canvas-tour-back',
   'agents-canvas-tour-skip', 'agents-canvas-tour-start',
@@ -149,13 +150,13 @@ const canvas = {
   width: 480,
   height: 320,
   nodes: [
-    {id: 'working-seat', kind: 'seat', label: 'working-seat', badge: 'WORKING', bucket: 'working', group: 'seat', x: 24, y: 24, w: 188, h: 72, door: 'person', work_href: '/work?assignment=worker:working-seat', claim: {label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9'}},
+    {id: 'working-seat', kind: 'seat', label: 'working-seat', shape: 'rounded', project: 'BluePrint', badge: 'WORKING', bucket: 'working', group: 'seat', x: 24, y: 24, w: 196, h: 92, door: 'person', work_href: '/work?assignment=worker:working-seat', claim: {label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9', order_id: 'pc-9'}},
     {id: 'work:blueprint:pc-9', kind: 'work', label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9', door: 'ticket', bucket: 'target', x: 268, y: 24, w: 188, h: 58},
     {id: 'idle-seat', kind: 'seat', label: 'idle-seat', badge: 'IDLE', bucket: 'idle', group: 'seat', x: 24, y: 98, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:idle-seat'},
     {id: 'failed-seat', kind: 'seat', label: 'failed-seat', badge: 'LAST RUN FAILED', bucket: 'error', group: 'seat', x: 24, y: 172, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:failed-seat'},
     {id: 'run:failed-seat', kind: 'last_run', label: 'Last run · failed', title: 'agent exit', outcome: 'error', href: '/timeline?actor=failed-seat', door: 'timeline', bucket: 'error', x: 268, y: 172, w: 188, h: 58},
     {id: 'off-seat', kind: 'seat', label: 'off-seat', badge: 'OFF', bucket: 'quiet', group: 'seat', x: 24, y: 246, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:off-seat'},
-    {id: 'loop-health', kind: 'job', label: 'loop-health', badge: 'IDLE', bucket: 'idle', group: 'job', x: 24, y: 332, w: 188, h: 72, door: '', fire: {label: 'Next fire · in 12m', href: '/calendar'}},
+    {id: 'loop-health', kind: 'job', label: 'loop-health', shape: 'diamond', badge: 'IDLE', bucket: 'idle', group: 'job', x: 24, y: 332, w: 196, h: 92, door: '', fire: {label: 'Next fire · in 12m', href: '/calendar'}},
     {id: 'fire:loop-health', kind: 'fire', label: 'Next fire · in 12m', href: '/calendar', door: 'calendar', bucket: 'target', x: 268, y: 332, w: 188, h: 58},
   ],
   edges: [
@@ -220,8 +221,9 @@ const context = {
   clearInterval() {},
   setTimeout() {},
   Date,
-  history: {replaceState() {}},
+  historyHref: '',
 };
+context.history = {replaceState(_state, _title, url) { context.historyHref = String(url || ''); }};
 context.document = {
   getElementById: get,
   createElement: tag => new Element(tag),
@@ -292,6 +294,10 @@ assert.equal(get('agents-canvas').hidden, false);
 assert.equal(get('agents-canvas-empty').hidden, true);
 assert.match(get('agents-pulse').textContent.replace(/\s+/g, ''), /1Working/);
 assert.match(get('agents-floor-spark').textContent, /4 runs · last 24h/);
+assert.match(context.historyHref, /face=canvas/);
+assert.ok(!context.historyHref.includes('view=canvas'), 'canonical deep-link is face=canvas');
+assert.equal(get('agents-view').dataset.face, 'canvas');
+assert.ok(get('agents-canvas-legend'), 'canvas legend host stays on Agents');
 
 const cards = get('agents-canvas').querySelectorAll('.bp-agents-canvas-node');
 const seatIds = cards.filter(n => n.dataset.kind === 'seat').map(n => n.dataset.id);
@@ -300,7 +306,11 @@ const working = cards.find(n => n.dataset.id === 'working-seat');
 assert.deepEqual(seatIds, ['working-seat', 'idle-seat', 'failed-seat', 'off-seat']);
 assert.deepEqual(jobIds, ['loop-health']);
 assert.equal(working.dataset.bucket, 'working');
+assert.equal(working.dataset.shape, 'rounded');
 assert.ok(working.querySelector('.bp-shift-cue'));
+assert.match(working.textContent, /BluePrint/);
+assert.ok(working.querySelector('.bp-agents-canvas-project'), 'seat shows project label');
+assert.ok(working.querySelector('.bp-agents-canvas-spark'), 'optional spark paints when Floor has runs');
 
 const edges = get('agents-canvas').querySelectorAll('.bp-agents-canvas-edge');
 const claimEdge = edges.find(edge => edge.dataset.kind === 'claim');
@@ -328,6 +338,7 @@ assert.match(claimChip.textContent, /Live claim.*pc-9/);
 assert.equal(claimChip.href, '/work-order?project=blueprint&id=pc-9');
 assert.ok(!working.querySelectorAll('.bp-agents-canvas-chip').some(a => a.textContent === 'Work'), 'claim chip replaces the generic Work link once a WO is held');
 const job = cards.find(n => n.dataset.id === 'loop-health');
+assert.equal(job.dataset.shape, 'diamond');
 const fireChip = job && job.querySelectorAll('.bp-agents-canvas-fire')[0];
 assert.ok(fireChip, 'next-fire tick is visible on the job node');
 assert.match(fireChip.textContent, /Next fire/);
@@ -343,6 +354,8 @@ assert.equal(get('agents-canvas-tour').dataset.step, 'strip');
 assert.equal(get('agents-pulse').dataset.tourFocus, 'true');
 assert.match(get('agents-canvas-tour-kicker').textContent, /1 of 3/);
 assert.match(get('agents-canvas-tour-copy').textContent, /Working, Idle, and Error/);
+assert.match(get('agents-canvas-tour-copy').textContent, /n8n-style factory/);
+const tourFactory = get('agents-canvas-tour-copy').textContent;
 assert.equal(get('agents-canvas-tour-next').textContent, 'Next');
 assert.equal(get('agents-canvas-empty-teach').hidden, true);
 fire('agents-canvas-tour-next');
@@ -358,6 +371,12 @@ assert.match(get('agents-canvas-tour-copy').textContent, /Work for a claim, Time
 fire('agents-canvas-tour-next');
 assert.equal(get('agents-canvas-tour').hidden, true);
 assert.equal(context.localStorage.getItem('bp-agents-canvas-tour'), 'seen');
+const personDoor = get('agents-canvas').querySelectorAll('.bp-agents-canvas-node').find(n => n.dataset.id === 'working-seat');
+const person = personDoor && personDoor.querySelector('.bp-agents-canvas-person');
+assert.ok(person, 'seat node is a person door, not an edit handle');
+for (const fn of person.listeners.click || []) fn({preventDefault() {}});
+assert.equal(get('agent-detail').hidden, false, 'seat click opens the person sheet');
+assert.match(get('agent-detail').textContent, /Inspect/);
 
 const emptyCanvas = {
   ...fixture,
@@ -438,4 +457,12 @@ process.stdout.write(JSON.stringify({
   floor_hero: true,
   coverage_door_closed: true,
   soft_poll_pulse: idlePulse,
+  working_shape: 'rounded',
+  job_shape: 'diamond',
+  has_legend: true,
+  has_project_label: true,
+  has_optional_spark: true,
+  canvas_href: context.historyHref,
+  person_sheet: true,
+  tour_factory: tourFactory,
 }));
