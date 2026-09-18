@@ -8,7 +8,7 @@ const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStr
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you, what is moving, and what this desk can verify.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
+const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you and what\'s moving.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
 let agentsView = 'floor';
@@ -530,18 +530,14 @@ function overviewFaceRow(order) {
   return row;
 }
 function executionRow(agent) {
-  const row=el('div',undefined,'bp-execution-row');
-  const main=el('div');
-  main.append(el('strong',agent.name));
-  const bits=[agent.badge];
-  if(agent.shift) bits.push(`since ${date(agent.shift.started_at)}`);
-  if(agent.held) bits.push(agent.held.id);
-  main.append(el('span',bits.join(' · '),'bp-order-meta'));
-  row.append(main,badge(agent.state,agent.badge));
-  const actions=el('div',undefined,'bp-execution-actions');
-  actions.append(link('Inspect seat','/agents'));
-  if(agent.held && agent.project) actions.append(link('Open order',workUrl({project:agent.project,id:agent.held.id,project_name:agent.project_name})));
-  row.append(actions);
+  const row=el('span',undefined,'bp-overview-exec-seat');
+  row.append(el('strong',agent.name));
+  return row;
+}
+function overviewExecutionSummary(item) {
+  const row=el('span',undefined,'bp-overview-exec-line');
+  const n=item.n;
+  row.append(el('span', n===1 ? '1 seat on shift' : n+' seats on shift'));
   return row;
 }
 function sources(parent, details) {
@@ -968,7 +964,9 @@ function overview() {
   const live=orders.filter(o=>o.status==='in_progress' && o.live_with);
   const running=snapshot.agents.filter(a=>a.group==='seat' && a.state==='working');
   const seats=snapshot.agents.filter(a=>a.group==='seat').length, jobs=snapshot.agents.filter(a=>a.group==='job').length;
-  reconcileList($('overview-executions'), running, a=>a.id, executionRow, running.length ? {} : {emptyText:overviewExecutionEmpty()});
+  // Compact count door — not a seat-row bulletin (pc-1549). Membership of
+  // "running" stays WorkForce shift seats only (pc-1483 / pc-1504).
+  reconcileList($('overview-executions'), running.length ? [{id:'shift', n:running.length}] : [], a=>a.id, overviewExecutionSummary, running.length ? {} : {emptyText:overviewExecutionEmpty()});
   const metrics=[['For You',forYou.length,'/work?attention=any'],['Running',running.length,'/agents'],['Claimed',live.length,'/work?status=in_progress'],['Open work',snapshot.projects.filter(x=>x.state==='available').reduce((sum,p)=>sum+p.open,0),'/work'],['Seats · Jobs',`${seats} · ${jobs}`,'/agents']];
   reconcileList($('metrics'), metrics, m=>m[0], ([label,count,href])=>{const a=link('',href,'bp-metric');a.append(el('strong',String(count)),el('span',label));return a;});
   paintOverviewThroughput();

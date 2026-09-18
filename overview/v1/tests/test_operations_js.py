@@ -515,7 +515,9 @@ class CompactRowTests(unittest.TestCase):
         fn = _SRC.split('function overview()')[1].split('function filterOptions')[0]
         compact = fn.replace(' ', '')
         self.assertIn("snapshot.agents.filter(a=>a.group==='seat'&&a.state==='working')", compact)
-        self.assertIn("reconcileList($('overview-executions'),running,", compact)
+        self.assertIn("reconcileList($('overview-executions'),running.length", compact)
+        self.assertIn('overviewExecutionSummary', compact)
+        self.assertNotIn('executionRow', compact)
 
     def test_overview_execution_empty_is_honest_when_no_running_seats(self):
         self.assertIn('function overviewExecutionEmpty()', _SRC)
@@ -1494,6 +1496,9 @@ class SlimOverviewHarnessTests(unittest.TestCase):
         self.assertEqual(self.result['decide_more'], '+1 more on Work')
         self.assertEqual(self.result['decide_more_href'], '/work?attention=decide')
         self.assertEqual(self.result['for_you_kpi'], 10)
+        self.assertEqual(self.result['exec_line'], '1 seat on shift')
+        self.assertFalse(self.result['exec_has_inspect'])
+        self.assertFalse(self.result['exec_has_open_order'])
 
     def test_read_watch_due_are_count_chips_to_work(self):
         self.assertEqual(self.result['chips'], ['Read · 2', 'Watch · 1', 'Due · 1'])
@@ -1616,13 +1621,11 @@ class OverviewHonestyTests(unittest.TestCase):
         self.assertIn('decideMore.hidden=true', compact)
         self.assertNotIn('muted[muteKey', fn)
 
-    def test_remainder_door_host_sits_after_decide_rows_before_chips(self):
+    def test_remainder_door_host_sits_after_decide_rows(self):
         overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
         decide_pos = overview.index('id="for-you-decide"')
         more_pos = overview.index('id="overview-decide-more"')
-        chips_pos = overview.index('id="overview-face-chips"')
         self.assertLess(decide_pos, more_pos)
-        self.assertLess(more_pos, chips_pos)
         self.assertNotIn('Needs you', overview)
         self.assertNotIn('id="needs-you"', _HTML)
 
@@ -1694,6 +1697,54 @@ class OverviewNowPaintTests(unittest.TestCase):
         self.assertIn('id="overview-face-chips"', _HTML)
         nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+
+
+class OverviewNowParityTests(unittest.TestCase):
+    """pc-1549 / Visual-finish MUST #1: Now matches end-01 look-fors.
+    Option D membership stays — paint + stack only."""
+
+    def test_now_stack_is_kpis_chips_compact_exec_then_decide(self):
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        metrics_pos = overview.index('id="metrics"')
+        chips_pos = overview.index('id="overview-face-chips"')
+        exec_pos = overview.index('id="overview-executions"')
+        decide_pos = overview.index('id="for-you-decide"')
+        more_pos = overview.index('id="overview-decide-more"')
+        self.assertLess(metrics_pos, chips_pos)
+        self.assertLess(chips_pos, exec_pos)
+        self.assertLess(exec_pos, decide_pos)
+        self.assertLess(decide_pos, more_pos)
+        self.assertIn('id="overview-due-fed"', overview)
+        self.assertIn('Due fed by Calendar', overview)
+        self.assertIn('href="/agents"', overview)
+        self.assertIn('All agents', overview)
+        self.assertNotIn('Mute 24h', overview)
+        self.assertNotIn('View all', overview)
+        self.assertNotIn('Inspect seat', overview)
+        self.assertNotIn('Seats with an open WorkForce shift', overview)
+
+    def test_current_execution_is_a_count_door_not_seat_rows(self):
+        fn = _SRC.split('function overview()')[1].split('function remainderLabel')[0]
+        compact = fn.replace(' ', '')
+        summary = _SRC.split('function overviewExecutionSummary(item)')[1].split('function overviewSourceLine')[0].replace(' ', '')
+        self.assertIn('function overviewExecutionSummary(item)', _SRC)
+        self.assertIn("n===1?'1seatonshift':n+'seatsonshift'", summary)
+        self.assertIn("running.length?[{id:'shift',n:running.length}]:[]", compact)
+        self.assertNotIn('Inspect seat', fn)
+        self.assertNotIn('Open order', fn)
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-overview-exec', css)
+        hide = css.split('#overview-view .bp-face-entry')[1].split('#overview-view .bp-face-chip')[0]
+        self.assertIn('.bp-execution-row', hide)
+        self.assertIn('.bp-execution-actions', hide)
+
+    def test_for_you_panel_chrome_is_gone(self):
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        self.assertIn('class="bp-overview-act"', overview)
+        self.assertIn('id="for-you-decide-heading">Act now<', overview)
+        self.assertNotIn('<h2>For You</h2>', overview)
+        self.assertNotIn('Act-now decisions here', overview)
+        self.assertNotIn('class="bp-panel', overview)
 
 
 class CalendarDoorsTests(unittest.TestCase):
