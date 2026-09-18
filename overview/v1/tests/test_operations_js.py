@@ -2235,6 +2235,65 @@ class WorkVisualFinishTests(unittest.TestCase):
         self.assertNotIn('bp-work-flow-bar', _SRC)
 
 
+class WorkScarcityMockCloseTests(unittest.TestCase):
+    """pc-1558 residual mock-close: hero scarcity wins vs filter wall / ticket wall."""
+
+    def test_title_hero_filter_door_then_bands(self):
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertLess(work.index('id="work-flow"'), work.index('id="filters"'))
+        self.assertLess(work.index('id="search"'), work.index('id="work-facet-door"'))
+        self.assertLess(work.index('id="work-facet-door"'), work.index('id="project-filter"'))
+        self.assertLess(work.index('id="filters"'), work.index('id="work-band-act-now"'))
+        self.assertLess(work.index('id="work-band-act-now"'), work.index('id="work-band-my-todos"'))
+        self.assertLess(work.index('id="work-band-my-todos"'), work.index('id="work-band-seat-backlog"'))
+        self.assertIn('bp-work-facet-door', work)
+        self.assertIn('id="work-facet-door-summary"', work)
+        self.assertNotIn('<details class="bp-work-facet-door" id="work-facet-door" open', work)
+        self.assertIn('document.body.dataset.page = page', _SRC)
+        self.assertIn('function syncWorkFacetDoor()', _SRC)
+        work_fn = _SRC.split('function work()')[1].split('function agentAction')[0]
+        self.assertIn('renderActiveFilters()', work_fn)
+        door = _SRC.split('function syncWorkFacetDoor()')[1].split('function renderActiveFilters')[0]
+        self.assertIn("'Filters · '", door)
+        self.assertIn("door.open=true", door.replace(' ', ''))
+
+    def test_css_elevates_hero_and_scarcity_over_filter_wall(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('pc-1558', css)
+        work = css[css.index('#work-view {'):css.index('.bp-work-row {')]
+        self.assertIn('font-size: 28px', work)
+        self.assertIn('grid-template-areas: "dot label" "count count" "ticks ticks"', work)
+        self.assertIn('.bp-work-facet-door', work)
+        self.assertIn('#work-view .bp-work-band .bp-section-head .bp-muted { display: none; }', work)
+        self.assertIn('border-left: 4px solid var(--ov-state-scanning)', work)
+        self.assertIn('.bp-work-band-my-todos', work)
+        self.assertIn('background: transparent', work)
+        self.assertIn('.bp-work-band-seat-backlog', work)
+        self.assertIn('.bp-operations[data-page="work"] #page-description { display: none; }', work)
+        self.assertIn('.bp-work-seat-chip-ready { color: var(--ov-link);', work)
+        self.assertIn('.bp-work-seat-chip-stalled { color: var(--ov-state-error);', work)
+        self.assertNotIn('#fff', work)
+        self.assertNotIn('bp-work-flow-bar', work)
+        self.assertNotIn('n8n', work.lower())
+        self.assertIn('#work-view .bp-work-row { grid-template-columns: auto minmax(0,1fr) auto', css)
+
+    def test_caps_membership_and_neighbors_stay_frozen(self):
+        self.assertIn('WORK_BAND_LIMIT=8', _SRC.replace(' ', ''))
+        self.assertIn('SEAT_PREVIEW_SEATS=3', _SRC.replace(' ', ''))
+        self.assertIn('SEAT_PREVIEW_PER_SEAT=3', _SRC.replace(' ', ''))
+        self.assertNotIn('SEAT_WINDOW=40', _SRC.replace(' ', ''))
+        self.assertNotIn('bp-work-flow-pipeline', _SRC)
+        self.assertNotIn('bp-work-flow-bar', _SRC)
+        self.assertIn('id="agents-hero"', _HTML)
+        self.assertIn('id="timeline-hero"', _HTML)
+        self.assertIn('id="calendar-hero"', _HTML)
+        self.assertIn('id="delivery-hero"', _HTML)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('point of sale', _HTML.lower())
+
+
 class WorkRepresentationV2Tests(unittest.TestCase):
     """Issue #158 / #160: seat-load chips + thin flow companion, hard caps, +N doors."""
 
