@@ -1,18 +1,17 @@
-"""pc-1534/pc-1539/pc-1545 Agents Canvas — live spatial twin of the floor.
+"""pc-1534/pc-1539/pc-1545/pc-1564 Agents Canvas — live factory window.
 
-Nodes are seats and jobs. Colors reuse ``floor_bucket``. Thin edges are
-seat→claimed work, seat→last-run and/or next-fire ticks; the claim edge
-pulses so the canvas reads as a live twin of the floor, not a static
-diagram. The claimed work order is also surfaced directly on the seat
-node (not only via its edge target) so it stays visible without
-scrolling to the target column. Next-fire countdown ticks sit on the
-seat or job when Calendar door data exists — the target column is a
-door, not the only place the tick is visible. A seat's most recent
-terminal ledger row (real completion or failure — SKIP and quiet seats
-report nothing) opens a Timeline door filtered to that seat, same source
-as the AGENTS_INTENT "Failed is failed" rule: a failed last run is never
-softened into a neutral tile. This is not an editor: no rewire, no
-invented roster, no Overview/Work dump.
+Cap 1 (pc-1564) elevates the acquaintance canvas toward an n8n-feel
+factory window: seats and jobs keep distinct shapes, state fill, a
+claimed-WO badge, and next-fire ticks. Colors reuse ``floor_bucket``.
+Thin edges are seat→claimed work, seat→last-run and/or next-fire ticks;
+the claim edge pulses so the canvas reads as a live factory of the
+floor, not a static org-chart. The claimed work order is also surfaced
+directly on the seat node (not only via its edge target). Next-fire
+countdown ticks sit on the seat or job when Calendar door data exists.
+A seat's most recent terminal ledger row (real completion or failure —
+SKIP and quiet seats report nothing) opens a Timeline door filtered to
+that seat. This is not an editor: no rewire, no invented roster, no
+Overview/Work dump.
 """
 from __future__ import annotations
 
@@ -24,15 +23,15 @@ from .agents_floor import floor_bucket
 from .calendar_doors import _parse_iso, countdown_words
 
 EMPTY_REASON = 'No seats or jobs on this roster.'
-NODE_W = 188
-NODE_H = 58
-NODE_H_RICH = 72
-GAP_Y = 16
+NODE_W = 196
+NODE_H = 64
+NODE_H_RICH = 92
+GAP_Y = 18
 PAD_X = 24
 PAD_Y = 24
 COL_ACTOR = PAD_X
-COL_TARGET = 268
-STACK_GAP = 10
+COL_TARGET = 286
+STACK_GAP = 12
 
 
 def empty_agents_canvas(reason: str = EMPTY_REASON) -> dict:
@@ -135,11 +134,14 @@ def _actor_node(agent: dict, x: int, y: int, held: dict | None, fire: dict | Non
     identity = _text(agent.get('id'))
     group = _text(agent.get('group'), 'job')
     bucket = floor_bucket(agent)
-    rich = held is not None or fire is not None
+    kind = group if group in ('seat', 'job') else 'job'
+    rich = held is not None or fire is not None or (kind == 'seat' and _text(agent.get('project_name')))
     node = {
         'id': identity,
-        'kind': group if group in ('seat', 'job') else 'job',
+        'kind': kind,
+        'shape': 'rounded' if kind == 'seat' else 'diamond',
         'label': _text(agent.get('name'), identity),
+        'project': _text(agent.get('project_name')),
         'badge': _text(agent.get('badge') or agent.get('state'), bucket),
         'bucket': bucket,
         'group': group,
@@ -155,6 +157,7 @@ def _actor_node(agent: dict, x: int, y: int, held: dict | None, fire: dict | Non
             node['claim'] = {
                 'label': f'{held["title"]} · {held["order_id"]}',
                 'href': held['href'],
+                'order_id': held['order_id'],
             }
     if fire is not None:
         node['fire'] = {
