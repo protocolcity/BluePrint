@@ -722,7 +722,10 @@ class SeatCoverageTests(unittest.TestCase):
         self.assertIn('row.install_hints[p]', _SRC)
 
     def test_coverage_panel_is_separate_from_seats(self):
-        self.assertIn('<h2>Coverage</h2>', _HTML)
+        self.assertIn('id="agents-coverage-door"', _HTML)
+        self.assertIn('id="agents-coverage-summary"', _HTML)
+        self.assertIn('id="coverage-list"', _HTML)
+        self.assertNotIn('<h2>Coverage</h2>', _HTML)
         self.assertNotIn('<h2>Seats</h2><div id="coverage-list"', _HTML)
 
     def test_hiring_footnote_is_present(self):
@@ -1867,6 +1870,10 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertIn('4 runs · last 24h', result['floor_spark'])
         self.assertIn('1 fail (25%)', result['floor_spark'])
         self.assertEqual(result['floor_spark_when_quiet'], '')
+        self.assertEqual(result['dispatch_secondary'], 'Dispatch now')
+        self.assertFalse(result['coverage_door_open'])
+        self.assertEqual(result['coverage_door'], 'Coverage · 1 project · 1 missing staff')
+        self.assertEqual(result['coverage_door_empty'], 'Coverage · none reported')
 
 
 class AgentsFloorSparkPaintTests(unittest.TestCase):
@@ -2746,6 +2753,78 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertEqual(result['tour_steps'], ['strip', 'node', 'door'])
         self.assertEqual(result['tour_seen'], 'seen')
         self.assertTrue(result['floor_back'])
+
+
+class AgentsFloorScarcityTests(unittest.TestCase):
+    """Agents Floor scarcity / visual-finish: factory hero first, coverage door, dispatch secondary."""
+
+    def test_hero_band_is_first_read_and_holds_pulse_plus_spark(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        self.assertIn('id="agents-hero"', agents)
+        self.assertIn('class="bp-agents-hero"', agents)
+        self.assertLess(agents.index('id="agents-hero"'), agents.index('id="agents-pulse"'))
+        self.assertLess(agents.index('id="agents-pulse"'), agents.index('id="agents-floor-spark"'))
+        self.assertLess(agents.index('id="agents-floor-spark"'), agents.index('id="agents-face"'))
+        self.assertLess(agents.index('id="agents-face"'), agents.index('id="agents-next-fire"'))
+        self.assertLess(agents.index('id="agents-next-fire"'), agents.index('id="agents-floor-lists"'))
+        pulse_close = agents.index('id="agents-pulse"')
+        spark_at = agents.index('id="agents-floor-spark"')
+        hero_close = agents.index('id="agents-face"')
+        self.assertLess(pulse_close, spark_at)
+        self.assertLess(spark_at, hero_close)
+        overview = _HTML.split('id="overview-view"')[1].split('id="work-view"')[0]
+        work = _HTML.split('id="work-view"')[1].split('id="projects-view"')[0]
+        self.assertNotIn('id="agents-hero"', overview)
+        self.assertNotIn('id="agents-hero"', work)
+        self.assertNotIn('id="agents-coverage-door"', overview)
+
+    def test_coverage_hire_and_legend_sit_behind_a_closed_door(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        door = agents.split('id="agents-coverage-door"', 1)[1]
+        self.assertIn('class="bp-agents-door"', agents)
+        self.assertIn('id="agents-coverage-summary"', door)
+        self.assertIn('id="coverage-list"', door)
+        self.assertIn('id="agents-legend"', door)
+        self.assertIn('not a hire-now list', door)
+        self.assertLess(agents.index('id="seat-list"'), agents.index('id="agents-coverage-door"'))
+        self.assertLess(agents.index('id="job-list"'), agents.index('id="agents-coverage-door"'))
+        self.assertLess(agents.index('id="supervisor-panel"'), agents.index('id="agents-coverage-door"'))
+        self.assertNotIn('<h2>Coverage</h2>', agents)
+        self.assertNotIn('class="bp-panel"><h2>Coverage</h2>', _HTML)
+        self.assertIn('function paintCoverageDoor(', _SRC)
+        self.assertIn('Coverage · none reported', _SRC)
+        self.assertIn("renderCoverage()", _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0])
+
+    def test_dispatch_controls_are_secondary_not_twin_hero(self):
+        action = _SRC.split('function agentAction(agent, dispatchLabel)')[1].split('function currentOrderFor')[0]
+        self.assertIn("'bp-quiet-action'", action)
+        self.assertIn("el('button',agent.action==='recover'", action.replace(' ', ''))
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-agents-hero', css)
+        self.assertIn('#agents-floor-lists .bp-quiet-action', css)
+        self.assertIn('font-size: 32px', css)
+        hero = css[css.index('.bp-agents-hero {'):css.index('.bp-agents-meta')]
+        self.assertIn('border: 1px solid var(--ov-tile-border-strong)', hero)
+        self.assertNotIn('#fff', hero)
+        self.assertIn('.bp-agents-door', css)
+        self.assertLess(css.index('.bp-agents-hero'), css.index('.bp-agents-door'))
+
+    def test_floor_canvas_toggle_and_canvas_caps_stay(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        self.assertIn('id="agents-face-floor"', agents)
+        self.assertIn('id="agents-face-canvas"', agents)
+        self.assertIn('id="agents-canvas"', agents)
+        self.assertIn('id="agents-canvas-tour"', agents)
+        self.assertIn('Working / Idle / Error counts this floor', agents)
+        self.assertIn("kind:'claim'", _SRC.replace(' ', ''))
+        self.assertIn("kind:'last_run'", _SRC.replace(' ', ''))
+        self.assertIn("kind:'next_fire'", _SRC.replace(' ', ''))
+        self.assertIn('maybeStartAgentsTour()', _SRC)
+        self.assertNotIn('draggable', _SRC.split('function paintAgentsCanvas()')[1].split('function timelineActionLabel')[0])
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('point of sale', _HTML.lower())
 
 
 if __name__ == '__main__':
