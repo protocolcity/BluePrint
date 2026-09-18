@@ -111,6 +111,7 @@ const IDS = [
   'agents-floor-empty', 'agents-floor-spark', 'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list',
   'agents-face', 'agents-face-floor', 'agents-face-canvas', 'agents-floor-lists',
   'agents-canvas-wrap', 'agents-canvas', 'agents-canvas-empty',
+  'agents-hero', 'agents-coverage-door', 'agents-coverage-summary', 'agents-legend',
   'timeline-project', 'timeline-source',
 ];
 const nodes = new Map();
@@ -162,7 +163,9 @@ const fixture = {
       runs: 4, errors: 1, fail_rate: 0.25, state: 'healthy',
     },
   },
-  coverage: [],
+  coverage: [
+    {project:'blueprint', name:'BluePrint', present:['claude'], held:[], missing:['cursor'], not_configured:[], hire_commands:{cursor:'workforce hire cursor --project blueprint'}, install_hints:{}},
+  ],
   supervisor: null,
   sources: [{name: 'WorkForce heartbeat', state: 'fresh', last_at: new Date().toISOString()}],
   calendar_doors: {due_count: 0, due_href: '/calendar', items: [], next_fire: {name: 'loop-health', seconds: 12 * 60}, next_fire_line: 'Next fire · loop-health in 12m'},
@@ -281,10 +284,20 @@ assert.ok(get('agents-floor-spark').querySelector('.bp-agents-floor-fail'), 'str
 assert.equal(get('agents-floor-spark').querySelector('.bp-agents-floor-spark-line') && get('agents-floor-spark').querySelector('.bp-agents-floor-spark-line').dataset.tone, 'working', 'mixed fail does not paint the whole strip as error');
 assert.equal(get('agents-floor-spark').querySelector('a') && get('agents-floor-spark').querySelector('a').href, '/timeline?period=1');
 
+const idleRow = get('seat-list').querySelectorAll('.bp-agent-select').find(n => n.dataset.agentId === 'idle-seat');
+const idleAction = idleRow && idleRow.parent && idleRow.parent.querySelector('.bp-quiet-action');
+assert.ok(idleAction, 'Dispatch now stays on the row but as a quiet secondary control');
+assert.equal(idleAction.textContent, 'Dispatch now');
+assert.equal(get('agents-coverage-door').open, false, 'Coverage / Hire stay collapsed behind the door');
+assert.equal(get('agents-coverage-summary').textContent, 'Coverage · 1 project · 1 missing staff');
+const coverageSummary = get('agents-coverage-summary').textContent;
+assert.equal(get('coverage-list').querySelectorAll('code').length, 0, 'hire commands stay closed until the inner Hire door opens');
+
 const quietOnly = {
   ...fixture,
   agents: [agent('off-seat', 'off', {badge: 'OFF'}), agent('held-seat', 'not_configured', {badge: 'NOT CONFIGURED'})],
   agents_floor: {working: 0, idle: 0, error: 0, stale: 0, quiet: 2, sparks: {}},
+  coverage: [],
   calendar_doors: {due_count: 0, due_href: '/calendar', items: [], next_fire: null, next_fire_line: 'Next fire · none reported'},
 };
 runtime.applySnapshot(quietOnly);
@@ -298,6 +311,7 @@ assert.equal(get('agents-floor-empty').textContent, 'No seats working right now.
 assert.match(get('seat-list').textContent, /quiet roster below/);
 assert.equal(get('agents-next-fire').textContent, 'Next fire · none reported');
 assert.equal(get('agents-floor-spark').textContent, '');
+assert.equal(get('agents-coverage-summary').textContent, 'Coverage · none reported');
 
 process.stdout.write(JSON.stringify({
   pulse,
@@ -313,4 +327,8 @@ process.stdout.write(JSON.stringify({
   quiet_spark: quietSpark,
   floor_spark: '4 runs · last 24h · 1 fail (25%)',
   floor_spark_when_quiet: get('agents-floor-spark').textContent,
+  dispatch_secondary: idleAction ? idleAction.textContent : '',
+  coverage_door_open: get('agents-coverage-door').open,
+  coverage_door: coverageSummary,
+  coverage_door_empty: get('agents-coverage-summary').textContent,
 }));

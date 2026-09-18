@@ -115,6 +115,7 @@ const IDS = [
   'active-filters', 'overview-view', 'work-view', 'agents-view', 'calendar-view',
   'seat-list', 'job-list', 'agent-detail', 'supervisor-panel', 'coverage-list',
   'agents-heartbeat', 'agents-next-fire', 'agents-pulse', 'agents-floor-remainder',
+  'agents-hero', 'agents-coverage-door', 'agents-coverage-summary', 'agents-legend',
   'agents-floor-empty', 'agents-floor-spark', 'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list',
   'agents-face', 'agents-face-floor', 'agents-face-canvas', 'agents-floor-lists',
   'agents-canvas-wrap', 'agents-canvas', 'agents-canvas-empty',

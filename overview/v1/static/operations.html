@@ -60,18 +60,30 @@
     </div>
   </section>
   <section id="agents-view" hidden>
-    <div id="agents-pulse" class="bp-metrics bp-metrics-compact bp-agents-pulse" aria-label="Agents floor"></div>
-    <p id="agents-floor-spark" class="bp-muted bp-agents-floor-spark" role="status"></p>
+    <div id="agents-hero" class="bp-agents-hero" role="region" aria-label="Factory state">
+      <div id="agents-pulse" class="bp-metrics bp-metrics-compact bp-agents-pulse" aria-label="Agents floor"></div>
+      <p id="agents-floor-spark" class="bp-muted bp-agents-floor-spark" role="status"></p>
+    </div>
     <div id="agents-face" class="bp-agents-face" role="group" aria-label="Agents face">
       <button type="button" id="agents-face-floor" aria-pressed="true">Floor</button>
       <button type="button" id="agents-face-canvas" aria-pressed="false">Canvas</button>
     </div>
-    <div class="bp-section-head"><div><p id="agents-legend" class="bp-note bp-muted">Seats claim work orders. Jobs never claim. Supervisor dispatches seats and does not build. Coverage shows hired vs missing providers per project, including idle projects with no open queue. At most 2 implementation seats may run in parallel. State comes from the WorkForce ledger.</p><p id="agents-heartbeat" class="bp-muted" role="status"></p><p id="agents-floor-remainder" class="bp-muted" role="status"></p><p id="agents-next-fire" class="bp-muted bp-agents-next-fire" role="status"></p><p id="agents-floor-empty" class="bp-muted" hidden></p></div></div>
+    <div class="bp-agents-meta">
+      <p id="agents-heartbeat" class="bp-muted" role="status"></p>
+      <p id="agents-floor-remainder" class="bp-muted" role="status"></p>
+      <p id="agents-next-fire" class="bp-muted bp-agents-next-fire" role="status"></p>
+      <p id="agents-floor-empty" class="bp-muted" hidden></p>
+    </div>
     <div id="agents-floor-lists">
       <div class="bp-panel"><h2>Seats</h2><div id="seat-list" class="bp-agent-rows"></div><details id="agents-quiet" class="bp-agents-quiet" hidden><summary id="agents-quiet-summary">Quiet</summary><div id="agents-quiet-list" class="bp-agent-rows"></div></details></div>
       <div class="bp-panel"><h2>Jobs</h2><div id="job-list" class="bp-agent-rows"></div></div>
       <div class="bp-panel"><h2>Supervisor</h2><div id="supervisor-panel"></div></div>
-      <div class="bp-panel"><h2>Coverage</h2><div id="coverage-list" class="bp-coverage-list"></div><p class="bp-muted bp-note">Coverage is not a hire-now list — empty-queue projects may stay unstaffed on purpose. Hire… copies a WorkForce command when you want one; it is not For You work. Hiring runs on this Mac through WorkForce; the desk never writes the roster.</p></div>
+      <details id="agents-coverage-door" class="bp-agents-door">
+        <summary id="agents-coverage-summary">Coverage</summary>
+        <p id="agents-legend" class="bp-note bp-muted">Seats claim work orders. Jobs never claim. Supervisor dispatches seats and does not build. Coverage shows hired vs missing providers per project, including idle projects with no open queue. At most 2 implementation seats may run in parallel. State comes from the WorkForce ledger.</p>
+        <div id="coverage-list" class="bp-coverage-list"></div>
+        <p class="bp-muted bp-note">Coverage is not a hire-now list — empty-queue projects may stay unstaffed on purpose. Hire… copies a WorkForce command when you want one; it is not For You work. Hiring runs on this Mac through WorkForce; the desk never writes the roster.</p>
+      </details>
     </div>
     <div id="agents-canvas-wrap" hidden>
       <div class="bp-panel bp-agents-canvas-panel">
