@@ -169,20 +169,33 @@
   color: var(--ov-fg);
   background: var(--ov-bg);
 }
-.bp-delivery-ci-spark { margin: 2px 0 12px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.bp-delivery-ci-spark { margin: 0 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .bp-delivery-ci-spark a { text-decoration: none; }
 .bp-delivery-ci-spark a:hover { text-decoration: underline; }
 .bp-delivery-ci-spark-line { letter-spacing: .02em; font-size: 12px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
 .bp-delivery-ci-spark-line[data-tone="error"] { color: var(--ov-state-error); }
-/* pc-1542 / C4: PR · CI · Remote is the Delivery hero — git ledger, not a ticket board. */
+.bp-delivery-ci-spark-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+}
+.bp-delivery-ci-spark-bar {
+  display: block;
+  width: 4px;
+  min-height: 2px;
+  border-radius: 1px;
+  background: var(--ov-state-working);
+}
+.bp-delivery-ci-spark-bar[data-tone="error"] { background: var(--ov-state-error); }
+.bp-delivery-ci-spark-bar[data-empty="true"] { background: var(--ov-tile-border); }
+/* Delivery git-evidence visual-finish: PR · CI · Remote chips + thin CI
+   spark are the first-read hero. Filters stay quiet. Repo ledger is
+   evidence, not a WorkLane ticket dump. */
 .bp-delivery-hero {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: stretch;
-  gap: 16px 28px;
-  margin: 2px 0 6px;
-  padding: 6px 0 18px;
+  display: block;
+  margin: 2px 0 14px;
+  padding: 0 0 8px;
   font-variant-numeric: tabular-nums;
 }
 .bp-delivery-hero-chips {
@@ -190,7 +203,9 @@
   flex-wrap: wrap;
   gap: 10px;
   min-width: 0;
+  margin: 0 0 12px;
 }
+.bp-delivery-status { margin: 0; font-size: 12px; }
 .bp-operations a.bp-delivery-hero-chip,
 .bp-operations .bp-delivery-hero-chip {
   display: grid;
@@ -235,7 +250,8 @@
 .bp-delivery-hero-chip[data-tone="error"] .bp-delivery-hero-chip-name::before { background: var(--ov-state-error); }
 .bp-delivery-hero-chip[data-tone="muted"] { opacity: .92; }
 .bp-delivery-hero-chip[data-tone="muted"] .bp-delivery-hero-chip-primary { color: var(--ov-muted); font-size: 16px; }
-#delivery-view .bp-filters { padding: 4px 0 10px; gap: 12px; }
+#delivery-view .bp-filters,
+.bp-delivery-facets { padding: 4px 0 10px; gap: 10px; }
 #delivery-view .bp-filters input,
 #delivery-view .bp-filters select { min-height: 32px; padding: 6px 10px; }
 .bp-agents-pulse { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
@@ -901,8 +917,12 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-cal-write-door[hidden] { display: none; }
 
 /* Delivery: exception-first repository summary with grouped evidence (pc-1487).
-   Hero (PR · CI · Remote) sits above this ledger — pc-1542. */
-.bp-delivery-summary { font-size: 14px; font-weight: 500; margin: 0 0 6px !important; }
+   Hero (PR · CI · Remote + thin CI spark) sits above this quieter ledger. */
+.bp-delivery-summary { font-size: 13px; font-weight: 500; margin: 0 0 6px !important; }
+.bp-delivery-ledger { margin-top: 2px; }
+#delivery-view .bp-delivery-repo { padding: 14px 16px; margin-bottom: 12px; }
+#delivery-view .bp-delivery-repo .bp-order { padding: 8px 0; }
+#delivery-view .bp-delivery-repo .bp-order strong { font-size: 13px; }
 .bp-delivery-repo .bp-delivery-groups { margin-top: 8px; }
 .bp-delivery-group { border-top: 1px solid var(--ov-tile-border); padding: 9px 0; }
 .bp-delivery-group:first-child { border-top: 0; }
@@ -910,4 +930,4 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-delivery-group > summary::-webkit-details-marker { display: none; }
 .bp-delivery-group .bp-order { border-top: 0; padding: 6px 0 0; }
 .bp-delivery-group .bp-order:first-of-type { padding-top: 10px; }
-.bp-delivery-note { margin-bottom: 14px; }
+.bp-delivery-note { margin: 4px 0 12px; }
