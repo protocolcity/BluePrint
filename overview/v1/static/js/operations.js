@@ -88,7 +88,10 @@ if (legacyParam) {
 $('page-title').textContent = titles[page][0];
 $('page-description').textContent = titles[page][1];
 document.title = `BluePrint · ${titles[page][0]}`;
-document.body.dataset.page = page;
+if(document.body){
+  document.body.dataset = document.body.dataset || {};
+  document.body.dataset.page = page;
+}
 $(page + '-view').hidden = false;
 if(page==='projects' && $('projects-filter')) $('projects-filter').value=projectsFilter;
 document.querySelector(`[data-page="${page}"]`).setAttribute('aria-current','page');
