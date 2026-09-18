@@ -795,6 +795,103 @@ class DisposableDeskMapMotionSmokeTests(unittest.TestCase):
         self.assertNotEqual(row['pulse'], 'unavailable')
 
 
+def _write_desk_join(root: Path, folder: str, slug: str, display: str, prefix: str) -> None:
+    manifest = root / folder / '.protocolcity' / 'desk-join.json'
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps({'slug': slug, 'prefix': prefix, 'display': display}))
+    (root / folder / 'CHARTER.md').write_text(f'# {display}\n')
+
+
+def _write_store(root: Path, slug: str, *, events: list[str], updated_at: str, title: str) -> None:
+    data = root / 'worklane' / 'worklane' / 'local' / 'data'
+    data.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(data / f'{slug}.db') as conn:
+        conn.executescript(
+            'CREATE TABLE tasks(id INTEGER, ext_id TEXT, title TEXT, status TEXT, '
+            'priority INTEGER, updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+            'CREATE TABLE task_comments(id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            'CREATE TABLE task_events(id INTEGER, task_id INTEGER, event_type TEXT, status TEXT, actor TEXT, created_at TEXT);'
+        )
+        conn.execute(
+            "INSERT INTO tasks VALUES(1,NULL,?,?,1,?,?,'human','Decide')",
+            (title, 'in_progress' if events else 'backlog', updated_at, json.dumps(['worker:agent'])),
+        )
+        for index, stamp in enumerate(events, start=1):
+            conn.execute(
+                "INSERT INTO task_events VALUES(?,?, 'status_change','in_progress','seat',?)",
+                (index, 1, stamp),
+            )
+
+
+class Pc1561MapMotionVerifySmokeTests(unittest.TestCase):
+    """pc-1561 — disposable desk: live pulse on Map, no WO wall / Overview dump."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix='bp-pc1561-map-')
+        self.root = Path(self.temp.name)
+        now = datetime.now(timezone.utc)
+        live = [(now - timedelta(hours=h)).strftime('%Y-%m-%dT%H:%M:%SZ') for h in (1, 2, 3, 4)]
+        recent = [(now - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')]
+        stale = (now - timedelta(days=5)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        _write_desk_join(self.root, 'product', 'product', 'Product', 'pc')
+        _write_desk_join(self.root, 'recipes', 'recipes', 'Recipes', 'rc')
+        _write_desk_join(self.root, 'notes', 'notes', 'Notes', 'nt')
+        _write_desk_join(self.root, 'career', 'career', 'Career', 'cr')
+        _write_store(self.root, 'product', events=live, updated_at=live[0], title='Live peel')
+        _write_store(self.root, 'recipes', events=recent, updated_at=recent[0], title='Recent tick')
+        _write_store(self.root, 'notes', events=[], updated_at=stale, title='Quiet pile')
+        (self.root / 'scratch').mkdir()
+        (self.root / 'scratch' / 'loose.txt').write_text('unmanaged\n')
+        self.httpd, self.port, self.thread = _start_server(empty_state(), binder_root=self.root)
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.temp.cleanup()
+
+    def test_operations_pulse_is_live_recent_quiet_unavailable(self) -> None:
+        status, body, _ = _get(self.port, '/api/operations')
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        by_id = {row['id']: row for row in payload['portfolio']['projects']}
+        self.assertGreaterEqual(by_id['product']['motion'], 3)
+        self.assertEqual(by_id['recipes']['motion'], 1)
+        self.assertEqual(by_id['notes']['motion'], 0)
+        self.assertEqual(by_id['career']['state'], 'unavailable')
+        projects = {row['id']: row for row in payload['projects']}
+        self.assertEqual(projects['career']['state'], 'unavailable')
+        self.assertEqual(projects['notes']['state'], 'available')
+
+    def test_map_page_has_stroke_and_no_wo_or_overview_dump(self) -> None:
+        status, body, _ = _get(self.port, '/map')
+        text = body.decode()
+        self.assertEqual(status, 200)
+        self.assertIn('id="map-shell"', text)
+        self.assertIn('/map/js/workspace_map_app.v1.js', text)
+        motion_js = _get(self.port, '/map/js/map-motion.js')[1].decode()
+        self.assertIn('classifyNodeMotion', motion_js)
+        self.assertIn('pc-1561', motion_js)
+        self.assertNotIn('id="work-band-act-now"', text)
+        self.assertNotIn('id="work-list"', text)
+        self.assertNotIn('id="overview-throughput"', text)
+        self.assertNotIn('id="for-you-decide"', text)
+        self.assertNotIn('id="overview-face-chips"', text)
+        self.assertNotIn('id="map-density"', text)
+        nav = text.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        css = _get(self.port, '/map/css/workspace_map.css')[1].decode()
+        self.assertIn('pc-1561', css)
+        self.assertIn('.map-lot.map-motion-live .map-lot-plate', css)
+        self.assertNotIn('histogram', css.lower())
+
+    def test_work_and_overview_keep_their_peels(self) -> None:
+        home = _get(self.port, '/')[1].decode()
+        self.assertIn('id="overview-throughput"', home)
+        self.assertIn('id="work-band-act-now"', home)
+        self.assertNotIn('map-motion-live', home)
+        self.assertNotIn('id="map-shell"', home)
+
+
 if __name__ == "__main__":
     unittest.main()
 

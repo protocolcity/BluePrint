@@ -1,5 +1,6 @@
 /* map-motion.js is pure classification — no DOM. Fixtures match
-   test_node_motion.py so Python and JS stay on the same honesty rules. */
+   test_node_motion.py so Python and JS stay on the same honesty rules.
+   pc-1561 verify: stroke stays the live pulse; no invented overlay. */
 import assert from 'node:assert/strict';
 import {
   LIVE_MOTION,
