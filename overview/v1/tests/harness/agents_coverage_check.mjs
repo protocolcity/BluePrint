@@ -218,6 +218,7 @@ const IDS = [
   'page-title', 'page-description', 'eyebrow', 'freshness', 'source-warning', 'footer-status',
   'agents-view', 'agents-heartbeat', 'seat-list', 'job-list', 'supervisor-panel', 'coverage-list',
   'agents-next-fire', 'agents-pulse', 'agents-floor-remainder', 'agents-floor-empty', 'agents-floor-spark',
+  'agents-hero', 'agents-coverage-door', 'agents-coverage-summary', 'agents-legend',
   'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list',
   'restore-muted', 'refresh', 'desk-scope', 'desk-name', 'scope-path', 'preferences',
   'refresh-preference', 'motion-preference', 'preference-status', 'filters', 'search',

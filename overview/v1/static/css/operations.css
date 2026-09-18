@@ -89,12 +89,86 @@
 .bp-agents-next-fire { margin: 6px 0 0; font-variant-numeric: tabular-nums; }
 .bp-agents-next-fire a { text-decoration: none; }
 .bp-agents-next-fire a:hover { text-decoration: underline; }
-.bp-agents-floor-spark { margin: -4px 0 12px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.bp-agents-floor-spark { margin: 8px 0 0; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .bp-agents-floor-spark a { text-decoration: none; }
 .bp-agents-floor-spark a:hover { text-decoration: underline; }
-.bp-agents-floor-spark-line { letter-spacing: .02em; font-size: 12px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
+.bp-agents-floor-spark-line { letter-spacing: .02em; font-size: 14px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
 .bp-agents-floor-spark-line[data-tone="error"] { color: var(--ov-state-error); }
 .bp-agents-floor-fail { color: var(--ov-state-error); font-variant-numeric: tabular-nums; }
+/* Agents Floor scarcity: factory hero first, coverage/hire behind a door. */
+.bp-agents-hero {
+  margin: 2px 0 14px;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--ov-tile-border-strong);
+  border-radius: 8px;
+  background: var(--ov-tile-bg);
+}
+.bp-agents-hero .bp-agents-pulse {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.bp-agents-hero .bp-agents-pulse .bp-metric {
+  background: transparent;
+  padding: 4px 12px 2px 0;
+  border-right: 0;
+}
+.bp-agents-hero .bp-agents-pulse .bp-metric strong { font-size: 32px; letter-spacing: -.03em; }
+.bp-agents-hero .bp-agents-pulse .bp-metric span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.bp-agents-hero .bp-agents-pulse .bp-metric span::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.bp-agents-hero .bp-agents-pulse .bp-metric[data-state="working"] span { color: var(--ov-state-working); }
+.bp-agents-hero .bp-agents-pulse .bp-metric[data-state="idle"] span { color: var(--ov-muted); }
+.bp-agents-hero .bp-agents-pulse .bp-metric[data-state="last_run_failed"] span { color: var(--ov-state-error); }
+.bp-agents-meta { display: grid; gap: 2px; margin: 0 0 14px; }
+.bp-agents-meta .bp-note { margin-top: 0 !important; }
+.bp-agents-door {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--ov-tile-border);
+  border-radius: 8px;
+  background: transparent;
+}
+.bp-agents-door > summary {
+  cursor: pointer;
+  color: var(--ov-muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  list-style: none;
+}
+.bp-agents-door > summary::-webkit-details-marker { display: none; }
+.bp-agents-door > summary::before { content: '▸ '; color: var(--ov-muted); }
+.bp-agents-door[open] > summary::before { content: '▾ '; }
+.bp-agents-door .bp-note { margin-top: 10px !important; }
+#agents-floor-lists .bp-quiet-action,
+#supervisor-panel .bp-quiet-action {
+  min-height: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  background: transparent;
+  border-color: var(--ov-tile-border);
+  color: var(--ov-muted);
+}
+#agents-floor-lists .bp-quiet-action:hover,
+#supervisor-panel .bp-quiet-action:hover {
+  color: var(--ov-fg);
+  background: var(--ov-bg);
+}
 .bp-delivery-ci-spark { margin: 2px 0 12px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .bp-delivery-ci-spark a { text-decoration: none; }
 .bp-delivery-ci-spark a:hover { text-decoration: underline; }
