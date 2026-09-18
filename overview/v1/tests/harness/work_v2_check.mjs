@@ -111,7 +111,7 @@ const IDS = [
   'refresh', 'desk-scope', 'desk-name', 'scope-path', 'restore-muted', 'refresh-preference',
   'motion-preference', 'preferences', 'preference-status', 'search', 'project-filter',
   'assignment-filter', 'status-filter', 'gate-filter', 'kind-filter', 'attention-filter',
-  'filters', 'work-list', 'results', 'page-count', 'previous', 'next', 'clear-filters',
+  'filters', 'work-facet-door', 'work-facet-door-summary', 'work-list', 'results', 'page-count', 'previous', 'next', 'clear-filters',
   'active-filters', 'overview-view', 'work-view', 'agents-view', 'calendar-view',
   'timeline-view', 'connections-view', 'delivery-view', 'settings-view', 'overview-executions',
   'overview-exec-cue', 'metrics', 'overview-throughput', 'overview-unrouted', 'overview-source-line',
@@ -319,9 +319,13 @@ assert.equal(firstRow.querySelector('.bp-order-detail'), null);
 assert.equal(firstRow.querySelector('.bp-face-mute'), null);
 assert.ok(firstRow.querySelector('.bp-order-link').textContent.includes('Decide'));
 assert.ok(firstRow.querySelector('.bp-work-row-age'), 'dim age is present');
+assert.equal(get('work-facet-door').open, false, 'filter wall stays a closed door at first glance');
+assert.equal(get('work-facet-door-summary').textContent, 'Filters');
 
 get('work-act-now-more').querySelector('button').click();
 assert.equal(get('attention-filter').value, 'act_now', '+N opens the Act now facet');
+assert.equal(get('work-facet-door').open, true, 'active facet opens the filter door');
+assert.match(get('work-facet-door-summary').textContent, /Filters · \d+/);
 assert.equal(get('work-act-now').querySelectorAll('.bp-order').length, 9, 'facet shows the full Act now list');
 assert.equal(get('work-band-my-todos').hidden, true);
 assert.equal(get('work-band-seat-backlog').hidden, true);
