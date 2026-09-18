@@ -304,12 +304,36 @@ assert.equal(hasRail, true);
 assert.equal(eventTimes, 2);
 assert.equal(sourceLabels, 2);
 
+const denseRows = Array.from({length: 10}, (_, index) => row(
+  'd' + index,
+  index < 6 ? `2026-09-17T1${index}:00:00Z` : `2026-09-16T1${index - 6}:00:00Z`,
+  'Event ' + index,
+  index % 2 ? 'github' : 'worklane',
+));
+runtime.applyTimeline({rows: denseRows, sources: [], next_cursor: null, activity: busyActivity});
+runtime.timeline();
+const denseEvents = get('timeline-list').querySelectorAll('.bp-timeline-event').length;
+const denseRemainder = get('timeline-stream-more').textContent;
+assert.equal(denseEvents, 8, 'pc-1560 caps the stream at 8');
+assert.equal(denseRemainder, '+2 more');
+assert.equal(get('timeline-stream-more').hidden, false);
+const remainderDoor = get('timeline-stream-more').querySelector('button');
+assert.ok(remainderDoor, 'remainder door is a visible +N control');
+for (const fn of remainderDoor.listeners.click || []) fn();
+const expandedEvents = get('timeline-list').querySelectorAll('.bp-timeline-event').length;
+const expandedRemainder = get('timeline-stream-more').textContent;
+assert.equal(expandedEvents, 10);
+assert.equal(expandedRemainder, '');
+assert.equal(get('timeline-stream-more').hidden, true);
+
 runtime.applyTimeline({rows: [], sources: [], next_cursor: null, activity: quietActivity});
 runtime.timeline();
 assert.equal(get('timeline-activity-summary').textContent, 'Quiet in this window.');
 assert.equal(get('timeline-activity-chart').hidden, true);
 assert.equal(get('timeline-activity-chart').querySelectorAll('.bp-timeline-hist-col').length, 0);
 assert.equal(get('timeline-list').textContent, 'No timeline rows in the readable window.');
+assert.equal(get('timeline-stream-more').textContent, '');
+assert.equal(get('timeline-stream-more').hidden, true);
 const quietDoors = get('timeline-doors').children;
 assert.equal(doorText(quietDoors[0]), 'WorknoneWorkLane firings');
 assert.equal(doorText(quietDoors[1]), 'DeliverynoneGitHub firings');
@@ -342,6 +366,12 @@ process.stdout.write(JSON.stringify({
   source_labels: sourceLabels,
   quiet_work: 'WorknoneWorkLane firings',
   quiet_delivery: 'DeliverynoneGitHub firings',
+  quiet_remainder: '',
   quiet_stream: 'No timeline rows in the readable window.',
   unavailable_doors: unavailableDoors,
+  stream_cap: 8,
+  dense_events: denseEvents,
+  dense_remainder: denseRemainder,
+  expanded_events: expandedEvents,
+  expanded_remainder: expandedRemainder,
 }));

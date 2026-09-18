@@ -21,6 +21,10 @@ let remotePending = false, remoteLast = 0, remoteData = null;
 let deliveryRepo = '', deliveryType = '', deliveryPeriod = '';
 let timelineData = null, timelinePending = false, timelineCursor = '', timelineMore = false, timelineFingerprint = '', timelineExpanded = false;
 let timelineProject = '', timelineSource = '', timelineActor = '', timelinePeriod = '';
+// pc-1560: first-read stream is capped; +N remainder opens the next window.
+// Do not dump the 200-row page as an equal-weight bulletin under Firings.
+const TIMELINE_STREAM_LIMIT = 8;
+let timelineStreamWindow = TIMELINE_STREAM_LIMIT;
 let streamState = 'connecting', everOpened = false, consecutiveErrors = 0, lastChangeAt = null;
 let interval = 15, motion = 'system';
 try { const saved=JSON.parse(localStorage.getItem('bp-display') || '{}');if([0,15,30].includes(saved.interval))interval=saved.interval;if(saved.motion==='off')motion='off'; } catch(error) { /* Unavailable storage uses defaults. */ }
@@ -2446,12 +2450,60 @@ function buildTimelineDays(rows) {
     if (last && last.key === key) last.groups.push(group);
     else days.push({id: 'day:' + key + ':' + group.id, key, groups: [group]});
   }
+  for (const day of days) day.total = timelineDayEventCount(day);
   return days;
+}
+function timelineDayEventCount(day) {
+  return day.groups.reduce((sum, group) => sum + group.rows.length, 0);
+}
+function capTimelineDays(days, limit) {
+  const total = days.reduce((sum, day) => sum + (day.total || timelineDayEventCount(day)), 0);
+  const window = Math.max(Number(limit) || 0, TIMELINE_STREAM_LIMIT);
+  if (total <= window) return {days, remainder: 0, shown: total, total};
+  let used = 0;
+  const out = [];
+  for (const day of days) {
+    if (used >= window) break;
+    const kept = [];
+    for (const group of day.groups) {
+      if (used >= window) break;
+      const size = group.rows.length;
+      if (used + size > window && used > 0) break;
+      kept.push(group);
+      used += size;
+    }
+    if (kept.length) {
+      out.push({id: day.id, key: day.key, groups: kept, total: day.total || timelineDayEventCount(day)});
+    }
+  }
+  return {days: out, remainder: Math.max(0, total - used), shown: used, total};
+}
+function expandTimelineStream() {
+  timelineStreamWindow += TIMELINE_STREAM_LIMIT;
+  timeline();
+}
+function resetTimelineStreamWindow() {
+  timelineStreamWindow = TIMELINE_STREAM_LIMIT;
+}
+function paintTimelineRemainder(remainder) {
+  const host = $('timeline-stream-more');
+  if (!host) return;
+  host.replaceChildren();
+  if (remainder > 0) {
+    host.hidden = false;
+    const door = el('button', '+' + remainder + ' more', 'bp-filter-chip bp-timeline-remainder');
+    door.type = 'button';
+    door.addEventListener('click', expandTimelineStream);
+    host.append(door);
+  } else {
+    host.hidden = true;
+  }
 }
 function timelineDayNode(day) {
   const wrap = el('section', undefined, 'bp-timeline-day');
   wrap.dataset.day = day.key;
-  const count = day.groups.reduce((sum, group) => sum + group.rows.length, 0);
+  const visible = timelineDayEventCount(day);
+  const count = day.total || visible;
   wrap.append(el('h3', `${timelineDayLabel(day.key)} · ${count}`, 'bp-timeline-day-head'));
   const rail = el('div', undefined, 'bp-timeline-rail');
   for (const group of day.groups) rail.append(timelineGroupNode(group));
@@ -2573,7 +2625,7 @@ function paintTimelineActivityLine(chart, buckets, peak) {
   polyline.setAttribute('points', points);
   polyline.setAttribute('fill', 'none');
   polyline.setAttribute('stroke', 'currentColor');
-  polyline.setAttribute('stroke-width', '1.6');
+  polyline.setAttribute('stroke-width', '2.2');
   polyline.setAttribute('stroke-linejoin', 'round');
   polyline.setAttribute('stroke-linecap', 'round');
   svg.appendChild(polyline);
@@ -2639,11 +2691,13 @@ function paintTimelineActivity() {
 }
 function timeline() {
   const days = buildTimelineDays(timelineVisibleRows());
-  reconcileList($('timeline-list'), days, d => d.id, timelineDayNode, {emptyText: 'No timeline rows in the readable window.'});
+  const capped = capTimelineDays(days, timelineStreamWindow);
+  reconcileList($('timeline-list'), capped.days, d => d.id, timelineDayNode, {emptyText: 'No timeline rows in the readable window.'});
+  paintTimelineRemainder(capped.remainder);
   timelineSources();
   paintTimelineDoors();
   paintTimelineActivity();
-  $('timeline-more').hidden = !timelineMore;
+  $('timeline-more').hidden = !(timelineMore && capped.remainder === 0);
   $('timeline-clear-filters').hidden = !timelineFilterChips().length;
 }
 function timelineFilterParams() {
@@ -2660,6 +2714,7 @@ function updateTimelineFilters() {
   timelineActor = $('timeline-actor').value.trim();
   timelineCursor = '';
   timelineExpanded = false;
+  resetTimelineStreamWindow();
   const params = timelineFilterParams();
   history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
   refreshTimeline(false, {force: true});
@@ -2669,6 +2724,7 @@ function updateTimelineFilters() {
 // position (STATES_AND_TERMS.md pc-1483 pattern extended to this filter).
 function updateTimelinePeriod() {
   timelinePeriod = $('timeline-period').value;
+  resetTimelineStreamWindow();
   const params = timelineFilterParams();
   history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
   if (timelineData) timeline();
@@ -3491,7 +3547,7 @@ if ($('timeline-filters')) {
   $('timeline-period').addEventListener('change', updateTimelinePeriod);
   $('timeline-clear-filters').addEventListener('click', clearTimelineFilters);
   $('timeline-more').addEventListener('click', () => { timelineExpanded = true; refreshTimeline(true); });
-  $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; refreshTimeline(false, {force: true}); });
+  $('timeline-new-events').addEventListener('click', () => { timelineExpanded = false; resetTimelineStreamWindow(); refreshTimeline(false, {force: true}); });
 }
 if ($('delivery-filters')) {
   $('delivery-type').value = deliveryType;

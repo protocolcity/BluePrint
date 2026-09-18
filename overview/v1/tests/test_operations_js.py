@@ -1289,7 +1289,7 @@ class TimelineHeroTests(unittest.TestCase):
         primary = css.split('.bp-timeline-door-primary')[1].split('}')[0]
         self.assertIn('font-size: 20px', primary)
         filters = css.split('#timeline-view .bp-filters input')[1].split('}')[0]
-        self.assertIn('min-height: 32px', filters)
+        self.assertIn('min-height: 28px', filters)
         self.assertIn('id="delivery-hero"', _HTML)
         self.assertIn('id="delivery-ci-spark"', _HTML)
         self.assertIn('id="overview-face-chips"', _HTML)
@@ -1334,7 +1334,8 @@ class TimelineTimeSpineVisualFinishTests(unittest.TestCase):
         self.assertLess(timeline.index('id="timeline-hero"'), timeline.index('id="timeline-filters"'))
         self.assertLess(timeline.index('id="timeline-filters"'), timeline.index('id="timeline-list"'))
         self.assertLess(timeline.index('id="timeline-activity"'), timeline.index('id="timeline-list"'))
-        self.assertLess(timeline.index('id="timeline-list"'), timeline.index('id="timeline-source-strip"'))
+        self.assertLess(timeline.index('id="timeline-list"'), timeline.index('id="timeline-stream-more"'))
+        self.assertLess(timeline.index('id="timeline-stream-more"'), timeline.index('id="timeline-source-strip"'))
         self.assertNotIn('id="work-band-act-now"', timeline)
         self.assertNotIn('id="for-you-decide"', timeline)
         self.assertNotIn('wo-tile', timeline)
@@ -1351,9 +1352,9 @@ class TimelineTimeSpineVisualFinishTests(unittest.TestCase):
         hero = css.split('.bp-timeline-door-primary')[1].split('}')[0]
         self.assertIn('font-size: 20px', hero)
         hist = css.split('.bp-timeline-hist {')[1].split('}')[0]
-        self.assertIn('height: 128px', hist)
+        self.assertIn('height: 176px', hist)
         filters = css.split('#timeline-view .bp-filters input')[1].split('}')[0]
-        self.assertIn('min-height: 32px', filters)
+        self.assertIn('min-height: 28px', filters)
 
     def test_paint_keeps_c5_doors_and_groups_the_stream_by_time(self):
         self.assertIn('function paintTimelineDoors(', _SRC)
@@ -1384,6 +1385,103 @@ class TimelineTimeSpineVisualFinishTests(unittest.TestCase):
         self.assertIn('id="delivery-ci-spark"', _HTML)
         self.assertNotIn('n8n', _HTML.lower())
         self.assertNotIn('POS', _HTML)
+
+
+class TimelineDensityCapTests(unittest.TestCase):
+    """pc-1560 WANT residual: Firings hist+line keeps first-read hero weight;
+    the event stream is capped with a visible +N remainder door. Compose
+    with #190 time-spine — elevate density, do not thrash neighbors."""
+
+    def test_stream_host_and_remainder_door_sit_under_the_hero(self):
+        timeline = _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0]
+        self.assertIn('id="timeline-hero"', timeline)
+        self.assertIn('id="timeline-activity-chart"', timeline)
+        self.assertIn('id="timeline-stream-more"', timeline)
+        self.assertIn('bp-timeline-more', timeline)
+        self.assertLess(timeline.index('id="timeline-hero"'), timeline.index('id="timeline-filters"'))
+        self.assertLess(timeline.index('id="timeline-activity"'), timeline.index('id="timeline-list"'))
+        self.assertLess(timeline.index('id="timeline-list"'), timeline.index('id="timeline-stream-more"'))
+        self.assertLess(timeline.index('id="timeline-stream-more"'), timeline.index('id="timeline-more"'))
+        self.assertEqual(_HTML.count('id="timeline-stream-more"'), 1)
+        self.assertNotIn('id="timeline-stream-more"', _HTML.split('id="timeline-view"')[0])
+        self.assertNotIn('id="work-flow"', timeline)
+        self.assertNotIn('id="calendar-load"', timeline)
+
+    def test_paint_caps_the_stream_and_exposes_remainder(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn('TIMELINE_STREAM_LIMIT=8', compact)
+        self.assertIn('function capTimelineDays(', _SRC)
+        self.assertIn('function paintTimelineRemainder(', _SRC)
+        self.assertIn('function expandTimelineStream(', _SRC)
+        self.assertIn("'+' + remainder + ' more'", _SRC)
+        self.assertIn('bp-timeline-remainder', _SRC)
+        timeline = _SRC.split('function timeline()')[1].split('function timelineFilterParams')[0]
+        self.assertIn('capTimelineDays(', timeline)
+        self.assertIn('paintTimelineRemainder(', timeline)
+        self.assertIn('timelineMore&&capped.remainder===0', timeline.replace(' ', ''))
+        self.assertIn('resetTimelineStreamWindow()', _SRC)
+        paint = _SRC.split('function paintTimelineDoors(')[1].split('function paintTimelineActivityLine(')[0]
+        self.assertIn("'WorkLane firings'", paint)
+        self.assertIn("'GitHub firings'", paint)
+        self.assertIn("'none'", paint)
+        self.assertIn('unavailable', paint)
+        self.assertNotIn('Needs you', paint)
+        self.assertNotIn('Act now', paint)
+        self.assertNotIn('For You', paint)
+
+    def test_css_keeps_hist_line_louder_than_the_capped_stream(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('pc-1560', css)
+        hist = css.split('.bp-timeline-hist {')[1].split('}')[0]
+        self.assertIn('height: 176px', hist)
+        activity = css.split('.bp-timeline-activity h2 {')[1].split('}')[0]
+        self.assertIn('font-size: 22px', activity)
+        stream = css.split('.bp-timeline-stream {')[1].split('}')[0]
+        self.assertIn('padding: 8px 12px', stream)
+        filters = css.split('#timeline-view .bp-filters input')[1].split('}')[0]
+        self.assertIn('min-height: 28px', filters)
+        self.assertIn('.bp-timeline-remainder', css)
+        calendar = css.split('#calendar-view .ov-cal-load-chart {')[1].split('}')[0]
+        self.assertIn('height: 128px', calendar)
+
+    def test_density_harness_caps_and_keeps_honest_empty(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping timeline density harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'timeline_activity_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'timeline density harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['stream_cap'], 8)
+        self.assertEqual(result['dense_events'], 8)
+        self.assertEqual(result['dense_remainder'], '+2 more')
+        self.assertEqual(result['expanded_events'], 10)
+        self.assertEqual(result['expanded_remainder'], '')
+        self.assertEqual(result['quiet_remainder'], '')
+        self.assertEqual(result['quiet_stream'], 'No timeline rows in the readable window.')
+        self.assertEqual(result['quiet_work'], 'WorknoneWorkLane firings')
+        self.assertEqual(result['unavailable_doors'], ['Workunavailable', 'Deliveryunavailable'])
+        self.assertTrue(result['has_line'])
+        self.assertEqual(result['healthy_work'], 'Work2 eventsWorkLane firings')
+
+    def test_does_not_regress_neighbors_or_held_surfaces(self):
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="agents-canvas"', _HTML)
+        self.assertIn('id="delivery-hero"', _HTML)
+        self.assertIn('id="calendar-hero"', _HTML)
+        self.assertIn('id="calendar-load"', _HTML)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('POS', _HTML)
+        self.assertNotIn('point of sale', _HTML.lower())
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertIn('href="/timeline"', nav)
 
 
 class ProjectsReturnAndFinishingTests(unittest.TestCase):
