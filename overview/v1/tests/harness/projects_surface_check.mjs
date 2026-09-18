@@ -78,6 +78,7 @@ class Element {
     const walk = node => {
       if (sel === '.bp-projects-row' && node.className && node.className.includes('bp-projects-row') && !node.className.includes('bp-projects-head')) out.push(node);
       if (sel === '.bp-projects-compare-row' && node.className && node.className.includes('bp-projects-compare-row')) out.push(node);
+      if (sel === '.bp-metric' && node.className && node.className.includes('bp-metric')) out.push(node);
       if (sel === '.bp-projects-spark' && node.className && node.className.includes('bp-projects-spark')) out.push(node);
       if (sel === '.bp-projects-pulse' && node.className && node.className.includes('bp-projects-pulse')) out.push(node);
       if (sel === '.bp-projects-stack' && node.className && node.className.includes('bp-projects-stack')) out.push(node);
@@ -134,7 +135,7 @@ function reconcileList(container, items, keyFn, buildRow, {emptyText = ''} = {})
 
 const IDS = [
   'page-title', 'page-description', 'eyebrow', 'freshness', 'source-warning', 'footer-status',
-  'projects-view', 'projects-summary', 'projects-compare', 'projects-compare-summary', 'projects-filter', 'projects-list', 'projects-filters',
+  'projects-view', 'projects-hero', 'projects-pulse', 'projects-summary', 'projects-compare', 'projects-compare-summary', 'projects-filter', 'projects-list', 'projects-filters', 'projects-breakdown-door', 'projects-breakdown-summary',
   'refresh', 'desk-scope', 'desk-name', 'scope-path', 'restore-muted', 'refresh-preference',
   'motion-preference', 'preferences', 'preference-status', 'search', 'project-filter',
   'assignment-filter', 'status-filter', 'gate-filter', 'kind-filter', 'attention-filter',
@@ -392,6 +393,17 @@ assert.ok(compareText.includes('Map'), 'compare bars must door Map');
 assert.ok(!compareText.includes('Delivery'), 'compare bars must not lead with git evidence');
 assert.match(get('projects-compare-summary').textContent, /hot/);
 
+const pulse = get('projects-pulse');
+const pulseTiles = pulse.querySelectorAll('.bp-metric');
+assert.equal(pulseTiles.length, 3, 'hero pulse must paint Hot / Blocked / Quiet');
+assert.ok(pulseTiles.some(tile => domText(tile).includes('Hot')), 'hero pulse must include Hot');
+assert.ok(pulseTiles.some(tile => domText(tile).includes('Blocked')), 'hero pulse must include Blocked');
+assert.ok(pulseTiles.some(tile => domText(tile).includes('Quiet')), 'hero pulse must include Quiet');
+assert.ok(compareRows[0] && compareRows[0].querySelector('.bp-projects-pulse'), 'compare card must carry a pulse chip');
+assert.ok(compare.querySelector('.bp-projects-stack'), 'compare card must carry the stacked open/For You bar');
+assert.equal(get('projects-breakdown-door').open, false, 'Breakdown table stays closed on first-read');
+assert.match(get('projects-breakdown-summary').textContent, /Breakdown · 7 stores/);
+
 console.log(JSON.stringify({
   active_row_count: activeRows.length,
   quiet_summary: collapsed.querySelector('summary').textContent,
@@ -408,4 +420,9 @@ console.log(JSON.stringify({
   compare_rows: compareRows.length,
   compare_has_work_door: compareText.includes('open'),
   compare_skips_quiet: !compareRows.some(row => (row.dataset && row.dataset.project) === 'gridfinity'),
+  hero_pulse_tiles: pulseTiles.length,
+  hero_has_hot: pulseTiles.some(tile => domText(tile).includes('Hot')),
+  compare_card_has_pulse: Boolean(compareRows[0] && compareRows[0].querySelector('.bp-projects-pulse')),
+  breakdown_door_open: get('projects-breakdown-door').open,
+  breakdown_summary: get('projects-breakdown-summary').textContent,
 }));

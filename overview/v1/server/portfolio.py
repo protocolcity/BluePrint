@@ -1,8 +1,8 @@
 """Projects portfolio pulse — open / For You sparks and compare bars.
 
-Issue #150. Per-store stacked open/For You plus last-24h motion glyphs.
-Unavailable stores never paint a fake zero spark. Doors go to Work and Map,
-not ticket bodies, seat-shift detail, or git evidence.
+Issue #150 / pc-1562 C9. Per-store stacked open/For You plus last-24h motion
+glyphs. Unavailable stores never paint a fake zero spark. Doors go to Work
+and Map, not ticket bodies, seat-shift detail, or git evidence.
 """
 from __future__ import annotations
 
