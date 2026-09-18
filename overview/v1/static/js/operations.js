@@ -769,6 +769,32 @@ function projectSparkCell(project) {
   }
   return cell;
 }
+function paintProjectsPulse() {
+  const host=$('projects-pulse');
+  if(!host) return;
+  const data=portfolioFromSnapshot();
+  if(data.state==='unavailable') {
+    host.replaceChildren(el('p','Portfolio unavailable','bp-muted'));
+    return;
+  }
+  const items=[['Hot',data.hot||0,'hot'],['Blocked',data.blocked||0,'blocked'],['Quiet',data.quiet||0,'quiet']];
+  reconcileList(host, items, item=>item[0], ([label,count,pulse])=>{
+    const tile=el('div',undefined,'bp-metric');
+    tile.dataset.pulse=pulse;
+    tile.append(el('strong',String(count)),el('span',label));
+    return tile;
+  });
+}
+function paintProjectsBreakdownDoor(storeCount) {
+  const summary=$('projects-breakdown-summary');
+  if(!summary) return;
+  // pc-1562 first-read: closed face is a store count, never the dense table.
+  if(!storeCount) {
+    summary.textContent='Breakdown · no stores';
+    return;
+  }
+  summary.textContent=storeCount===1 ? 'Breakdown · 1 store' : `Breakdown · ${storeCount} stores`;
+}
 function paintProjectsCompare() {
   const host=$('projects-compare');
   const summary=$('projects-compare-summary');
@@ -809,14 +835,18 @@ function paintProjectsCompare() {
   }
   host.hidden=false;
   reconcileList(host, rows, row=>row.id, row=>{
-    const article=el('div',undefined,'bp-projects-compare-row');
+    const article=el('article',undefined,'bp-projects-compare-row');
     article.dataset.pulse=row.pulse;
     article.dataset.project=row.id;
+    const head=el('div',undefined,'bp-projects-compare-head');
     const name=link(row.name || row.id, row.href || ('/work?project='+row.id), 'bp-projects-compare-name');
+    const chip=el('span', row.pulse, 'bp-projects-pulse');
+    chip.dataset.pulse=row.pulse;
+    head.append(name, chip);
     const meta=el('span',undefined,'bp-projects-compare-meta');
     if(row.state==='unavailable') {
       meta.append(el('span','Store unavailable','bp-muted'));
-      article.append(name, el('span','','bp-projects-stack'), meta);
+      article.append(head, el('span','','bp-projects-stack'), meta);
       return article;
     }
     const stack=row.open ? stackedOpenBar(row.open, row.attention||0, data.peak_open) : el('span',undefined,'bp-projects-stack');
@@ -830,7 +860,7 @@ function paintProjectsCompare() {
       spark.setAttribute('aria-hidden','true');
       meta.append(spark);
     }
-    article.append(name, stack, meta);
+    article.append(head, stack, meta);
     return article;
   });
 }
@@ -884,7 +914,9 @@ function projects() {
   const readable=(snapshot.projects || []).filter(p=>p.state==='available').length;
   const readAge=lastSuccess ? Math.max(0,Math.floor((Date.now()-lastSuccess)/1000)) : null;
   $('projects-summary').textContent=`${snapshot.projects.length} stores · ${unavailable ? `${unavailable} unavailable` : 'all readable'} · read ${readAge===null ? '…' : readAge+'s ago'}`;
+  paintProjectsPulse();
   paintProjectsCompare();
+  paintProjectsBreakdownDoor((snapshot.projects || []).length);
   const items=[...active];
   if(quiet.length) items.push({id:'__quiet__', rows:quiet});
   reconcileList($('projects-list'), items, item=>item.id, item=>{
