@@ -289,8 +289,9 @@ const idleAction = idleRow && idleRow.parent && idleRow.parent.querySelector('.b
 assert.ok(idleAction, 'Dispatch now stays on the row but as a quiet secondary control');
 assert.equal(idleAction.textContent, 'Dispatch now');
 assert.equal(get('agents-coverage-door').open, false, 'Coverage / Hire stay collapsed behind the door');
-assert.equal(get('agents-coverage-summary').textContent, 'Coverage · 1 project · 1 missing staff');
+assert.equal(get('agents-coverage-summary').textContent, 'Coverage · 1 project');
 const coverageSummary = get('agents-coverage-summary').textContent;
+assert.ok(!/missing staff|hire/i.test(coverageSummary), 'closed door is not a staffing bulletin');
 assert.equal(get('coverage-list').querySelectorAll('code').length, 0, 'hire commands stay closed until the inner Hire door opens');
 
 const quietOnly = {
@@ -331,4 +332,5 @@ process.stdout.write(JSON.stringify({
   coverage_door_open: get('agents-coverage-door').open,
   coverage_door: coverageSummary,
   coverage_door_empty: get('agents-coverage-summary').textContent,
+  coverage_door_bulletin: /missing staff|hire/i.test(coverageSummary),
 }));
