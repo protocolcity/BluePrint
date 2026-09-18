@@ -136,18 +136,25 @@
   </section>
   <section id="connections-view" hidden><div class="bp-panel"><h2>Needs attention</h2><p class="bp-muted">Reachable is not usable. Installed is not live. A failed report is still evidence. The live indicator is only the update transport.</p><div id="connection-exceptions"></div></div><div class="bp-panel"><h2>Data sources</h2><div id="connection-list"></div></div><div class="bp-panel"><h2>Engine capabilities</h2><p class="bp-muted">Reachability and last outcome from live probes on the verified local origin. These are not installation receipts.</p><div id="capability-list"></div></div><div class="bp-panel"><h2>Installed engines</h2><p class="bp-muted">Receipts establish installed version, not live daemon identity or health.</p><div id="engine-list"></div></div><div class="bp-panel"><h2>Excluded stores</h2><p class="bp-muted">Unregistered databases in this workspace. They are not counted as active projects.</p><div id="excluded-store-list"></div></div><div class="bp-panel bp-remote"><h2>Remote operations</h2><p id="github-connection-status">Reading connection state…</p><p class="bp-muted">GitHub provides repository delivery evidence. Direct remote-agent heartbeat reporting is not connected.</p><a href="/delivery">View repository delivery</a></div><div class="bp-panel"><h2>Running application</h2><dl class="bp-facts"><dt>Build</dt><dd id="build"></dd><dt>Workspace</dt><dd id="workspace-path"></dd><dt>Refresh</dt><dd id="refresh-description">Reading preference…</dd></dl></div></section>
   <section id="calendar-view" hidden>
-    <p class="bp-note bp-muted">Upcoming agent runs are reported by WorkForce. Timed values use your browser’s timezone. All-day dates stay on the calendar day they were recorded.</p>
-    <nav id="calendar-doors" class="bp-calendar-doors" data-role="cal-doors" aria-label="Calendar doors"></nav>
-    <div class="bp-cal-strip bp-cal-sources-strip" aria-label="Schedule sources">
-      <span class="bp-cal-strip-label">Sources</span>
-      <div class="bp-cal-strip-chips" data-role="cal-sources"></div>
+    <div id="calendar-hero" class="bp-calendar-hero" role="region" aria-label="One Agenda factory clock">
+      <nav id="calendar-doors" class="bp-calendar-doors" data-role="cal-doors" aria-label="Calendar doors"></nav>
+      <div class="bp-cal-strip bp-cal-sources-strip" aria-label="Schedule sources">
+        <span class="bp-cal-strip-label">Sources</span>
+        <div class="bp-cal-strip-chips" data-role="cal-sources"></div>
+      </div>
+      <p id="calendar-local-line" class="bp-muted bp-cal-local-line" data-role="cal-local-line" role="status">Local schedule · on this desk.</p>
+      <div id="calendar-load" class="bp-panel bp-calendar-load" data-role="cal-load">
+        <div class="bp-section-head"><div><h2>This week</h2><p id="calendar-load-summary" class="bp-muted" data-role="cal-load-summary"></p></div></div>
+        <div id="calendar-load-chart" class="ov-cal-load-chart" data-role="cal-load-chart" hidden></div>
+      </div>
     </div>
-    <div id="calendar-load" class="bp-panel bp-calendar-load" data-role="cal-load">
-      <div class="bp-section-head"><div><h2>Load by day</h2><p id="calendar-load-summary" class="bp-muted" data-role="cal-load-summary"></p></div></div>
-      <div id="calendar-load-chart" class="ov-cal-load-chart" data-role="cal-load-chart" hidden></div>
-    </div>
-    <form class="bp-filters" id="calendar-filters">
+    <form class="bp-filters bp-cal-facets" id="calendar-filters">
       <label>Project<select id="calendar-project"><option value="">All projects</option></select></label>
+      <div id="calendar-app-facet" class="bp-cal-app-facet" aria-label="Calendar app">
+        <span class="bp-cal-strip-label">App</span>
+        <span class="bp-cal-chip" data-state="live">BluePrint · SoT</span>
+        <div class="bp-cal-strip-chips" data-role="cal-outbound"></div>
+      </div>
       <div class="bp-cal-nav" role="group" aria-label="Week">
         <button type="button" id="calendar-prev-week">Previous week</button>
         <button type="button" id="calendar-today-btn">Today</button>
@@ -163,13 +170,8 @@
         title="Reserved — Calendar writes arrive with Hybrid fabric"
       >New event · reserved</button>
     </form>
-    <div class="bp-cal-strip bp-cal-outbound-strip" aria-label="Outbound calendar apps (reserved)">
-      <span class="bp-cal-strip-label">Outbound</span>
-      <div class="bp-cal-strip-chips" data-role="cal-outbound"></div>
-    </div>
     <p id="calendar-range" class="bp-muted" role="status"></p>
-    <div class="bp-panel"><div class="bp-section-head"><div><h2>Next scheduled runs</h2><p class="bp-muted">WorkForce next-run times. Manual jobs have no next run.</p></div></div><div id="schedule-list"></div></div>
-    <div class="bp-panel"><div class="bp-section-head"><div><h2>Agenda</h2><p class="bp-muted">Today and upcoming clocks. Past and overdue stay collapsed.</p></div><a href="/calendar.ics">Subscribe / export calendar</a></div>
+    <div class="bp-panel bp-calendar-agenda"><div class="bp-section-head"><div><h2>One Agenda</h2><p class="bp-muted">Today and upcoming clocks. Past and overdue stay collapsed. Timed values use this browser’s timezone.</p></div><a href="/calendar.ics">Subscribe / export calendar</a></div>
       <div id="dated-work">
         <h3 id="calendar-today-heading">Today</h3>
         <div id="calendar-today"></div>
@@ -178,7 +180,8 @@
         <details id="calendar-past-wrap"><summary id="calendar-past-summary">Past and overdue</summary><div id="calendar-past"></div></details>
       </div>
     </div>
-    <div class="bp-panel"><h2>Calendar events</h2><div id="event-list"></div></div>
+    <details class="bp-cal-secondary"><summary>Next scheduled runs</summary><p class="bp-muted">WorkForce next-run times. Manual jobs have no next run.</p><div id="schedule-list"></div></details>
+    <details class="bp-cal-secondary"><summary>Local calendar file</summary><div id="event-list"></div></details>
   </section>
 
   <section id="settings-view" hidden><div class="bp-panel"><h2>Display preferences</h2><p class="bp-muted">Saved in this browser. These do not change agents or services. Pages also update live when the desk sees a change; the interval below is the fallback poll used while that connection is down.</p><form class="bp-filters" id="preferences"><label>Fallback refresh<select id="refresh-preference"><option value="15">Every 15 seconds</option><option value="30">Every 30 seconds</option><option value="0">Manual only</option></select></label><label>Motion<select id="motion-preference"><option value="system">Follow system preference</option><option value="off">Reduce motion</option></select></label></form><p id="preference-status" role="status" class="bp-muted"></p></div><div class="bp-panel"><h2>Workspace and application</h2><dl class="bp-facts"><dt>Workspace</dt><dd id="settings-workspace"></dd><dt>Running build</dt><dd id="settings-build"></dd><dt>Updates</dt><dd id="settings-updates">Connecting…</dd><dt>Appearance</dt><dd>BluePrint dark</dd><dt>Data access</dt><dd>Local reads; work-order changes through WorkLane</dd></dl><p class="bp-note"><a href="/connections">Inspect connections and source freshness</a></p></div></section>

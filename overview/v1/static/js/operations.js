@@ -8,7 +8,7 @@ const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStr
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you and what\'s moving.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','Working, idle, and error on this floor — from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
+const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','One Agenda — the factory clock for dated work and next fire on this desk.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you and what\'s moving.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','Working, idle, and error on this floor — from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
 let agentsView = 'floor';
@@ -2785,6 +2785,35 @@ function updateCalendarContext() {
   history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);
   if(snapshot) calendar();
 }
+function paintCalendarLocalLine(load) {
+  const line=$('calendar-local-line');
+  if(!line) return;
+  if(!snapshot?.workspace || load?.state==='unavailable') {
+    line.textContent='Local schedule unavailable.';
+    return;
+  }
+  const calendarSource=(snapshot.sources || []).find(source=>source.name==='Calendar');
+  if(calendarSource?.state==='unavailable') {
+    line.textContent='Local schedule file could not be read.';
+    return;
+  }
+  if(!load?.total) {
+    line.textContent='Local schedule · no dated clocks this week.';
+    return;
+  }
+  line.textContent='Local schedule · WorkLane clocks on this desk.';
+}
+function bindCalendarClock() {
+  const chart=$('calendar-load-chart');
+  if(!chart || chart.dataset.bound==='1') return;
+  chart.dataset.bound='1';
+  chart.addEventListener('click', event=>{
+    const col=event.target.closest ? event.target.closest('.ov-cal-load-col') : null;
+    if(!col || !col.dataset.day) return;
+    calendarDay=col.dataset.day;
+    updateCalendarContext();
+  });
+}
 function paintCalendarSchedule() {
   const view=$('calendar-view');
   if(!view) return;
@@ -2792,15 +2821,20 @@ function paintCalendarSchedule() {
   const workLaneSource=(snapshot?.sources || []).find(source=>source.name==='WorkLane');
   paintSourceStrip(view, {workLane: workLaneSource?.state==='available'});
   paintOutboundStrip(view);
-  paintLoad(view, buildLoadByDay({
+  const load=buildLoadByDay({
     workDates: snapshot?.work_dates || [],
     events: snapshot?.events || [],
     agents: snapshot?.agents || [],
     origin: calendarOrigin(),
+    selected: calendarOrigin(),
+    today: todayKey(),
     project: selectedProject,
     now: new Date(),
     readable: Boolean(snapshot?.workspace),
-  }));
+  });
+  paintLoad(view, load);
+  paintCalendarLocalLine(load);
+  bindCalendarClock();
 }
 function calendar() {
   paintCalendarSchedule();
