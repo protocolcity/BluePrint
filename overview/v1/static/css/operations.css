@@ -832,13 +832,17 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-timeline-detail summary { cursor: pointer; color: var(--ov-link); }
 .bp-timeline-detail p { margin: 6px 0 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* Timeline time-spine visual-finish: firings histogram + line is the
-   first-read hero; Work / Delivery doors count WorkLane / GitHub in the
-   window. Stream is events by time, not a quiet work-order list. Quiet
-   windows stay copy-only — no decorative empty chart. */
+/* Timeline time-spine (#190) + density Cap (pc-1560): firings histogram
+   + line is unmistakably first-read hero weight. Work / Delivery doors
+   count WorkLane / GitHub in the window. Stream is events by time, capped
+   with visible +N remainder doors — not an equal-weight bulletin wall.
+   Quiet windows stay copy-only — no decorative empty chart. */
 .bp-timeline-hero {
-  margin: 2px 0 14px;
-  padding: 0 0 8px;
+  margin: 2px 0 18px;
+  padding: 16px 18px 12px;
+  border: 1px solid var(--ov-tile-border-strong);
+  border-radius: 8px;
+  background: var(--ov-tile-bg);
 }
 .bp-timeline-doors {
   display: flex;
@@ -886,21 +890,31 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 .bp-timeline-door[data-tone="muted"] { opacity: .92; }
 .bp-timeline-door[data-tone="muted"] .bp-timeline-door-primary { color: var(--ov-muted); font-size: 16px; }
 #timeline-view .bp-filters,
-.bp-timeline-facets { padding: 4px 0 10px; gap: 10px; }
+.bp-timeline-facets { padding: 2px 0 8px; gap: 8px; }
 #timeline-view .bp-filters input,
-#timeline-view .bp-filters select { min-height: 32px; padding: 6px 10px; }
+#timeline-view .bp-filters select { min-height: 28px; padding: 4px 8px; font-size: 13px; }
 .bp-timeline-activity {
-  padding: 16px 18px;
-  margin-bottom: 8px;
-  border-color: var(--ov-tile-border-strong);
+  padding: 4px 0 0;
+  margin-bottom: 0;
+  border: 0;
+  background: transparent;
 }
-.bp-timeline-activity .bp-section-head { margin-bottom: 10px; }
+.bp-timeline-activity .bp-section-head { margin-bottom: 12px; }
+.bp-timeline-activity h2 {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -.03em;
+}
+.bp-timeline-activity #timeline-activity-summary {
+  color: var(--ov-fg);
+  font-size: 14px;
+}
 .bp-timeline-hist {
   position: relative;
   display: flex;
   align-items: stretch;
   gap: 6px;
-  height: 128px;
+  height: 176px;
   margin: 0;
 }
 .bp-timeline-hist-line {
@@ -943,19 +957,20 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 }
 .bp-timeline-hist-bar {
   width: 100%;
-  max-width: 28px;
+  max-width: 36px;
   margin-inline: auto;
   background: var(--ov-link);
-  border-radius: 2px 2px 0 0;
+  border-radius: 3px 3px 0 0;
 }
 .bp-timeline-hist-bar[data-empty="true"] {
   background: var(--ov-tile-border);
   min-height: 2px;
 }
 .bp-timeline-hist-count {
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--ov-muted);
+  color: var(--ov-fg);
   text-align: center;
   line-height: 1;
   height: 14px;
@@ -976,9 +991,14 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
   background: var(--ov-focus);
 }
 .bp-timeline-note { margin: 4px 0 12px; }
-.bp-timeline-stream { padding: 14px 16px; margin-top: 2px; }
-.bp-timeline-day { padding: 4px 0 12px; }
-.bp-timeline-day + .bp-timeline-day { border-top: 1px solid var(--ov-tile-border); margin-top: 4px; }
+.bp-timeline-stream { padding: 8px 12px; margin-top: 0; }
+.bp-timeline-more { margin: 6px 0 8px; }
+.bp-timeline-remainder {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.bp-timeline-day { padding: 2px 0 8px; }
+.bp-timeline-day + .bp-timeline-day { border-top: 1px solid var(--ov-tile-border); margin-top: 2px; }
 .bp-timeline-day-head {
   font-size: 12px;
   font-weight: 600;
@@ -994,7 +1014,7 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 #timeline-view .bp-timeline-event {
   grid-template-columns: 56px minmax(0,1fr) auto;
   gap: 10px;
-  padding: 8px 0;
+  padding: 5px 0;
   align-items: start;
 }
 .bp-timeline-time {

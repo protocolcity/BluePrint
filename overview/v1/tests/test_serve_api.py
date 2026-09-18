@@ -528,6 +528,7 @@ class DisposableDeskThroughputSmokeTests(unittest.TestCase):
         self.assertIn('id="overview-throughput"', text)
         self.assertIn('id="agents-floor-spark"', text)
         self.assertIn('id="timeline-activity-chart"', text)
+        self.assertIn('id="timeline-stream-more"', text)
         self.assertIn('id="work-band-act-now"', text)
         self.assertIn('id="calendar-load"', text)
         self.assertIn('id="calendar-doors"', text)
