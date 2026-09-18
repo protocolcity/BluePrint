@@ -1166,7 +1166,7 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
 
 /* pc-1563: soft-conflict marks on One Agenda rows. Soft chrome only —
    dim twin / also-on / app precedes / You win / rejected / proposes.
-   Never a hard block, never a second SoT Agenda. */
+   Never a blocking control, never a second SoT Agenda. */
 .bp-cal-soft {
   display: flex;
   flex-wrap: wrap;

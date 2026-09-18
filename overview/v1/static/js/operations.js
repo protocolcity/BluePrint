@@ -4,8 +4,7 @@
 const {readerHref} = await import('/js/reader-navigation.mjs');
 const {connectChanges} = await import('/js/change-feed.mjs');
 const {reconcileList} = await import('/js/dom-reconcile.mjs');
-const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip} = await import('/js/calendar.v1.js');
-const {applyHybridMarks, paintHybridMark, capAgendaDay} = await import('/js/calendar.v1.js');
+const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip, applyHybridMarks, paintHybridMark, capAgendaDay} = await import('/js/calendar.v1.js');
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';

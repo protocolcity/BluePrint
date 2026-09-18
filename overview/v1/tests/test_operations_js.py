@@ -2876,6 +2876,9 @@ class CalendarHybridHonestyStripTests(unittest.TestCase):
         import_line = _SRC.split("await import('/js/calendar.v1.js')")[0].splitlines()[-1]
         self.assertIn('paintSourceStrip', import_line)
         self.assertIn('paintOutboundStrip', import_line)
+        self.assertIn('applyHybridMarks', import_line)
+        self.assertIn('paintHybridMark', import_line)
+        self.assertIn('capAgendaDay', import_line)
 
     def test_source_strip_reads_worklane_from_sources_state_not_a_fake_mcp(self):
         paint = _SRC.split('function paintCalendarSchedule()')[1].split('function calendar()')[0]
@@ -2999,7 +3002,7 @@ class CalendarHybridMarksCapTests(unittest.TestCase):
         self.assertIn('capAgendaDay(', _SRC)
         self.assertIn('function paintCalendarDayMore(', _SRC)
         self.assertIn('function hybridScenesOn(', _SRC)
-        self.assertIn("'+'+remainder+' on Timeline'", compact)
+        self.assertIn("'+'+remainder+' on Timeline'", _SRC)
         self.assertIn("'/timeline'", _SRC.split('function paintCalendarDayMore(')[1].split('function calendar()')[0])
         self.assertIn("hybridScenesOn()", _SRC.split('function calendar()')[1].split('const demand=')[0])
         self.assertIn('snapshot.hybrid_marks', _SRC)
