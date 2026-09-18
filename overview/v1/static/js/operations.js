@@ -1773,13 +1773,13 @@ function paintCoverageDoor(rows) {
   const summary=$('agents-coverage-summary');
   if(!summary) return;
   const list=rows || [];
+  // pc-1559 first-glance: closed face is a quiet project count, never a
+  // staffing bulletin. Staffing detail stays behind the open door.
   if(!list.length) {
     summary.textContent='Coverage · none reported';
     return;
   }
-  const missing=list.filter(row=>row.missing && row.missing.length).length;
-  const base=list.length===1 ? 'Coverage · 1 project' : `Coverage · ${list.length} projects`;
-  summary.textContent=missing ? `${base} · ${missing} missing staff` : base;
+  summary.textContent=list.length===1 ? 'Coverage · 1 project' : `Coverage · ${list.length} projects`;
 }
 function renderCoverage() {
   ensureCoverageHireDelegation();
