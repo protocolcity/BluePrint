@@ -2903,7 +2903,7 @@ class CalendarHybridHonestyStripTests(unittest.TestCase):
         result = json.loads(proc.stdout)
         self.assertEqual(result['source_states'], ['live', 'reserved', 'reserved'])
         self.assertEqual(result['source_states_no_worklane'], ['unavailable', 'reserved', 'reserved'])
-        self.assertEqual(result['outbound_states'], ['reserved', 'reserved'])
+        self.assertEqual(result['outbound_states'], ['honesty', 'honesty', 'honesty', 'honesty'])
 
 
 class CalendarOneAgendaVisualFinishTests(unittest.TestCase):
@@ -2967,6 +2967,99 @@ class CalendarOneAgendaVisualFinishTests(unittest.TestCase):
         self.assertIn('id="timeline-activity-chart"', _HTML)
         self.assertNotIn('n8n', _HTML.lower())
         self.assertNotIn('POS', _HTML)
+
+
+class CalendarHybridMarksCapTests(unittest.TestCase):
+    """pc-1563 Phase 3 chrome: soft-conflict marks + outbound honesty
+    weight on One Agenda. Thin paint only — does not replace C2 / One
+    Agenda, invent a reconcile dashboard, or write SoT from Apple/Outlook."""
+
+    def test_one_agenda_keeps_doors_sources_facets_and_day_remainder(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        self.assertIn('id="calendar-hero"', calendar)
+        self.assertIn('id="calendar-doors"', calendar)
+        self.assertIn('data-role="cal-sources"', calendar)
+        self.assertIn('data-role="cal-outbound"', calendar)
+        self.assertIn('id="calendar-app-facet"', calendar)
+        self.assertIn('BluePrint · SoT', calendar)
+        self.assertIn('>One Agenda<', calendar)
+        self.assertIn('id="calendar-today-more"', calendar)
+        self.assertLess(calendar.index('id="calendar-today"'), calendar.index('id="calendar-today-more"'))
+        self.assertLess(calendar.index('id="calendar-today-more"'), calendar.index('id="calendar-next"'))
+        self.assertEqual(calendar.count('id="dated-work"'), 1)
+        self.assertNotIn('id="reconcile"', calendar)
+        self.assertNotIn('id="apple-events"', calendar)
+        self.assertNotIn('id="outlook-events"', calendar)
+        self.assertNotIn('Google', calendar)
+
+    def test_paint_applies_marks_caps_day_and_doors_remainder_to_timeline(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn('applyHybridMarks(', _SRC)
+        self.assertIn('paintHybridMark(', _SRC)
+        self.assertIn('capAgendaDay(', _SRC)
+        self.assertIn('function paintCalendarDayMore(', _SRC)
+        self.assertIn('function hybridScenesOn(', _SRC)
+        self.assertIn("'+'+remainder+' on Timeline'", compact)
+        self.assertIn("'/timeline'", _SRC.split('function paintCalendarDayMore(')[1].split('function calendar()')[0])
+        self.assertIn("hybridScenesOn()", _SRC.split('function calendar()')[1].split('const demand=')[0])
+        self.assertIn('snapshot.hybrid_marks', _SRC)
+        self.assertIn("event.hybrid?.fixture", _SRC)
+        self.assertNotIn('silent overwrite', _SRC.lower())
+        self.assertNotIn('block this event', _SRC.lower())
+        calendar = _SRC.split('function calendar()')[1].split('function capabilities()')[0]
+        self.assertIn('capAgendaDay(', calendar)
+        self.assertIn('paintCalendarDayMore(', calendar)
+        self.assertIn('applyHybridMarks(', calendar)
+
+    def test_css_weights_honesty_and_soft_marks_not_hard_block(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('pc-1563', css)
+        self.assertIn('.bp-cal-chip[data-state="honesty"]', css)
+        self.assertIn('.bp-cal-soft-chip', css)
+        self.assertIn('.bp-cal-twin', css)
+        self.assertIn('.bp-cal-day-remainder', css)
+        self.assertNotIn('hard block', css.lower())
+        self.assertNotIn('overwrite', css.lower())
+
+    def test_hybrid_import_stays_on_calendar_helpers(self):
+        self.assertIn("await import('/js/calendar.v1.js')", _SRC)
+        self.assertIn('applyHybridMarks', _SRC)
+        self.assertIn('paintHybridMark', _SRC)
+        self.assertIn('capAgendaDay', _SRC)
+
+    def test_does_not_dump_neighbors_or_invent_caps(self):
+        calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        self.assertNotIn('id="overview-throughput"', calendar)
+        self.assertNotIn('id="work-flow"', calendar)
+        self.assertNotIn('id="work-band-act-now"', calendar)
+        self.assertNotIn('id="agents-pulse"', calendar)
+        self.assertNotIn('POS', calendar)
+        self.assertNotIn('n8n', calendar.lower())
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+
+    def test_hybrid_harness_locks_scenes_honesty_and_day_cap(self):
+        node = shutil.which('node')
+        if not node:
+            raise unittest.SkipTest('node not available; skipping calendar hybrid harness')
+        harness = Path(__file__).resolve().parent / 'harness' / 'calendar_hybrid_check.mjs'
+        proc = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=15, check=False)
+        if proc.returncode != 0:
+            raise AssertionError(
+                f'calendar hybrid harness failed ({proc.returncode}):\n'
+                f'stdout={proc.stdout}\nstderr={proc.stderr}'
+            )
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['scenes'], ['A', 'B2', 'C1', 'D1'])
+        self.assertEqual(result['chips']['A'], ['also on Apple', 'app precedes'])
+        self.assertEqual(result['chips']['B2'], ['You win'])
+        self.assertEqual(result['chips']['C1'], ['rejected', 'proposes'])
+        self.assertEqual(result['chips']['D1'], ['also on Apple'])
+        self.assertEqual(result['day_cap']['remainder'], 2)
+        self.assertEqual(len(result['day_cap']['shown']), 8)
+        self.assertEqual(result['dogfood_rows'], 5)
+        self.assertTrue(all('honesty' in chip for chip in result['outbound']))
 
 
 class MapNodeMotionLeakTests(unittest.TestCase):

@@ -208,12 +208,19 @@ assert.equal(sourcesHost.children[0].textContent, 'WorkLane · Unavailable');
 
 cal.paintOutboundStrip(sourcesRoot);
 const outboundStates = outboundHost.children.map((c) => c.dataset.state);
-assert.deepEqual(outboundStates, ['reserved', 'reserved']);
+assert.deepEqual(outboundStates, ['honesty', 'honesty', 'honesty', 'honesty']);
 assert.deepEqual(
   outboundHost.children.map((c) => c.textContent),
-  ['Apple · reader · not wired', 'Outlook · reader · not wired'],
+  [
+    'Apple · reader · honesty',
+    'Apple · publish · honesty',
+    'Outlook · reader · honesty',
+    'Outlook · publish · honesty',
+  ],
 );
 assert.equal(outboundHost.children[0].getAttribute('aria-disabled'), undefined);
+assert.match(outboundHost.children[0].title, /source of truth/);
+assert.match(outboundHost.children[0].title, /readers\/ties/);
 
 console.log(JSON.stringify({
   origin: load.origin,
