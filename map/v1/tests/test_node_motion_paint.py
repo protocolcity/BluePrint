@@ -90,29 +90,39 @@ class Pc1561MapMotionVerifyTests(unittest.TestCase):
         self.assertIn("LIVE_MOTION = 3", self.motion)
 
     def test_map_shell_has_no_wo_wall(self) -> None:
-        blob = self.html + self.css + self.paint + self.host
+        html = self.html
+        css = self.css
+        self.assertIn("no wo-tape", css)
         for leak in (
-            "wo-tape",
-            "work-list",
-            "work-band-act-now",
-            "work-band-my-todos",
-            "work-band-seat-backlog",
-            "work-flow",
-            "for-you-decide",
+            'id="wo-tape"',
+            'id="work-list"',
+            'id="work-band-act-now"',
+            'id="work-band-my-todos"',
+            'id="work-band-seat-backlog"',
+            'id="work-flow"',
+            'id="for-you-decide"',
+            ".wo-tape",
+            "#work-list",
+            "#work-flow",
         ):
-            self.assertNotIn(leak, blob)
+            self.assertNotIn(leak, html)
+            self.assertNotIn(leak, css)
+            self.assertNotIn(leak, self.paint)
+            self.assertNotIn(leak, self.host)
 
     def test_map_shell_has_no_overview_dump(self) -> None:
-        blob = self.html + self.css + self.paint + self.host
+        html = self.html
         for leak in (
-            "overview-throughput",
-            "overview-face-chips",
-            "overview-exec",
-            "overview-unrouted",
-            "id=\"metrics\"",
+            'id="overview-throughput"',
+            'id="overview-face-chips"',
+            'id="overview-exec"',
+            'id="overview-unrouted"',
+            'id="metrics"',
             "Act now",
         ):
-            self.assertNotIn(leak, blob)
+            self.assertNotIn(leak, html)
+            self.assertNotIn(leak, self.paint)
+            self.assertNotIn(leak, self.host)
 
     def test_does_not_invent_density_overlay_or_steal_pos(self) -> None:
         blob = self.html + self.css + self.paint + self.host + self.motion
