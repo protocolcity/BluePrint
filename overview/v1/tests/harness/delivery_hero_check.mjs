@@ -193,7 +193,7 @@ raw = raw
   .replace("const {readerHref} = await import('/js/reader-navigation.mjs');", 'const {readerHref} = readerNav;')
   .replace("const {connectChanges} = await import('/js/change-feed.mjs');", 'const {connectChanges} = changeFeed;')
   .replace("const {reconcileList} = await import('/js/dom-reconcile.mjs');", 'const {reconcileList} = {reconcileList: reconcileListFn};')
-  .replace("const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip} = await import('/js/calendar.v1.js');", 'const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip} = {buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){},paintSourceStrip(){},paintOutboundStrip(){}};');
+  .replace("const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip, applyHybridMarks, paintHybridMark, capAgendaDay} = await import('/js/calendar.v1.js');", 'const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStrip, applyHybridMarks, paintHybridMark, capAgendaDay} = {buildLoadByDay(){return {state:"empty",origin:"",days:[],total:0};},paintLoad(){},paintDoors(){},paintSourceStrip(){},paintOutboundStrip(){},applyHybridMarks(items){return items||[];},paintHybridMark(){},capAgendaDay(items){const rows=items||[];return {shown:rows,remainder:0,total:rows.length};}};');
 const bootMarker = 'connectChanges(()=>{if(!document.hidden){refresh();';
 const bootAt = raw.indexOf(bootMarker);
 if (bootAt === -1) throw new Error('operations.js boot marker missing');
