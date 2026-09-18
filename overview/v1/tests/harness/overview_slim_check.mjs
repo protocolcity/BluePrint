@@ -110,7 +110,7 @@ const IDS = [
   'filters', 'work-list', 'results', 'page-count', 'previous', 'next', 'clear-filters',
   'active-filters', 'overview-view', 'work-view', 'agents-view', 'calendar-view',
   'timeline-view', 'connections-view', 'delivery-view', 'settings-view', 'overview-executions',
-  'overview-exec-cue', 'metrics', 'overview-throughput', 'overview-unrouted', 'overview-source-line',
+  'overview-exec-cue', 'overview-exec-label', 'overview-due-fed', 'metrics', 'overview-throughput', 'overview-unrouted', 'overview-source-line',
   'for-you-decide', 'overview-decide-more', 'overview-face-chips',
   'work-band-act-now', 'work-act-now', 'work-act-now-count', 'work-act-now-more',
   'work-band-my-todos', 'work-my-todos', 'work-my-todos-count', 'work-my-todos-more',
@@ -291,6 +291,13 @@ assert.equal(chips[1].dataset.face, 'watch');
 assert.equal(chips[2].dataset.face, 'due', 'Due chip carries the gold face token');
 assert.ok(sixMore && sixMore.hasClass('bp-face-chip'), '+N paints as a chip, not a tall body');
 assert.equal(sixMore && sixMore.dataset.face, 'decide');
+const execText = get('overview-executions').textContent;
+assert.equal(execText, '1 seat on shift', 'Current execution is a compact count, not seat rows');
+assert.equal(get('overview-executions').querySelectorAll('.bp-execution-row').length, 0);
+assert.equal(get('overview-executions').querySelectorAll('.bp-execution-actions').length, 0);
+assert.equal(execText.includes('Inspect seat'), false);
+assert.equal(execText.includes('Open order'), false);
+assert.equal(execText.includes('Mute'), false);
 assert.equal(get('work-recent').children.length, 0, 'overview() must not paint Recent on Work');
 assert.equal(get('mute-status').textContent, '', 'overview() must not write mute status');
 assert.match(get('overview-unrouted').textContent, /Unrouted/);
@@ -499,6 +506,9 @@ process.stdout.write(JSON.stringify({
   next_fire: nextFireText,
   helper_due_count: helperDoors.due_count,
   helper_next_fire: helperDoors.next_fire_line,
+  exec_line: execText,
+  exec_has_inspect: execText.includes('Inspect seat'),
+  exec_has_open_order: execText.includes('Open order'),
   throughput: '3 closes · last 24h',
   throughput_href: '/timeline?period=1',
   throughput_empty: 'No closes in the last 24h',
