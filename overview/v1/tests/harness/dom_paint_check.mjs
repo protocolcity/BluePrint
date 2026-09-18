@@ -442,11 +442,12 @@ const settings = await import(
   cal.paintLoad(root, load);
   cal.paintDoors(root, { due_count: 1, next_fire_line: "Next fire · none reported" });
   const chart = root.querySelector('[data-role="cal-load-chart"]');
+  const dueDoor = root.querySelector('[data-role="cal-doors"]').children[0];
   cases.calendar_load = {
     summary: root.querySelector('[data-role="cal-load-summary"]').textContent,
     hidden: chart.hidden,
     bars: chart.children.length,
-    due: root.querySelector('[data-role="cal-doors"]').children[0].textContent,
+    due: `${dueDoor.children[0].textContent} · ${dueDoor.children[1].textContent}`,
     fire: root.querySelector('[data-role="cal-doors"]').children[2].href,
   };
 }

@@ -150,22 +150,36 @@ assert.equal(down.querySelector('[data-role="cal-load-chart"]').hidden, true);
 
 const doors = root.querySelector('[data-role="cal-doors"]');
 assert.equal(doors.children.length, 4);
-assert.equal(doors.children[0].textContent, 'Due · 2');
+assert.equal(doors.children[0].dataset.kind, 'due');
+assert.equal(doors.children[0].children[0].textContent, 'Due');
+assert.equal(doors.children[0].children[1].textContent, '2');
 assert.equal(doors.children[0].href, '/');
-assert.equal(doors.children[1].textContent, 'Due / Remind');
-assert.equal(doors.children[1].href, '/work?attention=due');
-assert.equal(doors.children[2].textContent, 'Next fire · loop-health in 12m');
+assert.equal(doors.children[1].dataset.kind, 'remind');
+assert.equal(doors.children[1].children[0].textContent, 'Due / Remind');
+assert.equal(doors.children[1].children[1].textContent, 'My todos');
+assert.equal(doors.children[1].href, '/work?attention=my_todos');
+assert.equal(doors.children[2].dataset.kind, 'next-fire');
+assert.equal(doors.children[2].children[0].textContent, 'Next fire');
+assert.equal(doors.children[2].children[1].textContent, 'loop-health in 12m');
 assert.equal(doors.children[2].href, '/agents');
-assert.equal(doors.children[3].textContent, 'Firings');
+assert.equal(doors.children[3].dataset.kind, 'firings');
+assert.equal(doors.children[3].children[0].textContent, 'Firings');
+assert.equal(doors.children[3].children[1].textContent, 'Timeline');
 assert.equal(doors.children[3].href, '/timeline');
 
 const html = readFileSync(join(HERE, '..', '..', 'static', 'operations.html'), 'utf8');
 const calendar = html.split('id="calendar-view"')[1].split('id="settings-view"')[0];
+assert.ok(calendar.includes('id="calendar-hero"'));
 assert.ok(calendar.includes('id="calendar-load"'));
 assert.ok(calendar.includes('id="calendar-doors"'));
+assert.ok(calendar.includes('id="calendar-local-line"'));
+assert.ok(calendar.includes('id="calendar-app-facet"'));
+assert.ok(calendar.includes('One Agenda'));
 assert.ok(!calendar.includes('wo-tile'));
 assert.ok(!calendar.includes('id="agents-pulse"'));
 assert.ok(!calendar.includes('id="work-band-act-now"'));
+assert.ok(!calendar.includes('Google'));
+assert.ok(!calendar.includes('google'));
 
 // pc-1540 / Cap C2: reserved Hybrid source + outbound strips. WorkLane is
 // only ever live when its snapshot.sources state is 'available'; MCP/Connector
@@ -180,24 +194,24 @@ sourcesRoot.append(sourcesHost, outboundHost);
 
 cal.paintSourceStrip(sourcesRoot, {workLane: true});
 const sourceStates = sourcesHost.children.map((c) => c.dataset.state);
-assert.deepEqual(sourceStates, ['live', 'live', 'reserved', 'reserved']);
+assert.deepEqual(sourceStates, ['live', 'reserved', 'reserved']);
 assert.deepEqual(
   sourcesHost.children.map((c) => c.textContent),
-  ['Local · Live', 'WorkLane · Live', 'MCP · Reserved', 'Connector · Reserved'],
+  ['WorkLane · Live', 'MCP · not wired', 'Connector · not wired'],
 );
-assert.equal(sourcesHost.children[2].getAttribute('aria-disabled'), undefined);
+assert.equal(sourcesHost.children[1].getAttribute('aria-disabled'), undefined);
 
 cal.paintSourceStrip(sourcesRoot, {workLane: false});
 const sourceStatesNoWorkLane = sourcesHost.children.map((c) => c.dataset.state);
-assert.deepEqual(sourceStatesNoWorkLane, ['live', 'unavailable', 'reserved', 'reserved']);
-assert.equal(sourcesHost.children[1].textContent, 'WorkLane · Unavailable');
+assert.deepEqual(sourceStatesNoWorkLane, ['unavailable', 'reserved', 'reserved']);
+assert.equal(sourcesHost.children[0].textContent, 'WorkLane · Unavailable');
 
 cal.paintOutboundStrip(sourcesRoot);
 const outboundStates = outboundHost.children.map((c) => c.dataset.state);
 assert.deepEqual(outboundStates, ['reserved', 'reserved']);
 assert.deepEqual(
   outboundHost.children.map((c) => c.textContent),
-  ['Apple · Reserved', 'Outlook · Reserved'],
+  ['Apple · reader · not wired', 'Outlook · reader · not wired'],
 );
 assert.equal(outboundHost.children[0].getAttribute('aria-disabled'), undefined);
 
@@ -209,7 +223,7 @@ console.log(JSON.stringify({
   bars: chart.querySelectorAll('.ov-cal-load-col').length,
   quiet_hidden: quietRoot.querySelector('[data-role="cal-load-chart"]').hidden,
   unavailable: down.querySelector('[data-role="cal-load-summary"]').textContent,
-  due_door: doors.children[0].textContent,
+  due_door: `${doors.children[0].children[0].textContent} · ${doors.children[0].children[1].textContent}`,
   fire_door: doors.children[2].href,
   source_states: sourceStates,
   source_states_no_worklane: sourceStatesNoWorkLane,
