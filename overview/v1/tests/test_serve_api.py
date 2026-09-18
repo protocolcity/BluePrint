@@ -521,9 +521,14 @@ class DisposableDeskThroughputSmokeTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('id="projects-compare"', text)
         self.assertIn('id="projects-compare-summary"', text)
+        self.assertIn('id="projects-hero"', text)
+        self.assertIn('id="projects-pulse"', text)
+        self.assertIn('id="projects-breakdown-door"', text)
         projects = text.split('id="projects-view"', 1)[1].split('id="agents-view"', 1)[0]
         work = text.split('id="work-view"', 1)[1].split('id="projects-view"', 1)[0]
         self.assertIn('id="projects-compare"', projects)
+        self.assertIn('id="projects-hero"', projects)
+        self.assertLess(projects.index('id="projects-hero"'), projects.index('id="projects-list"'))
         self.assertNotIn('id="projects-compare"', work)
         self.assertIn('id="overview-throughput"', text)
         self.assertIn('id="agents-floor-spark"', text)

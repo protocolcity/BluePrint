@@ -63,14 +63,20 @@
     <div class="bp-pagination" hidden><button id="previous" type="button">Previous</button><span id="page-count"></span><button id="next" type="button">Next</button></div>
   </section>
   <section id="projects-view" hidden>
-    <p id="projects-summary" class="bp-muted" role="status"></p>
-    <p id="projects-compare-summary" class="bp-muted bp-projects-compare-summary" role="status"></p>
-    <div id="projects-compare" class="bp-projects-compare" hidden></div>
-    <form class="bp-filters" id="projects-filters" role="search"><label>Filter projects<input id="projects-filter" type="search" placeholder="Name or id" autocomplete="off"></label></form>
-    <div class="bp-panel bp-projects-panel">
-      <div class="bp-projects-head bp-projects-row" aria-hidden="true"><span>Project</span><span>Open</span><span>For You</span><span>Deferred</span><span>Live / Parked</span><span>Agents now</span><span>Last change</span><span>Go</span></div>
-      <div id="projects-list"></div>
+    <div id="projects-hero" class="bp-projects-hero" role="region" aria-label="Projects portfolio">
+      <div id="projects-pulse" class="bp-metrics bp-metrics-compact bp-projects-pulse" aria-label="Portfolio pulse"></div>
+      <p id="projects-compare-summary" class="bp-muted bp-projects-compare-summary" role="status"></p>
+      <div id="projects-compare" class="bp-projects-compare" hidden></div>
     </div>
+    <p id="projects-summary" class="bp-muted" role="status"></p>
+    <form class="bp-filters" id="projects-filters" role="search"><label>Filter projects<input id="projects-filter" type="search" placeholder="Name or id" autocomplete="off"></label></form>
+    <details id="projects-breakdown-door" class="bp-projects-door">
+      <summary id="projects-breakdown-summary">Breakdown</summary>
+      <div class="bp-panel bp-projects-panel">
+        <div class="bp-projects-head bp-projects-row" aria-hidden="true"><span>Project</span><span>Open</span><span>For You</span><span>Deferred</span><span>Live / Parked</span><span>Agents now</span><span>Last change</span><span>Go</span></div>
+        <div id="projects-list"></div>
+      </div>
+    </details>
   </section>
   <section id="agents-view" hidden>
     <div id="agents-hero" class="bp-agents-hero" role="region" aria-label="Factory state">
