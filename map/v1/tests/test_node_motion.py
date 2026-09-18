@@ -181,5 +181,27 @@ class AttachMotionTests(unittest.TestCase):
         self.assertEqual(stamped['lots'][0]['motion']['motion'], 0)
 
 
+class Pc1561StrokeHonestyTests(unittest.TestCase):
+    """pc-1561 — live pulse stays truthful. No invented overlay ticks."""
+
+    def test_open_pile_is_not_a_live_pulse(self):
+        painted = classify_node_motion(
+            _project(open=40, attention=8, last_change={'at': (NOW - timedelta(days=5)).isoformat()}),
+            {'motion': 0, 'state': 'empty'},
+            now=NOW,
+        )
+        self.assertEqual(painted['stroke'], 'none')
+        self.assertEqual(painted['state'], 'quiet')
+        self.assertNotIn('overlay', painted)
+        self.assertNotIn('density', painted)
+
+    def test_live_threshold_is_still_the_pulse(self):
+        self.assertEqual(LIVE_MOTION, 3)
+        live = classify_node_motion(_project(), {'motion': LIVE_MOTION, 'state': 'healthy'}, now=NOW)
+        recent = classify_node_motion(_project(), {'motion': LIVE_MOTION - 1, 'state': 'healthy'}, now=NOW)
+        self.assertEqual(live['stroke'], 'live')
+        self.assertEqual(recent['stroke'], 'recent')
+
+
 if __name__ == '__main__':
     unittest.main()

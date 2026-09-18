@@ -55,11 +55,12 @@ html, body { margin: 0; height: 100%; background: var(--map-bg); color: var(--ma
 .map-lot-file-label {
   fill: var(--map-muted); font-size: 10px; pointer-events: none;
 }
-/* Issue #156 / Cap C8 — stroke = activity, thin only. Quiet nodes keep the
- * 1px rest stroke. Unavailable is dashed muted, never a fake zero glow.
- * Live/recent stay a thin accent (max 1.5px), never a bold ring — the
- * selected (2px) and focus-visible (3px) outlines stay the strongest marks
- * on the canvas so doors keep reading first. */
+/* Issue #156 / Cap C8 / pc-1561 verify — stroke = activity, thin only.
+ * Quiet nodes keep the 1px rest stroke. Unavailable is dashed muted, never
+ * a fake zero glow. Live/recent stay a thin accent (max 1.5px), never a
+ * bold ring, WO wall, Overview dump, or density overlay — selected (2px)
+ * and focus-visible (3px) outlines stay the strongest marks so doors keep
+ * reading first. */
 .map-lot.map-motion-recent .map-lot-plate,
 .map-dig-child.map-motion-recent .map-dig-plate,
 .map-project-node.map-motion-recent .map-hub-disc {
