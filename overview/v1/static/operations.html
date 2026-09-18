@@ -109,15 +109,15 @@
     <div id="agent-detail" class="bp-panel bp-agent-detail" hidden></div>
   </section>
   <section id="delivery-view" hidden>
-    <div id="delivery-hero" class="bp-delivery-hero" role="region" aria-label="Delivery evidence">
+    <div id="delivery-hero" class="bp-delivery-hero" role="region" aria-label="Delivery git evidence">
       <div id="delivery-hero-chips" class="bp-delivery-hero-chips"></div>
+      <p id="delivery-ci-spark" class="bp-muted bp-delivery-ci-spark" role="status"></p>
+      <p id="remote-status" role="status" class="bp-muted bp-delivery-status">Connecting to configured repositories…</p>
     </div>
-    <p id="remote-status" role="status" class="bp-muted">Connecting to configured repositories…</p>
-    <p id="delivery-ci-spark" class="bp-muted bp-delivery-ci-spark" role="status"></p>
+    <form class="bp-filters bp-delivery-facets" id="delivery-filters" role="search"><label>Repository<select id="delivery-repo"><option value="">All repositories</option></select></label><label>Type<select id="delivery-type"><option value="">All types</option><option value="pull_request">Pull requests</option><option value="workflow">CI checks</option><option value="release">Releases</option></select></label><label>Period<select id="delivery-period"><option value="">Last 14 days</option><option value="1">Last day</option><option value="3">Last 3 days</option><option value="7">Last 7 days</option></select></label><button id="delivery-clear-filters" type="button" class="bp-filter-chip" hidden>Clear filters</button></form>
     <details class="bp-source-strip bp-delivery-note"><summary>GitHub delivery evidence — not agent liveness</summary><p class="bp-muted">Pull requests, CI and remotes reported by GitHub. Event times are when GitHub recorded the change; fetched time is when this desk last read the cache. Installed revision appears only when a workspace deployment receipt matches a commit or release tag.</p></details>
-    <form class="bp-filters" id="delivery-filters" role="search"><label>Repository<select id="delivery-repo"><option value="">All repositories</option></select></label><label>Type<select id="delivery-type"><option value="">All types</option><option value="pull_request">Pull requests</option><option value="workflow">CI checks</option><option value="release">Releases</option></select></label><label>Period<select id="delivery-period"><option value="">Last 14 days</option><option value="1">Last day</option><option value="3">Last 3 days</option><option value="7">Last 7 days</option></select></label><button id="delivery-clear-filters" type="button" class="bp-filter-chip" hidden>Clear filters</button></form>
     <p id="delivery-boundary" class="bp-muted" hidden></p>
-    <div id="remote-repositories"></div>
+    <div id="remote-repositories" class="bp-delivery-ledger"></div>
   </section>
   <section id="timeline-view" hidden>
     <div id="timeline-hero" class="bp-timeline-hero" role="region" aria-label="Timeline activity">

@@ -212,6 +212,7 @@ const healthy = {
   repositories: [{
     repo: 'org/repo',
     state: 'connected',
+    branch: 'main',
     items: [],
     groups: [],
     summary: {open_prs: 2, recent_merges: 3, failed_checks: 2, pending_checks: 0},
@@ -235,7 +236,7 @@ assert.equal(chips.length, 3);
 assert.deepEqual(chips.map(chip => chip.dataset.kind), ['pr', 'ci', 'remote']);
 assert.equal(chips[0].textContent, 'PR2 open3 merged');
 assert.equal(chips[1].textContent, 'CI8 checks2 fails');
-assert.equal(chips[2].textContent, 'Remoteconnected1 remote');
+assert.equal(chips[2].textContent, 'Remoteconnectedmain');
 assert.equal(chips[0].href, '/delivery?type=pull_request');
 assert.equal(chips[1].href, '/delivery?type=workflow');
 assert.equal(chips[2].href, '/connections');
@@ -258,6 +259,7 @@ const emptyChips = get('delivery-hero-chips').querySelectorAll('.bp-delivery-her
 assert.equal(emptyChips[0].textContent, 'PRnone');
 assert.equal(emptyChips[1].textContent, 'CIno runs');
 assert.equal(emptyChips[2].textContent, 'Remoteconnected0 remotes');
+assert.ok(!emptyChips[2].textContent.includes('main'));
 
 runtime.paintDeliveryHero({state: 'unavailable', repositories: [], ci_spark: {
   days: Array(14).fill(0), fails: Array(14).fill(0), merges: Array(14).fill(0),
@@ -285,6 +287,8 @@ process.stdout.write(JSON.stringify({
   ci_href: chips[1].href,
   remote_href: chips[2].href,
   empty_pr: emptyChips[0].textContent,
+  empty_remote: emptyChips[2].textContent,
+  branch: chips[2].querySelector('.bp-delivery-hero-chip-secondary').textContent,
   unavailable: down,
   not_configured: none,
 }));

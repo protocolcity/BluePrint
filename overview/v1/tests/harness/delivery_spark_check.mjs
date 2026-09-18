@@ -235,6 +235,9 @@ assert.equal(links[2].target, '_blank');
 assert.equal(links[2].textContent, 'Open failing check');
 assert.ok(host.querySelector('.bp-delivery-ci-spark-line'), 'healthy paints glyphs');
 assert.equal(host.querySelector('.bp-delivery-ci-spark-line').dataset.tone, 'error');
+const bars = host.querySelector('.bp-delivery-ci-spark-bars');
+assert.ok(bars, 'healthy paints thin spark bars from existing days');
+assert.equal(bars.querySelectorAll('.bp-delivery-ci-spark-bar').length, 14);
 
 runtime.paintDeliverySpark({state: 'connected', repositories: [], ci_spark: {
   days: Array(14).fill(0), fails: Array(14).fill(0), merges: Array(14).fill(0),
@@ -279,6 +282,7 @@ process.stdout.write(JSON.stringify({
   out_href: links[2].href,
   out_label: links[2].textContent,
   has_glyphs: true,
+  has_bars: true,
   empty,
   unavailable,
   not_configured: notConfigured,
