@@ -6,7 +6,10 @@ import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
-from server.operations import operations_snapshot, store_last_change, WORKLANE_API_PATH
+from server.operations import (
+    operations_snapshot, store_last_change, WORKLANE_API_PATH,
+    PROBE_TIMEOUT_SECS, set_listen_port, origin_is_self,
+)
 from server.work_order import read_work_order
 
 class OperationsTests(unittest.TestCase):
@@ -986,6 +989,23 @@ class OperationsTests(unittest.TestCase):
         self.assertGreaterEqual(load['total'], 2)
         self.assertTrue(any(row['count'] for row in load['days']))
         self.assertEqual(result['calendar_doors']['due_count'] >= 1, True)
+
+    def test_self_listen_port_refuses_nested_probe(self):
+        (self.root/'local/worklane').mkdir(parents=True)
+        (self.root/'local/worklane/deployment.json').write_text(json.dumps({
+            'version':'0.1.7','port':8801}))
+        set_listen_port(8801)
+        self.addCleanup(lambda: set_listen_port(None))
+        self.assertTrue(origin_is_self('http://127.0.0.1:8801'))
+        self.assertLessEqual(PROBE_TIMEOUT_SECS, 1.0)
+        from urllib.error import URLError
+        with patch('server.operations.build_opener') as build_opener:
+            build_opener.return_value.open.side_effect=URLError('should not run')
+            result=operations_snapshot(self.root)
+        api=result['engines']['worklane_api']
+        self.assertEqual(api['state'],'unavailable')
+        self.assertIn('listen port', api['detail'].lower())
+        build_opener.return_value.open.assert_not_called()
 
 class TimestampAndParkMarkerTests(unittest.TestCase):
     """pc-1495 second-pass findings: "Parked by" must count as a park marker and
