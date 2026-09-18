@@ -121,7 +121,7 @@ const IDS = [
   'agents-next-fire', 'agents-pulse', 'agents-floor-remainder', 'agents-floor-empty', 'agents-floor-spark',
   'agents-quiet', 'agents-quiet-summary', 'agents-quiet-list', 'work-calendar-doors',
   'timeline-project', 'timeline-source', 'timeline-actor', 'timeline-list', 'timeline-sources',
-  'timeline-more', 'timeline-new-events', 'timeline-hero', 'timeline-doors', 'timeline-activity', 'timeline-activity-chart',
+  'timeline-more', 'timeline-stream-more', 'timeline-new-events', 'timeline-hero', 'timeline-doors', 'timeline-activity', 'timeline-activity-chart',
   'timeline-activity-summary', 'timeline-period', 'timeline-note', 'calendar-project', 'calendar-today', 'calendar-next',
   'calendar-past', 'calendar-prev-week', 'calendar-next-week', 'calendar-today-btn',
   'calendar-today-heading', 'calendar-next-heading', 'calendar-past-summary', 'calendar-past-wrap',
