@@ -2264,8 +2264,11 @@ class DeliveryCiSparkTests(unittest.TestCase):
         projects = _HTML.split('id="projects-view"')[1].split('id="agents-view"')[0]
         timeline = _HTML.split('id="timeline-view"')[1].split('id="connections-view"')[0]
         calendar = _HTML.split('id="calendar-view"')[1].split('id="settings-view"')[0]
+        hero = delivery.split('id="delivery-hero"')[1].split('id="delivery-filters"')[0]
         self.assertIn('id="delivery-ci-spark"', delivery)
-        self.assertLess(delivery.index('id="remote-status"'), delivery.index('id="delivery-ci-spark"'))
+        self.assertIn('id="delivery-ci-spark"', hero)
+        self.assertLess(delivery.index('id="delivery-hero-chips"'), delivery.index('id="delivery-ci-spark"'))
+        self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="remote-status"'))
         self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="delivery-filters"'))
         self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="remote-repositories"'))
         self.assertEqual(_HTML.count('id="delivery-ci-spark"'), 1)
@@ -2301,6 +2304,8 @@ class DeliveryCiSparkTests(unittest.TestCase):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
         self.assertIn('.bp-delivery-ci-spark', css)
         self.assertIn('.bp-delivery-ci-spark-line', css)
+        self.assertIn('.bp-delivery-ci-spark-bars', css)
+        self.assertIn('.bp-delivery-ci-spark-bar', css)
         self.assertIn('id="overview-throughput"', _HTML)
         self.assertIn('id="agents-floor-spark"', _HTML)
         self.assertIn('id="agents-pulse"', _HTML)
@@ -2338,6 +2343,7 @@ class DeliveryCiSparkTests(unittest.TestCase):
         self.assertEqual(result['out_href'], 'https://github.com/org/repo/actions/runs/9')
         self.assertEqual(result['out_label'], 'Open failing check')
         self.assertTrue(result['has_glyphs'])
+        self.assertTrue(result['has_bars'])
         self.assertEqual(result['empty'], 'No CI runs in the last 14 days')
         self.assertEqual(result['unavailable'], 'CI unavailable')
         self.assertEqual(result['not_configured'], 'CI not configured')
@@ -2360,8 +2366,15 @@ class DeliveryHeroTests(unittest.TestCase):
         self.assertIn('id="delivery-hero"', delivery)
         self.assertIn('id="delivery-hero-chips"', delivery)
         self.assertIn('id="delivery-ci-spark"', delivery)
+        self.assertIn('Delivery git evidence', delivery)
+        self.assertIn('bp-delivery-facets', delivery)
+        self.assertIn('bp-delivery-ledger', delivery)
+        hero = delivery.split('id="delivery-hero"')[1].split('id="delivery-filters"')[0]
+        self.assertIn('id="delivery-ci-spark"', hero)
+        self.assertIn('id="remote-status"', hero)
         self.assertLess(delivery.index('id="delivery-hero"'), delivery.index('id="remote-status"'))
         self.assertLess(delivery.index('id="delivery-hero-chips"'), delivery.index('id="delivery-ci-spark"'))
+        self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="remote-status"'))
         self.assertLess(delivery.index('id="delivery-ci-spark"'), delivery.index('id="delivery-filters"'))
         self.assertLess(delivery.index('id="delivery-filters"'), delivery.index('id="remote-repositories"'))
         self.assertEqual(_HTML.count('id="delivery-hero"'), 1)
@@ -2378,6 +2391,9 @@ class DeliveryHeroTests(unittest.TestCase):
     def test_paint_uses_pr_ci_remote_doors_not_worklane_triage(self):
         self.assertIn('function paintDeliveryHero(', _SRC)
         self.assertIn('function deliveryHeroFromRemote(', _SRC)
+        self.assertIn('function deliveryHeroBranch(', _SRC)
+        self.assertIn('function deliveryRemoteSecondary(', _SRC)
+        self.assertIn('function deliverySparkBars(', _SRC)
         chip = _SRC.split('function deliveryHeroChip(')[1].split('function paintDeliveryHero(')[0]
         self.assertIn('node.dataset.kind=kind', chip.replace(' ', ''))
         paint = _SRC.split('function paintDeliveryHero(')[1].split('function paintDeliverySpark(')[0]
@@ -2434,13 +2450,69 @@ class DeliveryHeroTests(unittest.TestCase):
         self.assertEqual(result['kinds'], ['pr', 'ci', 'remote'])
         self.assertEqual(result['healthy_pr'], 'PR2 open3 merged')
         self.assertEqual(result['healthy_ci'], 'CI8 checks2 fails')
-        self.assertEqual(result['healthy_remote'], 'Remoteconnected1 remote')
+        self.assertEqual(result['healthy_remote'], 'Remoteconnectedmain')
         self.assertEqual(result['pr_href'], '/delivery?type=pull_request')
         self.assertEqual(result['ci_href'], '/delivery?type=workflow')
         self.assertEqual(result['remote_href'], '/connections')
         self.assertEqual(result['empty_pr'], 'PRnone')
         self.assertEqual(result['unavailable'], ['PRunavailable', 'CIunavailable', 'Remoteunavailable'])
         self.assertEqual(result['not_configured'], ['PRnot configured', 'CInot configured', 'Remotenot configured'])
+        self.assertEqual(result['branch'], 'main')
+        self.assertEqual(result['empty_remote'], 'Remoteconnected0 remotes')
+
+
+class DeliveryGitEvidenceVisualFinishTests(unittest.TestCase):
+    """Delivery git-evidence mock-parity: PR/CI/remote chips + thin CI spark
+    are the first-read hero. Not a WorkLane triage dump."""
+
+    def test_first_read_is_git_evidence_hero_not_worklane_dump(self):
+        delivery = _HTML.split('id="delivery-view"')[1].split('id="timeline-view"')[0]
+        self.assertIn('Delivery git evidence', delivery)
+        self.assertIn('id="delivery-hero-chips"', delivery)
+        self.assertIn('id="delivery-ci-spark"', delivery)
+        self.assertIn('bp-delivery-facets', delivery)
+        self.assertIn('bp-delivery-ledger', delivery)
+        self.assertLess(delivery.index('id="delivery-hero"'), delivery.index('id="delivery-filters"'))
+        self.assertLess(delivery.index('id="delivery-filters"'), delivery.index('id="remote-repositories"'))
+        self.assertNotIn('id="work-band-act-now"', delivery)
+        self.assertNotIn('id="for-you-decide"', delivery)
+        self.assertNotIn('wo-tile', delivery)
+        self.assertNotIn('Act now', delivery)
+
+    def test_css_weights_hero_over_quiet_filters_and_ledger(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-delivery-hero', css)
+        self.assertIn('.bp-delivery-ci-spark-bars', css)
+        self.assertIn('.bp-delivery-facets', css)
+        self.assertIn('.bp-delivery-ledger', css)
+        self.assertIn('#delivery-view .bp-delivery-repo', css)
+        hero = css.split('.bp-delivery-hero-chip-primary')[1].split('}')[0]
+        self.assertIn('font-size: 20px', hero)
+        filters = css.split('#delivery-view .bp-filters input')[1].split('}')[0]
+        self.assertIn('min-height: 32px', filters)
+
+    def test_paint_keeps_spark_peels_and_branch_honesty(self):
+        self.assertIn('function paintDeliverySpark(', _SRC)
+        self.assertIn('function deliverySparkBars(', _SRC)
+        self.assertIn('function deliveryHeroBranch(', _SRC)
+        self.assertIn('function deliveryRemoteSecondary(', _SRC)
+        self.assertIn('No CI runs in the ', _SRC)
+        self.assertIn('CI unavailable', _SRC)
+        self.assertIn('CI not configured', _SRC)
+        paint = _SRC.split('function paintDeliveryHero(')[1].split('function paintDeliverySpark(')[0]
+        self.assertNotIn('Needs you', paint)
+        self.assertNotIn('Act now', paint)
+        self.assertNotIn('For You', paint)
+        self.assertNotIn('seat', paint.lower())
+
+    def test_does_not_regress_neighbor_surfaces(self):
+        self.assertIn('id="overview-throughput"', _HTML)
+        self.assertIn('id="work-flow"', _HTML)
+        self.assertIn('id="agents-pulse"', _HTML)
+        self.assertIn('id="calendar-hero"', _HTML)
+        self.assertIn('id="timeline-activity-chart"', _HTML)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('POS', _HTML)
 
 
 class CalendarLoadBarTests(unittest.TestCase):

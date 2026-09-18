@@ -3139,18 +3139,47 @@ function deliverySparkGlyphs(values) {
   if(!peak) return '';
   return series.map(n=>SPARK_BLOCKS[Math.min(7, Math.round((n/peak)*7))]).join('');
 }
+function deliverySparkBars(spark) {
+  const days=Array.isArray(spark?.days) ? spark.days : [];
+  const fails=Array.isArray(spark?.fails) ? spark.fails : [];
+  if(!days.some(n=>Number(n)>0)) return null;
+  const peak=Math.max(1, ...days.map(n=>Number(n)||0));
+  const wrap=el('span', undefined, 'bp-delivery-ci-spark-bars');
+  wrap.setAttribute('aria-hidden','true');
+  days.forEach((n,i)=>{
+    const count=Number(n)||0;
+    const bar=el('span', undefined, 'bp-delivery-ci-spark-bar');
+    bar.style.height=`${Math.max(count?3:2, Math.round((count/peak)*16))}px`;
+    if((Number(fails[i])||0)>0) bar.dataset.tone='error';
+    if(!count) bar.dataset.empty='true';
+    wrap.append(bar);
+  });
+  return wrap;
+}
 function deliveryHeroRepos(data) {
   return (data.repositories || []).filter(repo=>!deliveryRepo || repo.repo===deliveryRepo);
 }
+function deliveryHeroBranch(repos) {
+  const names=[...new Set((repos||[]).map(repo=>String(repo.branch||'').trim()).filter(Boolean))];
+  return names.length===1 ? names[0] : '';
+}
+function deliveryRemoteSecondary(hero) {
+  const remotes=Number(hero.remotes)||0;
+  const branch=String(hero.branch||'').trim();
+  if(remotes===1 && branch) return branch;
+  const count=remotes===1 ? '1 remote' : `${remotes} remotes`;
+  return branch ? `${count} · ${branch}` : count;
+}
 function deliveryHeroFromRemote(data) {
-  if(!data) return {state:'unavailable', remote_state:'unavailable', open_prs:0, merges:0, checks:0, failures:0, remotes:0};
+  if(!data) return {state:'unavailable', remote_state:'unavailable', open_prs:0, merges:0, checks:0, failures:0, remotes:0, branch:''};
   const remoteState=String(data.state || 'unknown');
-  if(remoteState==='not_configured') return {state:'not_configured', remote_state:remoteState, open_prs:0, merges:0, checks:0, failures:0, remotes:0};
-  if(remoteState==='unavailable' || remoteState==='invalid_config') return {state:'unavailable', remote_state:'unavailable', open_prs:0, merges:0, checks:0, failures:0, remotes:0};
+  if(remoteState==='not_configured') return {state:'not_configured', remote_state:remoteState, open_prs:0, merges:0, checks:0, failures:0, remotes:0, branch:''};
+  if(remoteState==='unavailable' || remoteState==='invalid_config') return {state:'unavailable', remote_state:'unavailable', open_prs:0, merges:0, checks:0, failures:0, remotes:0, branch:''};
+  const repos=deliveryHeroRepos(data);
   const spark=deliverySparkFromRemote(data);
-  if(spark.state==='unavailable') return {state:'unavailable', remote_state:remoteState, open_prs:0, merges:0, checks:0, failures:0, remotes:deliveryHeroRepos(data).length};
+  if(spark.state==='unavailable') return {state:'unavailable', remote_state:remoteState, open_prs:0, merges:0, checks:0, failures:0, remotes:repos.length, branch:deliveryHeroBranch(repos)};
   let open=0, merges=0;
-  for(const repo of deliveryHeroRepos(data)) {
+  for(const repo of repos) {
     const summary=repo.summary || {};
     open += Number(summary.open_prs) || 0;
     merges += Number(summary.recent_merges) || 0;
@@ -3163,7 +3192,8 @@ function deliveryHeroFromRemote(data) {
     merges,
     checks: Number(spark.checks) || 0,
     failures: Number(spark.failures) || 0,
-    remotes: deliveryHeroRepos(data).length,
+    remotes: repos.length,
+    branch: deliveryHeroBranch(repos),
   };
 }
 function deliveryHeroChip(kind, name, primary, secondary, href, tone) {
@@ -3206,7 +3236,7 @@ function paintDeliveryHero(data) {
   const ciTone=hero.failures ? 'error' : (hero.checks ? 'working' : 'muted');
   host.append(deliveryHeroChip('ci','CI', ciPrimary, ciSecondary, deliverySparkHref('workflow'), ciTone));
   const remoteLabel=hero.remote_state.replaceAll('_',' ');
-  const remoteSecondary=hero.remotes===1 ? '1 remote' : `${hero.remotes} remotes`;
+  const remoteSecondary=deliveryRemoteSecondary(hero);
   const remoteTone=hero.remote_state==='connected' ? 'working' : (hero.remote_state==='partial' ? 'partial' : 'muted');
   host.append(deliveryHeroChip('remote','Remote', remoteLabel, remoteSecondary, '/connections', remoteTone));
 }
@@ -3248,6 +3278,8 @@ function paintDeliverySpark(data) {
       line.setAttribute('aria-hidden','true');
       host.append(line);
     }
+    const bars=deliverySparkBars(spark);
+    if(bars) host.append(bars);
   } else {
     host.append(document.createTextNode('No CI runs in the '+window));
   }
