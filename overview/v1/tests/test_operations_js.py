@@ -1413,12 +1413,12 @@ class TimelineDensityCapTests(unittest.TestCase):
         self.assertIn('function capTimelineDays(', _SRC)
         self.assertIn('function paintTimelineRemainder(', _SRC)
         self.assertIn('function expandTimelineStream(', _SRC)
-        self.assertIn("'+'+remainder+' more'", compact)
+        self.assertIn("'+' + remainder + ' more'", _SRC)
         self.assertIn('bp-timeline-remainder', _SRC)
         timeline = _SRC.split('function timeline()')[1].split('function timelineFilterParams')[0]
         self.assertIn('capTimelineDays(', timeline)
         self.assertIn('paintTimelineRemainder(', timeline)
-        self.assertIn('timelineMore && capped.remainder === 0', timeline.replace(' ', ''))
+        self.assertIn('timelineMore&&capped.remainder===0', timeline.replace(' ', ''))
         self.assertIn('resetTimelineStreamWindow()', _SRC)
         paint = _SRC.split('function paintTimelineDoors(')[1].split('function paintTimelineActivityLine(')[0]
         self.assertIn("'WorkLane firings'", paint)
