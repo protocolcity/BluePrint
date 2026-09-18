@@ -8,7 +8,7 @@ const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStr
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','One Agenda — the factory clock for dated work and next fire on this desk.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you and what\'s moving.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','Working, idle, and error on this floor — from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
+const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','Events by time — WorkLane, WorkForce, supervisor and GitHub firings on one spine.'],calendar:['Calendar','One Agenda — the factory clock for dated work and next fire on this desk.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you and what\'s moving.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','Working, idle, and error on this floor — from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
 let agentsView = 'floor';
@@ -2334,14 +2334,33 @@ function timelineHeadline(row) {
   return `${timelineActionLabel(row)} · ${row.title}`;
 }
 function timelineMeta(row) {
-  return [row.project || 'desk', row.actor, date(row.at)].filter(Boolean).join(' · ');
+  return [row.project || 'desk', row.actor].filter(Boolean).join(' · ');
 }
-// Headline (action + work/project/actor) carries the action word exactly
-// once; the badge names the source instead of repeating it (pc-1488
-// Done-when: avoid repeated status/badge words).
+function timelineClock(row) {
+  const stamp = Date.parse(row.at);
+  if (Number.isNaN(stamp)) return '';
+  return new Date(stamp).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+}
+function timelineDayKey(row) {
+  const stamp = Date.parse(row.at);
+  if (Number.isNaN(stamp)) return 'unknown';
+  return new Date(stamp).toISOString().slice(0, 10);
+}
+function timelineDayLabel(key) {
+  if (!key || key === 'unknown') return 'Untimed';
+  const stamp = Date.parse(key + 'T00:00:00Z');
+  if (Number.isNaN(stamp)) return key;
+  return new Date(stamp).toLocaleDateString([], {weekday: 'short', month: 'short', day: 'numeric'});
+}
+// Headline (action + work) carries the action word exactly once; the
+// badge names the source instead of repeating it. Time sits on the rail
+// so the stream reads as events by time, not a quiet work-order list.
 function timelineRow(row) {
-  const node = el('article', undefined, 'bp-order');
-  const content = el('div');
+  const node = el('article', undefined, 'bp-order bp-timeline-event');
+  node.dataset.source = row.source || '';
+  const time = el('time', timelineClock(row), 'bp-timeline-time');
+  if (row.at) time.setAttribute('datetime', row.at);
+  const content = el('div', undefined, 'bp-timeline-event-body');
   content.append(el('strong', timelineHeadline(row)));
   content.append(el('span', timelineMeta(row), 'bp-order-meta'));
   // The full original comment is never clipped away: a short headline is
@@ -2353,13 +2372,13 @@ function timelineRow(row) {
   }
   const sourceBadge = badge(row.source, SOURCE_LABEL[row.source] || row.source);
   if (row.event_title) sourceBadge.title = row.event_title;
-  node.append(content, sourceBadge);
   if (row.link?.href) {
     const href = row.link.href;
     const linkNode = link(row.link.label || 'Open', row.link.external ? href : readerHref(href), 'bp-order-link');
     if (row.link.external) { linkNode.target = '_blank'; linkNode.rel = 'noopener noreferrer'; }
-    node.append(linkNode);
+    content.append(linkNode);
   }
+  node.append(time, content, sourceBadge);
   return node;
 }
 // Consecutive rows sharing a verified correlation key (WorkForce
@@ -2386,6 +2405,26 @@ function timelineGroupNode(group) {
   const actions = group.rows.map(timelineActionLabel).join(' → ');
   wrap.append(el('summary', `${group.rows.length} events · ${head.title} · ${actions}`));
   for (const row of group.rows) wrap.append(timelineRow(row));
+  return wrap;
+}
+function buildTimelineDays(rows) {
+  const days = [];
+  for (const group of buildTimelineGroups(rows)) {
+    const key = timelineDayKey(group.rows[0]);
+    const last = days[days.length - 1];
+    if (last && last.key === key) last.groups.push(group);
+    else days.push({id: 'day:' + key + ':' + group.id, key, groups: [group]});
+  }
+  return days;
+}
+function timelineDayNode(day) {
+  const wrap = el('section', undefined, 'bp-timeline-day');
+  wrap.dataset.day = day.key;
+  const count = day.groups.reduce((sum, group) => sum + group.rows.length, 0);
+  wrap.append(el('h3', `${timelineDayLabel(day.key)} · ${count}`, 'bp-timeline-day-head'));
+  const rail = el('div', undefined, 'bp-timeline-rail');
+  for (const group of day.groups) rail.append(timelineGroupNode(group));
+  wrap.append(rail);
   return wrap;
 }
 function timelinePeriodCutoff() {
@@ -2449,12 +2488,13 @@ function timelineWorkHref() {
   if (timelineProject) return '/work?' + new URLSearchParams({project: timelineProject});
   return '/work';
 }
-function timelineDoorChip(kind, name, primary, href, tone) {
+function timelineDoorChip(kind, name, primary, href, tone, secondary) {
   const node = link('', href, 'bp-timeline-door');
   node.dataset.kind = kind;
   node.dataset.tone = tone;
   node.append(el('span', name, 'bp-timeline-door-name'));
   node.append(el('span', primary, 'bp-timeline-door-primary'));
+  if (secondary) node.append(el('span', secondary, 'bp-timeline-door-secondary'));
   return node;
 }
 function paintTimelineDoors() {
@@ -2475,8 +2515,8 @@ function paintTimelineDoors() {
   const deliveryCount = Number(doors.delivery_count) || 0;
   const workPrimary = workCount ? `${workCount} event${workCount === 1 ? '' : 's'}` : 'none';
   const deliveryPrimary = deliveryCount ? `${deliveryCount} event${deliveryCount === 1 ? '' : 's'}` : 'none';
-  host.append(timelineDoorChip('work', 'Work', workPrimary, doors.work_href || timelineWorkHref(), workCount ? 'open' : 'muted'));
-  host.append(timelineDoorChip('delivery', 'Delivery', deliveryPrimary, doors.delivery_href || '/delivery', deliveryCount ? 'open' : 'muted'));
+  host.append(timelineDoorChip('work', 'Work', workPrimary, doors.work_href || timelineWorkHref(), workCount ? 'open' : 'muted', 'WorkLane firings'));
+  host.append(timelineDoorChip('delivery', 'Delivery', deliveryPrimary, doors.delivery_href || '/delivery', deliveryCount ? 'open' : 'muted', 'GitHub firings'));
 }
 function paintTimelineActivityLine(chart, buckets, peak) {
   const wrap = el('div', undefined, 'bp-timeline-hist-line');
@@ -2544,14 +2584,22 @@ function paintTimelineActivity() {
   chart.replaceChildren();
   buckets.forEach((bucket, index) => {
     const count = Number(bucket.count) || 0;
-    const col = el('div', undefined, 'bp-timeline-hist-col');
+    const col = el('button', undefined, 'bp-timeline-hist-col');
+    col.type = 'button';
+    col.dataset.day = String(bucket.start || '').slice(0, 10);
+    if (index === buckets.length - 1) col.dataset.now = 'true';
+    col.title = `${count} · ${date(bucket.start)}`;
+    col.addEventListener('click', () => {
+      const target = document.querySelector(`#timeline-list [data-day="${col.dataset.day}"]`);
+      if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({block: 'nearest'});
+    });
     const track = el('div', undefined, 'bp-timeline-hist-track');
     const bar = el('div', undefined, 'bp-timeline-hist-bar');
     bar.style.height = `${Math.round((count / peak) * 100)}%`;
     bar.dataset.empty = count ? 'false' : 'true';
-    bar.title = `${count} · ${date(bucket.start)}`;
     track.append(bar);
     col.append(track);
+    if (count) col.append(el('span', String(count), 'bp-timeline-hist-count'));
     const label = timelineActivityLabel(bucket, series.grain, index, buckets.length);
     if (label) col.append(el('span', label, 'bp-timeline-hist-label'));
     chart.append(col);
@@ -2559,8 +2607,8 @@ function paintTimelineActivity() {
   paintTimelineActivityLine(chart, buckets, peak);
 }
 function timeline() {
-  const groups = buildTimelineGroups(timelineVisibleRows());
-  reconcileList($('timeline-list'), groups, g => g.id, timelineGroupNode, {emptyText: 'No timeline rows in the readable window.'});
+  const days = buildTimelineDays(timelineVisibleRows());
+  reconcileList($('timeline-list'), days, d => d.id, timelineDayNode, {emptyText: 'No timeline rows in the readable window.'});
   timelineSources();
   paintTimelineDoors();
   paintTimelineActivity();

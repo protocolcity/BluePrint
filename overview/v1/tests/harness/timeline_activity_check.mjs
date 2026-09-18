@@ -142,12 +142,15 @@ const quietActivity = {
   window: series('day', 14, []),
 };
 
-function row(id, at, title) {
-  return {id, at, source: 'worklane', project: 'blueprint', actor: 'you', event: 'filed', title, link: {}};
+function row(id, at, title, source = 'worklane') {
+  return {id, at, source, project: 'blueprint', actor: 'you', event: 'filed', title, link: {}};
 }
 
 const busyPage = {
-  rows: [row('r1', '2026-09-17T14:10:00Z', 'Claim')],
+  rows: [
+    row('r1', '2026-09-17T14:10:00Z', 'Claim'),
+    row('r2', '2026-09-16T10:00:00Z', 'Opened', 'github'),
+  ],
   sources: [],
   next_cursor: null,
   activity: busyActivity,
@@ -287,18 +290,29 @@ const healthyDelivery = doorText(healthyDoors[1]);
 const workHref = healthyDoors[0].href;
 const deliveryHref = healthyDoors[1].href;
 const hasLine = get('timeline-activity-chart').querySelectorAll('.bp-timeline-hist-line').length > 0;
-assert.equal(healthyWork, 'Work2 events');
-assert.equal(healthyDelivery, 'Delivery3 events');
+const histCounts = get('timeline-activity-chart').querySelectorAll('.bp-timeline-hist-count').length;
+const days = get('timeline-list').querySelectorAll('.bp-timeline-day');
+const hasRail = get('timeline-list').querySelectorAll('.bp-timeline-rail').length > 0;
+const eventTimes = get('timeline-list').querySelectorAll('.bp-timeline-time').length;
+const sourceLabels = get('timeline-list').querySelectorAll('.bp-badge').length;
+assert.equal(healthyWork, 'Work2 eventsWorkLane firings');
+assert.equal(healthyDelivery, 'Delivery3 eventsGitHub firings');
 assert.equal(hasLine, true);
+assert.equal(histCounts, 4);
+assert.equal(days.length, 2);
+assert.equal(hasRail, true);
+assert.equal(eventTimes, 2);
+assert.equal(sourceLabels, 2);
 
 runtime.applyTimeline({rows: [], sources: [], next_cursor: null, activity: quietActivity});
 runtime.timeline();
 assert.equal(get('timeline-activity-summary').textContent, 'Quiet in this window.');
 assert.equal(get('timeline-activity-chart').hidden, true);
 assert.equal(get('timeline-activity-chart').querySelectorAll('.bp-timeline-hist-col').length, 0);
+assert.equal(get('timeline-list').textContent, 'No timeline rows in the readable window.');
 const quietDoors = get('timeline-doors').children;
-assert.equal(doorText(quietDoors[0]), 'Worknone');
-assert.equal(doorText(quietDoors[1]), 'Deliverynone');
+assert.equal(doorText(quietDoors[0]), 'WorknoneWorkLane firings');
+assert.equal(doorText(quietDoors[1]), 'DeliverynoneGitHub firings');
 
 runtime.applyTimeline(null);
 runtime.timeline();
@@ -321,7 +335,13 @@ process.stdout.write(JSON.stringify({
   work_href: workHref,
   delivery_href: deliveryHref,
   has_line: hasLine,
-  quiet_work: 'Worknone',
-  quiet_delivery: 'Deliverynone',
+  hist_counts: histCounts,
+  day_count: days.length,
+  has_rail: hasRail,
+  event_times: eventTimes,
+  source_labels: sourceLabels,
+  quiet_work: 'WorknoneWorkLane firings',
+  quiet_delivery: 'DeliverynoneGitHub firings',
+  quiet_stream: 'No timeline rows in the readable window.',
   unavailable_doors: unavailableDoors,
 }));
