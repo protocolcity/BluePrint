@@ -1067,6 +1067,13 @@ class ProjectsSurfaceHarnessTests(unittest.TestCase):
         self.assertTrue(self.result['compare_has_work_door'])
         self.assertTrue(self.result['compare_skips_quiet'])
 
+    def test_hero_pulse_and_closed_breakdown_are_first_read(self) -> None:
+        self.assertEqual(self.result['hero_pulse_tiles'], 3)
+        self.assertTrue(self.result['hero_has_hot'])
+        self.assertTrue(self.result['compare_card_has_pulse'])
+        self.assertFalse(self.result['breakdown_door_open'])
+        self.assertRegex(self.result['breakdown_summary'], r'Breakdown · 7 stores')
+
 
 class ConnectionsEngineTests(unittest.TestCase):
     def test_engine_list_paints_versions_reachability_and_supervisor(self):
@@ -2445,7 +2452,7 @@ class ProjectsPortfolioSparkTests(unittest.TestCase):
         agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
         self.assertIn('id="projects-compare"', projects)
         self.assertIn('id="projects-compare-summary"', projects)
-        self.assertLess(projects.index('id="projects-summary"'), projects.index('id="projects-compare"'))
+        self.assertLess(projects.index('id="projects-hero"'), projects.index('id="projects-compare"'))
         self.assertLess(projects.index('id="projects-compare"'), projects.index('id="projects-list"'))
         self.assertEqual(_HTML.count('id="projects-compare"'), 1)
         self.assertNotIn('id="projects-compare"', work)
@@ -2491,6 +2498,93 @@ class ProjectsPortfolioSparkTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
         self.assertNotIn('n8n', _HTML.lower())
         self.assertNotIn('WORKFLOWS', _HTML)
+        self.assertNotIn('POS', _HTML)
+
+
+class ProjectsPortfolioHeroTests(unittest.TestCase):
+    """pc-1562 / CAP_ACQUAINTANCE_052 C9: card/bar portfolio is the first-read
+    hero. Dense table stays behind Breakdown. No hire wall, invented
+    metrics, Overview/Work dump, POS, or drag editor."""
+
+    def test_card_bar_hero_is_first_read_with_hot_blocked_quiet(self):
+        projects = _HTML.split('id="projects-view"')[1].split('id="agents-view"')[0]
+        hero = projects.split('id="projects-hero"', 1)[1].split('id="projects-summary"', 1)[0]
+        self.assertIn('class="bp-projects-hero"', projects)
+        self.assertIn('Projects portfolio', projects)
+        self.assertIn('id="projects-pulse"', hero)
+        self.assertIn('id="projects-compare-summary"', hero)
+        self.assertIn('id="projects-compare"', hero)
+        self.assertNotIn('id="projects-list"', hero)
+        self.assertNotIn('Hire…', hero)
+        self.assertNotIn('id="for-you-decide"', hero)
+        self.assertNotIn('id="work-band-act-now"', hero)
+        self.assertLess(projects.index('id="projects-hero"'), projects.index('id="projects-pulse"'))
+        self.assertLess(projects.index('id="projects-pulse"'), projects.index('id="projects-compare"'))
+        self.assertLess(projects.index('id="projects-compare"'), projects.index('id="projects-breakdown-door"'))
+        self.assertLess(projects.index('id="projects-hero"'), projects.index('id="projects-list"'))
+        self.assertEqual(_HTML.count('id="projects-hero"'), 1)
+        self.assertNotIn('id="projects-hero"', _HTML.split('id="overview-view"')[1].split('id="work-view"')[0])
+        self.assertNotIn('id="projects-hero"', _HTML.split('id="work-view"')[1].split('id="projects-view"')[0])
+        self.assertNotIn('id="projects-hero"', _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0])
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('pc-1562', css)
+        self.assertIn('.bp-projects-hero', css)
+        self.assertIn('.bp-projects-compare-head', css)
+        hero_css = css[css.index('.bp-projects-hero {'):css.index('.bp-projects-compare-summary')]
+        self.assertIn('border: 1px solid var(--ov-tile-border-strong)', hero_css)
+        self.assertIn('font-size: 32px', hero_css)
+        self.assertNotIn('#fff', hero_css)
+
+    def test_table_stays_behind_closed_breakdown_door(self):
+        projects = _HTML.split('id="projects-view"')[1].split('id="agents-view"')[0]
+        door_tag = re.search(r'<details[^>]*id="projects-breakdown-door"[^>]*>', projects)
+        self.assertIsNotNone(door_tag)
+        self.assertNotIn(' open', door_tag.group(0))
+        self.assertIn('class="bp-projects-door"', projects)
+        self.assertIn('id="projects-breakdown-summary"', projects)
+        door = projects.split('id="projects-breakdown-door"', 1)[1]
+        self.assertIn('id="projects-list"', door)
+        self.assertIn('bp-projects-head', door)
+        self.assertNotIn('<h2>Breakdown</h2>', projects)
+        paint = _SRC.split('function paintProjectsBreakdownDoor(')[1].split('function paintProjectsCompare(')[0]
+        self.assertIn('pc-1562', paint)
+        self.assertIn('Breakdown · no stores', paint)
+        self.assertIn('Breakdown · 1 store', paint)
+        self.assertIn('Breakdown · ', paint)
+        self.assertNotIn('Hire', paint)
+        self.assertNotIn('missing staff', paint)
+
+    def test_paint_uses_existing_pulse_counts_and_open_for_you_weight(self):
+        self.assertIn('function paintProjectsPulse()', _SRC)
+        self.assertIn('function paintProjectsBreakdownDoor(', _SRC)
+        fn = _SRC.split('function projects()')[1].split('function overviewDecideRow')[0]
+        self.assertIn('paintProjectsPulse()', fn)
+        self.assertIn('paintProjectsCompare()', fn)
+        self.assertIn('paintProjectsBreakdownDoor(', fn)
+        self.assertLess(fn.index('paintProjectsPulse()'), fn.index('paintProjectsCompare()'))
+        self.assertLess(fn.index('paintProjectsCompare()'), fn.index('paintProjectsBreakdownDoor('))
+        pulse = _SRC.split('function paintProjectsPulse()')[1].split('function paintProjectsBreakdownDoor(')[0]
+        self.assertIn("'Hot'", pulse)
+        self.assertIn("'Blocked'", pulse)
+        self.assertIn("'Quiet'", pulse)
+        self.assertIn('data.hot', pulse)
+        self.assertIn('data.blocked', pulse)
+        self.assertIn('data.quiet', pulse)
+        self.assertIn("data.state==='unavailable'", pulse.replace(' ', ''))
+        self.assertIn('Portfolio unavailable', pulse)
+        self.assertNotIn('Hire', pulse)
+        self.assertNotIn('n8n', pulse.lower())
+        self.assertNotIn('Act now', pulse)
+        compare = _SRC.split('function paintProjectsCompare()')[1].split('function projectComparisonRow')[0]
+        self.assertIn('stackedOpenBar(', compare)
+        self.assertIn('For You', compare)
+        self.assertIn('bp-projects-spark-line', compare)
+        self.assertIn("row.pulse!=='quiet'", compare.replace(' ', ''))
+        self.assertNotIn('draggable', compare)
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('point of sale', _HTML.lower())
         self.assertNotIn('POS', _HTML)
 
 
