@@ -95,7 +95,8 @@
 .bp-agents-floor-spark-line { letter-spacing: .02em; font-size: 14px; line-height: 1; color: var(--ov-state-working); animation: bp-spark-in 400ms ease-out; }
 .bp-agents-floor-spark-line[data-tone="error"] { color: var(--ov-state-error); }
 .bp-agents-floor-fail { color: var(--ov-state-error); font-variant-numeric: tabular-nums; }
-/* Agents Floor scarcity: factory hero first, coverage/hire behind a door. */
+/* Agents Floor first-glance (pc-1559 / end-03): live strip + spark is the
+   only hero. Coverage / Hire / ops legend stay behind a closed door. */
 .bp-agents-hero {
   margin: 2px 0 14px;
   padding: 16px 18px 14px;
@@ -103,6 +104,12 @@
   border-radius: 8px;
   background: var(--ov-tile-bg);
 }
+.bp-agents-hero .bp-agents-floor-spark {
+  margin: 12px 0 0;
+  font-size: 15px;
+  color: var(--ov-fg);
+}
+.bp-agents-hero .bp-agents-floor-spark-line { font-size: 16px; }
 .bp-agents-hero .bp-agents-pulse {
   margin: 0;
   border: 0;
