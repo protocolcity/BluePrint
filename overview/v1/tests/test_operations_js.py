@@ -1954,7 +1954,8 @@ class AgentsLiveFloorTests(unittest.TestCase):
         self.assertEqual(result['floor_spark_when_quiet'], '')
         self.assertEqual(result['dispatch_secondary'], 'Dispatch now')
         self.assertFalse(result['coverage_door_open'])
-        self.assertEqual(result['coverage_door'], 'Coverage · 1 project · 1 missing staff')
+        self.assertEqual(result['coverage_door'], 'Coverage · 1 project')
+        self.assertFalse(result['coverage_door_bulletin'])
         self.assertEqual(result['coverage_door_empty'], 'Coverage · none reported')
 
 
@@ -2993,6 +2994,70 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertTrue(result['floor_hero'])
         self.assertTrue(result['coverage_door_closed'])
         self.assertEqual(result['soft_poll_pulse'], ['0Working', '1Idle', '0Error'])
+
+
+class AgentsFloorFirstGlanceTests(unittest.TestCase):
+    """pc-1559 Agents Floor first-glance (end-03): live strip hero only, no ops bulletin."""
+
+    def test_live_strip_and_spark_are_the_only_hero(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        hero = agents.split('id="agents-hero"', 1)[1].split('id="agents-face"', 1)[0]
+        self.assertIn('class="bp-agents-hero"', agents)
+        self.assertIn('id="agents-pulse"', hero)
+        self.assertIn('id="agents-floor-spark"', hero)
+        self.assertNotIn('bp-muted bp-agents-floor-spark', hero)
+        self.assertNotIn('id="agents-coverage-door"', hero)
+        self.assertNotIn('id="coverage-list"', hero)
+        self.assertNotIn('id="agents-legend"', hero)
+        self.assertNotIn('Hire…', hero)
+        self.assertLess(agents.index('id="agents-hero"'), agents.index('id="agents-pulse"'))
+        self.assertLess(agents.index('id="agents-pulse"'), agents.index('id="agents-floor-spark"'))
+        self.assertLess(agents.index('id="agents-floor-spark"'), agents.index('id="agents-face"'))
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('pc-1559', css)
+        self.assertIn('.bp-agents-hero .bp-agents-floor-spark', css)
+        self.assertIn('font-size: 32px', css)
+        hero_css = css[css.index('.bp-agents-hero {'):css.index('.bp-agents-meta')]
+        self.assertIn('border: 1px solid var(--ov-tile-border-strong)', hero_css)
+        self.assertIn('font-size: 15px', hero_css)
+        self.assertNotIn('#fff', hero_css)
+
+    def test_coverage_hire_and_legend_stay_behind_closed_door(self):
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        door = agents.split('id="agents-coverage-door"', 1)[1]
+        self.assertIn('class="bp-agents-door"', agents)
+        door_tag = re.search(r'<details[^>]*id="agents-coverage-door"[^>]*>', agents)
+        self.assertIsNotNone(door_tag)
+        self.assertNotIn(' open', door_tag.group(0))
+        self.assertIn('id="agents-coverage-summary"', door)
+        self.assertIn('id="coverage-list"', door)
+        self.assertIn('id="agents-legend"', door)
+        self.assertIn('not a hire-now list', door)
+        self.assertNotIn('<h2>Coverage</h2>', agents)
+        paint = _SRC.split('function paintCoverageDoor(')[1].split('function renderCoverage(')[0]
+        assigned = [line for line in paint.splitlines() if 'textContent' in line]
+        self.assertTrue(assigned)
+        self.assertIn('Coverage · none reported', paint)
+        self.assertIn('Coverage · 1 project', paint)
+        self.assertTrue(all('missing staff' not in line and 'Hire' not in line for line in assigned))
+        self.assertIn('pc-1559', paint)
+
+    def test_dispatch_stays_quiet_and_floor_canvas_caps_stay(self):
+        action = _SRC.split('function agentAction(agent, dispatchLabel)')[1].split('function currentOrderFor')[0]
+        self.assertIn("'bp-quiet-action'", action)
+        agents = _HTML.split('id="agents-view"')[1].split('id="delivery-view"')[0]
+        self.assertIn('id="agents-face-floor"', agents)
+        self.assertIn('id="agents-face-canvas"', agents)
+        self.assertIn('id="agents-canvas"', agents)
+        self.assertIn('id="agents-canvas-tour"', agents)
+        self.assertIn("kind:'claim'", _SRC.replace(' ', ''))
+        self.assertIn("kind:'next_fire'", _SRC.replace(' ', ''))
+        self.assertIn('maybeStartAgentsTour()', _SRC)
+        self.assertNotIn('draggable', _SRC.split('function paintAgentsCanvas()')[1].split('function timelineActionLabel')[0])
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
+        self.assertNotIn('n8n', _HTML.lower())
+        self.assertNotIn('point of sale', _HTML.lower())
 
 
 class AgentsFloorScarcityTests(unittest.TestCase):
