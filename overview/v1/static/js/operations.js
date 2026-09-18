@@ -88,6 +88,7 @@ if (legacyParam) {
 $('page-title').textContent = titles[page][0];
 $('page-description').textContent = titles[page][1];
 document.title = `BluePrint · ${titles[page][0]}`;
+if(document.body && document.body.dataset) document.body.dataset.page = page;
 $(page + '-view').hidden = false;
 if(page==='projects' && $('projects-filter')) $('projects-filter').value=projectsFilter;
 document.querySelector(`[data-page="${page}"]`).setAttribute('aria-current','page');
@@ -1333,8 +1334,7 @@ function paintWorkFlow() {
       const count=flow[stage] || 0;
       const item=el('span',undefined,'bp-work-flow-stage');
       item.dataset.stage=stage;
-      item.append(el('span',stage,'bp-work-flow-label'));
-      item.append(document.createTextNode(' '));
+      item.append(el('span',stage + ' ','bp-work-flow-label'));
       item.append(el('span',String(count),'bp-work-flow-count'));
       const ticks=flowTickCount(count, peak);
       if(ticks) {
@@ -1393,6 +1393,14 @@ function filterChips() {
   if($('attention-filter').value) chips.push(['Attention: '+$('attention-filter').selectedOptions[0].text,()=>{$('attention-filter').value='';}]);
   return chips;
 }
+function syncWorkFacetDoor() {
+  const door=$('work-facet-door');
+  if(!door) return;
+  const chips=filterChips();
+  const summary=$('work-facet-door-summary');
+  if(summary) summary.textContent=chips.length ? 'Filters · '+chips.length : 'Filters';
+  if(chips.length) door.open=true;
+}
 function renderActiveFilters() {
   const chips=filterChips(), container=$('active-filters');
   container.replaceChildren();
@@ -1402,6 +1410,7 @@ function renderActiveFilters() {
     container.append(chip);
   }
   $('clear-filters').hidden=!chips.length;
+  syncWorkFacetDoor();
 }
 function work() {
   renderWorkInbox();
