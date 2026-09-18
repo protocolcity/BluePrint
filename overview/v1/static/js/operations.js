@@ -8,7 +8,7 @@ const {buildLoadByDay, paintLoad, paintDoors, paintSourceStrip, paintOutboundStr
 const $ = id => document.getElementById(id);
 const route = location.pathname.replace(/\/$/, '') || '/';
 const page = ({'/':'overview','/overview':'overview','/work':'work','/projects':'projects','/agents':'agents','/connections':'connections','/delivery':'delivery','/activity':'delivery','/timeline':'timeline','/calendar':'calendar','/settings':'settings'})[route] || 'overview';
-const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you and what\'s moving.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','What each seat and job is doing right now, from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
+const titles = {delivery:['Delivery','PR, CI and remotes as landed GitHub evidence — not a ticket board.'],timeline:['Timeline','WorkLane events, WorkForce shifts, supervisor passes and GitHub delivery in one labelled stream.'],calendar:['Calendar','Today, upcoming runs, and dated work, with each clock labelled by its source.'],settings:['Settings','Display preferences and the application you are actually running.'],overview:['Overview','What needs you and what\'s moving.'],work:['Work','Find an open work order, see its context, and read the full history.'],projects:['Projects','Which stores are hot, quiet, or blocked — open work, For You, and last motion.'],agents:['Agents','Working, idle, and error on this floor — from the engine\'s own evidence.'],connections:['Connections','Where the information comes from, whether it is reachable and usable, and how current it is.']};
 let snapshot = null, pending = false, lastSuccess = null, lastAttempt = 0, lastError = false, pageIndex = 0, fingerprint = '';
 let selectedAgentId = '';
 let agentsView = 'floor';
@@ -1439,7 +1439,7 @@ function work() {
 function agentAction(agent, dispatchLabel) {
   const nodes=[];
   if(agent.action==='inspect') {
-    const button=el('button','Inspect');button.type='button';
+    const button=el('button','Inspect','bp-quiet-action');button.type='button';
     const feedback=el('p','','bp-muted');feedback.setAttribute('role','status');
     button.addEventListener('click',()=>{feedback.textContent=`Shift open past its budget with no terminal row. Inspect ledger/${agent.id}.log before dispatching again.`;});
     nodes.push(button,feedback);
@@ -1449,7 +1449,7 @@ function agentAction(agent, dispatchLabel) {
     nodes.push(el('p','No action needed.','bp-muted'));
     return nodes;
   }
-  const button=el('button',agent.action==='recover' ? 'Recover' : (dispatchLabel || 'Dispatch now'));
+  const button=el('button',agent.action==='recover' ? 'Recover' : (dispatchLabel || 'Dispatch now'),'bp-quiet-action');
   button.type='button';button.disabled=!agent.configured;
   const feedback=el('p','','bp-muted');feedback.setAttribute('role','status');
   button.addEventListener('click',async()=>{
@@ -1769,6 +1769,18 @@ function ensureCoverageHireDelegation() {
     if(row) paintCoverageHireBody(hire, row);
   },true);
 }
+function paintCoverageDoor(rows) {
+  const summary=$('agents-coverage-summary');
+  if(!summary) return;
+  const list=rows || [];
+  if(!list.length) {
+    summary.textContent='Coverage · none reported';
+    return;
+  }
+  const missing=list.filter(row=>row.missing && row.missing.length).length;
+  const base=list.length===1 ? 'Coverage · 1 project' : `Coverage · ${list.length} projects`;
+  summary.textContent=missing ? `${base} · ${missing} missing staff` : base;
+}
 function renderCoverage() {
   ensureCoverageHireDelegation();
   const rows=snapshot.coverage || [], active=[], collapsed=[];
@@ -1778,6 +1790,7 @@ function renderCoverage() {
   }
   const items=[...active];
   if(collapsed.length) items.push({project:'__collapsed__', rows:collapsed});
+  paintCoverageDoor(rows);
   reconcileList($('coverage-list'), items, item=>item.project, item=>{
     if(item.project==='__collapsed__') return coverageCollapsedBundle(item.rows);
     return coverageRow(item);
