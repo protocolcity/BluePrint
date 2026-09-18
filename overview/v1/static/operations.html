@@ -87,7 +87,7 @@
     </div>
     <div id="agents-canvas-wrap" hidden>
       <div class="bp-panel bp-agents-canvas-panel">
-        <div class="bp-section-head"><div><h2>Canvas</h2><p class="bp-muted">Read-only spatial twin of this floor. Nodes are seats and jobs. Edges are claimed work and next-fire ticks. Lists stay one hop away.</p></div><button type="button" id="agents-canvas-tour-start">Tour</button></div>
+        <div class="bp-section-head"><div><h2>Canvas</h2><p class="bp-muted">Live twin of this floor. Claim edges pulse. Claimed work sits on the seat. Next-fire ticks sit on the job or seat when Calendar has a door.</p></div><button type="button" id="agents-canvas-tour-start">Tour</button></div>
         <p id="agents-canvas-empty" class="bp-muted" hidden></p>
         <ol id="agents-canvas-empty-teach" class="bp-agents-tour-teach" hidden>
           <li><strong>Strip</strong> — Working / Idle / Error counts this floor. Zero is still a count.</li>

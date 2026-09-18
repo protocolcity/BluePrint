@@ -2704,6 +2704,13 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertIn("door==='ticket'", node.replace(' ', ''))
         self.assertIn('readerHref(', node)
         self.assertIn("'/calendar'", node)
+        self.assertIn('node.fire', node)
+        self.assertIn('paintAgentsFireChip(node.fire)', node.replace(' ', ''))
+        self.assertIn("kind==='fire'", node.replace(' ', ''))
+        edges = _SRC.split('function paintAgentsCanvasEdges')[1].split('function paintAgentsCanvas()')[0]
+        self.assertIn("dataset.motion='pulse'", edges.replace(' ', ''))
+        self.assertIn('dataset.tone', edges)
+        self.assertIn('function paintAgentsFireTicks()', _SRC)
         self.assertNotIn('n8n', _SRC.lower())
         self.assertNotIn('histogram', paint.lower())
 
@@ -2712,6 +2719,11 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertIn('.bp-agents-face', css)
         self.assertIn('.bp-agents-canvas-node', css)
         self.assertIn('.bp-agents-canvas-edge', css)
+        self.assertIn('.bp-agents-canvas-edge[data-kind="claim"]', css)
+        self.assertIn('bp-canvas-claim-pulse', css)
+        self.assertIn('bp-canvas-claim-flow', css)
+        self.assertIn('.bp-agents-canvas-fire', css)
+        self.assertIn('.bp-agents-canvas-tick', css)
         self.assertIn('.bp-agents-tour', css)
         self.assertIn('[data-tour-focus="true"]', css)
         nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
@@ -2753,6 +2765,12 @@ class AgentsCanvasPeelTests(unittest.TestCase):
         self.assertEqual(result['tour_steps'], ['strip', 'node', 'door'])
         self.assertEqual(result['tour_seen'], 'seen')
         self.assertTrue(result['floor_back'])
+        self.assertTrue(result['claim_pulse'])
+        self.assertTrue(result['fire_on_job'])
+        self.assertTrue(result['last_run_error_tone'])
+        self.assertTrue(result['floor_hero'])
+        self.assertTrue(result['coverage_door_closed'])
+        self.assertEqual(result['soft_poll_pulse'], ['0Working', '1Idle', '0Error'])
 
 
 class AgentsFloorScarcityTests(unittest.TestCase):
@@ -2825,6 +2843,55 @@ class AgentsFloorScarcityTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
         self.assertNotIn('n8n', _HTML.lower())
         self.assertNotIn('point of sale', _HTML.lower())
+
+
+class AgentsCanvasMotionTests(unittest.TestCase):
+    """Agents Canvas motion / visual-finish MUST — C1 claim pulse + C6 next-fire ticks."""
+
+    def test_claim_edges_pulse_and_claimed_wo_stays_on_the_node(self):
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        claim = css[css.index('.bp-agents-canvas-edge[data-kind="claim"]'):css.index('.bp-agents-canvas-edge[data-kind="next_fire"]')]
+        self.assertIn('bp-canvas-claim-pulse', claim)
+        self.assertIn('bp-canvas-claim-flow', claim)
+        self.assertIn('stroke-dasharray', claim)
+        self.assertIn('var(--ov-state-working)', claim)
+        self.assertIn('@keyframes bp-canvas-claim-flow', css)
+        self.assertIn('.bp-agents-canvas-claim', css)
+        self.assertIn('font-weight: 600', css[css.index('.bp-agents-canvas-claim'):css.index('.bp-agents-canvas-fire {')])
+        node = _SRC.split('function paintAgentsCanvasNode(node)')[1].split('function paintAgentsCanvasEdges')[0]
+        self.assertIn('bp-agents-canvas-claim', node)
+        edges = _SRC.split('function paintAgentsCanvasEdges')[1].split('function paintAgentsCanvas()')[0]
+        self.assertIn("dataset.motion='pulse'", edges.replace(' ', ''))
+
+    def test_next_fire_ticks_sit_on_jobs_and_seats(self):
+        builder = _SRC.split('function buildAgentsCanvas(agents, now)')[1].split('function agentsCanvasFromSnapshot')[0]
+        self.assertIn('actor.fire=', builder.replace(' ', ''))
+        self.assertIn('countdownWords(seconds)', builder.replace(' ', ''))
+        node = _SRC.split('function paintAgentsCanvasNode(node)')[1].split('function paintAgentsCanvasEdges')[0]
+        self.assertIn('paintAgentsFireChip(node.fire)', node.replace(' ', ''))
+        self.assertIn("kind==='fire'", node.replace(' ', ''))
+        self.assertIn('paintAgentsFireTicks()', node)
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'operations.css').read_text(encoding='utf-8')
+        self.assertIn('.bp-agents-canvas-ticks', css)
+        self.assertIn('.bp-agents-canvas-tick', css)
+        self.assertIn('var(--ov-state-scanning)', css[css.index('.bp-agents-canvas-edge[data-kind="next_fire"]'):css.index('.bp-agents-canvas-edge[data-kind="last_run"]')])
+        self.assertIn('Live twin of this floor', _HTML)
+        self.assertIn('Next-fire ticks sit on the job or seat', _HTML)
+
+    def test_soft_poll_and_tour_and_floor_scarcity_stay(self):
+        agents = _SRC.split('function agents()')[1].split('const SOURCE_LABEL')[0]
+        self.assertLess(agents.index('paintAgentsPulse()'), agents.index('paintAgentsCanvas()'))
+        self.assertIn('maybeStartAgentsTour()', agents)
+        self.assertIn('id="agents-hero"', _HTML)
+        self.assertIn('id="agents-coverage-door"', _HTML)
+        self.assertIn('id="agents-face-floor"', _HTML)
+        self.assertIn('id="agents-canvas-tour"', _HTML)
+        self.assertIn("id:'strip'", _SRC.replace(' ', ''))
+        self.assertIn("id:'node'", _SRC.replace(' ', ''))
+        self.assertIn("id:'door'", _SRC.replace(' ', ''))
+        self.assertNotIn('draggable', _SRC.split('function paintAgentsCanvas()')[1].split('function timelineActionLabel')[0])
+        nav = _HTML.split('class="bp-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertEqual(len(re.findall(r'<a href=', nav)), 10)
 
 
 if __name__ == '__main__':
