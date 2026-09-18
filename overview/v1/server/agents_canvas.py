@@ -5,12 +5,14 @@ seat→claimed work, seat→last-run and/or next-fire ticks; the claim edge
 pulses so the canvas reads as a live twin of the floor, not a static
 diagram. The claimed work order is also surfaced directly on the seat
 node (not only via its edge target) so it stays visible without
-scrolling to the target column. A seat's most recent terminal ledger row
-(real completion or failure — SKIP and quiet seats report nothing) opens
-a Timeline door filtered to that seat, same source as the AGENTS_INTENT
-"Failed is failed" rule: a failed last run is never softened into a
-neutral tile. This is not an editor: no rewire, no invented roster, no
-Overview/Work dump.
+scrolling to the target column. Next-fire countdown ticks sit on the
+seat or job when Calendar door data exists — the target column is a
+door, not the only place the tick is visible. A seat's most recent
+terminal ledger row (real completion or failure — SKIP and quiet seats
+report nothing) opens a Timeline door filtered to that seat, same source
+as the AGENTS_INTENT "Failed is failed" rule: a failed last run is never
+softened into a neutral tile. This is not an editor: no rewire, no
+invented roster, no Overview/Work dump.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from .calendar_doors import _parse_iso, countdown_words
 EMPTY_REASON = 'No seats or jobs on this roster.'
 NODE_W = 188
 NODE_H = 58
+NODE_H_RICH = 72
 GAP_Y = 16
 PAD_X = 24
 PAD_Y = 24
@@ -128,10 +131,11 @@ def _next_fire(agent: dict, now: datetime) -> dict | None:
     }
 
 
-def _actor_node(agent: dict, x: int, y: int, held: dict | None) -> dict:
+def _actor_node(agent: dict, x: int, y: int, held: dict | None, fire: dict | None) -> dict:
     identity = _text(agent.get('id'))
     group = _text(agent.get('group'), 'job')
     bucket = floor_bucket(agent)
+    rich = held is not None or fire is not None
     node = {
         'id': identity,
         'kind': group if group in ('seat', 'job') else 'job',
@@ -142,7 +146,7 @@ def _actor_node(agent: dict, x: int, y: int, held: dict | None) -> dict:
         'x': x,
         'y': y,
         'w': NODE_W,
-        'h': NODE_H,
+        'h': NODE_H_RICH if rich else NODE_H,
         'door': 'person' if group == 'seat' else '',
     }
     if group == 'seat':
@@ -152,6 +156,11 @@ def _actor_node(agent: dict, x: int, y: int, held: dict | None) -> dict:
                 'label': f'{held["title"]} · {held["order_id"]}',
                 'href': held['href'],
             }
+    if fire is not None:
+        node['fire'] = {
+            'label': fire['label'],
+            'href': fire['href'],
+        }
     return node
 
 
@@ -195,7 +204,8 @@ def build_agents_canvas(agents: list | None, now: datetime | None = None) -> dic
             y += 12
         for agent in rows:
             held = _held_work(agent) if _band == 'seat' else None
-            actor = _actor_node(agent, COL_ACTOR, y, held)
+            fire = _next_fire(agent, stamp)
+            actor = _actor_node(agent, COL_ACTOR, y, held, fire)
             nodes.append(actor)
             targets: list[tuple[str, dict]] = []
             if held is not None:
@@ -204,21 +214,22 @@ def build_agents_canvas(agents: list | None, now: datetime | None = None) -> dic
                 run = _last_run(agent)
                 if run is not None:
                     targets.append(('last_run', run))
-            fire = _next_fire(agent, stamp)
             if fire is not None:
                 targets.append(('next_fire', fire))
             target_y = y
             for kind, target in targets:
                 placed = _place_target(target, COL_TARGET, target_y)
                 nodes.append(placed)
+                tone = 'error' if placed.get('bucket') == 'error' else ('working' if kind == 'claim' else kind)
                 edges.append({
                     'from': actor['id'],
                     'to': placed['id'],
                     'kind': kind,
+                    'tone': tone,
                 })
                 target_y += NODE_H + STACK_GAP
-            row_bottom = target_y - STACK_GAP if targets else y + NODE_H
-            y = max(y + NODE_H, row_bottom) + GAP_Y
+            row_bottom = target_y - STACK_GAP if targets else y + actor['h']
+            y = max(y + actor['h'], row_bottom) + GAP_Y
 
     width = COL_TARGET + NODE_W + PAD_X
     height = max(y + PAD_Y - GAP_Y, PAD_Y + NODE_H)

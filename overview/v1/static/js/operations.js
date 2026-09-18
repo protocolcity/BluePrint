@@ -2050,7 +2050,6 @@ function buildAgentsCanvas(agents, now) {
         actor.work_href='/work?'+new URLSearchParams({assignment:'worker:'+agent.id});
         if(held) actor.claim={label:`${held.title || held.id} · ${held.id}`, href:'/work-order?'+new URLSearchParams({project:held.project,id:held.id})};
       }
-      nodes.push(actor);
       const targets=[];
       if(held) {
         targets.push({
@@ -2069,22 +2068,25 @@ function buildAgentsCanvas(agents, now) {
       }
       const fireAt=futureFireAt(agent.next_fire, stamp);
       if(fireAt!=null) {
-        targets.push({
-          kind:'next_fire',
-          node:{
-            id:`fire:${agent.id}`, kind:'fire', label:'Next fire', title:agent.name || agent.id,
-            href:'/calendar', door:'calendar', bucket:'target',
-          },
-        });
+        const seconds=(fireAt-stamp)/1000;
+        const fire={
+          id:`fire:${agent.id}`, kind:'fire', label:`Next fire · ${countdownWords(seconds)}`,
+          title:agent.name || agent.id, href:'/calendar', door:'calendar', bucket:'target', seconds,
+        };
+        actor.fire={label:fire.label, href:fire.href};
+        targets.push({kind:'next_fire', node:fire});
       }
+      if(actor.claim || actor.fire) actor.h=72;
+      nodes.push(actor);
       let targetY=y;
       for(const target of targets) {
         nodes.push({...target.node, x:colTarget, y:targetY, w:nodeW, h:nodeH});
-        edges.push({from:actor.id, to:target.node.id, kind:target.kind});
+        const tone=target.node.bucket==='error' ? 'error' : (target.kind==='claim' ? 'working' : target.kind);
+        edges.push({from:actor.id, to:target.node.id, kind:target.kind, tone});
         targetY+=nodeH+stackGap;
       }
-      const rowBottom=targets.length ? targetY-stackGap : y+nodeH;
-      y=Math.max(y+nodeH, rowBottom)+gapY;
+      const rowBottom=targets.length ? targetY-stackGap : y+actor.h;
+      y=Math.max(y+actor.h, rowBottom)+gapY;
     }
   });
   return {nodes, edges, width:colTarget+nodeW+padX, height:Math.max(y+padY-gapY, padY+nodeH), empty:false, empty_reason:''};
@@ -2112,6 +2114,18 @@ function setAgentsView(next) {
   }
   syncAgentsFace();
   if(snapshot) agents();
+}
+function paintAgentsFireTicks() {
+  const ticks=el('span',undefined,'bp-agents-canvas-ticks');
+  ticks.setAttribute('aria-hidden','true');
+  for(let i=0;i<5;i++) ticks.append(el('span','','bp-agents-canvas-tick'));
+  return ticks;
+}
+function paintAgentsFireChip(fire) {
+  const wrap=el('span',undefined,'bp-agents-canvas-fire-wrap');
+  wrap.append(link(fire.label, fire.href || '/calendar', 'bp-agents-canvas-chip bp-agents-canvas-fire'));
+  wrap.append(paintAgentsFireTicks());
+  return wrap;
 }
 function paintAgentsCanvasNode(node) {
   const card=el('article',undefined,'bp-agents-canvas-node');
@@ -2146,6 +2160,7 @@ function paintAgentsCanvasNode(node) {
     if(node.badge) meta.append(badge(node.bucket==='error'?'last_run_failed':(node.bucket || 'idle'), node.badge));
     if(node.claim) meta.append(link(node.claim.label, readerHref(node.claim.href), 'bp-agents-canvas-chip bp-agents-canvas-claim'));
     else if(node.work_href) meta.append(link('Work', node.work_href, 'bp-agents-canvas-chip'));
+    if(node.fire) meta.append(paintAgentsFireChip(node.fire));
     card.append(meta);
     return card;
   }
@@ -2153,6 +2168,7 @@ function paintAgentsCanvasNode(node) {
   const door=link('', href, 'bp-agents-canvas-person');
   door.append(el('span',node.label,'bp-agents-canvas-label'));
   card.append(door);
+  if(node.kind==='fire') card.append(paintAgentsFireTicks());
   return card;
 }
 function paintAgentsCanvasEdges(svg, canvas) {
@@ -2170,6 +2186,9 @@ function paintAgentsCanvasEdges(svg, canvas) {
     line.setAttribute('d',`M${x1} ${y1} C${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
     line.setAttribute('class','bp-agents-canvas-edge');
     line.dataset.kind=edge.kind || '';
+    const tone=edge.tone || (to.bucket==='error' ? 'error' : (edge.kind==='claim' ? 'working' : edge.kind || ''));
+    if(tone) line.dataset.tone=tone;
+    if(edge.kind==='claim') line.dataset.motion='pulse';
     svg.append(line);
   }
 }
