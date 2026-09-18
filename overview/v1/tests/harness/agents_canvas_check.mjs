@@ -149,19 +149,19 @@ const canvas = {
   width: 480,
   height: 320,
   nodes: [
-    {id: 'working-seat', kind: 'seat', label: 'working-seat', badge: 'WORKING', bucket: 'working', group: 'seat', x: 24, y: 24, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:working-seat', claim: {label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9'}},
+    {id: 'working-seat', kind: 'seat', label: 'working-seat', badge: 'WORKING', bucket: 'working', group: 'seat', x: 24, y: 24, w: 188, h: 72, door: 'person', work_href: '/work?assignment=worker:working-seat', claim: {label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9'}},
     {id: 'work:blueprint:pc-9', kind: 'work', label: 'Live claim · pc-9', href: '/work-order?project=blueprint&id=pc-9', door: 'ticket', bucket: 'target', x: 268, y: 24, w: 188, h: 58},
     {id: 'idle-seat', kind: 'seat', label: 'idle-seat', badge: 'IDLE', bucket: 'idle', group: 'seat', x: 24, y: 98, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:idle-seat'},
     {id: 'failed-seat', kind: 'seat', label: 'failed-seat', badge: 'LAST RUN FAILED', bucket: 'error', group: 'seat', x: 24, y: 172, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:failed-seat'},
     {id: 'run:failed-seat', kind: 'last_run', label: 'Last run · failed', title: 'agent exit', outcome: 'error', href: '/timeline?actor=failed-seat', door: 'timeline', bucket: 'error', x: 268, y: 172, w: 188, h: 58},
     {id: 'off-seat', kind: 'seat', label: 'off-seat', badge: 'OFF', bucket: 'quiet', group: 'seat', x: 24, y: 246, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:off-seat'},
-    {id: 'loop-health', kind: 'job', label: 'loop-health', badge: 'IDLE', bucket: 'idle', group: 'job', x: 24, y: 332, w: 188, h: 58, door: ''},
+    {id: 'loop-health', kind: 'job', label: 'loop-health', badge: 'IDLE', bucket: 'idle', group: 'job', x: 24, y: 332, w: 188, h: 72, door: '', fire: {label: 'Next fire · in 12m', href: '/calendar'}},
     {id: 'fire:loop-health', kind: 'fire', label: 'Next fire · in 12m', href: '/calendar', door: 'calendar', bucket: 'target', x: 268, y: 332, w: 188, h: 58},
   ],
   edges: [
-    {from: 'working-seat', to: 'work:blueprint:pc-9', kind: 'claim'},
-    {from: 'failed-seat', to: 'run:failed-seat', kind: 'last_run'},
-    {from: 'loop-health', to: 'fire:loop-health', kind: 'next_fire'},
+    {from: 'working-seat', to: 'work:blueprint:pc-9', kind: 'claim', tone: 'working'},
+    {from: 'failed-seat', to: 'run:failed-seat', kind: 'last_run', tone: 'error'},
+    {from: 'loop-health', to: 'fire:loop-health', kind: 'next_fire', tone: 'next_fire'},
   ],
 };
 const fixture = {
@@ -303,8 +303,13 @@ assert.equal(working.dataset.bucket, 'working');
 assert.ok(working.querySelector('.bp-shift-cue'));
 
 const edges = get('agents-canvas').querySelectorAll('.bp-agents-canvas-edge');
-assert.ok(edges.some(edge => edge.dataset.kind === 'claim'));
-assert.ok(edges.some(edge => edge.dataset.kind === 'last_run'));
+const claimEdge = edges.find(edge => edge.dataset.kind === 'claim');
+const lastRunEdge = edges.find(edge => edge.dataset.kind === 'last_run');
+assert.ok(claimEdge, 'claim edge is painted');
+assert.equal(claimEdge.dataset.motion, 'pulse', 'claimed/active links pulse');
+assert.equal(claimEdge.dataset.tone, 'working');
+assert.ok(lastRunEdge, 'last-run edge is painted');
+assert.equal(lastRunEdge.dataset.tone, 'error', 'failed last-run stays error on the edge');
 assert.ok(edges.some(edge => edge.dataset.kind === 'next_fire'));
 
 const links = get('agents-canvas').querySelectorAll('a');
@@ -322,6 +327,16 @@ assert.ok(claimChip, 'claimed WO is visible directly on the seat node');
 assert.match(claimChip.textContent, /Live claim.*pc-9/);
 assert.equal(claimChip.href, '/work-order?project=blueprint&id=pc-9');
 assert.ok(!working.querySelectorAll('.bp-agents-canvas-chip').some(a => a.textContent === 'Work'), 'claim chip replaces the generic Work link once a WO is held');
+const job = cards.find(n => n.dataset.id === 'loop-health');
+const fireChip = job && job.querySelectorAll('.bp-agents-canvas-fire')[0];
+assert.ok(fireChip, 'next-fire tick is visible on the job node');
+assert.match(fireChip.textContent, /Next fire/);
+assert.equal(fireChip.href, '/calendar');
+assert.ok(job.querySelectorAll('.bp-agents-canvas-tick').length >= 5, 'calendar door paints ticks on the job');
+const fireDoor = cards.find(n => n.dataset.id === 'fire:loop-health');
+assert.ok(fireDoor && fireDoor.querySelectorAll('.bp-agents-canvas-tick').length >= 5, 'next-fire door keeps ticks');
+assert.ok(get('agents-hero'), 'Floor scarcity hero host stays on Agents');
+assert.equal(get('agents-coverage-door').open, false, 'Coverage door stays collapsed on Canvas');
 
 assert.equal(get('agents-canvas-tour').hidden, false, 'unseen canvas starts the acquaintance tour');
 assert.equal(get('agents-canvas-tour').dataset.step, 'strip');
@@ -375,6 +390,30 @@ runtime.setAgentsView('floor');
 assert.equal(get('agents-floor-lists').hidden, false);
 assert.equal(get('agents-canvas-tour').hidden, true, 'switching to Floor hides an in-progress tour');
 
+const idleOnly = {
+  ...fixture,
+  agents: [agent('idle-seat', 'idle')],
+  agents_floor: {working: 0, idle: 1, error: 0, stale: 0, quiet: 0, sparks: {}},
+  agents_canvas: {
+    empty: false, empty_reason: '', width: 480, height: 120,
+    nodes: [
+      {id: 'idle-seat', kind: 'seat', label: 'idle-seat', badge: 'IDLE', bucket: 'idle', group: 'seat', x: 24, y: 24, w: 188, h: 58, door: 'person', work_href: '/work?assignment=worker:idle-seat'},
+    ],
+    edges: [],
+  },
+};
+runtime.applySnapshot(idleOnly);
+get('agents-pulse').replaceChildren();
+runtime.setAgentsView('canvas');
+runtime.agents();
+const idlePulse = get('agents-pulse').querySelectorAll('.bp-metric').map(n => n.textContent.replace(/\s+/g, ''));
+assert.deepEqual(idlePulse, ['0Working', '1Idle', '0Error'], 'soft-poll canvas reuses Floor Working/Idle/Error');
+const idleCards = get('agents-canvas').querySelectorAll('.bp-agents-canvas-node');
+assert.equal(idleCards.find(n => n.dataset.id === 'idle-seat').dataset.bucket, 'idle');
+assert.ok(!idleCards.some(n => n.dataset.bucket === 'working'), 'canvas does not keep a stale Working seat after refresh');
+assert.ok(!idleCards.some(n => n.querySelectorAll('.bp-agents-canvas-claim').length), 'no invented claim after Floor goes idle');
+assert.ok(!idleCards.some(n => n.querySelectorAll('.bp-agents-canvas-fire').length), 'no invented next-fire when Calendar door is absent');
+
 process.stdout.write(JSON.stringify({
   pulse,
   floor_lists_visible: true,
@@ -393,4 +432,10 @@ process.stdout.write(JSON.stringify({
   tour_steps: ['strip', 'node', 'door'],
   tour_seen: 'seen',
   floor_back: true,
+  claim_pulse: true,
+  fire_on_job: true,
+  last_run_error_tone: true,
+  floor_hero: true,
+  coverage_door_closed: true,
+  soft_poll_pulse: idlePulse,
 }));
