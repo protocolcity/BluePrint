@@ -42,6 +42,6 @@ This current process replaces the earlier Map-only interface, standing-chew, nam
 
 ## Human attention and three clocks
 
-The current interface separates Decide (human action), Read (requested reports), Watch (timers or no recent work update), and Note (personal notes/to-dos/reminders). Watch is a prompt to inspect evidence, not proof that an agent is dead. Deferred/tracking work remains outside the active inbox. Human gates preserve the responsible worker.
+The current interface separates Decide (human action), Read (requested reports), Watch (timers or no recent work update), and Due (dated personal reminders/deadlines that have arrived). Watch is a prompt to inspect evidence, not proof that an agent is dead. Deferred/tracking work remains outside the active inbox. Human gates preserve the responsible worker.
 
 Browser-local “Mute here for 24 hours” hides an inbox item only in that browser and workspace; WorkLane gates, assignments and readiness are unchanged. A `gate_type=timer` is an execution embargo. A `reminder:YYYY-MM-DD` label is a calendar date without an embargo: the reader sets/removes it through WorkLane and Calendar/ICS projects it. It does not send an outside notification. These are three separate clocks; do not clear a gate to snooze an item or gate work merely to create a reminder.

@@ -1,52 +1,13 @@
 #!/usr/bin/env python3
-"""Tiny dogfood server for the BluePrint desk — full four-lens shell.
+"""Serve the current BluePrint operations application and Map from one origin.
 
-Serves Overview (Mission Control) + Map V1 dig + Calendar + Settings from
-a single origin so every lens chip in the top nav is a real page, not a
-dead pill.
+The selected workspace supplies project stores, roster/run evidence and optional
+calendar/configuration. /api/operations is the current shared projection;
+/api/overview/* and fixture/Cellar options are retained compatibility paths.
+Current routes and ownership are documented in docs/PRODUCT.md and ARCHITECTURE.md.
 
-Endpoints (all on the same origin):
-
-- ``GET /``                       → Overview Mission Control
-- ``GET /overview``               → same
-- ``GET /map``                    → Map V1 dig (embeds/serves the map shell)
-- ``GET /calendar``               → Calendar week list
-- ``GET /settings``               → Settings groups
-
-- ``GET /api/overview/agents``    (agents + cloud/remote builder links)
-- ``GET /api/overview/jobs``      (jobs + Waiting · Ready · Blocked buckets)
-- ``GET /api/overview/pulse``     (named heartbeats + Cellar tip + last tick)
-- ``GET /api/overview/project``   (project card, ``{}`` when empty)
-- ``GET /api/overview/charter``   (charter drawer, ``{}`` when empty)
-- ``GET /api/calendar/events``    (local events, honest ``[]`` when empty)
-- ``GET /api/settings/desk``      (binder path + desk label)
-
-- ``GET /api/map/tree``           (requires ``--binder``)
-- ``GET /api/map/children``       (requires ``--binder``)
-- ``GET /api/file``               (requires ``--binder``)
-
-Usage::
-
-    python3 overview/v1/serve.py --port 8801 --binder ~/BluePrint
-
-The default serve is **honest empty** (`No agents` · `No open jobs` · silent
-pulse · `No events`) per ``docs/specs/OVERVIEW_INTENT.md`` §Dogfood note
-and ``OVERVIEW_CALENDAR_SETTINGS.md`` §Calendar empty state.
-
-``--binder DIR`` opts local truth in: ``<binder>/.blueprint/overview.json``
-seeds Agents/Jobs/Pulse (+ Project/Charter) when present (wins). When absent,
-Phase-B projectors read WorkForce roster + WorkLane SQLite (optional Desk
-HTTP) under the binder — honest empty when stores are missing.
-``<binder>/.blueprint/calendar.json`` seeds the Calendar. Inputs are re-read
-when they change on disk — no server bounce. ``--fixture`` stays boot-pinned
-(tests / demo).
-
-``--fixture PATH`` overrides the entire overview state (tests / demo only).
-
-``--cellar-tip`` sets the brew face — never a private ProtocolCity SHA.
-Omit it and the tip is read from the local brew Cellar
-(``brew list --versions blueprint``), falling back to ``DEFAULT_CELLAR_TIP``
-(``OVERVIEW_MC_EXT.md`` never-lie DoD).
+Use blueprint serve --foreground --root /path/to/workspace --port 8801.
+Synthetic fixtures are for tests or explicitly labelled demonstrations.
 """
 from __future__ import annotations
 

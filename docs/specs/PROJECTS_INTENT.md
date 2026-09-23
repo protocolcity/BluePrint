@@ -1,6 +1,6 @@
 # Projects INTENT — where the work is, who is on it, what moved
 
-Status: design record for pc-1481, 2026-09-13. Owning implementation order: pc-1486. Companion to [STATES_AND_TERMS.md](STATES_AND_TERMS.md), [SURFACES_REVIEW_2026_09.md](SURFACES_REVIEW_2026_09.md) and [AGENTS_INTENT.md](AGENTS_INTENT.md). Paint follows [OVERVIEW_THEME.md](OVERVIEW_THEME.md); no new tokens, fonts or libraries.
+Current surface reference. Read [the product contract](../PRODUCT.md) first.
 
 ## One sentence
 
@@ -68,10 +68,17 @@ is JS/backend work for a future order, not this paper.
 | Registered project with no seats | Agents now: "none staffed"; hiring stays on Agents |
 | Engine unavailable (WorkForce) | Agents now: "unknown", never idle |
 
-Held (not in pc-1486): editing project registration; project-level settings; per-project cost meters; any cross-workspace view.
+Outside this surface: editing project registration; project-level settings; per-project cost meters; any cross-workspace view.
 
-How the desk's own vocabulary maps onto this page (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works-in-one-breath) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
+How the desk's own vocabulary maps onto this page (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
 
-## Acceptance for pc-1486
+## Verification
 
 Rows with the columns above from a live-shaped fixture; activity ordering and quiet-project collapse; unavailable/partial states; disclosure breakdown keyboard reachable; links carry the project id; desktop and 400px installed screenshots; both suites green.
+
+## Papers and Map
+
+Project papers is a curated catalogue of recognized project documents. Map is a
+filesystem navigator and can expose additional permitted Markdown paths. Both
+resolve paths inside the selected workspace and exclude private runtime areas;
+the catalogue is not a complete filesystem index or a publication permission.
