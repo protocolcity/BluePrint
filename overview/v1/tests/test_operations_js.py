@@ -196,6 +196,17 @@ class LiveIndicatorTests(unittest.TestCase):
         auto_call_sites = _SRC.count('refresh();')
         self.assertGreaterEqual(auto_call_sites, 3)
 
+    def test_fallback_poll_stays_fifteen_seconds_by_default(self):
+        self.assertIn('let interval = 15', _SRC)
+        compact = _SRC.replace(' ', '')
+        self.assertIn('if([0,15,30].includes(saved.interval))interval=saved.interval', compact)
+
+    def test_overview_and_work_fetch_surface_subsets(self):
+        compact = _SRC.replace(' ', '')
+        self.assertIn("surface=(page==='overview'||page==='work')?page:''", compact)
+        self.assertIn("operationsUrl=surface?'/api/operations?surface='+encodeURIComponent(surface):'/api/operations'", compact)
+        self.assertIn('fetch(operationsUrl,{cache:\'no-store\'', compact)
+
 
 class ContentFingerprintTests(unittest.TestCase):
     """pc-1483: a fingerprint used to decide whether the content actually

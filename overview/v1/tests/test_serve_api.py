@@ -188,6 +188,27 @@ class HonestEmptyServeTests(unittest.TestCase):
         self.assertEqual(payload['calendar_load']['state'], 'unavailable')
         self.assertEqual(payload['calendar_load']['days'], [])
 
+    def test_operations_surface_subsets_keep_required_keys(self) -> None:
+        _, overview_body, _ = _get(self.port, '/api/operations?surface=overview')
+        overview = json.loads(overview_body)
+        self.assertIn('orders', overview)
+        self.assertIn('throughput', overview)
+        self.assertNotIn('calendar_load', overview)
+        self.assertNotIn('work_flow', overview)
+        self.assertNotIn('agents_canvas', overview)
+        _, work_body, _ = _get(self.port, '/api/operations?surface=work')
+        work = json.loads(work_body)
+        self.assertIn('orders', work)
+        self.assertIn('work_flow', work)
+        self.assertNotIn('throughput', work)
+        self.assertNotIn('calendar_load', work)
+        self.assertNotIn('agents_canvas', work)
+        _, full_body, _ = _get(self.port, '/api/operations?surface=map')
+        full = json.loads(full_body)
+        self.assertIn('calendar_load', full)
+        self.assertIn('work_flow', full)
+        self.assertIn('throughput', full)
+
     def test_overview_css_shares_focus_ring_across_interactive_elements(self) -> None:
         _, body, _ = _get(self.port, "/css/overview.css")
         css = body.decode("utf-8")
