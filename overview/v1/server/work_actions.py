@@ -12,10 +12,21 @@ from .work_order import read_work_order
 _BRIDGE = '''
 import json, sys
 from pathlib import Path
-from worklane.products import get_product, product_tracker
-from worklane.mcp.handlers import TPHandlers
+import importlib.metadata
+import importlib.util
 request = json.load(sys.stdin)
+public_errors = (ValueError,)
 try:
+    expected_prefix = Path(request['expected_prefix']).resolve()
+    specification = importlib.util.find_spec('worklane')
+    if (Path(sys.prefix).resolve() != expected_prefix or specification is None
+            or not specification.origin or not Path(specification.origin).resolve().is_relative_to(expected_prefix)):
+        raise ValueError('WorkLane is not running from the verified installed environment.')
+    if importlib.metadata.version('protocolcity-worklane') != request['expected_version']:
+        raise ValueError('WorkLane version does not match the workspace deployment receipt.')
+    from worklane.products import get_product, product_tracker
+    from worklane.mcp.handlers import TPHandlers, ToolError
+    public_errors = (ValueError, ToolError)
     try:
         from worklane.api.tasks import helpers
     except ImportError:
@@ -59,8 +70,7 @@ try:
         raise ValueError('Unsupported work-order action.')
     print(json.dumps(result))
 except Exception as exc:
-    from worklane.mcp.handlers import ToolError
-    message = str(exc) if isinstance(exc, (ToolError, ValueError)) else 'WorkLane rejected the action. Refresh before retrying.'
+    message = str(exc) if isinstance(exc, public_errors) else 'WorkLane rejected the action. Refresh before retrying.'
     print(json.dumps({'ok': False, 'error': message}))
 '''
 
@@ -82,10 +92,28 @@ def add_note(binder, project, order_id, body):
 def _invoke(root, project, order, action):
     from .local_projectors import resolve_roster_path
     installed = root / 'local/worklane/current/venv/bin/python'
-    executable = installed if installed.is_file() else root / 'worklane/.venv/bin/python'
-    if not executable.is_file():
-        raise RuntimeError('The workspace WorkLane runtime is unavailable.')
+    if not installed.is_file():
+        raise RuntimeError('The installed WorkLane runtime is unavailable. Install and verify it for this workspace before writing.')
     db = root / 'worklane/worklane/local/data' / (project + '.db')
+    receipt_path = root / 'local/worklane/deployment.json'
+    try:
+        if not receipt_path.resolve().is_relative_to(root):
+            raise ValueError('external receipt')
+        receipt = json.loads(receipt_path.read_text())
+        command = receipt.get('entrypoint')
+        version = receipt.get('version')
+        runtime = receipt.get('runtime')
+        if (not isinstance(command, list) or not command or not isinstance(command[0], str)
+                or not isinstance(version, str) or not version
+                or not isinstance(runtime, str) or not runtime
+                or not Path(command[0]).is_absolute()
+                or Path(command[0]).parent.resolve() != installed.parent.resolve()
+                or Path(runtime).resolve() != db.parent.parent.resolve()
+                or not db.resolve().is_relative_to(root)):
+            raise ValueError('mismatched installation')
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        raise RuntimeError('WorkLane deployment receipt is missing or does not match this workspace runtime. Verify the installation before writing.') from exc
+    executable = installed
     env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'HOME': os.environ.get('HOME', ''),
            'PYTHONDONTWRITEBYTECODE': '1', 'WORKLANE_RUNTIME_DIR': str(db.parent.parent),
            'WORKLANE_DB': str(db), 'TRADEOS_TRACKER': 'sqlite', 'WL_AGENT_ID': 'you', 'TP_AGENT_ID': 'you',
@@ -93,9 +121,9 @@ def _invoke(root, project, order, action):
            'WL_WORKFORCE_ROSTER': str(resolve_roster_path(root) or root / '.protocolcity/workforce/local/roster.json'),
            'WL_WAKE_DISABLE': '1', 'WL_NTFY_DISABLE': '1'}
     try:
-        result = subprocess.run([str(executable), '-c', _BRIDGE],
-            input=json.dumps({'project': project, 'raw_id': order['id'], 'expected_db': str(db), **action}),
-            cwd=str(root / 'worklane'), env=env, text=True, capture_output=True, timeout=15)
+        result = subprocess.run([str(executable), '-I', '-c', _BRIDGE],
+            input=json.dumps({'project': project, 'raw_id': order['id'], 'expected_db': str(db), 'expected_prefix': str(installed.parent.parent.resolve()), 'expected_version': version, **action}),
+            cwd=str(root), env=env, text=True, capture_output=True, timeout=15)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError('WorkLane timed out. The action may have been saved; refresh the record before retrying.') from exc
     except OSError as exc:
