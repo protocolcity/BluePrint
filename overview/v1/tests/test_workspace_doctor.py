@@ -40,7 +40,7 @@ class WorkspaceDoctorTests(unittest.TestCase):
         self.receipt()
         with patch('protocolcity.workspace_doctor._probe', return_value={'build': '1.2.3', 'workspace': {'path': '/another-workspace'}}) as probe:
             report = diagnose(self.root, probe=True)
-        probe.assert_called_once_with('http://127.0.0.1:12345', '/api/operations')
+        probe.assert_called_once_with('http://127.0.0.1:12345', '/api/identity')
         self.assertFalse(report['ok'])
         self.assertIn('BP_IDENTITY_MISMATCH', [row['code'] for row in report['checks']])
 
