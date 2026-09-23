@@ -20,6 +20,47 @@ class WorkActionTests(unittest.TestCase):
                 with self.assertRaises(ValueError): add_note(Path(path),'other','x-1','A normal note')
                 run.assert_not_called()
 
+class InstalledRuntimeTests(unittest.TestCase):
+    def test_checkout_runtime_cannot_be_used_for_writes(self):
+        from server.work_actions import _invoke
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / 'worklane/.venv/bin/python'
+            checkout.parent.mkdir(parents=True)
+            checkout.touch()
+            with patch('server.work_actions.subprocess.run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'installed WorkLane'):
+                    _invoke(root, 'example', {'id': '1'}, {'action': 'note', 'body': 'note'})
+                run.assert_not_called()
+
+    def test_missing_receipt_cannot_start_an_installed_path(self):
+        from server.work_actions import _invoke
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / 'local/worklane/current/venv/bin/python'
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            with patch('server.work_actions.subprocess.run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'receipt'):
+                    _invoke(root, 'example', {'id': '1'}, {'action': 'note', 'body': 'note'})
+                run.assert_not_called()
+
+    def test_receipt_must_identify_selected_runtime_and_store(self):
+        from server.work_actions import _invoke
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / 'local/worklane/current/venv/bin/python'
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            receipt = root / 'local/worklane/deployment.json'
+            receipt.write_text(json.dumps({'version': '1.0', 'entrypoint': [str(executable)],
+                                           'runtime': str(root / 'another-store')}))
+            with patch('server.work_actions.subprocess.run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'receipt'):
+                    _invoke(root, 'example', {'id': '1'}, {'action': 'note', 'body': 'note'})
+                run.assert_not_called()
+
+
 class EngineIntegrationTests(unittest.TestCase):
     def test_real_engine_writes_only_selected_temporary_workspace(self):
         # Optional integration with an explicitly supplied installed WorkLane
@@ -27,6 +68,8 @@ class EngineIntegrationTests(unittest.TestCase):
         import os
         executable=os.environ.get('BP_TEST_WORKLANE_PYTHON')
         if not executable: self.skipTest('Set BP_TEST_WORKLANE_PYTHON for installed-engine integration')
+        version = subprocess.check_output([executable, '-I', '-c',
+            "import importlib.metadata; print(importlib.metadata.version('protocolcity-worklane'))"], text=True).strip()
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             roots=[Path(a),Path(b)]
             for root in roots:
@@ -34,12 +77,23 @@ class EngineIntegrationTests(unittest.TestCase):
                 installed = root/'local/worklane/current'
                 installed.mkdir(parents=True)
                 (installed/'venv').symlink_to(Path(executable).parent.parent, target_is_directory=True)
+                (root/'local/worklane/deployment.json').write_text(json.dumps({
+                    'version': version, 'entrypoint': [str(installed/'venv/bin/python')],
+                    'runtime': str(data.parent)}))
                 manifest=root/'product/.protocolcity/desk-join.json';manifest.parent.mkdir(parents=True)
                 manifest.write_text('{"slug":"protocolcity","prefix":"pc"}')
                 script="from pathlib import Path; from worklane.trackers.sqlite import SQLiteTracker; import sys; t=SQLiteTracker(db_path=Path(sys.argv[1])); t.create_task(title='Test work order', description='Isolated verification')"
                 subprocess.run([executable,'-c',script,str(data/'protocolcity.db')],check=True,capture_output=True)
+            # A same-named checkout module must not shadow the installed package.
+            (roots[0]/'worklane/__init__.py').write_text("raise RuntimeError('source checkout imported')\n")
             first=add_note(roots[0],'protocolcity','pc-1','A plain note <script>text only</script>')
             self.assertTrue(first['ok']);self.assertEqual(first['comment']['author'],'you')
+            receipt_path = roots[0]/'local/worklane/deployment.json'
+            receipt = json.loads(receipt_path.read_text())
+            receipt_path.write_text(json.dumps({**receipt, 'version': '0.0-mismatch'}))
+            with self.assertRaisesRegex(RuntimeError, 'version does not match'):
+                add_note(roots[0], 'protocolcity', 'pc-1', 'Must not be saved')
+            receipt_path.write_text(json.dumps(receipt))
             for index,root in enumerate(roots):
                 with sqlite3.connect(root/'worklane/worklane/local/data/protocolcity.db') as conn:
                     self.assertEqual(conn.execute('SELECT count(*) FROM task_comments').fetchone()[0],1 if index==0 else 0)
