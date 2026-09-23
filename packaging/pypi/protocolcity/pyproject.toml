@@ -12,19 +12,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "protocolcity"
-version = "0.1.51"
+version = "0.1.52"
 description = "BluePrint suite (compat alias) — installs protocolcity-blueprint; taught CLI is blueprint"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "protocolcity-blueprint==0.1.51",
+    "protocolcity-blueprint==0.1.52",
 ]
 
 [project.optional-dependencies]
 # Same engines pin as the preferred distro so `pip install 'protocolcity[engines]'`
 # resolves WorkLane/WorkForce 0.1.9.
 engines = [
-    "protocolcity-blueprint[engines]==0.1.51",
+    "protocolcity-blueprint[engines]==0.1.52",
     "protocolcity-worklane==0.1.9",
     "protocolcity-workforce==0.1.9",
 ]

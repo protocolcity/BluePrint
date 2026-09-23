@@ -108,30 +108,97 @@ def store_last_change(conn, prefix):
             'verb': verb, 'text': f'{verb} {order_id}'}
 
 
-def task_comment_index(conn):
-    """One pass over a project's comments: last Owner marker and last note per task.
+_COMMENT_ID_CHUNK = 400
+_OWNER_SQL_MATCH = """(
+    body LIKE 'Owner:%' OR body LIKE '%' || CHAR(10) || 'Owner:%'
+    OR body LIKE 'Parked by%' OR body LIKE 'Parked:%'
+    OR body LIKE '%' || CHAR(10) || 'Parked by%' OR body LIKE '%' || CHAR(10) || 'Parked:%'
+    OR body LIKE 'Released by%' OR body LIKE '%' || CHAR(10) || 'Released by%'
+    OR body LIKE 'Reopened by%' OR body LIKE '%' || CHAR(10) || 'Reopened by%'
+    OR body LIKE 'Blocked:%' OR body LIKE '%' || CHAR(10) || 'Blocked:%'
+)"""
 
-    Returns (owner_by_task, last_note_by_task, parked_at_by_task) keyed by
-    task_id — never a full comment history.
+
+def _note_snippet(body):
+    snippet = (body or '').strip().splitlines()[0] if (body or '').strip() else ''
+    return snippet[:160] + ('…' if len(snippet) > 160 else '')
+
+
+def _apply_owner_comment(owner_by_task, parked_at_by_task, task_id, body, created_at):
+    if _RELEASE_RE.search(body):
+        owner_by_task.pop(task_id, None)
+        parked_at_by_task.pop(task_id, None)
+        return
+    if _PARKED_RE.search(body):
+        parked_at_by_task[task_id] = created_at
+    match = _OWNER_RE.search(body)
+    if match:
+        owner_by_task[task_id] = {'identity': match.group(1), 'since': created_at}
+
+
+def _last_notes_for(conn, where_sql, params, last_note_by_task):
+    window_sql = (
+        'SELECT task_id, body FROM ('
+        ' SELECT task_id, body, ROW_NUMBER() OVER ('
+        '  PARTITION BY task_id ORDER BY created_at DESC, id DESC'
+        ' ) AS rn FROM task_comments' + where_sql +
+        ') ranked WHERE rn = 1'
+    )
+    try:
+        rows = conn.execute(window_sql, params)
+    except sqlite3.OperationalError:
+        try:
+            rows = conn.execute(
+                'SELECT task_id, body FROM task_comments' + where_sql + ' ORDER BY created_at, id',
+                params,
+            )
+        except sqlite3.OperationalError:
+            return
+        for row in rows:
+            last_note_by_task[row['task_id']] = _note_snippet(row['body'])
+        return
+    for row in rows:
+        last_note_by_task[row['task_id']] = _note_snippet(row['body'])
+
+
+def _owners_for(conn, where_sql, params, owner_by_task, parked_at_by_task):
+    glue = ' AND ' if where_sql else ' WHERE '
+    sql = (
+        'SELECT task_id, body, created_at FROM task_comments'
+        + where_sql + glue + _OWNER_SQL_MATCH + ' ORDER BY created_at, id'
+    )
+    try:
+        rows = conn.execute(sql, params)
+    except sqlite3.OperationalError:
+        return
+    for row in rows:
+        _apply_owner_comment(
+            owner_by_task, parked_at_by_task,
+            row['task_id'], row['body'] or '', row['created_at'],
+        )
+
+
+def task_comment_index(conn, task_ids=None):
+    """Last Owner marker and last note per task via targeted SQL.
+
+    When *task_ids* is given, only those tasks are read — never the full
+    comment table. Last note is the latest comment first line. Owner and
+    parked-at walk Owner/Parked/Released/Reopened/Blocked comments in
+    created_at order so a later release still clears a claim.
     """
     owner_by_task, last_note_by_task, parked_at_by_task = {}, {}, {}
-    try:
-        comment_rows = conn.execute('SELECT task_id, body, created_at FROM task_comments ORDER BY created_at, id').fetchall()
-    except sqlite3.OperationalError:
+    if task_ids is not None and not task_ids:
         return owner_by_task, last_note_by_task, parked_at_by_task
-    for row in comment_rows:
-        task_id, body, created_at = row['task_id'], row['body'] or '', row['created_at']
-        snippet = body.strip().splitlines()[0] if body.strip() else ''
-        last_note_by_task[task_id] = snippet[:160] + ('…' if len(snippet) > 160 else '')
-        if _RELEASE_RE.search(body):
-            owner_by_task.pop(task_id, None)
-            parked_at_by_task.pop(task_id, None)
-            continue
-        if _PARKED_RE.search(body):
-            parked_at_by_task[task_id] = created_at
-        match = _OWNER_RE.search(body)
-        if match:
-            owner_by_task[task_id] = {'identity': match.group(1), 'since': created_at}
+    if task_ids is None:
+        _last_notes_for(conn, '', (), last_note_by_task)
+        _owners_for(conn, '', (), owner_by_task, parked_at_by_task)
+        return owner_by_task, last_note_by_task, parked_at_by_task
+    ids = list(task_ids)
+    for start in range(0, len(ids), _COMMENT_ID_CHUNK):
+        chunk = ids[start:start + _COMMENT_ID_CHUNK]
+        where_sql = ' WHERE task_id IN (' + ','.join('?' * len(chunk)) + ')'
+        _last_notes_for(conn, where_sql, chunk, last_note_by_task)
+        _owners_for(conn, where_sql, chunk, owner_by_task, parked_at_by_task)
     return owner_by_task, last_note_by_task, parked_at_by_task
 
 
@@ -1333,7 +1400,10 @@ def operations_snapshot(binder):
                 summary['loaded'] = len(rows)
                 summary['partial'] = count > len(rows)
                 result['truncated'] |= summary['partial']
-                owner_by_task, last_note_by_task, parked_at_by_task = task_comment_index(conn) if rows else ({}, {}, {})
+                loaded_ids = [row['id'] for row in rows]
+                owner_by_task, last_note_by_task, parked_at_by_task = (
+                    task_comment_index(conn, loaded_ids) if rows else ({}, {}, {})
+                )
                 prefix = project.get('prefix') or ''
                 summary['last_change'] = store_last_change(conn, prefix)
                 for task_row in conn.execute('SELECT id, ext_id, status FROM tasks').fetchall():

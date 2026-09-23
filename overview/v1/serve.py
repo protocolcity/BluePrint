@@ -361,8 +361,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/api/operations":
             from server.operations_cache import cached_operations_snapshot
+            from server.operations_surface import project_operations_surface
             try:
-                self._send_json(200, cached_operations_snapshot(self.binder_root))
+                snapshot = cached_operations_snapshot(self.binder_root)
+                self._send_json(200, project_operations_surface(snapshot, query.get("surface", "")))
             except Exception:
                 # An uncaught snapshot error used to drop the socket with 0
                 # bytes — the dogfood hang (pc-1554). Always answer.

@@ -3564,7 +3564,9 @@ async function refresh(manual) {
   lastAttempt=Date.now();pending=true;
   if(manual) { $('refresh').disabled=true;$('refresh').textContent='Refreshing…'; }
   try {
-    const response=await fetch('/api/operations',{cache:'no-store',signal:AbortSignal.timeout(10000)});
+    const surface=(page==='overview'||page==='work')?page:'';
+    const operationsUrl=surface?'/api/operations?surface='+encodeURIComponent(surface):'/api/operations';
+    const response=await fetch(operationsUrl,{cache:'no-store',signal:AbortSignal.timeout(10000)});
     if(!response.ok) throw new Error('Source request failed');
     const next=await response.json();
     const key=contentKey(next);
