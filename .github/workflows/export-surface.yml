@@ -24,7 +24,7 @@ jobs:
       - name: Install candidate and WorkLane integration dependency
         # Reviewed local-roster authority support; do not test against an older
         # published engine that cannot enforce selected-workspace assignment.
-        run: python -m pip install . 'git+https://github.com/protocolcity/WorkLane.git@aeb0a561edea4d09655eb00bee4daec7f3ce0d49'
+        run: python -m pip install . 'git+https://github.com/protocolcity/WorkLane.git@425067734c5283e70a444bc4b955b83aaf1eee3d'
       - name: Verify operations and engine boundaries
         run: |
           BP_TEST_WORKLANE_PYTHON="$(command -v python)" PYTHONPATH=overview/v1 python -m unittest discover -s overview/v1/tests
@@ -43,7 +43,7 @@ jobs:
         run: |
           python -m pip install setuptools wheel
           python -m pip install -r browser-tests/requirements-dev.lock
-          python -m pip install "git+https://github.com/protocolcity/WorkLane.git@aeb0a561edea4d09655eb00bee4daec7f3ce0d49"
+          python -m pip install "git+https://github.com/protocolcity/WorkLane.git@425067734c5283e70a444bc4b955b83aaf1eee3d"
           python -m playwright install --with-deps chromium
       - name: Playwright journeys (synthetic fixtures)
         run: BP_TEST_WORKLANE_PYTHON="$(command -v python)" python -m pytest browser-tests -q --browser chromium
