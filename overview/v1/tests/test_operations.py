@@ -43,6 +43,25 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(len(result['orders']),1)
         self.assertEqual(result['sources'][0]['state'],'partial')
 
+    def test_open_order_limit_is_workspace_wide_and_counts_remain_truthful(self):
+        for project in ('alpha', 'beta'):
+            self.seed(project)
+            with sqlite3.connect(self.root/'worklane/worklane/local/data'/(project+'.db')) as conn:
+                conn.execute('DELETE FROM tasks')
+                conn.executemany('INSERT INTO tasks VALUES(?,NULL,?,\'backlog\',2,\'2026-09-12\',\'[]\',NULL,NULL)',
+                                 [(number, 'Synthetic order '+str(number)) for number in range(1,1501)])
+        snapshot = operations_snapshot(self.root)
+        self.assertEqual(len(snapshot['orders']), 2000)
+        self.assertTrue(snapshot['truncated'])
+        self.assertEqual(snapshot['order_limit'], 2000)
+        projects = {row['id']: row for row in snapshot['projects']}
+        self.assertEqual(projects['alpha']['open'], 1500)
+        self.assertEqual(projects['beta']['open'], 1500)
+        self.assertEqual(projects['alpha']['loaded'], 1500)
+        self.assertEqual(projects['beta']['loaded'], 500)
+        self.assertFalse(projects['alpha']['partial'])
+        self.assertTrue(projects['beta']['partial'])
+
     def test_assignment_and_routing_are_separate_from_project(self):
         self.seed()
         for labels, expected_workers, needs_routing in [

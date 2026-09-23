@@ -1,201 +1,80 @@
-# States and terms — what every word on the desk means
+# States and terms
 
-Status: design record for pc-1461, 2026-09-13. Source of each definition is the engine or paper named beside it; BluePrint may only show what one of them establishes. Companion to [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md), [AGENTS_INTENT.md](AGENTS_INTENT.md) and [SURFACES_REVIEW_2026_09.md](SURFACES_REVIEW_2026_09.md). WorkLane's own rules are in `worklane/PROTOCOL.md`; this paper restates them in the desk's words and fixes how each surface presents them.
+BluePrint projects the selected workspace's WorkLane and WorkForce evidence.
+These facts remain separate; a claim is not proof that a process is running.
+See [the product contract](../PRODUCT.md) and
+[operations interface](OPERATIONS_EVOLUTION_2026_09.md).
 
-## 1. A work order has four independent axes
+## Work
 
-An order is not "in one state". It has a **status** (where it is in the pool), a **gate** (whether anyone may take it), an **assignment** (who it is routed to), and a **claim** (who actually holds it). Attention (For You) is derived from those four and the clock. Every surface must keep the axes separate; collapsing them is how "in progress" got read as "an agent is working".
+| Axis | Source and meaning |
+|---|---|
+| Status | WorkLane lifecycle: backlog → Open, in_progress → Live, in_review → Parked, done → Done, canceled → Canceled |
+| Gate | WorkLane gate fields: human, timer, deferred, tracking, or no gate; unresolved dependencies also prevent readiness |
+| Assignment | Responsible registered worker from routing labels, or You, or Unassigned |
+| Claim | Signed current owner, branch/workdir and start evidence; distinct from assignment |
+| Kind | Work, note, todo, reminder or report from supported labels |
+| For You | Derived attention, explained by a specific rule and time |
 
-### 1.1 Status (WorkLane pool position)
+Readiness belongs to WorkLane and includes status, gates, dependencies and worker
+eligibility. Ungated backlog is not sufficient. A parked implementation normally
+awaits integration; it does not automatically require a human approval.
 
-| Status | Meaning (PROTOCOL §1, §4) | Surface word |
-|---|---|---|
-| backlog | Free pool; anyone eligible may take it | **Open** |
-| in_review | Soft lock: reserved, parked or bundled by an identity; others skip. Not a sign-off queue | **Parked** (by whom) |
-| in_progress | The live order for one identity; exactly one per identity | **Live** (with whom) |
-| done | Closed with Completed / Verification / Links / Follow-ups | **Done** |
-| canceled | Withdrawn with a signed reason | **Canceled** |
+All open includes deferred and tracking work. Filters do not mutate stored status
+or gates. Counts must identify unavailable stores and omitted records. Assignment,
+status, gate, kind and attention filters remain independent and preserve context
+through refresh and reader return. Legacy query aliases may resolve to current
+filters without creating a second meaning.
 
-Rule kept from PROTOCOL 7a: finished agent work parked in_review is a handoff to the host integrator, not a request for You to approve it.
+## Attention
 
-### 1.2 Gate (may anyone take it)
+| Face | Rule |
+|---|---|
+| Decide | A current human decision or action with an explicit reason |
+| Read | An open report requested for the person |
+| Watch | Timer or qualifying lack of work updates; a reason to inspect evidence, not proof of a dead process |
+| Due | The earliest valid reminder/deadline date is today or earlier on the workspace's local calendar day |
 
-| gate_type | Meaning | Ready? | Surface word |
-|---|---|---|---|
-| none | Ungated | yes, if blockers are done | (nothing) |
-| human | You must act now; gate_note says what and what clears it | no | **Needs a decision** |
-| timer | Embargoed until gate_until, then thaws itself | no until then | **Held until (date)** |
-| deferred | Parked on purpose; gate_note says what would thaw it | no | **Deferred** |
-| tracking | Structural umbrella; children implement; never claimed | no | **Tracking** |
+Deferred and tracking orders stay outside For You. An undated note/todo or future
+date has a kind but no Due face. An agent-owned human gate stays assigned to its
+agent. A parked handoff held by a registered seat does not become Watch solely
+because it has been waiting for integration. Current update-age rules are in
+`overview/v1/server/attention_view.py`; explain the rule rather than claiming
+an agent is stalled.
 
-**Ready** (WorkLane readiness policy, wl-517): status backlog, no active gate, every declared and structured blocker done, and, for a seat, carrying that seat's `worker:` label and the seat's required eligibility label (`execution:bounded` for the bounded implementation seats). Ready is a computed fact; it is never a status.
+Three clocks differ: a timer gate embargoes execution; a reminder/deadline label
+adds a calendar date; a browser mute hides an item here temporarily. Mentioning a
+date in prose does not create a deadline. Clearing a reminder must not clear a
+gate. The retired attention query value `note` resolves to `due` for compatibility.
 
-### 1.3 Assignment (who it is routed to) versus claim (who holds it)
+## Execution
 
-| Term | Evidence | Surface word |
-|---|---|---|
-| Assigned | one or more `worker:<id>` labels | **Assigned to** You / seat name |
-| Unassigned | no `worker:` label | **Unassigned** |
-| Needs routing | `needs:routing` label | **Needs routing** (a triage chip, not a state) |
-| Claimed (live) | signed Owner marker comment and status in_progress | **Live with** identity, since time |
-| Parked (held) | Owner marker and status in_review | **Parked by** identity, since time |
-| Verified holder | WorkForce confirms the WorkLane owner matches the seat | small "verified" mark on Agents |
+| Term | Evidence |
+|---|---|
+| Seat | Registered worker allowed to claim scoped work |
+| Job | Registered reporting/supervisory duty; not an implementation claim |
+| Schedule | Configured trigger, separate from whether a run happened |
+| Heartbeat | Daemon observation time; stale/missing stays explicit |
+| Shift | Start, bounded in-flight state and terminal result from WorkForce |
+| Last run | Recorded result and reason, separate from current execution |
+| Provider capacity | Applicable qualification or provider evidence; installed CLI is insufficient |
+| Installed build | Deployment/package receipt, verified separately from live response |
 
-**Decision D10 (2026-09-13, user question on the Work filter). Partly superseded by §5 on the same day: You returns to the Assignment filter and For You leaves the Status filter.** Assignment values come from the roster, not from whatever labels happen to be on open orders: **You**, each hired seat (lanes only, listed even with zero orders) and **Unassigned**. "Needs routing" is not an assignment; it is a triage chip on a row, computed as ungated and unassigned, so a deferred or tracking order never needs routing while it is parked (today the label sits on 84 parked orders and duplicates "no worker assigned"). A human-gated order is You's by definition: it reads Assigned to You and enters For You even when no worker label was stamped. Assignment answers "who is it routed to"; For You answers "does it want a person now"; an order can be both Assigned to You and in For You, and that is two facts, not an overlap. The Status filter's "Needs you" entry becomes "For You (any face)" with the four faces beneath it; the Assignment entry reads "Assigned to You".
+Project Running counts include verified seat execution, not jobs or GitHub events.
+An old open shift is stale evidence; it does not authorize killing a process or
+stealing a claim. Host-specific supervisor/integration jobs are configuration,
+not automatically installed product capabilities.
 
-**Decision D11 (2026-09-13). You is a persona, not a seat. Superseded by §5 for the Work filters: You is an assignment value again; the persona qualifiers stay as item kinds.** Nobody expects You to pick up work orders the way a seat does; what You has is attention. On the desk, assignment values are therefore seats and Unassigned only. Items that belong to the person live in the project's own store (a project-related item always goes to the project store) but are classified by the You qualifier, never routed as work: `you:todo` is a personal task (Note face), `you:remind` a dated reminder (Note face with the date), a human gate a decision (Decide face), an inbox report something to read (Read face). `you:host` (You implementing on this machine) is retired as a routing target: implementation work is Unassigned with a "needs a seat" chip until a qualified seat takes it, or it is on a seat. On the wire `worker:you` remains the label WorkLane requires for persona items; the desk never shows it as an assignment. Live count at the time of the decision: 45 orders on You, of which 9 decisions, 3 reminders, 9 personal tasks, 9 parked and 15 implementation orders that belong on seats.
+## Labels and compatibility
 
-You qualifiers (see D11): `you:todo` (personal task), `you:remind` (dated reminder), `you:note` (personal note); `you:host` is retired as a routing target. `gate:founder` marks a publication or money gate that only You can pass. An assignment is routing intent; only a claim proves anyone is working. Work rows today print the assignment as "owner"; the record renames it **Assigned to** and adds **Live with / Parked by** from the Owner marker.
+`worker:` routes work; `you:todo`, `you:note` and legacy `you:remind` describe
+personal kind; `reminder:YYYY-MM-DD` and `deadline:YYYY-MM-DD` carry dates;
+`inbox-report` identifies reports; `parent:`/`slice-of:` links hierarchy.
+`execution:bounded` is an eligibility convention where a runner requires it.
+Other project tags do not grant authority. Historical cloud/retired-worker labels
+are not installed adapters or active seats. Compatibility decision labels remain
+readable but new records should use explicit current gate fields and reasons.
 
-### 1.4 Attention: For You and its four faces
-
-**For You** is the one pile of things that want a person. It has four faces, computed by BluePrint (attention_view.face) from gates, labels and the clock, never stored:
-
-| Face | Rule (exact) | What it asks of you | Gold? |
-|---|---|---|---|
-| **Decide** | gate human with an act-now note (not parking language), or `gate:human` / `needs:founder-decision` label | act now; the note says what and what clears it | yes |
-| **Read** | `inbox-report` label, still open (a report was written for you and not yet cleared) | read, then clear or snooze | yes |
-| **Watch** | timer gate, or a live order untouched for 90 minutes, or a parked order untouched for 90 minutes and held by You (not a registered seat) | look at evidence; not proof anything died | no |
-| **Due** | the earliest date across every `reminder:YYYY-MM-DD` and `deadline:YYYY-MM-DD` label on the order is today or past, on the workspace's local calendar day | your own list, now due; no gate | no |
-| (none) | everything else, including an undated todo/note, an order whose earliest reminder/deadline date is still ahead, a seat-parked handoff under 90 minutes, and all deferred and tracking orders | nothing | no |
-
-**Decision D16 (2026-09-13, user question).** Kind and For You used to overlap: the old Note face fired on the same labels that define the personal item kinds (`you:todo`, `you:note`, `you:remind`, `reminder:*`), and Read equalled Kind=report. Two of the four faces restated Kind instead of answering "does it want a person now" — 17 of 30 For You items were Note, 13 of them undated todos asking for nothing today. Due replaces Note: it fires only when a reminder or deadline date has arrived. An undated todo or note is Kind only (`kind_of` in attention_view.py); it never enters For You and shows under Assignment=You and Kind=todo/note on Work instead. `you:remind` carries no date of its own (§6): with a `reminder:<date>` label present it adds nothing to Due; without one it is an undated personal item and reads as Kind todo — "Reminder (no date)" must never appear.
-
-**Review findings fixed (2026-09-13, cursor-reviewer on PR #109 / pc-1494 recovery).** Five corrections to the D16 implementation, all in `attention_view.py`:
-- **Local day, not UTC.** Due compares the earliest reminder/deadline date against the host's local calendar day (`now.astimezone().date()`), not a bare UTC `.date()` — a UTC-only compare read tomorrow's reminder as due after roughly 19:00 in a US timezone.
-- **Earliest date wins, not first label.** When an order carries more than one `reminder:`/`deadline:` label (or both), Due and its reason text use the earliest parsed date across all of them, not whichever label happens to come first; a future reminder no longer hides a past deadline.
-- **`deadline:` is Kind reminder.** `kind_of` treats a `deadline:YYYY-MM-DD` label the same as `reminder:YYYY-MM-DD` for the Kind axis (§6) — a deadline-only order is Kind reminder, not Kind work.
-- **Seat-parked handoffs are exempt from Watch.** Per PROTOCOL 7a, an `in_review` order parked by a registered seat is the host integrator's queue, not a person's attention; only an `in_review` order parked by You (no seat identity on the Owner marker) or an `in_progress` order can earn Watch from the 90-minute clock.
-- **Legacy `?attention=note` still resolves.** Pre-D16 links using the retired Note value map to Due on load and are canonicalised, same as the other legacy status/gate mappings (§5).
-
-Three clocks stay separate: a timer gate is an embargo, a reminder label is a date, a browser mute hides a card here only. A `deadline:YYYY-MM-DD` label also drives the Due face and the Calendar's Due clock. A date taken from a gate note, title, or history is a mentioned date, not a deadline. An expired timer is labelled expired; it is not currently blocking. Needs you is the Decide face, never the existence of a date. Calendar presentation is in [OVERVIEW_CALENDAR_SETTINGS.md](OVERVIEW_CALENDAR_SETTINGS.md).
-
-**Naming decision (D6, amended by D16).** Overview says "Needs you 10" while the panel opens on "Decide · 8". They measure the same pile with different filters. The record fixes one word: the metric and the panel are both **For You**, the number is the whole pile, and the breakdown shows the faces (8 decide · 2 read · 2 watch · 5 due). Decide and Read are open by default; Watch and Due are collapsed with counts. "Needs you" survives only as the badge on a Decide row.
-
-## 2. Seats, jobs, shifts and passes (WorkForce)
-
-| Term | Evidence | Surface word |
-|---|---|---|
-| Seat (lane) | roster kind lane; claims work orders under its own identity | **Seat** |
-| Job | roster kind job; scheduled or manual duty; never claims | **Job** |
-| Schedule | cron or manual | **Automatic (cron text)** / **On demand** |
-| Heartbeat | daemon last tick | fresh under 2 min · stale · unknown |
-| Shift | ledger START to STOP/ERROR | **Working** (open, within budget plus grace) · **Stale shift** (past it, no terminal row) |
-| Last run | last terminal ledger row | outcome and reason verbatim |
-| Recovery attempt | ledger rows tagged recovery=1; attempts/N receipts | **Recovery n** on the shift line |
-| Supervisor pass | /api/supervisor row | pass outcome: no eligible ready work · stopped by operator · escalated · provider failed · proposed · dispatched |
-| Dispatch outcome | per seat in a pass | completed · failed · denied · skipped · rejected at dispatch time |
-
-Badge vocabulary and one-action-per-row rules are in AGENTS_INTENT.
-
-**Running is seats only (pc-1483).** A project's Running count — Overview's `Running` metric and the per-project `running` field the Map reads — counts a fresh heartbeat plus an open shift or in-flight ticket for a **seat** row only. A job (chief-of-staff, health-patrol and the like) shows `working` on its own Agents card while its shift is open, but it never claims a work order and must not add to a project's execution count; the two surfaces apply the identical `group === 'seat'` filter so a working job cannot make Map say a project is running while Overview says it is not.
-
-**The scheduled local loop (pc-1496).** Since 2026-09-14 three daemon-owned
-jobs run the local loop unattended: the MCP mirror check remains only
-evidence of MCP server configuration, never of a scheduled job's own
-enabled/running state (see OPERATIONS_EVOLUTION_2026_09.md); what retires
-the older "no unattended worker" framing is these three jobs' own
-evidence — the roster's `kind: job` rows, their cron schedules and their
-ledger rows. The three jobs are **bp-supervisor** (cron
-10, 30, 50 past the hour; proposes and re-validates work and dispatches it
-onto a seat within its configured cap; never claims, signs, closes, merges
-or deploys itself, and does not consult `COORDINATOR.lock`), **integrator**
-(cron every 20 minutes, deterministic script; drains parked in_review orders
-on both the protocolcity and workforce stores through suites, review,
-bounded recovery, PR, CI, merge, version bump, stage, activate and the
-PROTOCOL §5 close — see `worklane/PROTOCOL.md`; stands down while a fresh
-`COORDINATOR.lock` exists at
-`local/reports/parallel-plan-pass/uplift/COORDINATOR.lock`, TTL 2400s/40
-minutes against the lock's `updated_at`, so it never races a live
-coordinator session), and **loop-health** (cron 5 and 35 past the hour,
-deterministic report; checks the daemon, the integrator ledger and its last
-recorded pass outcome, seat locks, the coordinator lock, and the
-BluePrint/WorkLane HTTP endpoints; never dispatches, claims, merges or
-installs). loop-health reads only the last recorded integrator outcome, so
-after a legitimate coordinator handoff it can read a stand-down as a defect
-for up to one integrator cadence (~20 minutes) until the next pass
-overwrites that line — see OPERATIONS_EVOLUTION_2026_09.md.
-Only integrator honors the coordinator lock; bp-supervisor and loop-health
-keep firing on schedule regardless of a live coordinator session. All three
-are **jobs**, never seats, so the Running-is-seats-only rule above still
-applies to them and a working job never inflates a project's execution
-count. A person still hires or retires a seat, clears an exhausted recovery
-round or an operator stop file, and resolves an escalated or failed pass
-through the preserved-reservation recovery protocol, never a blind retry.
-
-## 3. What each surface must show per item
-
-Legend: ✓ shown today · ○ missing · — not needed there.
-
-| Field | Work row | For You card | Reader | Projects card | Calendar row | Agents row |
-|---|---|---|---|---|---|---|
-| id, project, title | ✓ | ✓ | ✓ | — | ✓ | held order ✓ |
-| status word (Open/Live/Parked) | ✓ badge | ○ | ✓ | — | — | — |
-| gate word and note | ✓ truncated | ✓ | ✓ | — | hold-until ✓ | — |
-| face and why (rule that fired) | ✓ badge, ○ why | ✓ badge, ○ why | ○ | — | ✓ badge | — |
-| assigned to | ✓ (as "owner") | ✓ | ✓ | ○ seats per project | — | — |
-| live with / parked by, since | ○ | ○ | ○ (only in comments) | — | — | ✓ holding |
-| ready for seat / eligibility label | ○ | — | ○ | — | — | ✓ ready count |
-| blockers and parent | ○ | — | ○ | — | — | — |
-| updated, and by whom | ✓ time | ✓ time | ✓ | ○ last activity | — | — |
-| last note snippet | ○ | ✓ gate note | ✓ full | — | — | — |
-| dated fields (due, hold until, reminder, mentioned date) | ○ | ○ | ✓ | — | ✓ with source field | — |
-| counts: open, For You, deferred | — | — | — | ✓ open, ✓ need you, ○ deferred | — | — |
-
-The gaps in the "live with / parked by" column are the ones that made the desk feel unwired: an order can be live with a seat and the Work row still says "you". The change feed (D2) makes the live column worth having; without push it would be stale on arrival.
-
-## 4. Decisions recorded here
-
-- D6 One word: For You everywhere; faces as the breakdown; "Needs you" only as a row badge. Recommended.
-- D7 Rows carry both axes: Assigned to (labels) and Live with / Parked by (claim), never one word for both. Recommended.
-- D8 Watch threshold stays at 90 minutes untouched; shown as "no update for 1h 40m", never as "stalled". Recommended.
-- D9 Deferred and tracking never enter For You and are hidden from Work by default (D3), with counts visible. **Superseded on 2026-09-13 by §5: they stay out of For You, but All open shows them.**
-
-## 5. Correction of 2026-09-13 — the five axes on Work (supersedes D3, D9's default hiding, D10's filter shape and D11's removal of You)
-
-The user reviewed the installed Work surface on consolidation.47 and corrected two things: All open hid 87 of 122 open orders behind a "Show deferred and tracking" checkbox, and You had been removed from Assignment while For You sat inside Status. This section is the current rule; the earlier decisions above stay as history and must not be restored by following the old text. Owning implementation order: pc-1482.
-
-| Axis | Question it answers | Values | Source |
-|---|---|---|---|
-| **Assignment** | Who is responsible | **You** · each registered seat · Unassigned | `worker:` labels and persona qualifiers; You matches `worker:you` and human-owned decisions, never an agent-owned decision |
-| **Status** | Where in the lifecycle | Open · Live · Parked (plus Done, Canceled when asked for) | WorkLane status |
-| **Gate** | May it execute | none · human · timer (active or expired) · deferred · tracking · blocked on another order | WorkLane gate fields; an expired timer is not an active embargo; a declared blocker whose dependency is still open is the Gate value "Blocked on another order" |
-| **Kind** | What sort of item | work · note · todo · reminder · report, where recorded | `you:*`, `reminder:*`, `inbox-report` labels |
-| **For You** | Does it want a person now | the four faces (Decide · Read · Watch · Due) | computed attention (§1.4); a named view, not a status |
-
-Rules:
-
-- **All open is complete.** The default Work list is every order that is not done or canceled from every readable registered store, whatever its gate. Per-project totals agree with Projects and Overview. Unavailable or truncated stores are labelled on the page, never silently short.
-- **No hidden second filter.** The "Show deferred and tracking" checkbox is removed. Gate is its own filter with an explicit value list and no default exclusion. Status holds lifecycle words only.
-- **You is an assignment.** Assignment lists You beside All assignments, the registered seats and Unassigned. Persona items (`you:todo`, `you:remind`, `you:note`) and human-owned decisions match You; an agent-owned order with a human gate stays assigned to that agent and appears in For You because You must act. A row never reads "Assigned to Unassigned" for a persona item.
-- **For You is attention.** It is not a Status choice; it is the named inbox view with its faces. An order can be assigned to You and in For You, or assigned to a seat and in For You; those are two facts.
-- **Ready comes from the engine.** A Ready view uses WorkLane readiness (dependencies, gate expiry, seat eligibility); ungated backlog is not "ready" by itself. Deferred and tracking orders are visible under All open and remain unclaimable.
-- **Counts are explicit.** The list header states filtered of total and the active filters with a clear-all. Filters, page and selection survive refresh, back/forward, reader return and reload; the old `deferred=1` and `status=gate:*` links map to the Gate filter.
-- **Stored data is untouched.** No stored status is added, no gate or label is rewritten to make the view come out; the projection and the filters change, the records do not.
-
-Fixtures every implementation must carry: a personal reminder assigned to You; an agent-owned human gate visible in For You and still assigned to the agent; an ungated ready agent order; deferred and tracking records visible under All open but not ready; an expired timer beside an active one; an unavailable store and a truncated store. Also (D16): an undated todo (Kind todo, no face); a reminder dated today (Due); a reminder dated tomorrow (no face, Kind reminder); an open inbox-report (Read); each assigned to You.
-
-## 6. Label matrix — every tag on a work order, which axis it feeds, who writes it
-
-Inventory taken 2026-09-13 across all twelve registered stores (133 open orders). Labels are free text in WorkLane; this table is the desk's contract for reading them. A label that is not in the table is a project tag (area, topic) and feeds nothing on the desk except search. Nothing here creates a new stored status; every row maps a label onto one of the five axes of §5 or onto a fact the reader shows.
-
-| Label family | Meaning | Axis it feeds | Written by | Shown on the desk as |
-|---|---|---|---|---|
-| `product:<slug>` | Store identity stamped on every order | none (routing) | WorkLane on create | project name on the row |
-| `worker:<seat>` | Routed to a registered seat | **Assignment** | filer, coordinator, seat generator | Assigned to seat; Assignment filter |
-| `worker:you` | Routed to the person | **Assignment** = You | filer, coordinator | Assigned to You (pc-1493 fixes the host case) |
-| `you:todo` · `you:remind` · `you:note` | Personal item kinds; `you:host` = You implementing on this machine. `you:remind` carries no date of its own — it is a legacy alias: with a `reminder:<date>` label present it adds nothing, without one it is Kind todo (D16) | **Kind** (and Assignment = You) | filer | Your todo / Your note; Kind todo/note on Work; no face unless dated |
-| `reminder:YYYY-MM-DD` · `deadline:YYYY-MM-DD` | Dated clocks without an embargo | Calendar clocks; **Kind** = reminder; **Due** face when the date is today or past (D16) | filer, reader | Reminder / Due with the source label named |
-| `inbox-report` · `inbox-report:<kind>` | A report was written for the person | **For You** = Read | report jobs | Read face |
-| `gate:founder` · `needs:founder-decision` · `needs:founder-present` | Only the person can pass this (publication, money, physical presence) | **For You** = Decide when the gate is human; otherwise a reader chip | filer | Needs you badge; chip |
-| `needs:routing` | WorkLane's stamp: no seat carried it when routing was last computed | none on the desk since .50; the desk computes Needs routing from ungated plus unassigned | WorkLane (engine) | Needs routing chip only when ungated and unassigned |
-| `execution:bounded` | Eligibility for the bounded implementation seats | Readiness (seat eligibility) | filer | Ready for seat |
-| `seat:cloud` | Historical: routed to a cloud/citizen executor that no longer exists. Decided 2026-09-14 (wf-258, option A): cloud sessions are never roster seats; they appear only as GitHub evidence on Delivery and as WorkLane claims they sign themselves on Work | none | historical | nothing (search only) |
-| `epic` · `epic:tracking` · `epic:citizen-park` · `goal` | Structural umbrella markers | none; the **Gate** value tracking is the fact | filer | Tracking badge comes from gate_type, not the label |
-| `parent:<id>` · `slice-of:<id>` | Hierarchy | reader (Part of …) | filer | Part of link |
-| `adr:<n>` · `sys:<x>` · `area:<x>` · `phase:<x>` · `host:<x>` | Project taxonomy | none | project | search only |
-| `worker:<retired hand>` on done orders · `gate_type:<x>` · `gate_type=<x>` | Legacy markers; a gate must be a real gate field, never a label | none | historical | nothing; corrected when found (osp-1005, pc-1287) |
-
-What is not a label, and must not become one: status (`backlog`, `in_progress`, `in_review`, `done`, `canceled` are fields), the gate (`gate_type`, `gate_until`, `gate_note` are fields), a claim (the signed Owner marker comment), declared blockers (the `blockers` list; a declared blocker is the Gate value "Blocked on another order", pc-1493), and readiness (computed by the WorkLane policy from status, gate, blockers and eligibility).
-
-Reading the inventory: 80 open orders carry `needs:routing` and 57 carry `seat:cloud`; almost all of them are the 77 deferred or tracking orders whose historical hands were retired. They are parked on purpose, they are Unassigned because their seats no longer exist, and they need a seat only when their gate thaws. That is the whole relationship between Unassigned and parked on the Work page: nothing drops work there today; it is the retired-seat backlog, visible since .50 and filterable by Gate.
+Status, gate, declared blockers, signed ownership and engine readiness must not
+be replaced by arbitrary labels. Unassigned deferred work is intentionally
+parked; it needs routing when it becomes actionable, not merely to fill a queue.

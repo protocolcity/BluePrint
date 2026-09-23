@@ -1,16 +1,9 @@
 #!/usr/bin/env python3
-"""Prove the public cut artifacts are claim-ready (pc-1468 / #145).
+"""Check matching package versions, exact engine pins and public artifact hygiene.
 
-Checks, without uploading anything:
-
-1. Both package pyprojects declare version 0.1.50 and engines ==0.1.9
-2. Built sdist/wheel contain no ``.mcp.json``, no ``/Users/<name>/`` host
-   fingerprints, and no ``.protocolcity/`` runtime tree
-3. Packaged templates that name a workspace root use ``{{WORKSPACE_ROOT}}``
-4. Release notes contain no secret-material patterns
-
-Prints locations and rule names only — never echoes possible credentials.
-Does not invoke twine.
+Builds wheel/sdist candidates without uploading. Findings show only file paths
+and rule names, never possible credential values. Release notes, templates and
+public tests are checked alongside both preferred and compatibility packages.
 """
 from __future__ import annotations
 
@@ -21,19 +14,15 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import zipfile
 from pathlib import Path
 from typing import Iterable, List, Sequence, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
-CUT_VERSION = "0.1.50"
-ENGINE_PINS = (
-    "protocolcity-worklane==0.1.9",
-    "protocolcity-workforce==0.1.9",
-)
 PREFERRED_PYPROJECT = ROOT / "pyproject.toml"
 COMPAT_PYPROJECT = ROOT / "packaging" / "pypi" / "protocolcity" / "pyproject.toml"
-RELEASE_NOTES = ROOT / "docs" / "releases" / "0.1.50.md"
+RELEASE_NOTES = ROOT / "docs" / "releases"
 
 # Actual host home directories, not documentation ellipsis or character classes.
 HOST_USERS = re.compile(r"/Users/[A-Za-z0-9._-]+/")
@@ -75,49 +64,42 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _toml_version(text: str) -> str:
-    match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', text)
-    if not match:
-        raise ValueError("version field missing")
-    return match.group(1)
-
-
-def _toml_engines(text: str) -> List[str]:
-    # Whole-file scan: a quoted extra like "pkg[engines]==ver" contains
-    # brackets, so a naive engines = [ ... ] slice stops too early.
-    if not re.search(r"(?m)^engines\s*=\s*\[", text):
-        raise ValueError("engines extra missing")
-    return re.findall(r'"(protocolcity-[^"]+)"', text)
-
-
 def check_metadata() -> List[str]:
     failures: List[str] = []
-    for label, path in (
-        ("protocolcity-blueprint", PREFERRED_PYPROJECT),
-        ("protocolcity", COMPAT_PYPROJECT),
-    ):
-        if not path.is_file():
-            failures.append(f"{label}: missing {path.relative_to(ROOT)}")
-            continue
-        text = _read(path)
+    metadata = []
+    for path in (PREFERRED_PYPROJECT, COMPAT_PYPROJECT):
         try:
-            version = _toml_version(text)
-        except ValueError as exc:
-            failures.append(f"{label}: {exc}")
-            continue
-        if version != CUT_VERSION:
-            failures.append(f"{label}: version {version!r} != {CUT_VERSION!r}")
-        try:
-            engines = _toml_engines(text)
-        except ValueError as exc:
-            failures.append(f"{label}: {exc}")
-            continue
-        for pin in ENGINE_PINS:
-            if pin not in engines:
-                failures.append(f"{label}: engines missing {pin}")
-    preferred = _read(PREFERRED_PYPROJECT)
-    if ".mcp.json" not in preferred or "exclude-package-data" not in preferred:
-        failures.append("protocolcity-blueprint: exclude-package-data must name .mcp.json")
+            metadata.append(tomllib.loads(_read(path))["project"])
+        except (OSError, ValueError, KeyError) as exc:
+            failures.append(f"{path.name}: invalid project metadata ({type(exc).__name__})")
+    if len(metadata) != 2:
+        return failures
+    preferred, compat = metadata
+    version = preferred.get("version")
+    if not isinstance(version, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+(?:[A-Za-z0-9.+-]*)", version):
+        failures.append("preferred package: invalid or missing static version")
+    if compat.get("version") != version:
+        failures.append("compatibility and preferred package versions differ")
+    expected_alias = f"protocolcity-blueprint=={version}"
+    if compat.get("dependencies") != [expected_alias]:
+        failures.append("compatibility dependency must match preferred version exactly")
+    engine_names = ("protocolcity-worklane", "protocolcity-workforce")
+    preferred_pins = preferred.get("optional-dependencies", {}).get("engines", [])
+    compat_pins = compat.get("optional-dependencies", {}).get("engines", [])
+    if not all(isinstance(pins, list) and all(isinstance(pin, str) for pin in pins)
+               for pins in (preferred_pins, compat_pins)):
+        return failures + ["engine dependencies must be string lists"]
+    for name in engine_names:
+        matches = [pin for pin in preferred_pins if isinstance(pin, str) and pin.startswith(name + "==")]
+        if len(matches) != 1 or not re.fullmatch(re.escape(name) + r"==[0-9]+(?:\.[0-9]+)+(?:[A-Za-z0-9.+-]*)", matches[0]):
+            failures.append(f"preferred engines need one exact {name} version")
+        elif matches[0] not in compat_pins:
+            failures.append(f"compatibility engines must match {name} pin")
+    if len(preferred_pins) != 2 or set(compat_pins) != set(preferred_pins + [f"protocolcity-blueprint[engines]=={version}"]):
+        failures.append("unexpected or mismatched engine dependencies")
+    text = _read(PREFERRED_PYPROJECT)
+    if ".mcp.json" not in text or "exclude-package-data" not in text:
+        failures.append("preferred package must exclude host .mcp.json files")
     return failures
 
 
@@ -227,16 +209,19 @@ def scan_public_tests() -> List[str]:
 
 
 def scan_release_notes() -> List[str]:
-    if not RELEASE_NOTES.is_file():
-        return [f"missing {RELEASE_NOTES.relative_to(ROOT)}"]
-    text = _read(RELEASE_NOTES)
+    notes = sorted(RELEASE_NOTES.glob("*.md"))
+    if not notes:
+        return ["missing release notes directory or Markdown notes"]
     failures: List[str] = []
-    if HOST_USERS.search(text) or HOST_HOME.search(text):
-        failures.append("docs/releases/0.1.50.md: host-path fingerprint")
-    if SECRET_MATERIAL.search(text):
-        failures.append("docs/releases/0.1.50.md: secret material")
-    if "twine upload" in text and "dry-run" not in text.lower():
-        failures.append("docs/releases/0.1.50.md: live twine upload instruction")
+    for path in notes:
+        text = _read(path)
+        label = path.relative_to(ROOT)
+        if HOST_USERS.search(text) or HOST_HOME.search(text):
+            failures.append(f"{label}: host-path fingerprint")
+        if SECRET_MATERIAL.search(text):
+            failures.append(f"{label}: secret material")
+        if "twine upload" in text and "dry-run" not in text.lower():
+            failures.append(f"{label}: live twine upload instruction")
     return failures
 
 
@@ -330,7 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     print(
         "Public cut check: clean — "
-        f"both packages {CUT_VERSION}, engines ==0.1.9, "
+        "matching package versions and exact engine pins, "
         "no host MCP/runtime/paths in artifacts"
     )
     return 0

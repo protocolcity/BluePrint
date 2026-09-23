@@ -1438,7 +1438,7 @@ def _run_serve_with_engines(city_root: Path, port: int) -> int:
 
 def main(argv: Optional[List[str]] = None) -> int:
     actual = list(sys.argv[1:] if argv is None else argv)
-    if actual and actual[0] in ('serve', 'status', 'service', 'stage', 'activate', 'update', 'install', 'uninstall'):
+    if actual and actual[0] in ('serve', 'status', 'service', 'stage', 'activate', 'update', 'install', 'uninstall', 'doctor'):
         from .operations_cli import main as current
         return current(actual)
     # Taught face is blueprint; fall back to argv basename for module form.
@@ -1500,7 +1500,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="all_unmanaged",
         help=(
             "after workspace is ready, adopt every safe unmanaged top-level folder "
-            "(alias: --adopt-existing; pc-571 / GH#6)"
+            "(alias: --adopt-existing;  / GH#6)"
         ),
     )
     p_setup.add_argument(
@@ -1521,7 +1521,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_setup.add_argument(
         "--serve",
         action="store_true",
-        help="open the suite with engines after setup",
+        help="open the current BP application after setup; engines are configured separately",
     )
     p_setup.add_argument(
         "--service",
@@ -1573,7 +1573,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "service",
         help=(
             "macOS login LaunchAgent — keep suite+engines up without a terminal "
-            "(pc-433)"
+            ""
         ),
     )
     svc_sub = p_service.add_subparsers(dest="service_cmd")
@@ -1771,7 +1771,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="adopt_existing",
         help=(
             "after founding, adopt every safe unmanaged top-level folder already "
-            "under the workspace (pc-571 / GH#6; same as setup --adopt-existing)"
+            "under the workspace (GH#6; same as setup --adopt-existing)"
         ),
     )
     p_found.add_argument(
@@ -1823,7 +1823,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="all_unmanaged",
         help=(
             "adopt every safe unmanaged top-level folder under the workspace "
-            "(alias: --adopt-existing; pc-571 / GH#6)"
+            "(alias: --adopt-existing;  / GH#6)"
         ),
     )
     p_adopt.add_argument("--force", action="store_true", help="overwrite existing papers")
@@ -1833,7 +1833,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help=(
             "allow desk store join when zone is foreign/export/archive "
-            "(founder-present; default refuses live WorkLane pollution — pc-1186)"
+            "(authorized host; default refuses live WorkLane pollution —)"
         ),
     )
     p_adopt.add_argument("--desk", default=DEFAULT_DESK, help="WorkLane base URL")
@@ -1842,7 +1842,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help=(
             "plant unarmed workers/demo-worker CONTRACT+prompt stubs "
-            "(default: no stubs — work-order-only projects stay clean; pc-489)"
+            "(default: no stubs — work-order-only projects stay clean)"
         ),
     )
     p_adopt.add_argument(
@@ -1888,7 +1888,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--cabinet",
         default=None,
         dest="cabinet",
-        help="back-compat alias for --neighborhood (pc-320)",
+        help="back-compat alias for --neighborhood ",
     )
     p_doctor.add_argument(
         "--fix",
@@ -1900,7 +1900,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help=(
             "clobber existing thin stubs / seed files when refreshing "
-            "(not required to plant *missing* L0 kits — use --fix alone; pc-1162)"
+            "(not required to plant *missing* L0 kits — use --fix alone)"
         ),
     )
     p_doctor.add_argument(
@@ -1913,7 +1913,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help=(
             "allow desk join when project zone is foreign/export/archive "
-            "(founder-present; default refuses — pc-1186)"
+            "(authorized host; default refuses —)"
         ),
     )
     p_doctor.add_argument("--desk", default=DEFAULT_DESK, help="WorkLane base URL")
@@ -1930,7 +1930,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="check_paths",
         help=(
             "lint suite/protocolcity/scripts for host-path hardcodes "
-            "(~/Developer, /Users/…); see scripts/check_no_host_paths.py (pc-956)"
+            "(~/Developer, /Users/…); see scripts/check_no_host_paths.py "
         ),
     )
 
@@ -1939,7 +1939,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         help=(
             "after renaming/moving a workspace folder: rewrite service, "
             "registry, roster, LaunchAgents, skill bridges, grok paths, "
-            "and project vendor configs (GH #7 · pc-959 · portable cities)"
+            "and project vendor configs (GH #7 ·  · portable cities)"
         ),
     )
     p_reloc.add_argument(
@@ -1988,15 +1988,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_update = sub.add_parser(
         "update",
         help=(
-            "upgrade BluePrint suite to the latest release (Homebrew or pip) "
-            "— pair with --agent-prompt for Cursor/any AI (pc-565)"
+            "retired command; use stage/activate for source releases or upgrade for legacy service conversion"
         ),
     )
     p_update.add_argument(
         "--method",
         choices=("auto", "brew", "pip"),
         default="auto",
-        help="install channel (default: auto-detect brew, else pip)",
+        help="legacy option; this command does not install packages",
     )
     p_update.add_argument(
         "--restart",
@@ -2023,7 +2022,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "feedback",
         help=(
             "paste-ready beta bug report (versions, doctor, logs) — local only "
-            "(pc-317/pc-434); pair with --agent-prompt for Cursor/any AI"
+            "; pair with --agent-prompt for Cursor/any AI"
         ),
     )
     p_feedback.add_argument(
@@ -2050,7 +2049,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_feedback.add_argument(
         "--write",
         action="store_true",
-        help="also write .protocolcity/reports/feedback-*.md under the workspace",
+        help="also write.protocolcity/reports/feedback-*.md under the workspace",
     )
     p_feedback.add_argument(
         "--open",
@@ -2062,7 +2061,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "serve",
         help=(
             "serve BluePrint suite (Overview landing · Map · Desk · Roster); "
-            "when a login LaunchAgent is installed, kickstarts it (pc-1072) "
+            "when a login LaunchAgent is installed, kickstarts it  "
             "instead of a foreground orphan"
         ),
     )
@@ -2073,7 +2072,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help=(
             "force a terminal-owned suite process even when a login service is "
-            "installed (pc-1072; dies with the shell — prefer launchd restart)"
+            "installed (dies with the shell — prefer launchd restart)"
         ),
     )
     p_serve.add_argument(
@@ -2081,8 +2080,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help=(
             "start WorkLane (:8799) + WorkForce (:8797) before the suite "
-            "(pc-575: census is in-process — no citylens/:8796). Default when "
-            "a workspace root is resolved (pc-421); this flag is kept for scripts."
+            "(: census is in-process — no citylens/:8796). Default when "
+            "a workspace root is resolved; this flag is kept for scripts."
         ),
     )
     p_serve.add_argument(
@@ -2096,7 +2095,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     p_hide = sub.add_parser(
         "hide",
-        help="hide a folder from Map plots (display-only; writes .protocolcity/hidden.json)",
+        help="hide a folder from Map plots (display-only; writes.protocolcity/hidden.json)",
     )
     p_hide.add_argument("folder", help="folder name or path (slug = basename, lowercased)")
     p_hide.add_argument(
@@ -2130,9 +2129,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             "`seed-ops`, not a lane hire."
         ),
         epilog=(
-            "Grammar (pc-435): worker/hand/agent = claims tickets; "
+            "Grammar : worker/hand/agent = claims tickets; "
             "job = scheduled duty (Map diamond). "
-            "Paper packs (pc-968): names ending in -desk auto-pick director "
+            "Paper packs : names ending in -desk auto-pick director "
             "CONTRACT/prompt; override with --template worker|director. "
             "Examples:\n"
             "  blueprint hire neo --workdir ~/ws/recipes --role 'notes helper'\n"
@@ -2209,7 +2208,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         choices=_HIRE_TEMPLATE_CHOICES,
         default="auto",
         help=(
-            "paper pack for CONTRACT/prompt (pc-968): auto picks director when "
+            "paper pack for CONTRACT/prompt : auto picks director when "
             "name ends in -desk, else worker; or force worker|director"
         ),
     )
@@ -2242,7 +2241,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     p_digest = sub.add_parser(
         "digest",
-        help="daily workspace digest — write dated MD + optional ntfy push (pc-712)",
+        help="daily workspace digest — write dated MD + optional ntfy push ",
         description=(
             "Run or install the daily workspace digest job. "
             "Writes {ws}/.protocolcity/digests/YYYY-MM-DD.md. "
@@ -2324,11 +2323,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             demo_flag = True
         if getattr(args, "no_demo", False):
             demo_flag = False
-        service_flag = None
-        if getattr(args, "service", False):
-            service_flag = True
-        if getattr(args, "no_service", False):
-            service_flag = False
+        service_flag = False
+        if getattr(args, "service", False) or getattr(args, "isolated", False):
+            print("Setup creates workspace files. For a persistent BP service, use blueprint stage and blueprint activate; use blueprint upgrade only to convert an existing legacy service.", file=sys.stderr)
+            return 2
         isolated = bool(getattr(args, "isolated", False))
         if isolated and service_flag is not True:
             print(
@@ -2365,7 +2363,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 desk_url=args.desk,
                 no_ticket=args.no_ticket,
                 map_port=args.port,
-                serve_fn=_run_serve_with_engines,
+                serve_fn=lambda root, port: __import__('protocolcity.operations_cli', fromlist=['main']).main(
+                    ['serve', '--foreground', '--root', str(root), '--port', str(port)]),
                 demo=demo_flag,
                 service=service_flag,
                 service_isolated=isolated,

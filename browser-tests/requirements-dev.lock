@@ -1,0 +1,5 @@
+# Test-only browser runner. Install: pip install -r browser-tests/requirements-dev.lock
+# Then: playwright install chromium
+playwright==1.49.1
+pytest==8.3.4
+pytest-playwright==0.6.2

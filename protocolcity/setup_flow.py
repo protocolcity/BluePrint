@@ -1231,7 +1231,7 @@ def _maybe_service_install(
     if not want:
         print(
             "  Skipped always-on. Later: "
-            "blueprint service install --root %s" % root
+            "blueprint activate --workspace %s --release <verified-release>" % root
         )
         return False
 
@@ -1246,7 +1246,7 @@ def _maybe_service_install(
     except Exception as e:
         print("warning: service install failed: %s" % e, file=sys.stderr)
         print(
-            "  Tip: blueprint service install --root %s" % root,
+            "  Tip: blueprint activate --workspace %s --release <verified-release>" % root,
             file=sys.stderr,
         )
         return False
@@ -1320,7 +1320,7 @@ def _after_workspace_ready(
             file=sys.stderr,
         )
         print(
-            "  Retry: blueprint service install --root %s --force" % root,
+            "  Retry: blueprint activate --workspace %s --release <verified-release>" % root,
             file=sys.stderr,
         )
         print("  http://127.0.0.1:%d/" % map_port, file=sys.stderr)
@@ -1340,22 +1340,22 @@ def _maybe_serve(
 ) -> int:
     do_serve = serve
     if not do_serve and is_tty() and not yes and serve_fn is not None:
-        ans = _prompt_choice("Open the suite now (serve --with-engines)", ("y", "n"), "y")
+        ans = _prompt_choice("Open BluePrint now (foreground)", ("y", "n"), "y")
         do_serve = ans == "y"
     if not do_serve:
         print("")
         print("Next:")
-        print("  blueprint serve --root %s --with-engines" % root)
+        print("  blueprint serve --foreground --root %s" % root)
         print("  open http://127.0.0.1:%d/" % map_port)
         print(
             "  # macOS login auto-start: "
-            "blueprint service install --root %s" % root
+            "blueprint activate --workspace %s --release <verified-release>" % root
         )
         return 0
     if serve_fn is None:
         print(
             "error: serve requested but not wired — run: "
-            "blueprint serve --root %s --with-engines" % root,
+            "blueprint serve --foreground --root %s" % root,
             file=sys.stderr,
         )
         return 2

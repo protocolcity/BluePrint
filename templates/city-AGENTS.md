@@ -48,23 +48,17 @@ blocked.
 - **Work spanning two projects = two work orders**, one per project,
   each scoped to its side of the boundary.
 
-## Foreign / upstream-owned folders
+## Source ownership
 
-Third-party git clones in this workspace are **consumers** by default — no
-adopt required to run automations or file operator work.
-
-- **Code defects / features** → file an issue on the **upstream** GitHub.
-  Do not patch tracked source here (keeps `git pull` clean).
-- **Operator work** (sync jobs, local data, note hygiene) → work orders in
-  that project's desk store.
-- `data/` and gitignored config are the local safe zone.
-- Adopt is optional. `blueprint adopt … --force` joins the desk for
-  coordination only; origin stays foreign.
+Identify the canonical repository and applicable contribution instructions before
+editing. An authorized bug fix may use an isolated checkout and reviewed branch.
+Preserve local changes, data and history. A registered reference clone does not
+become a second product or store. Keep host configuration outside public source.
 
 ## Coordination (You in chat — any vendor)
 
 BluePrint is vendor-neutral: pick any chat host + WorkLane MCP for capture, any
-CLI for hired hands, suite as **glass**.
+configured runner for execution, and the suite for operations.
 
 - **Ownership:** WorkLane owns work orders and writes; WorkForce owns execution
   and roster state. BluePrint presents verified state and routes supported
@@ -84,19 +78,18 @@ CLI for hired hands, suite as **glass**.
   dig-in / done trail over re-teaching the same outcome in a new chat.
 - **For You** = real decisions, credentials, publication or requested reading; not
   “confirm this plan” after You already filed
-- **Coord sessions** file / label / dispatch / escalate — they do **not** claim
-  `worker:*` work when a hand runtime exists
-- **Identity** default wire id: **`you`** (UI shows **You**)
-- **Skills** live on **local disk** under `.agents/skills/` (preferred) and
-  `.claude/skills/` — L0 always-on toolkit; L1 under each project. Not cloud.
-  L0 must still load in **project** sessions (`scripts/skills_sync.sh` + Grok
-  `[skills] paths` — see `.claude/skills/README.md` and `FIRST_RUN.md`).
+- **Interactive work:** an authorized session may implement as You. Respect
+  active claims and dispatch contracts; do not silently compete with an agent.
+- **Identity:** use the actual acting identity; UI shows the human as **You**.
+- **Skills:** keep a canonical shared source and generate provider mirrors where
+  needed. Verify availability in each execution environment. Local files do not
+  automatically become available to a remote worker.
 - **Efficiency:** the planted skill supports inspection/reporting. A job needs
   separately configured execution; empty queues stop without refill or thaw.
 - **Capacity:** stop at configured limits and report failures. Roster changes
   require applicable authorization; a template does not establish capacity.
-- Full ladder: product docs `INSTRUCTION_LADDER.md` + `SUITE_VIEWER.md` when
-  present in your BluePrint install
+- Read the installed product documentation for supported execution adapters.
+  Instruction templates do not establish provider access or remote execution.
 
 ## Creating workers and work orders
 
@@ -127,7 +120,7 @@ blueprint hire <function-name> --workdir <workspace>/.protocolcity/ops --kind jo
 
 ## Truth upkeep (board + papers — every project)
 
-The work-order board is shared memory. **Closing a ticket hides the work.**
+The work-order board preserves decisions and evidence. Closing is an acceptance claim.
 
 - **Sticky residual.** If work remains at close: keep the parent open, **or**
   file child tickets first and list those ids under `Follow-ups:`.
