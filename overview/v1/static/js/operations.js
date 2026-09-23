@@ -279,7 +279,8 @@ function rowFace(order) {
   if(order.attention_face==='decide') return 'Decide';
   if(order.attention_face==='read') return 'Read';
   if(order.attention_face==='watch') return 'Watch';
-  if(order.attention_face==='due' || isYouKind(order)) return 'Note';
+  if(order.attention_face==='due') return 'Due';
+  if(isYouKind(order)) return 'Note';
   if(order.you_host) return 'Host';
   if((order.kind || 'work')==='work' && hasWorkerYou(order) && !hasSeatWorker(order)) return 'Host';
   return 'none';

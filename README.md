@@ -23,7 +23,7 @@ Install the published package in an isolated environment:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install protocolcity protocolcity-worklane protocolcity-workforce
-blueprint setup ~/my-workspace --create --yes
+blueprint setup ~/my-workspace --create --yes --no-desk --no-ticket --no-service
 blueprint serve --foreground --root ~/my-workspace --port 8803
 ```
 

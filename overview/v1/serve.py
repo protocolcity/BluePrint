@@ -413,16 +413,7 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_file(query.get("path", ""), query.get("render", "raw"))
             return
 
-        # HTML pages.
-        if route in ("/", "/overview", "/overview/"):
-            self._serve_static(_OV_STATIC_DIR, "overview.html")
-            return
-        if route in ("/calendar", "/calendar/"):
-            self._serve_static(_OV_STATIC_DIR, "calendar.html")
-            return
-        if route in ("/settings", "/settings/"):
-            self._serve_static(_OV_STATIC_DIR, "settings.html")
-            return
+        # Map uses its own shell within the current operations navigation.
         if route in ("/map", "/map/"):
             self._serve_map_shell()
             return

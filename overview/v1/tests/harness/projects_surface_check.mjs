@@ -371,7 +371,7 @@ const commsRow = [...list.querySelectorAll('.bp-projects-row')].find(row => domT
 assert.ok(commsRow, 'Comms row must exist');
 assert.ok(domText(commsRow).includes('you · live'), 'human live claim must still show in Agents now');
 
-assert.ok(domText(commsRow).includes('partial (limited to 2,000)'), 'partial scan-derived counts must carry the limit marker');
+assert.ok(domText(commsRow).includes('partial (workspace record limit)'), 'partial scan-derived counts must carry the limit marker');
 
 const spark = blueprintRow.querySelector('.bp-projects-spark');
 assert.ok(spark, 'active project row must host a per-card spark');
@@ -414,7 +414,7 @@ console.log(JSON.stringify({
   roster_reads_coverage: domText(workforceRow).includes('Claude idle'),
   unregistered_none_staffed: domText(worklaneRow).includes('none staffed'),
   human_live_claim: domText(commsRow).includes('you · live'),
-  partial_counts_marked: domText(commsRow).includes('partial (limited to 2,000)'),
+  partial_counts_marked: domText(commsRow).includes('partial (workspace record limit)'),
   breakdown_present: blueprintRow.querySelectorAll('details').length >= 1,
   spark_hot: domText(spark).includes('hot'),
   compare_rows: compareRows.length,

@@ -60,6 +60,9 @@ class BandPartitionTests(unittest.TestCase):
         self.assertEqual(board_band(row), 'act_now')
         self.assertEqual(row_face(row), 'Read')
 
+    def test_due_attention_is_not_painted_as_an_undated_note(self):
+        self.assertEqual(row_face(order(attention_face='due', kind='reminder')), 'Due')
+
     def test_you_todo_without_human_gate_is_my_todos(self):
         row = order(kind='todo', workers=['you'], assigned_you=True)
         self.assertTrue(is_my_todo(row))
