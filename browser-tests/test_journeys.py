@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import pytest
 
 from playwright.sync_api import Page, expect
 
@@ -112,13 +113,14 @@ def test_failed_note_preserves_draft_and_shows_recovery(page: Page, healthy_base
     expect(page.locator('#note-body')).to_have_value('Keep this unsaved draft')
 
 
-def test_failed_refresh_keeps_last_observation_visible(page_healthy: Page) -> None:
-    page = page_healthy
+@pytest.mark.parametrize('surface', ['overview', 'work'])
+def test_failed_refresh_keeps_last_observation_visible(page: Page, healthy_base_url: str, surface: str) -> None:
+    page.goto(healthy_base_url + ('/' if surface == 'overview' else '/work'))
     expect(page.locator('#freshness')).not_to_contain_text('Connecting')
-    page.route('**/api/operations', lambda route: route.abort())
+    page.route(re.compile(r'.*/api/operations(?:\?.*)?$'), lambda route: route.abort())
     page.locator('#refresh').click()
     expect(page.locator('#freshness')).to_contain_text('Refresh failed')
-    expect(page.locator('#overview-view')).to_be_visible()
+    expect(page.locator(f'#{surface}-view')).to_be_visible()
 
 
 def test_stale_heartbeat_is_visible_as_stale_evidence(page: Page) -> None:
