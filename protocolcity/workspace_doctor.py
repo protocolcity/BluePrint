@@ -172,7 +172,7 @@ def diagnose(root: Path, *, probe: bool = False) -> dict:
             if origin is None:
                 raise ValueError("no verified local origin")
             if component == "blueprint":
-                value = _probe(origin, "/api/operations")
+                value = _probe(origin, "/api/identity")
                 workspace = value.get("workspace") or {}
                 if (not isinstance(workspace, dict) or workspace.get("path") != str(root)
                         or value.get("build") != receipt["version"]):

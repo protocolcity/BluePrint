@@ -43,17 +43,18 @@ def serve_binder(binder: Path):
         **os.environ,
         "PYTHONPATH": f"{_CHECKOUT / 'overview/v1'}:{_CHECKOUT / 'map/v1'}:{_CHECKOUT}",
     }
+    installed_python = os.environ.get("BP_TEST_BLUEPRINT_PYTHON")
+    if installed_python:
+        if not Path(installed_python).is_absolute() or not Path(installed_python).is_file():
+            raise ValueError("BP_TEST_BLUEPRINT_PYTHON must name an installed absolute interpreter")
+        env.pop("PYTHONPATH", None)
+        command = [installed_python, "-I", "-m", "overview.v1.serve"]
+    else:
+        command = [sys.executable, str(_SERVE)]
+    command += ["--host", "127.0.0.1", "--port", str(port), "--binder", str(binder)]
     proc = subprocess.Popen(
-        [
-            sys.executable,
-            str(_SERVE),
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--binder",
-            str(binder),
-        ],
+        command,
+        cwd=binder,
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

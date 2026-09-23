@@ -55,3 +55,8 @@ Reproduced product bugs should add a failing-then-passing regression in the
 suite that owns the behavior (component unittest or browser journey).
 
 Traces use the [official pytest plugin options](https://playwright.dev/python/docs/test-runners). CI retains synthetic failure evidence for seven days, with no automatic retries. Missing the installed WorkLane dependency fails the write journey rather than silently skipping it.
+
+For package acceptance, set `BP_TEST_BLUEPRINT_PYTHON` to the installed candidate's
+absolute interpreter and run the browser tier. Its server starts with `-I` from
+a disposable workspace, without source-checkout imports. Keep
+`BP_TEST_WORKLANE_PYTHON` set to the independently installed engine.
