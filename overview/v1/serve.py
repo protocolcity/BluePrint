@@ -350,6 +350,15 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, ValueError, sqlite3.Error):
                 self._send_json(503, {"error": "Timeline could not be read."})
             return
+        if route == "/api/identity":
+            from importlib.metadata import version, PackageNotFoundError
+            try:
+                build = version("protocolcity-blueprint")
+            except PackageNotFoundError:
+                build = "Source checkout"
+            self._send_json(200, {"schema": "blueprint.identity/v1", "build": build,
+                "workspace": {"path": str(self.binder_root.resolve())} if self.binder_root else None})
+            return
         if route == "/api/operations":
             from server.operations_cache import cached_operations_snapshot
             try:

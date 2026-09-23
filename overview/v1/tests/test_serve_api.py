@@ -106,6 +106,15 @@ class HonestEmptyServeTests(unittest.TestCase):
         self.httpd.shutdown()
         self.httpd.server_close()
 
+    def test_identity_does_not_load_the_operations_snapshot(self):
+        with mock.patch("server.operations_cache.cached_operations_snapshot", side_effect=RuntimeError("slow or broken store")) as snapshot:
+            status, body, content_type = _get(self.port, "/api/identity")
+        snapshot.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(content_type, "application/json")
+        self.assertEqual(json.loads(body)["schema"], "blueprint.identity/v1")
+        self.assertIn("build", json.loads(body))
+
     def test_agents_endpoint_returns_empty_lists(self) -> None:
         status, body, ctype = _get(self.port, "/api/overview/agents")
         self.assertEqual(status, 200)

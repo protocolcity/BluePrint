@@ -18,7 +18,8 @@ A readable receipt is installation evidence, not proof of a healthy process.
 
 `--probe` uses only local origins recorded in this workspace's receipts, refuses
 redirects and never substitutes a default port. BP must report the same workspace
-and build. A usable WorkLane read endpoint does not prove write authority.
+and build through `/api/identity`, without loading the operations snapshot.
+A usable WorkLane read endpoint does not prove write authority.
 WorkForce process/heartbeat and provider qualification require their own evidence.
 
 Support JSON includes only allowlisted diagnostic fields. It omits source paths,

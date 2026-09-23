@@ -1,5 +1,6 @@
 """Package metadata and artifact hygiene."""
 import importlib.util
+import tomllib
 import shutil
 import subprocess
 import sys
@@ -33,8 +34,9 @@ class PublicCutMetadataTests(unittest.TestCase):
             root = Path(temporary)
             preferred = root / "preferred.toml"
             compat = root / "compat.toml"
-            preferred.write_text(self.check.PREFERRED_PYPROJECT.read_text().replace("0.1.50", "0.2.0+candidate.1"))
-            compat.write_text(self.check.COMPAT_PYPROJECT.read_text().replace("0.1.50", "0.2.0+candidate.1"))
+            current = tomllib.loads(self.check.PREFERRED_PYPROJECT.read_text())["project"]["version"]
+            preferred.write_text(self.check.PREFERRED_PYPROJECT.read_text().replace(current, "0.2.0+candidate.1"))
+            compat.write_text(self.check.COMPAT_PYPROJECT.read_text().replace(current, "0.2.0+candidate.1"))
             self.check.PREFERRED_PYPROJECT = preferred
             self.check.COMPAT_PYPROJECT = compat
             self.assertEqual(self.check.check_metadata(), [])
