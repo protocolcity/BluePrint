@@ -19,6 +19,9 @@ def main(argv=None):
         from protocolcity.distro import distro_version
         print(distro_version())
         return 0
+    if args and args[0] == 'doctor':
+        from .workspace_doctor import main as doctor
+        return doctor(args[1:])
     if args and args[0] in ('stage','activate'):
         from .deploy import main as deploy
         original=sys.argv

@@ -279,7 +279,8 @@ function rowFace(order) {
   if(order.attention_face==='decide') return 'Decide';
   if(order.attention_face==='read') return 'Read';
   if(order.attention_face==='watch') return 'Watch';
-  if(order.attention_face==='due' || isYouKind(order)) return 'Note';
+  if(order.attention_face==='due') return 'Due';
+  if(isYouKind(order)) return 'Note';
   if(order.you_host) return 'Host';
   if((order.kind || 'work')==='work' && hasWorkerYou(order) && !hasSeatWorker(order)) return 'Host';
   return 'none';
@@ -589,7 +590,7 @@ function workforceHeartbeatState() {
 }
 function projectCountCell(project, field) {
   if(project.state!=='available') return el('span','Store unavailable','bp-muted');
-  if(project.partial) return el('span',`${project[field]} partial (limited to 2,000)`,'bp-muted');
+  if(project.partial) return el('span',`${project[field]} partial (workspace record limit)`,'bp-muted');
   return el('span',String(project[field] ?? 0));
 }
 function projectLiveParkedText(project) {
@@ -599,7 +600,7 @@ function projectLiveParkedText(project) {
   if(live) bits.push(`${live} live`);
   if(parked) bits.push(`${parked} parked`);
   const base=bits.length ? bits.join(' · ') : '0';
-  if(project.partial) return `${base} partial (limited to 2,000)`;
+  if(project.partial) return `${base} partial (workspace record limit)`;
   return base;
 }
 function projectLiveSeats(project) {
@@ -3103,7 +3104,7 @@ function paint() {
     ...engineRows().filter(([,engine])=>isException(engine)).map(([name, engine])=>({name, state:engine.state})),
   ];
   $('source-warning').hidden=!issues.length && !snapshot.truncated;
-  $('source-warning').textContent=issues.length ? `Some sources need attention: ${issues.map(s=>`${s.name} (${s.state})`).join(', ')}. Counts may be incomplete.` : 'Large stores are limited to 2,000 open records each. Filtered counts may be incomplete.';
+  $('source-warning').textContent=issues.length ? `Some sources need attention: ${issues.map(s=>`${s.name} (${s.state})`).join(', ')}. Counts may be incomplete.` : 'This workspace view is limited to 2,000 open records across all stores. Filtered counts may be incomplete.';
   $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Delivery`;
   filterOptions();
   if(page==='overview') overview();

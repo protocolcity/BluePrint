@@ -7,7 +7,7 @@
  * Spatial projection uses MapGraph directly.
  *
  * Depth ladder (workspace root up to surface children):
- *   0  workspace hub (OneSeo / city folder)
+ *   0  workspace hub
  *   1  managed projects on the ring
  *   2  children of projects (expand-all + dig at project root)
  *   3+ deeper dig (disk)

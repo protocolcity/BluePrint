@@ -1,6 +1,6 @@
 # Projects INTENT — where the work is, who is on it, what moved
 
-Status: design record for pc-1481, 2026-09-13. Owning implementation order: pc-1486. Companion to [STATES_AND_TERMS.md](STATES_AND_TERMS.md), [SURFACES_REVIEW_2026_09.md](SURFACES_REVIEW_2026_09.md) and [AGENTS_INTENT.md](AGENTS_INTENT.md). Paint follows [OVERVIEW_THEME.md](OVERVIEW_THEME.md); no new tokens, fonts or libraries.
+Current surface reference. Read [the product contract](../PRODUCT.md) first.
 
 ## One sentence
 
@@ -36,7 +36,7 @@ Rows are ordered by activity: projects with an agent working first, then by For 
 | Column | Source | Notes |
 |---|---|---|
 | Project name, folder, instructions present | project registry (`desk-join.json`, `AGENTS.md`) | file read time |
-| Open, For You, Deferred/Tracking | operations projection of that store; counts follow STATES_AND_TERMS §5 (All open includes every gate) | "Store unavailable" or "partial (limited to 2,000)" replaces the number, never zero |
+| Open, For You, Deferred/Tracking | operations projection of that store; counts follow STATES_AND_TERMS §5 (All open includes every gate) | "Store unavailable" or "partial (workspace record limit)" replaces the number, never zero |
 | Live / Parked | WorkLane Owner markers (in_progress / in_review) | a claim is a claim; it is never painted as execution |
 | Agents now | WorkForce coverage for the project plus a working/idle read of its seats | "none staffed" when no seat is registered for the project; "working" needs an open shift in the ledger or daemon in-flight |
 | Last change | most recent WorkLane event or comment in that store (from the change feed / timeline projection), with actor and order id | "no activity recorded" when the store has no events; never the read time |
@@ -68,10 +68,27 @@ is JS/backend work for a future order, not this paper.
 | Registered project with no seats | Agents now: "none staffed"; hiring stays on Agents |
 | Engine unavailable (WorkForce) | Agents now: "unknown", never idle |
 
-Held (not in pc-1486): editing project registration; project-level settings; per-project cost meters; any cross-workspace view.
+Outside this surface: editing project registration; project-level settings; per-project cost meters; any cross-workspace view.
 
-How the desk's own vocabulary maps onto this page (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works-in-one-breath) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
+How the desk's own vocabulary maps onto this page (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
 
-## Acceptance for pc-1486
+## Verification
 
 Rows with the columns above from a live-shaped fixture; activity ordering and quiet-project collapse; unavailable/partial states; disclosure breakdown keyboard reachable; links carry the project id; desktop and 400px installed screenshots; both suites green.
+
+## Papers and Map
+
+Project papers is a curated catalogue of recognized project documents. Map is a
+filesystem navigator and can expose additional permitted Markdown paths. Both
+resolve paths inside the selected workspace and exclude private runtime areas;
+the catalogue is not a complete filesystem index or a publication permission.
+
+## Large workspaces
+
+The shared snapshot loads at most 2,000 open records across all registered stores.
+Stores are visited in stable filename order, with priority then update time and
+ID within each store. Store open totals remain exact when readable; derived
+counts are marked partial wherever rows are omitted. The snapshot reports its
+limit and each store's loaded count. Work shows the warning and calendar export
+refuses incomplete work dates. Use the owning WorkLane store for the complete
+record set. This is a bounded projection, not server-side pagination.

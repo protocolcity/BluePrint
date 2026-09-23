@@ -409,8 +409,8 @@ def _write_first_run(
             "|---|---|\n"
             "| `AGENTS.md` | Workspace instructions — project registry |\n"
             "| `BOUNDARIES.md` | Cross-project grants (empty at found — add only when needed) |\n"
-            "| `.claude/skills/README.md` | L0 skills shelf — local agent coordination (not cloud) |\n"
-            "| `.agents/skills/workspace-efficiency/` | L0 drain-hygiene skill (ready seats / You-starve) |\n"
+            "| `.claude/skills/README.md` | L0 skills shelf — shared project instructions |\n"
+            "| `.agents/skills/workspace-efficiency/` | workspace execution audit skill |\n"
             "| `scripts/skills_sync.sh` | Bridge L0 skills into project folders for Claude/Cursor |\n"
             "| `scripts/open_work_audit.py` | Open/ready/feeds audit CLI |\n"
             "| `%s/AGENTS.md` | First **project** instructions (name you chose) |\n"
@@ -426,8 +426,8 @@ def _write_first_run(
             "|---|---|\n"
             "| `AGENTS.md` | Workspace instructions — project registry (empty until you add folders) |\n"
             "| `BOUNDARIES.md` | Cross-project grants (empty at found — add only when needed) |\n"
-            "| `.claude/skills/README.md` | L0 skills shelf — local agent coordination (not cloud) |\n"
-            "| `.agents/skills/workspace-efficiency/` | L0 drain-hygiene skill (ready seats / You-starve) |\n"
+            "| `.claude/skills/README.md` | L0 skills shelf — shared project instructions |\n"
+            "| `.agents/skills/workspace-efficiency/` | workspace execution audit skill |\n"
             "| `scripts/skills_sync.sh` | Bridge L0 skills into project folders for Claude/Cursor |\n"
             "| `scripts/open_work_audit.py` | Open/ready/feeds audit CLI |\n"
             "| `FIRST_RUN.md` | This card |\n"
@@ -437,7 +437,7 @@ def _write_first_run(
         "Desk was offline during founding — scaffold only. "
         + (
             "The store join is queued (`.protocolcity/pending-desk.json`) and "
-            "runs automatically on the next `blueprint serve --with-engines`.\n"
+            "must be completed after the selected WorkLane engine is configured.\n"
             if hood
             else "Join a store when you adopt or create a project.\n"
         )
@@ -562,11 +562,11 @@ here forces `project`, `app`, or `my-city` — those were never product requirem
 ## Open BluePrint (right now)
 
 ```bash
-# Stranger / clean machine: start suite + engines (Explorer · Desk · Agents).
-# Ctrl-C stops the suite and any engines this process started.
-blueprint serve --root %s --port %d --with-engines
-# Host already running launchd engines? omit --with-engines (honest bind).
-# open http://127.0.0.1:%d/   ← Map (tickets + hands in-Map)
+# Start the current BP application. Configure the owning engines separately.
+# Ctrl-C stops this foreground application.
+blueprint serve --foreground --root %s --port %d
+# Engine services and credentials are managed separately.
+# open http://127.0.0.1:%d/   ← BluePrint operations
 ```
 
 %s
@@ -940,7 +940,7 @@ def found(
                 "desk_url": desk_url,
                 "pending": True,
                 "error": "desk offline — scaffold only; join queued for "
-                "`blueprint serve --with-engines` (desk at %s)"
+                "explicit registration after the WorkLane engine is configured at %s"
                 % desk_url,
             }
     elif with_desk and not hood:
@@ -979,8 +979,8 @@ def found(
     )
 
     next_steps = [
-        "blueprint serve --root %s --port %d --with-engines" % (root, map_port),
-        "open http://127.0.0.1:%d/  (Overview · Explorer /map · Desk · Agents /roster)" % map_port,
+        "blueprint serve --foreground --root %s --port %d" % (root, map_port),
+        "open http://127.0.0.1:%d/  (Overview · Work · Projects · Agents · Map)" % map_port,
         "read %s" % first_run,
     ]
     if hood and store_slug:

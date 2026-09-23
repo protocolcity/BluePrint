@@ -967,7 +967,7 @@ class ProjectsSurfaceTests(unittest.TestCase):
     def test_unavailable_store_never_paints_zero_open(self):
         self.assertIn("project.state!=='available'", _SRC)
         self.assertIn("'Store unavailable'", _SRC)
-        self.assertIn('partial (limited to 2,000)', _SRC)
+        self.assertIn('partial (workspace record limit)', _SRC)
 
     def test_last_change_reads_from_server_not_read_time(self):
         self.assertIn('project.last_change', _SRC)
@@ -1003,7 +1003,7 @@ class ProjectsSurfaceTests(unittest.TestCase):
         self.assertIn("projectCountCell(project,'deferred')", _SRC)
         live_fn = _SRC.split('function projectLiveParkedText(project)')[1].split('function projectLiveSeats')[0]
         self.assertIn('project.partial', live_fn)
-        self.assertIn('partial (limited to 2,000)', live_fn)
+        self.assertIn('partial (workspace record limit)', live_fn)
 
     def test_breakdown_is_keyboard_reachable(self):
         self.assertIn('bp-projects-detail', _SRC)

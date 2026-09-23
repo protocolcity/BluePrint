@@ -2,6 +2,8 @@
 
 BluePrint is the operations interface for a selected workspace. WorkLane owns work orders and writes. WorkForce owns registered agents, schedules, execution controls, and shift history. Project applications own their business logic and data. GitHub supplies delivery evidence; it does not establish agent liveness.
 
+The [product contract](docs/PRODUCT.md) defines the audience, operations model and supported continuation boundaries.
+
 ## Current application
 
 `overview/v1/serve.py` serves one origin for Overview, Work, Projects and project papers, Agents, Delivery, Timeline, Map, Calendar, Connections, and Settings. `/activity` redirects to `/delivery`. `map/v1` provides the spatial document browser and keyboard-accessible folder list. Shared recovered `protocolcity` utilities support installation, workspace bridges, and audits; `suite/api` retains compatible calendar and routing helpers. Historical suite UI specifications describe earlier implementations and do not override this application or the accepted [operations design](docs/specs/OPERATIONS_EVOLUTION_2026_09.md).

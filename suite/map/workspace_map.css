@@ -3626,7 +3626,7 @@
   }
   /*
    * Depth ladder (pc-774) — primary visual order from workspace root up:
-   *   map-depth-0  workspace hub (OneSeo)
+   *   map-depth-0  workspace hub
    *   map-depth-1  projects (work fill + ring stroke still own color)
    *   map-depth-2  project children (expand minis + dig at project root)
    *   map-depth-3+ deeper dig (disk) — quieter same family

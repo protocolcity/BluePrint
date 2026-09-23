@@ -1,35 +1,23 @@
-# Vendor pointers (thin defaults)
+# Provider instruction pointers
 
-The canonical law file is always `AGENTS.md` — one law, every vendor reads
-it. Vendor-specific files are **thin pointers only**, never a second law body.
+Keep instructions in canonical `AGENTS.md` files. Codex, Claude, Grok, Cursor and
+other clients can participate through their supported instruction mechanisms;
+verify those mechanisms for the installed client/version.
 
-`blueprint found` plants `CLAUDE.md` and `GROK.md` as `@AGENTS.md` by default.
-`doctor --fix` plants them when missing on a managed city. When a
-vendor file *is* present but not a thin pointer, it is **DIVERGED** (MERGE /
-CONVERT — never auto-rewritten).
-
-**Claude Code** — create `CLAUDE.md` containing exactly one line:
+When a client supports an import file, point it to `AGENTS.md`. For example, a
+supported `CLAUDE.md` import can contain:
 
 ```
 @AGENTS.md
 ```
 
-**Cursor / Codex** — nothing to do: both read `AGENTS.md` natively.
+A client may instead read `AGENTS.md` directly, follow an explicitly configured
+path, or need a generated copy. Do not assume a file named `GROK.md` or a symlink
+is loaded by every client. Verify with a bounded run before enabling dispatch.
+Keep provider-only connection settings separate from shared product rules.
 
-**Grok / xAI tooling** — either form is valid:
-
-```
-ln -s AGENTS.md GROK.md
-```
-
-or a one-line file containing only `@AGENTS.md`.
-
-**Anything else** — same idea: find where the tool looks for instructions
-and point it at `AGENTS.md`. If a tool forces you to copy content instead of
-pointing, treat that copy as generated: regenerate it from `AGENTS.md`,
-never edit it directly.
-
-The rule this preserves: when the law changes, it changes in one file.
-Personalized vendor instructions do not belong in `CLAUDE.md` / `GROK.md` —
-fold them into `AGENTS.md` (or a worker `CONTRACT.md` / `prompt.md`), then
-keep the vendor file as a pointer.
+BP founding tools may create pointer files; the current Doctor can report
+missing or divergent pointers and add supported missing pointers with explicit
+repair. Existing files are preserved. Read the installed command's help for the
+exact repair option. A generated pointer does not establish provider access,
+model availability, quota, tools or permission to run.
