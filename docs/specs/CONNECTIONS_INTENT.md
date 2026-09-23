@@ -1,6 +1,6 @@
 # Connections INTENT — reachable, usable, fresh and installed as separate facts
 
-Status: design record for pc-1490, 2026-09-13. Companion to [STATES_AND_TERMS.md](STATES_AND_TERMS.md), [SURFACES_REVIEW_2026_09.md](SURFACES_REVIEW_2026_09.md) and [OPERATIONS_EVOLUTION_2026_09.md](OPERATIONS_EVOLUTION_2026_09.md). Paint follows [OVERVIEW_THEME.md](OVERVIEW_THEME.md); no new tokens, fonts or libraries.
+Current surface reference. Read [the product contract](../PRODUCT.md) first.
 
 ## One sentence
 
@@ -124,7 +124,7 @@ Never probe another workspace, never default a port when the receipt is missing,
 
 Starting or restarting engines; writing receipts, rosters or stores; a WorkLane `/health` route; host supervisor scope or stop-file editors (Settings already leaves those out).
 
-## Acceptance for pc-1490
+## Verification
 
 - 404 / non-products HTTP reply is reachable, not usable; HTTP status retained.
 - Failed supervisor pass is failed outcome with usable evidence, not Available.
@@ -132,4 +132,4 @@ Starting or restarting engines; writing receipts, rosters or stores; a WorkLane 
 - Exceptions first, one next step, raw endpoint/path/version in a disclosure; healthy rows compact.
 - Transport chip does not hide a failed source; stale/unavailable/partial/empty/unknown are distinct.
 - No default-port or cross-workspace fallback.
-- Disposable-fixture tests; both suites green. Installed-build/browser evidence is the integrator's close, not this seat's.
+- Disposable-fixture tests; both suites green. Installed-build/browser evidence is required separately from source validation.

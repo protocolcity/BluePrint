@@ -1,6 +1,6 @@
 # Map — focused exploded project (approved direction, 2026-09-13)
 
-Status: design record for pc-1481; owning implementation order pc-1492. Extends [MAP_V1_GLASS.md](MAP_V1_GLASS.md) and the Map sections of [OPERATIONS_EVOLUTION_2026_09.md](OPERATIONS_EVOLUTION_2026_09.md). The user approved this direction (A); the layered-path (B) and relationship (C) alternatives were comparison references and are not additional modes to ship.
+Current surface reference. Read [the product contract](../PRODUCT.md) first.
 
 ## One sentence
 
@@ -13,7 +13,7 @@ Map shows one project in focus with its four direct context branches (Work, Agen
 - One expanded branch. Opening a branch collapses the previously open one to its compact form. Counts on a compact branch are named ("4 open · 1 For You", "1 working"), never bare number triplets.
 - One selected detail area. Selecting an item (work order, seat, paper, PR) shows its summary there with the same words the owning surface uses and a link to the original evidence; the reader opens from it and returns to the same branch and selection.
 - Sidebar, canvas and breadcrumb share one selection; browser back/forward, refresh and reader return restore it (URL carries project, branch and item).
-- Work counts follow STATES_AND_TERMS §5 (All open includes every gate). A WorkLane claim is "live with", never "working"; only WorkForce shift evidence paints a seat as working (pc-1483).
+- Work counts follow STATES_AND_TERMS §5 (All open includes every gate). A WorkLane claim is "live with", never "working"; only WorkForce shift evidence paints a seat as working.
 - Motion explains what opened and where it came from: a short expansion from the parent node, stable positions for everything else. A real change-feed event (WorkLane / WorkForce / supervisor file move) may flash the matching branch and tick a changed count once. No force or orbit layout, no ambient movement, no agents moving around. Reduced motion switches to immediate state changes.
 - Narrow widths render the same hierarchy as an expandable list with the same selection model, not a miniature canvas.
 - Text stays legible at the default zoom; large levels disclose counts and offer bounded navigation instead of shrinking labels.

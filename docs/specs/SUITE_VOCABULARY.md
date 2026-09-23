@@ -1,6 +1,6 @@
 # Suite vocabulary (current register)
 
-Status: current, 2026-09-13. Supersedes the dual-register paper kept in the private aside folder; civic nouns (city, neighborhood, citizen, hand) are historical brand only and are not taught on any surface. Principle: nobody has to learn the history to run the system.
+Status: current vocabulary. People should not have to learn historical branding to operate the product. Use workspace, project, work order, agent and You in current interfaces.
 
 | Concept | Word on every surface | Wire / code (fine in code, never as chrome) |
 |---|---|---|

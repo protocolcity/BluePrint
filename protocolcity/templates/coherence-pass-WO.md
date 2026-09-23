@@ -2,7 +2,6 @@
 
 > Instrument: architecture-first companion (ALWAYS_WORK §2l).
 > Filed by: {{FILER}} as follow-up to {{LAW_CHANGE_WO}}.
-> Early instances: POS · trading · BP suite architecture passes.
 
 ## Why
 

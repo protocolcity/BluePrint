@@ -2,7 +2,7 @@
 
 BluePrint is the operations interface; WorkLane owns work-order state and WorkForce owns agent execution. Independent products keep their own business logic, data, and interfaces. Do not embed their runtime internals here.
 
-The active application is `overview/v1/serve.py`, with shared Map modules in `map/v1/`. The historical `suite/` and recovered `protocolcity/` runtime remain during consolidation; avoid starting competing UI services. Current design evolution: `docs/specs/OPERATIONS_EVOLUTION_2026_09.md`.
+The active application is `overview/v1/serve.py`, with shared Map modules in `map/v1/`. The historical `suite/` and recovered `protocolcity/` runtime remain during consolidation; avoid starting competing UI services. Product definition: `docs/PRODUCT.md`. Current operations design: `docs/specs/OPERATIONS_EVOLUTION_2026_09.md`.
 
 ## Implementation and verification
 

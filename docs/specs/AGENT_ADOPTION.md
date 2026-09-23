@@ -1,106 +1,54 @@
-# Agent adoption — the standard seat set per project
+# Configure agents for a project
 
-Status: product rule. Companion to [AGENTS_INTENT.md](AGENTS_INTENT.md) (how
-seats are shown), [STATES_AND_TERMS.md](STATES_AND_TERMS.md) section 2 (seat,
-job, shift, pass) and [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
+Status: current product contract. See [the product definition](../PRODUCT.md)
+and [architecture](../../ARCHITECTURE.md) for component ownership.
 
-## Why this exists
+A worker is a registered execution identity with project scope, a contract,
+provider/model configuration, tools, host, trigger and budget. A provider being
+installed does not mean every project needs a seat for it. Register capacity
+that matches actual work; do not manufacture agents or tasks to fill a roster.
 
-Seats hired one at a time follow history, not the project. A new workspace
-needs a named, generated set: which seats a project has, which jobs the
-workspace shares, and how the desk reports what is missing. Cloud sessions
-(Cursor / Claude / Grok on GitHub) are evidence, never seats.
+WorkForce's provider adapters support generated seats for Codex, Claude, Cursor
+and Grok. Use the installed `workforce hire --help` and dry-run path; generation
+and model availability are version-dependent. A generated folder or successful
+dry run is configuration evidence, not authenticated execution.
 
-## Decision D12: the standard seat set
+## Instructions and authority
 
-A project is fully staffed when it has, **for each provider present on the
-host**, one bounded implementation seat scoped to that project, and the
-workspace has, for each provider, one review job and one supervisor job
-shared by all projects.
+Read workspace AGENTS.md, project AGENTS.md, the registered worker CONTRACT.md,
+then the scoped work order and dispatch prompt. Provider discovery files are
+thin pointers. Skills supply relevant capabilities; they do not grant broader
+scope or replace current authorization.
 
-| Row | Kind | Per | Name | Claims | Scope | Budget |
-|---|---|---|---|---|---|---|
-| Implementer | seat | project × provider | `<prefix>-<provider>-implementer` | yes, `worker:<name>` on that project's store | the project folder only; its own worker-config folder; the workspace AGENTS chain | 1800 s, one pass, turn cap |
-| Reviewer | job | provider | `<provider>-reviewer` | never | read-only, no tools, one turn | 240 s |
-| Supervisor | job | workspace | `bp-supervisor` | never | roster scope list; stop file | 2100 s |
-| Reports | job | workspace | chief-of-staff, health-patrol, workspace-efficiency | never | read-only | 120 s |
+Implementers claim under their own identity before editing. Review/supervision
+jobs have their own contracts and must not imply an implementation claim.
+Publication, integration and deployment follow the workspace's applicable
+authority. No provider-specific blanket policy overrides an authorized task.
 
-Providers, in the order the desk lists them: **Claude** (`claude`),
-**Cursor** (`cursor-agent`), **Grok** (`grok`), **Codex** (`codex`). Pins
-come from host capacity policy. A provider that is installed but disabled
-(credits, cost) is still hired and marked **held** in the roster, so the
-desk shows it as OFF rather than missing.
+## Qualification
 
-Cloud sessions (Cursor cloud agents on GitHub, Claude cloud, Grok Bot) are
-**not** part of the standard set. wf-258 decided option A (evidence only,
-2026-09-14): cloud sessions stay off the WorkForce roster permanently — they
-are not seats-in-waiting for a later option B. They appear only through the
-evidence they leave: GitHub pull requests, checks and merges on Delivery by
-author, and, if a cloud session signs a claim or comment through WorkLane
-under its own identity, that hand-off on Work. No remote dispatch adapter, no
-remote liveness on Agents. See [STATES_AND_TERMS.md](STATES_AND_TERMS.md),
-section 6 label matrix, `seat:cloud` row (cloud sessions are evidence, never
-seats).
+Verify exact model, authenticated account, allowed tools, execution host,
+project/store identity and budget. Record dated evidence from a bounded task:
+claim, edit, test, artifact/revision and review handoff. Provider selection should
+use observed task fit and capacity, not a permanent vendor ranking. Unknown quota
+remains unknown. Permission or authentication failure is not permission to find
+a less restricted executor.
 
-## Decision D13: one seat shape, generated, never copied
+## Continuation and cloud boundary
 
-`workforce hire` (and `blueprint adopt`, which calls it) generates the whole
-seat from a provider adapter and the project: `runner.json` (provider command
-with the pin, `--max-turns`, the project's repository and expected remote,
-prompt and contract paths), `launch.py`, `mcp.json` (WorkLane MCP signed as
-the seat), `CONTRACT.md` and `prompt.md` from the project template, and the
-roster row with `model`, `scope_home`, `perimeter_grants`, `authority_chain`
-and `queue_url` all pointing at the generated folder. No permission-bypass
-flag anywhere by default; each adapter uses its provider's non-interactive
-mode with an explicit tool allow list. The seat is dry-run dispatched once
-at hire time and the receipt is kept.
+The work record can outlive a provider session. A supported handoff preserves a
+checkpoint and artifacts, verifies that the previous writer stopped, transfers
+ownership through WorkLane and validates context before the next executor claims.
+Native provider session continuation and execution on another host are distinct.
 
-## Decision D14: instructions and scopes
+Current BP dispatch is local-only. Remote/cloud execution is a future extension
+requiring an explicitly configured runtime and equivalent scope/evidence checks;
+it is not permanently forbidden and is not currently implemented. Repository
+activity and provider session URLs remain observations, not remote-agent health.
 
-- **Instructions** come from three layers, read in order at dispatch:
-  workspace AGENTS.md, the project's AGENTS.md, the seat's CONTRACT.md. The
-  prompt names the order, the checkout, the branch, the test commands and
-  the parking rule; nothing else. The contract is the same text for every
-  implementer of a project; only identity and provider differ.
-- **Scope** is the project folder for implementers (perimeter grant = that
-  folder plus the seat's worker-config folder), read-only everywhere for
-  reviewers, the roster scope list for the supervisor. A seat never touches
-  another product, host configuration, credentials, rosters or runtime data;
-  the person publishes, reviews, merges and installs.
-- **Recovery** instructions reach the seat through the prompt and as a
-  comment on the order.
+## Display
 
-## Decision D15: the desk tells you what is missing
-
-Agents (AGENTS_INTENT) gains one line per project under the Seats group:
-"BluePrint: Claude, Cursor · missing Grok, Codex" computed from the roster
-against the providers detected on the host, with a Hire action that runs the
-generated hire. A provider that is not installed reads NOT CONFIGURED with
-the install hint; a held one reads OFF.
-
-## Apply on a workspace
-
-1. Refresh the engine model registry and ship a capacity policy template
-   with current pins (WorkForce).
-2. Make `hire` generate the D13 shape from adapters for the installed
-   providers (WorkForce).
-3. Re-generate existing seats from the adapters, keeping identities, then
-   hire the missing ones for registered projects that have open work.
-   Personal or idle folders get seats only when work is filed for them
-   (empty queues stop cleanly).
-4. Keep one review job per provider plus the supervisor; supervisor scope
-   becomes the roster's seats list.
-5. Adoption plants the set for a new project; `blueprint doctor` reports
-   drift from the set.
-
-## Is / Is-not
-
-| IS | IS NOT |
-|---|---|
-| One generated seat shape per provider, identical contracts per project | Hand-copied folders, per-seat prompt drift |
-| Coverage stated per project on the desk | Guessing from the roster file |
-| Providers detected, missing ones named | A hard-coded four |
-| Hire generated from adapters | A coordinator working around a permission denial |
-| Cloud sessions as evidence, permanently (wf-258 option A) | Cloud rows on the roster, now or later |
-
-How the desk's own vocabulary maps onto seats and jobs (Projects = stores, Agents = hired seats + live shifts, Delivery = GitHub evidence, WorkLane/WorkForce stay separate packages): [README.md § How the desk works](../../README.md#how-the-desk-works-in-one-breath) or [SUITE_VOCABULARY.md](SUITE_VOCABULARY.md).
+Agents distinguishes configured, unavailable, held, running, stopped and unknown
+states only when supported by source evidence. Explain a missing capability or
+refusal precisely. Do not infer a missing required seat just because a vendor CLI
+is present. See [states and terms](STATES_AND_TERMS.md).
