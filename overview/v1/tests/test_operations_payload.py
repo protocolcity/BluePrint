@@ -1,4 +1,4 @@
-"""operations snapshot payload budget and surface key subsets."""
+"""Operations snapshot payload budget and surface key subsets."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,11 @@ import time
 import unittest
 from pathlib import Path
 
+from datetime import datetime, timezone
+
+from server.attention_view import local_today
 from server.operations import operations_snapshot, task_comment_index
+from server.operations_cache import cached_operations_snapshot, reset_operations_cache
 from server.operations_surface import (
     FORBIDDEN_SURFACE_KEYS,
     OVERVIEW_ORDER_KEYS,
@@ -97,8 +101,8 @@ class OperationsPayloadTests(unittest.TestCase):
         full = json.dumps(snapshot).encode('utf-8')
         overview = json.dumps(project_operations_surface(snapshot, 'overview')).encode('utf-8')
         work = json.dumps(project_operations_surface(snapshot, 'work')).encode('utf-8')
-        # Recorded budget: 887KB for 1200 compact orders. Surfaces
-        # must shrink Work/Overview bytes without dropping required fields.
+        # Recorded budget: 887KB for 1200 compact orders. Surfaces must shrink
+        # Work/Overview bytes without dropping required fields.
         self.assertLess(len(overview), len(full),
                         f'overview={len(overview)} full={len(full)} snapshot_ms={snapshot_ms:.1f}')
         self.assertLess(len(work), len(full),
@@ -180,6 +184,81 @@ class OperationsPayloadTests(unittest.TestCase):
         self.assertNotIn(5, notes)
         self.assertTrue(notes[1].startswith('Owner: second'))
         self.assertEqual(parked, {})
+
+    def test_projected_payload_keeps_work_and_overview_journey_fields(self):
+        today = local_today(datetime.now(timezone.utc)).isoformat()
+        data = self.root / 'worklane' / 'worklane' / 'local' / 'data'
+        data.mkdir(parents=True)
+        for slug, prefix, name in (
+            ('alpha', 'al', 'Alpha'),
+            ('beta', 'be', 'Beta'),
+        ):
+            manifest = self.root / slug / '.protocolcity' / 'desk-join.json'
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(json.dumps({'slug': slug, 'prefix': prefix, 'display': name}))
+        with sqlite3.connect(data / 'alpha.db') as conn:
+            conn.executescript(
+                'CREATE TABLE tasks('
+                'id INTEGER, ext_id TEXT, title TEXT, status TEXT, priority INTEGER, '
+                'updated_at TEXT, labels TEXT, gate_type TEXT, gate_note TEXT);'
+                'CREATE TABLE task_comments('
+                'id INTEGER, task_id INTEGER, body TEXT, author TEXT, created_at TEXT);'
+            )
+            conn.execute(
+                "INSERT INTO tasks VALUES(1,NULL,'Findable search token','backlog',2,"
+                "'2026-09-12T00:00:00Z',?,?,?)",
+                ('["worker:agent"]', None, None),
+            )
+            conn.execute(
+                "INSERT INTO tasks VALUES(2,NULL,'Due reminder','backlog',2,"
+                "'2026-09-12T00:00:00Z',?,?,?)",
+                (json.dumps(['worker:you', 'you:remind', 'reminder:' + today]), None, None),
+            )
+            conn.execute(
+                "INSERT INTO tasks VALUES(3,NULL,'Needs a decision','backlog',1,"
+                "'2026-09-12T00:00:00Z',?,?,?)",
+                ('[]', 'human', 'Approve the plan'),
+            )
+        (data / 'beta.db').write_bytes(b'not sqlite')
+        snapshot = operations_snapshot(self.root)
+        overview = project_operations_surface(snapshot, 'overview')
+        work = project_operations_surface(snapshot, 'work')
+        self.assertEqual(snapshot['sources'][0]['state'], 'partial')
+        self.assertEqual(overview['sources'][0]['state'], 'partial')
+        self.assertEqual(work['sources'][0]['state'], 'partial')
+        self.assertGreater(overview['calendar_doors']['due_count'], 0)
+        self.assertTrue(overview['calendar_doors']['due_href'])
+        self.assertTrue(work['calendar_doors']['items'])
+        due_item = work['calendar_doors']['items'][0]
+        self.assertTrue(due_item.get('task_id') or due_item.get('title'))
+        work_by_title = {row['title']: row for row in work['orders']}
+        search_row = work_by_title['Findable search token']
+        self.assertEqual(search_row['workers'], ['agent'])
+        self.assertEqual(search_row['owner'], 'agent')
+        self.assertEqual(search_row['id'], 'al-1')
+        decide = next(row for row in overview['orders'] if row['title'] == 'Needs a decision')
+        self.assertEqual(decide['attention_face'], 'decide')
+        self.assertEqual(decide['status'], 'backlog')
+        reminder = work_by_title['Due reminder']
+        self.assertEqual(reminder['attention_face'], 'due')
+        self.assertTrue(reminder['assigned_you'])
+        self.assertIn('id', work['projects'][0])
+        self.assertIn('name', work['projects'][0])
+        self.assertIn('engines', overview)
+        self.assertIn('engines', work)
+
+    def test_cached_snapshot_stays_full_after_surface_projection(self):
+        _seed_compact_workspace(self.root, projects=1, open_each=2)
+        reset_operations_cache()
+        try:
+            cached = cached_operations_snapshot(self.root)
+            overview = project_operations_surface(cached, 'overview')
+            again = cached_operations_snapshot(self.root)
+            self.assertIs(cached, again)
+            self.assertIn('agents_canvas', again)
+            self.assertNotIn('agents_canvas', overview)
+        finally:
+            reset_operations_cache()
 
 
 if __name__ == '__main__':

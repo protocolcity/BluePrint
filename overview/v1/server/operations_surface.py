@@ -9,7 +9,7 @@ from __future__ import annotations
 
 SURFACES = frozenset({'overview', 'work'})
 
-# Recorded 12×100 compact-order budget from the synthetic workspace measurement.
+# Recorded 12×100 compact-order budget: 887KB full snapshot.
 PAYLOAD_BASELINE_BYTES = 887 * 1024
 
 FORBIDDEN_SURFACE_KEYS = (
