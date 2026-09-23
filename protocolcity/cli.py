@@ -1438,7 +1438,7 @@ def _run_serve_with_engines(city_root: Path, port: int) -> int:
 
 def main(argv: Optional[List[str]] = None) -> int:
     actual = list(sys.argv[1:] if argv is None else argv)
-    if actual and actual[0] in ('serve', 'status', 'service', 'stage', 'activate', 'update', 'install', 'uninstall'):
+    if actual and actual[0] in ('serve', 'status', 'service', 'stage', 'activate', 'update', 'install', 'uninstall', 'doctor'):
         from .operations_cli import main as current
         return current(actual)
     # Taught face is blueprint; fall back to argv basename for module form.

@@ -42,3 +42,17 @@ def page_partial(page, partial_base_url):
     page.set_default_timeout(15000)
     page.goto(partial_base_url + "/projects")
     return page
+
+
+@pytest.fixture
+def action_workspace():
+    import os
+    from pathlib import Path
+    from support.workspace import build_action_workspace
+    engine = os.environ.get('BP_TEST_WORKLANE_PYTHON')
+    if not engine:
+        pytest.fail('Browser action tests require BP_TEST_WORKLANE_PYTHON naming an installed WorkLane environment.')
+    with tempfile.TemporaryDirectory(prefix='bp-browser-actions-') as tmp:
+        root = build_action_workspace(Path(tmp), engine)
+        with serve_binder(root) as (url, _process):
+            yield root, url
