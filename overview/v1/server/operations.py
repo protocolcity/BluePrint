@@ -1271,7 +1271,7 @@ def operations_snapshot(binder):
     except PackageNotFoundError:
         build = 'Source checkout'
     result = {'observed_at': now.isoformat(), 'build': build, 'workspace': None,
-              'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False,
+              'orders': [], 'projects': [], 'agents': [], 'supervisor': None, 'sources': [], 'truncated': False, 'order_limit': 2000,
               'events': [], 'work_dates': [], 'excluded_stores': [], 'coverage': [],
               'calendar_doors': empty_calendar_doors(),
               'calendar_load': empty_calendar_load(),
@@ -1320,24 +1320,26 @@ def operations_snapshot(binder):
         project = registry.get(path.stem, {'name': path.stem, 'prefix': '', 'folder': None})
         summary = {'id': path.stem, **project, 'open': 0, 'attention': 0, 'claimed': 0,
                    'running': 0, 'deferred': 0, 'parked': 0, 'state': 'available',
-                   'partial': False, 'last_change': None}
+                   'partial': False, 'loaded': 0, 'last_change': None}
         try:
             if not path.resolve().is_relative_to(root):
                 raise OSError('external store')
             with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True, timeout=.25)) as conn:
                 conn.row_factory = sqlite3.Row
-                rows = conn.execute("SELECT * FROM tasks WHERE status NOT IN ('done','canceled','cancelled') ORDER BY priority, updated_at DESC LIMIT 2001").fetchall()
+                remaining = max(0, result['order_limit'] - len(result['orders']))
+                rows = conn.execute("SELECT * FROM tasks WHERE status NOT IN ('done','canceled','cancelled') ORDER BY priority, updated_at DESC, id LIMIT ?", (remaining,)).fetchall()
                 count = conn.execute("SELECT count(*) FROM tasks WHERE status NOT IN ('done','canceled','cancelled')").fetchone()[0]
                 summary['open'] = count
-                summary['partial'] = count > 2000
+                summary['loaded'] = len(rows)
+                summary['partial'] = count > len(rows)
                 result['truncated'] |= summary['partial']
-                owner_by_task, last_note_by_task, parked_at_by_task = task_comment_index(conn)
+                owner_by_task, last_note_by_task, parked_at_by_task = task_comment_index(conn) if rows else ({}, {}, {})
                 prefix = project.get('prefix') or ''
                 summary['last_change'] = store_last_change(conn, prefix)
                 for task_row in conn.execute('SELECT id, ext_id, status FROM tasks').fetchall():
                     task_id = task_row['ext_id'] or (f"{prefix}-{task_row['id']}" if prefix else str(task_row['id']))
                     status_by_id[task_id] = task_row['status']
-                for row in rows[:2000]:
+                for row in rows:
                     item = dict(row)
                     try:
                         labels = json.loads(item.get('labels') or '[]')
@@ -1433,7 +1435,7 @@ def operations_snapshot(binder):
         if slug not in found:
             result['projects'].append({'id': slug, **project, 'open': 0, 'attention': 0, 'claimed': 0,
                                        'running': 0, 'deferred': 0, 'parked': 0, 'state': 'unavailable',
-                                       'partial': False, 'last_change': None})
+                                       'partial': False, 'loaded': 0, 'last_change': None})
             store_available[slug] = False
             motion_by_id[slug] = None
     unavailable_slugs = {slug for slug, ok in store_available.items() if not ok}
