@@ -24,7 +24,7 @@ jobs:
       - name: Install candidate and WorkLane integration dependency
         # Reviewed local-roster authority support; do not test against an older
         # published engine that cannot enforce selected-workspace assignment.
-        run: python -m pip install . 'git+https://github.com/protocolcity/WorkLane.git@767fad15552b86c0565d2991ef4dff7a92967fd3'
+        run: python -m pip install . 'git+https://github.com/protocolcity/WorkLane.git@aeb0a561edea4d09655eb00bee4daec7f3ce0d49'
       - name: Verify operations and engine boundaries
         run: |
           BP_TEST_WORKLANE_PYTHON="$(command -v python)" PYTHONPATH=overview/v1 python -m unittest discover -s overview/v1/tests
@@ -43,7 +43,7 @@ jobs:
         run: |
           python -m pip install setuptools wheel
           python -m pip install -r browser-tests/requirements-dev.lock
-          python -m pip install "git+https://github.com/protocolcity/WorkLane.git@767fad15552b86c0565d2991ef4dff7a92967fd3"
+          python -m pip install "git+https://github.com/protocolcity/WorkLane.git@aeb0a561edea4d09655eb00bee4daec7f3ce0d49"
           python -m playwright install --with-deps chromium
       - name: Playwright journeys (synthetic fixtures)
         run: BP_TEST_WORKLANE_PYTHON="$(command -v python)" python -m pytest browser-tests -q --browser chromium
@@ -56,9 +56,7 @@ jobs:
           retention-days: 7
 
   public-cut:
-    # Scrub CI for the 0.1.50 public cut. GitHub secret_scanning +
-    # push_protection is an org/repo gate (enabled on BluePrint). This job
-    # still scans built sdists/wheels so packaged files cannot carry host
+    # Scan built sdists/wheels on every candidate so packaged files cannot carry host
     # MCP, /Users fingerprints, or .protocolcity runtime.
     runs-on: ubuntu-latest
     steps:
