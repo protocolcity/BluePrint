@@ -43,9 +43,17 @@ jobs:
         run: |
           python -m pip install setuptools wheel
           python -m pip install -r browser-tests/requirements-dev.lock
-          playwright install chromium
+          python -m pip install "git+https://github.com/protocolcity/WorkLane.git@767fad15552b86c0565d2991ef4dff7a92967fd3"
+          python -m playwright install --with-deps chromium
       - name: Playwright journeys (synthetic fixtures)
-        run: python -m pytest browser-tests -q --browser chromium
+        run: BP_TEST_WORKLANE_PYTHON="$(command -v python)" python -m pytest browser-tests -q --browser chromium
+      - name: Retain synthetic failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-evidence
+          path: browser-tests/artifacts/
+          retention-days: 7
 
   public-cut:
     # Scrub CI for the 0.1.50 public cut. GitHub secret_scanning +

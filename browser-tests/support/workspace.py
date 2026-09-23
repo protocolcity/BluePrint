@@ -103,3 +103,32 @@ def build_empty_workspace(root: Path) -> Path:
     (root / ".blueprint").mkdir(exist_ok=True)
     (root / ".blueprint/overview.json").write_text("{}", encoding="utf-8")
     return root
+
+
+def build_action_workspace(root: Path, executable: str) -> Path:
+    """Install identity plus a real disposable WorkLane store for write journeys."""
+    import subprocess
+    version = subprocess.check_output([executable, '-I', '-c',
+        "import importlib.metadata; print(importlib.metadata.version('protocolcity-worklane'))"], text=True).strip()
+    data = root / 'worklane/worklane/local/data'
+    data.mkdir(parents=True)
+    install = root / 'local/worklane/current'
+    install.mkdir(parents=True)
+    (install / 'venv').symlink_to(Path(executable).resolve().parent.parent if not Path(executable).parent.parent.joinpath('pyvenv.cfg').exists() else Path(executable).parent.parent, target_is_directory=True)
+    (root / 'local/worklane/deployment.json').write_text(json.dumps({
+        'version': version, 'entrypoint': [str(install / 'venv/bin/python')], 'runtime': str(data.parent)}))
+    join = root / 'example/.protocolcity/desk-join.json'
+    join.parent.mkdir(parents=True)
+    join.write_text('{"slug":"protocolcity","prefix":"pc","display":"Example"}')
+    script = "from pathlib import Path; from worklane.trackers.sqlite import SQLiteTracker; import sys; tracker=SQLiteTracker(db_path=Path(sys.argv[1])); tracker.create_task(title='Browser action fixture', description='Synthetic write acceptance')"
+    subprocess.run([executable, '-I', '-c', script, str(data / 'protocolcity.db')], cwd=root, check=True, capture_output=True)
+    return root
+
+
+def build_stale_workspace(root: Path) -> Path:
+    build_healthy_workspace(root)
+    runtime = root / 'workforce/local'
+    runtime.mkdir(parents=True)
+    (runtime / 'roster.json').write_text('{"workers":{}}')
+    (runtime / 'daemon.json').write_text('{"last_tick":"2000-01-01T00:00:00Z","in_flight":{}}')
+    return root

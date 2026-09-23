@@ -83,8 +83,8 @@ observed execution evidence. See the [capability matrix](docs/PRODUCT.md#capabil
 
 Start with [AGENTS.md](AGENTS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
 Run behavior tests against disposable workspaces, inspect built artifacts, and
-verify the installed build before calling a UI fix complete. Doctor is one
-layer of diagnostics, not proof that every feature works.
+verify the installed build before calling a UI fix complete. [Doctor](docs/operations/DIAGNOSTICS.md) supplies scoped diagnostics and sanitized
+support reports alongside behavior tests.
 
 Keep runtime configuration, credentials and private work history outside
 product source. Report bugs using the repository issue templates with a

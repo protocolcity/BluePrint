@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local verification entrypoint for BluePrint source (pc-1570 tiers)."""
+"""Local verification entrypoint for BluePrint source (component, browser, package and installed tiers)."""
 from __future__ import annotations
 
 import argparse
@@ -16,9 +16,9 @@ BROWSER = ROOT / "browser-tests"
 
 
 def _env(extra: str = "") -> dict[str, str]:
-    base = f"{OVERVIEW}:{ROOT}"
+    base = os.pathsep.join((str(OVERVIEW), str(ROOT)))
     if extra:
-        base = f"{extra}:{base}"
+        base = extra + os.pathsep + base
     env = os.environ.copy()
     env["PYTHONPATH"] = base
     return env
@@ -65,12 +65,24 @@ def tier_release() -> None:
     _run([PYTHON, str(ROOT / "scripts/check_release_artifacts.py")])
 
 
-def tier_installed() -> None:
-    print(
-        "installed smoke is host-only: activate the reviewed wheel under the selected "
-        "workspace, confirm /api/operations build identity, then exercise the changed "
-        "lens manually. Source tiers do not substitute for installed acceptance."
-    )
+def tier_installed(root: Path, expected_version: str) -> None:
+    import json
+    from urllib.request import urlopen
+    workspace = root.expanduser().resolve()
+    receipt = json.loads((workspace / '.blueprint/deployment.json').read_text())
+    port = receipt.get('port')
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError('Selected workspace has no valid deployment port.')
+    with urlopen(f'http://127.0.0.1:{port}/api/operations', timeout=5) as response:
+        actual = json.load(response)
+    if (actual.get('workspace', {}).get('path') != str(workspace)
+            or actual.get('build') != expected_version or receipt.get('version') != expected_version):
+        raise ValueError('Responding workspace/build does not match the expected installation.')
+    for path in ('/', '/work', '/agents', '/map', '/settings'):
+        with urlopen(f'http://127.0.0.1:{port}' + path, timeout=5) as response:
+            if response.status != 200 or b'<html' not in response.read(1024).lower():
+                raise ValueError('Installed application route did not return HTML.')
+    print('Installed identity and critical read-only routes verified; action acceptance is separate.')
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,12 +93,18 @@ def main(argv: list[str] | None = None) -> int:
         default="edit",
         help="edit=component suites; pr=+skip audit+browser; release=+packaging checks",
     )
+    parser.add_argument("--root", type=Path, help="selected workspace for installed checks")
+    parser.add_argument("--expected-version", help="reviewed installed version")
     args = parser.parse_args(argv)
+    if args.tier == "installed":
+        if not args.root or not args.expected_version:
+            parser.error("installed checks require --root and --expected-version")
+        tier_installed(args.root, args.expected_version)
+        return 0
     steps = {
         "edit": tier_edit,
         "pr": tier_pr,
         "release": tier_release,
-        "installed": tier_installed,
     }
     steps[args.tier]()
     return 0
