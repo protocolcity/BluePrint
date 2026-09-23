@@ -11,7 +11,7 @@ YOU_KINDS = frozenset({'todo', 'note', 'reminder'})
 CLOSED_STATUSES = frozenset({'done', 'canceled', 'cancelled'})
 OPEN_STATUSES = frozenset({'backlog', 'in_progress', 'in_review'})
 STATUS_WORDS = ('Open', 'Ready', 'Live', 'Review', 'Deferred', 'Stalled', 'Done')
-FACE_WORDS = ('Decide', 'Read', 'Watch', 'Note', 'Host', 'none')
+FACE_WORDS = ('Decide', 'Read', 'Watch', 'Due', 'Note', 'Host', 'none')
 ATTENTION_VALUES = ('', 'any', 'act_now', 'my_todos', 'seat', 'decide', 'read', 'watch', 'due')
 STATUS_LEGACY = {
     'backlog': 'Open',
@@ -84,7 +84,7 @@ def board_band(order):
 
 
 def row_face(order):
-    """Face badge: Decide / Read / Watch / Note / Host / none — never Needs you."""
+    """Face badge: Decide / Read / Watch / Due / Note / Host / none — never Needs you."""
     face = order.get('attention_face') or ''
     if face == 'decide':
         return 'Decide'
@@ -92,7 +92,9 @@ def row_face(order):
         return 'Read'
     if face == 'watch':
         return 'Watch'
-    if face == 'due' or is_you_kind(order):
+    if face == 'due':
+        return 'Due'
+    if is_you_kind(order):
         return 'Note'
     if order.get('you_host'):
         return 'Host'

@@ -1521,7 +1521,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_setup.add_argument(
         "--serve",
         action="store_true",
-        help="open the suite with engines after setup",
+        help="open the current BP application after setup; engines are configured separately",
     )
     p_setup.add_argument(
         "--service",
@@ -1988,15 +1988,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_update = sub.add_parser(
         "update",
         help=(
-            "upgrade BluePrint suite to the latest release (Homebrew or pip) "
-            "— pair with --agent-prompt for Cursor/any AI "
+            "retired command; use stage/activate for source releases or upgrade for legacy service conversion"
         ),
     )
     p_update.add_argument(
         "--method",
         choices=("auto", "brew", "pip"),
         default="auto",
-        help="install channel (default: auto-detect brew, else pip)",
+        help="legacy option; this command does not install packages",
     )
     p_update.add_argument(
         "--restart",
@@ -2324,11 +2323,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             demo_flag = True
         if getattr(args, "no_demo", False):
             demo_flag = False
-        service_flag = None
-        if getattr(args, "service", False):
-            service_flag = True
-        if getattr(args, "no_service", False):
-            service_flag = False
+        service_flag = False
+        if getattr(args, "service", False) or getattr(args, "isolated", False):
+            print("Setup creates workspace files. For a persistent BP service, use blueprint stage and blueprint activate; use blueprint upgrade only to convert an existing legacy service.", file=sys.stderr)
+            return 2
         isolated = bool(getattr(args, "isolated", False))
         if isolated and service_flag is not True:
             print(
@@ -2365,7 +2363,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 desk_url=args.desk,
                 no_ticket=args.no_ticket,
                 map_port=args.port,
-                serve_fn=_run_serve_with_engines,
+                serve_fn=lambda root, port: __import__('protocolcity.operations_cli', fromlist=['main']).main(
+                    ['serve', '--foreground', '--root', str(root), '--port', str(port)]),
                 demo=demo_flag,
                 service=service_flag,
                 service_isolated=isolated,

@@ -50,3 +50,13 @@ It detects each legacy agent by plist presence and by `launchctl print`, boots o
 Run `python -m protocolcity.open_work_audit --workspace /path/to/workspace --json --feeds --process --decay` with the installed BP interpreter. An explicitly selected workspace uses its registered stores and installed WorkLane readiness policy on temporary SQLite snapshots; original stores are opened read-only. It does not fall back to another host's default desk. The current adapter supports the workspace's standard local WorkLane layout; an unavailable engine or store is reported as unknown.
 
 Coverage distinguishes You, no worker, missing/retired workers, manual and scheduled lanes, ambiguous assignments and queue-scope mismatches. Configured coverage is not authentication, liveness or execution proof. Process checks use saved readiness and configuration; they do not certify transport. Legacy URL-only audits remain available, but cannot establish selected-workspace staffing coverage. The scheduled operations reports use the explicit workspace path and carry these limits.
+
+## Creating a workspace
+
+`blueprint setup PATH --create --yes --no-desk --no-ticket --no-service` plants
+workspace files without registering a default engine or creating example work.
+Configure WorkLane and WorkForce separately and explicitly. `setup --serve` opens
+the current BP application in the foreground; it does not start engines.
+Persistent installation uses stage/activate above. Legacy setup `--service` is
+refused with migration guidance; `upgrade` converts an existing installation and
+does not fetch a newer package.

@@ -1,67 +1,15 @@
 #!/usr/bin/env python3
-"""suite/serve.py — BluePrint suite v1 (port 8801).
+"""Historical suite helpers retained for compatibility imports.
 
-Citizen entry (pc-1299: Overview lands; Map digs in):
-  Landing = Overview (Wall density — For You, agents, programs).
-  Map is the exploded visual at /workspace-map. Same truth: projects, agents,
-  work orders, rules.
-
-    /            -> wall.html  (LANDING — Overview)
-    /overview    -> wall.html
-    /wall        -> wall.html
-    /wall.html   -> wall.html  (file alias; same Overview)
-    /workspace-map -> workspace_map.html  (dig-in)
-    /calendar.ics -> VCALENDAR of timer gates + deadline: labels (all stores; pc-1125)
-    /calendar    -> cheap HTML list of the same events (pc-1125)
-    /person      -> person_v1.html  (agent detail deep link)
-    /ticket      -> ticket_v1.html  (work-order detail deep link)
-    /read        -> read_v1.html
-    /settings    -> settings_v1.html  (pc-1267 spine view; ?sheet=1 still 302s to Map)
-    /settings_v1.html -> payload for SuiteSettingsSheet clone (Map FAB / dig)
-  Retired (302 → /workspace-map, query preserved):
-    /skin /map /explorer /desk /roster /agents /ported /home
-    /api/overview -> composed live KPIs + activity (room + project)
-    /api/city    -> in-process protocolcity.citylens.cached_snapshot (pc-574)
-    /api/attention -> in-process you_attention (Desk feed; no :8796)
-    /api/people  -> workforce :8797 /api/scene
-    /api/worker/<name> -> workforce worker model + city-relative law paths
-    /api/worker/<name>/model -> POST {model} update roster pin (pc-428; local roster)
-    /api/ops-reports -> recent ops/job report .md files (pc-432)
-    /api/city-structure -> disk-only folder shell for progressive Map paint (pc-413)
-    /api/dispatch/<name> -> POST workforce fire_now (on-demand Dispatch; pc-243)
-    /api/skip/<name> -> POST skip next scheduled fire only (pc-555; Approaching)
-    /api/tasks   -> WorkLane/TP list (GET) · file (POST — pc-288 intake;
-                   pc-498: route hand via worker/hand or stamp needs:routing)
-    /api/tasks/live-strip -> Map WO desk tape composite (serial status pulls; pc-934)
-    /api/wo-gate-counts -> Map WO chip tallies (live/ready/deferred; uncapped; pc-688)
-    /api/tasks/ready -> WorkLane ready queue (take-a-number; pc-288)
-    /api/tasks/unrouted -> ready tickets with no worker:* (starvation count; pc-498)
-    /api/task/<id> -> WorkLane/TP task record (GET) · claim/status (PATCH)
-    /api/task/<id>/comments -> POST signed comment (Owner marker on claim)
-    /api/ground  -> Finder-parity listing (managed flag on folders)
-    /api/file    -> read-only .md body for the paper reader
-    /api/city-asset -> read-only .html/.md/.json under city root (report visual)
-    /api/tp-scene -> WorkLane full-registry scene (rich scene with admin fallback)
-    /api/desk-bootstrap -> parallel city+attention+people+tpScene (Desk first paint)
-    /api/map-bootstrap  -> same four + hidden + detect (Map first paint; pc-375)
-    /api/hood-inventory -> dig-in root_mds/entries (pc-890; not on first paint)
-    /api/pulse   -> generation tokens only (city local + WL + WF) for live-shell Layer B
-    /api/worker-out/<name>/stream -> SSE proxy to WorkForce shift-out tail (Layer C)
-    /api/open    -> open a city-root path in Finder (POST; folders open, files reveal)
-    /api/manage  -> POST adopt/manage via protocolcity.citylens.manage_cabinet (pc-302/574)
-    /api/seed-ops -> POST seed workspace ops jobs (chief-of-staff/health-patrol/workspace-efficiency; pc-446/pc-876/pc-987)
-    /api/survey  -> POST force land resurvey via citylens.start_survey (pc-325/574)
-    /api/find    -> survey-index name search: files + folders for the searchlight (pc-94/pc-1225)
-    /api/detect  -> always-on disk detect: managed projects, agent papers, roster (pc-355)
-    /api/office  -> in-process cached_office_snapshot (adopt_preview for Map Manage)
-    /api/project/<slug>/doors -> GET/POST local/doors.json (pin tools/pages/host-actions; pc-1172)
-    /api/project/<slug>/doors/run -> POST execute a pinned host-action by index (loopback only)
-    /api/project/<slug>/notes -> GET/POST project local/notes.md (citizen notes)
-    /api/project/<slug>/expected-state -> GET/POST .protocolcity/expected-state.json (pc-653 §3)
-    /api/hygiene-expected -> GET all managed projects' expected-state (Map bulk)
-
-Run: python3 suite/serve.py
+The supported application is overview/v1/serve.py through blueprint serve.
+This module cannot start an independent HTTP application.
 """
+
+if __name__ == "__main__":
+    import sys
+    print("The historical suite server is retired. Use blueprint serve --foreground --root WORKSPACE.", file=sys.stderr)
+    raise SystemExit(2)
+
 import datetime
 import errno
 import http.server
@@ -7321,65 +7269,3 @@ class SuiteHTTPServer(http.server.ThreadingHTTPServer):
             sys.stderr.write("-" * 40 + "\n")
         except Exception:
             pass
-
-
-if __name__ == "__main__":
-    # Guard: temp / missing roots must not steal production :8801 (pc-873 / pc-832).
-    # launchd only execs the plist — warn-only left Map on /var/folders after reboot.
-    from pathlib import Path as _Path
-
-    # pc-1071: every suite-service.err line gets a wall-clock stamp.
-    install_stderr_timestamps()
-
-    _cr = os.path.realpath(CITY_ROOT) if os.path.isdir(CITY_ROOT) else os.path.abspath(
-        os.path.expanduser(CITY_ROOT)
-    )
-    try:
-        from protocolcity.service import guard_city_root_for_serve as _guard_root
-
-        _guard = _guard_root(_Path(_cr), port=int(PORT), rehome=True, quiet=False)
-    except Exception as _ge:
-        # Fallback string check if service import fails (broken install).
-        _guard = {
-            "ok": True,
-            "action": "continue",
-            "should_exit": False,
-            "error": str(_ge),
-        }
-        if (
-            int(PORT) == 8801
-            and (
-                not os.path.isdir(_cr)
-                or "/var/folders/" in _cr
-                or "/tmp/" in _cr
-                or "pc-setup-" in _cr
-            )
-        ):
-            print(
-                "ERROR: SUITE_CITY_ROOT unusable on :8801 (%s) — guard import failed: %s\n"
-                "  Fix: blueprint service install --root <workspace> --force"
-                % (_cr, _ge),
-                flush=True,
-            )
-            sys.exit(2)
-
-    if _guard.get("should_exit"):
-        sys.exit(int(_guard.get("exit_code") or 1))
-
-    # pc-1004: fill gzip memo off the request path before (and during) first hits.
-    try:
-        _gzip_prewarm_suite_statics()
-    except Exception:
-        pass
-
-    # pc-1218: watchdog for hung handler threads.
-    threading.Thread(target=_watchdog_loop, daemon=True, name="handler-watchdog").start()
-
-    with SuiteHTTPServer(("127.0.0.1", PORT), Handler) as srv:
-        mode = (
-            "remote " + CITYLENS
-            if _CITYLENS_REMOTE
-            else "in-process protocolcity.citylens"
-        )
-        print(f"suite v1 on http://127.0.0.1:{PORT} (census: {mode})")
-        srv.serve_forever()

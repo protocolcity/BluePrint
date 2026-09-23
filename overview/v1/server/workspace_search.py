@@ -95,4 +95,4 @@ def find(binder, query, offset=0, limit=50, project=''):
                             h['kind'] != 'Work order', h['title'].casefold(), h['identity']))
     return {'query':query, 'results':hits[offset:offset+limit], 'total':len(hits),
             'offset':offset, 'limit':limit, 'issues':issues,
-            'scope':'All work history in registered stores; workspace papers and registered project folders. Runtime, hidden, dependency and archive trees are excluded.'}
+            'scope':'Work titles and IDs across registered history; paper and folder names. Descriptions and comments are not searched. Runtime, hidden, dependency and archive trees are excluded.'}
