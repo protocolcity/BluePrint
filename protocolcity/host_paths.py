@@ -4,7 +4,7 @@ Fails on operational defaults that reintroduce Class E bugs:
 ``expanduser("~/Developer")``, ``Path.home() / "Developer"``, absolute
 ``/Users/…`` / ``/home/…`` under suite, protocolcity, scripts.
 
-CLI entry: ``scripts/check_no_host_paths.py`` and ``blueprint doctor --check-paths``.
+CLI entry: ``scripts/check_no_host_paths.py`` for contributor source checks.
 """
 
 from __future__ import annotations
@@ -59,19 +59,6 @@ _SKIP_DIR_NAMES = {
     ".pytest_cache",
     "templates",
 }
-
-# Historical succession papers — keep as-signed; do not rewrite (pc-957).
-_RETIRED_WORKER_IDS = frozenset(
-    {
-        "bryce",
-        "carl",
-        "drew",
-        "riley",
-        "trinity",
-        "codex",
-        "claude-protocolcity",
-    }
-)
 
 _TEXT_SUFFIXES = {
     ".py",
@@ -153,25 +140,13 @@ def _iter_files(roots: Sequence[Path]) -> List[Path]:
     return files
 
 
-def _is_retired_worker_path(rel: str) -> bool:
-    """True for workers/<retired-id>/… papers left as historical record."""
-    parts = rel.replace("\\", "/").split("/")
-    if len(parts) >= 2 and parts[0] == "workers" and parts[1] in _RETIRED_WORKER_IDS:
-        return True
-    return False
-
-
 def scan_host_paths(
     repo: Path,
     *,
     include_workers: bool = True,
     exceptions: Optional[Sequence[str]] = None,
 ) -> Dict:
-    """Scan committed city-hall surfaces; return report dict with ok/hits.
-
-    Active ``workers/`` papers are in scope by default (pc-957). Retired
-    succession ids stay out of the fail set so history is not rewritten.
-    """
+    """Scan product and optional worker instructions; use explicit exceptions."""
     roots = [
         repo / "suite",
         repo / "protocolcity",
@@ -188,8 +163,6 @@ def scan_host_paths(
             rel = str(path.relative_to(repo)).replace("\\", "/")
         except ValueError:
             rel = str(path)
-        if _is_retired_worker_path(rel):
-            continue
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:

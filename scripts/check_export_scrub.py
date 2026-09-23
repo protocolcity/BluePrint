@@ -1,62 +1,23 @@
 #!/usr/bin/env python3
-"""Export / citizen-surface vocabulary scrub (pc-991 / pc-1144).
+"""Compatibility scanner for legacy export vocabulary and public source.
 
-Single source of scrub patterns consumed by:
-
-- ``scripts/export_blueprint.sh`` / ``export_charter.sh`` — audit DEST after
-  doc surgery (``--dest``: extra suffixes + expanded ticket prefixes)
-- ``scripts/suite_ship_lint.sh`` — commit-time audit of the shipped set
-- Public export CI (planted ``export-surface.yml``) — same ``--dest`` scan
-
-Historically these greps lived only in ``export_blueprint.sh`` §4, so
-leaks in ``templates/`` were caught at export staging (pc-978). This module
-is the shared definition so a leak fails at lint, not at publish.
-
-Patterns (keep names stable — tests pin them):
-
-1. personal paths / handles
-2. internal ticket references
-3. internal hosts / aliases
-4. internal governance term (founder → citizen in public docs)
-5. sibling POS product slugs (``oneseo-pos`` / ``OneSeoPOS`` / ``oneseo_pos``)
-6. sibling POS ticket/prefix forms (``osp-`` / ``regi-``)
-7. sibling POS customer / host-product identity (example_user / retired LAN name)
-8. secret material (keys / tokens)
-
-Ruling — what the source-set scan covers (pc-1144):
-
-| Class | Surface | Policy |
-|---|---|---|
-| A | Citizen docs (``.md``) under ``DEFAULT_SOURCE_REL_PATHS`` | Full scrub |
-| B | Planted ops scripts (``.py`` / ``.sh`` / ``.ps1`` under ``templates/``) | Same full scrub |
-| C | MCP runtime JSON (module path / env renames) | **Out of source-set default** — dest scan skips ``mcp.json`` + ``agents/mcp/**`` |
-| D | Host monorepo ``scripts/`` (not under templates) | Internal ops; not plant kit |
-
-Source-set ticket prefixes stay ``pc|tp|so|t|oc`` because planted ``*.md``
-still cite ``wf-`` / ``wl-`` law; DEST surgery strips those before ``--dest``.
-``--dest`` expands tickets to ``wl|wf|gf|ts|osp|regi`` so leftovers fail
-the public parcel, including planted ``*.json``.
-
-``library/city-hall/`` is **not** on the export whitelist. Patterns still
-apply if a POS term lands under the shipped set (templates / example /
-export docs). Plant-kit ``BOUNDARIES.md`` may name the suite ↔ sibling POS
-grant as a worked example — see ``SCRUB_ALLOW_LABELS_BY_REL``.
-
-Machine-local commit-email history stays export-only (needs DEST ``.git``).
+Current canonical-source validation lives in check_source_surface.py. This
+scanner retains stable rule labels for older export consumers. Public defaults
+contain generic paths and secret shapes, never encoded personal identifiers.
+Optional private deny rules belong in a local JSON file selected through
+BP_PRIVATE_SCRUB_RULES; that file must not be committed or packaged. Findings
+print locations and rule names only.
 """
 from __future__ import annotations
 
 import argparse
-import base64
+import json
+import os
 import re
 import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, FrozenSet, Iterable, List, Sequence, Tuple
-
-def _hidden_rx(b64: str) -> str:
-    """Decode a denylist regex so handles never sit in source as tokens."""
-    return base64.b64decode(b64.encode("ascii")).decode("ascii")
 
 # ── Single source of patterns (export_blueprint.sh §4 historically) ─────────
 # Each: (label, regex, case_insensitive)
@@ -66,7 +27,7 @@ TICKET_DEST = r"\b(pc|tp|so|t|oc|wl|wf|gf|ts|osp|regi)-[0-9]+\b"
 SCRUB_PATTERNS: Tuple[Tuple[str, str, bool], ...] = (
     (
         "personal path/handle",
-        _hidden_rx("ZXhhbXBsZV91c2VyfGV4YW1wbGVfdXNlcnwvVXNlcnMvfH4vRGV2ZWxvcGVyfGV4YW1wbGVfdXNlcnxleGFtcGxlX3VzZXJ8ZVwuc2VvQGljbG91ZFwuY29t"),
+        r"/Users/[A-Za-z0-9_.-]+/|/home/[A-Za-z0-9_.-]+/|~/Developer",
         False,
     ),
     (
@@ -99,7 +60,7 @@ SCRUB_PATTERNS: Tuple[Tuple[str, str, bool], ...] = (
     ),
     (
         "sibling POS customer identity",
-        r"example_user|example_user|ops\.oneseo\.internal",
+        r"[A-Za-z0-9.-]+\.internal\b",
         True,
     ),
     (
@@ -113,6 +74,24 @@ SCRUB_PATTERNS: Tuple[Tuple[str, str, bool], ...] = (
         False,
     ),
 )
+
+def private_rules() -> Tuple[Tuple[str, str, bool], ...]:
+    path = os.environ.get("BP_PRIVATE_SCRUB_RULES")
+    if not path:
+        return ()
+    raw = json.loads(Path(path).read_text())
+    if not isinstance(raw, list):
+        raise ValueError("private scrub rules must be a list")
+    rows = []
+    for item in raw:
+        if (not isinstance(item, dict) or not isinstance(item.get("pattern"), str)
+                or not item["pattern"] or type(item.get("ignore_case", False)) is not bool):
+            raise ValueError("invalid private scrub rule")
+        re.compile(item["pattern"])
+        rows.append(("private configured rule", item["pattern"], item.get("ignore_case", False)))
+    return tuple(rows)
+
+SCRUB_PATTERNS += private_rules()
 
 # Plant-kit BOUNDARIES is the one instructional place a sibling POS product
 # slug may appear (worked grant example). Match by trailing rel path so a
@@ -259,7 +238,7 @@ def format_hits(
             display = path.relative_to(root) if root else path
         except ValueError:
             display = path
-        lines.append(f"SCRUB FAILURE: {label}: {display}:{lineno}: {text}")
+        lines.append(f"SCRUB FAILURE: {label}: {display}:{lineno}")
     if len(hits) > limit:
         lines.append(f"... and {len(hits) - limit} more")
     return "\n".join(lines)
@@ -269,13 +248,13 @@ def run_self_test() -> int:
     """Seed one violation per pattern class; expect each to be detected."""
     samples = (
         ("personal path/handle", "see /Users/someone/secret"),
-        ("personal path/handle", "backups at example_user/wl-backups"),
+        ("personal path/handle", "backups at ~/Developer/workspace-backups"),
         ("internal ticket reference", "fixed in pc-991"),
         ("internal host/alias", "uses launchd for always-on"),
         ("internal governance term (founder)", "ask the founder"),
         ("sibling POS product", "leaked oneseo-pos slug"),
         ("sibling POS ticket/prefix", "see osp-123"),
-        ("sibling POS customer identity", "host is example_user"),
+        ("sibling POS customer identity", "host is example.internal"),
         ("secret material", "token ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
     )
     compiled = {label: cre for label, cre in _compiled()}

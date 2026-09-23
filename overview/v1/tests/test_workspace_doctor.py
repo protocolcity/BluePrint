@@ -100,3 +100,30 @@ class WorkspaceDoctorTests(unittest.TestCase):
         self.assertEqual(existing.read_text(), 'custom instructions\n')
         self.assertEqual((self.root / 'GROK.md').read_text(), '@AGENTS.md\n')
         self.assertEqual(repair_vendor_pointers(self.root), [])
+
+    def test_receipt_selected_layout_and_stale_execution_evidence(self):
+        runtime = self.root / 'state/worklane'
+        self.receipt('worklane', runtime=str(runtime))
+        join = self.root / 'example/.protocolcity/desk-join.json'
+        join.parent.mkdir(parents=True)
+        join.write_text('{"slug":"example"}')
+        store = runtime / 'data/example.db'
+        store.parent.mkdir(parents=True)
+        with closing(sqlite3.connect(store)) as connection:
+            connection.execute('CREATE TABLE tasks(id INTEGER)')
+            connection.commit()
+        force = self.root / 'state/workforce'
+        self.receipt('workforce', data_home=str(force))
+        (force / 'local').mkdir(parents=True)
+        (force / 'local/daemon.json').write_text('{"last_tick":"2000-01-01T00:00:00Z"}')
+        report = diagnose(self.root)
+        codes = [row['code'] for row in report['checks']]
+        self.assertIn('STORE_READABLE', codes)
+        self.assertIn('EXECUTION_EVIDENCE_STALE', codes)
+        self.assertTrue(all('expected' in row and 'observed' in row for row in report['checks']))
+
+    def test_explicit_external_runtime_never_falls_back(self):
+        self.receipt('worklane', runtime='/another-workspace/runtime')
+        report = diagnose(self.root)
+        self.assertIn('INSTALLATION_UNVERIFIED', [row['code'] for row in report['checks']])
+        self.assertFalse(report['ok'])

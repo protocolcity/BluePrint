@@ -37,7 +37,7 @@ and only that binder.
 
 | Rule | Why |
 |---|---|
-| Exactly one binder per Map instance | No cross-workspace stitching, no OneSeo-style meta-hub in V1 |
+| Exactly one binder per Map instance | No cross-workspace stitching, no workspace aggregation in V1 |
 | Binder path is server-owned (`/api/map/snapshot` returns it) | Suite never guesses; no localStorage binder in V1 |
 | Binder folder = **hub** node | Painted center; the only depth-0 lot |
 | Everything else = **lot** under hub | Depth ≥1; top-level lots first, deeper lots on dig |

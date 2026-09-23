@@ -912,7 +912,7 @@ def resolve_city_rel_with_project(rel, project):
     """Resolve a city-relative path; on miss, retry inside the project folder.
 
     Work-order WHERE paths are usually written project-relative
-    (``docs/design/x.md`` meaning ``oneseo-pos/docs/design/x.md``). With a
+    (``docs/design/x.md`` meaning ``example-project/docs/design/x.md``). With a
     ``project`` hint, fall back to ``<project-folder>/<rel>`` so ticket chips
     and relative links open instead of 404ing at city root (pc-1209).
     Returns ``(abs_target_or_None, rel_used)``.
@@ -1983,7 +1983,7 @@ def _ledger_dir_candidates():
     if city:
         add(os.path.join(city, "workforce", "local", "ledger"))
         add(os.path.join(city, ".protocolcity", "workforce", "local", "ledger"))
-    # Package checkout next to ProtocolCity (OneSeo/workforce/local)
+    # Package checkout next to the selected workspace
     try:
         suite_dir = os.path.dirname(os.path.abspath(__file__))
         repo = os.path.dirname(suite_dir)
@@ -3404,7 +3404,7 @@ def city_structure_from_disk(root=None, with_desk=True):
         except Exception:
             pass
     # pc-951: degraded structure shell must still ship L0 root_files so Map
-    # OneSeo hub paints Instructions (same shape as citylens light census).
+    # Workspace hub paints Instructions (same shape as citylens light census).
     # pc-1040: also ship workspace root_mds (nested papers, same project shape).
     root_files = []
     root_mds = []
@@ -6020,7 +6020,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if route == "/calendar.ics":
                 body = _cal_render_ics(
                     events,
-                    cal_name="OneSeo Workspace",
+                    cal_name="Workspace",
                 )
                 # Brief cache so Apple Calendar polls are not a desk stampede
                 out = body.encode("utf-8")
@@ -6035,7 +6035,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     )
                     self.send_header(
                         "Content-Disposition",
-                        'inline; filename="oneseo-workspace.ics"',
+                        'inline; filename="workspace.ics"',
                     )
                     if errors:
                         self.send_header(

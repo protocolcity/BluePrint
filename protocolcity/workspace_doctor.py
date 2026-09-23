@@ -70,9 +70,10 @@ def diagnose(root: Path, *, probe: bool = False) -> dict:
               "workspace_id": hashlib.sha256(str(root).encode()).hexdigest()[:16],
               "probe_requested": probe, "checks": []}
 
-    def add(code, severity, state, source, summary, next_step=""):
+    def add(code, severity, state, source, summary, next_step="", expected="valid selected-workspace evidence"):
         report["checks"].append(dict(code=code, severity=severity, state=state,
-            source=source, observed_at=observed, summary=summary, next_step=next_step))
+            source=source, observed_at=observed, summary=summary, next_step=next_step,
+            expected=expected, observed=state))
 
     if not root.is_dir():
         add("WORKSPACE_MISSING", "error", "missing", "workspace", "Selected workspace does not exist.",
@@ -90,6 +91,25 @@ def diagnose(root: Path, *, probe: bool = False) -> dict:
         else:
             add("INSTRUCTION_PRESENT", "info", "ok", name, "Instruction source is present; content alignment needs review.")
 
+    # A receipt may select another in-workspace layout. Invalid explicit
+    # configuration never falls back to a guessed store or another workspace.
+    lane_runtime = root / "worklane/worklane/local"
+    force_home = root / "workforce"
+    for component, field in (("worklane", "runtime"), ("workforce", "data_home")):
+        path = root / "local" / component / "deployment.json"
+        if path.exists():
+            try:
+                value = _object(path, root).get(field)
+                if not isinstance(value, str) or not Path(value).is_absolute() or not _inside(Path(value), root):
+                    raise ValueError("invalid selected data directory")
+                selected = Path(value).resolve()
+            except (OSError, ValueError):
+                selected = None
+            if component == "worklane":
+                lane_runtime = selected
+            else:
+                force_home = selected
+
     seen = set()
     for manifest in sorted(root.glob("*/.protocolcity/desk-join.json")):
         source = manifest.relative_to(root).as_posix()
@@ -103,7 +123,9 @@ def diagnose(root: Path, *, probe: bool = False) -> dict:
                     "Keep one canonical registration; preserve reference and export folders separately.")
                 continue
             seen.add(slug)
-            database = root / "worklane/worklane/local/data" / (slug + ".db")
+            if lane_runtime is None:
+                raise ValueError("unverified WorkLane runtime")
+            database = lane_runtime / "data" / (slug + ".db")
             if not _inside(database, root):
                 raise ValueError("external store")
             if not database.exists():
@@ -136,7 +158,7 @@ def diagnose(root: Path, *, probe: bool = False) -> dict:
                 raise ValueError("missing version")
             if component == "worklane":
                 runtime = receipt.get("runtime")
-                if not isinstance(runtime, str) or Path(runtime).resolve() != (root / "worklane/worklane/local").resolve():
+                if lane_runtime is None or not isinstance(runtime, str) or Path(runtime).resolve() != lane_runtime:
                     raise ValueError("different runtime")
             if component == "workforce":
                 data_home = receipt.get("data_home")
@@ -175,7 +197,7 @@ def diagnose(root: Path, *, probe: bool = False) -> dict:
                 "Receipt, selected origin or optional live response could not be verified.",
                 "Inspect the selected component's installation and receipt; no fallback service was contacted.")
 
-    roster_paths = [root / "workforce/local/roster.json", root / ".protocolcity/workforce/local/roster.json"]
+    roster_paths = [force_home / "local/roster.json"] if force_home else []
     roster_path = next((path for path in roster_paths if path.exists()), None)
     if roster_path:
         try:
@@ -187,6 +209,29 @@ def diagnose(root: Path, *, probe: bool = False) -> dict:
         except (OSError, ValueError):
             add("ROSTER_INVALID", "error", "invalid", "WorkForce roster", "Roster cannot be read inside this workspace.",
                 "Validate the selected WorkForce data home and roster without overwriting execution history.")
+        add("PROVIDER_QUALIFICATION_REQUIRED", "warning", "unknown", "provider capacity",
+            "Roster configuration does not establish authentication, supported tools or remaining quota.",
+            "Refresh dated WorkForce capability and capacity evidence before automatic routing.",
+            expected="fresh provider, model, scope, tools and capacity evidence")
+    if force_home:
+        heartbeat = force_home / "local/daemon.json"
+        if heartbeat.exists():
+            try:
+                record = _object(heartbeat, root)
+                tick = datetime.fromisoformat(str(record.get("last_tick", "")).replace("Z", "+00:00"))
+                if tick.tzinfo is None:
+                    raise ValueError("undated heartbeat")
+                age = (datetime.now(timezone.utc) - tick).total_seconds()
+                if age < 0 or age > 180:
+                    add("EXECUTION_EVIDENCE_STALE", "warning", "stale", "WorkForce heartbeat",
+                        "Saved execution evidence is stale or dated in the future; this does not prove a stopped agent.",
+                        "Inspect WorkForce status, process and claim ownership before recovery.", expected="heartbeat observed within 180 seconds")
+                else:
+                    add("EXECUTION_EVIDENCE_RECENT", "info", "recent", "WorkForce heartbeat",
+                        "Saved execution evidence is recent; process ownership still requires engine verification.")
+            except (OSError, ValueError, TypeError):
+                add("EXECUTION_EVIDENCE_INVALID", "warning", "unknown", "WorkForce heartbeat",
+                    "Saved execution evidence cannot be interpreted.", "Inspect the selected engine status without deleting its locks or history.")
     report["ok"] = not any(item["severity"] == "error" for item in report["checks"])
     return report
 
