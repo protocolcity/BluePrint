@@ -24,7 +24,7 @@ dependencies = [
 # Same engines pin as the preferred distro so `pip install 'protocolcity[engines]'`
 # resolves WorkLane/WorkForce 0.1.9.
 engines = [
-    "protocolcity-blueprint[engines]==0.1.50",
+    "protocolcity-blueprint[engines]==0.1.51",
     "protocolcity-worklane==0.1.9",
     "protocolcity-workforce==0.1.9",
 ]
