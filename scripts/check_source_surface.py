@@ -15,9 +15,9 @@ def main():
     root=Path(__file__).resolve().parent.parent
     patterns=[]
     for label,pattern,ignore_case in SCRUB_PATTERNS:
-        if label not in ('personal path/handle','sibling POS customer identity','secret material'):continue
-        # Generic path-scrubbing expressions are code, not a person's path.
-        if label=='personal path/handle':pattern=pattern.replace('/Users/','/Users/[A-Za-z0-9_][A-Za-z0-9_.-]*').replace('|~/Developer','')
+        if label not in ('personal path/handle','sibling POS customer identity','secret material','private configured rule'):continue
+        if label == 'personal path/handle':
+            pattern = pattern.replace('|~/Developer', '')
         patterns.append((label,re.compile(pattern,re.I if ignore_case else 0)))
     files=subprocess.check_output(['git','-C',str(root),'ls-files','-z']).decode().split('\0')
     failures=[]

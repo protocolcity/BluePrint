@@ -1,4 +1,4 @@
-"""Public cut 0.1.50 — metadata and artifact hygiene (pc-1468 / #145)."""
+"""Package metadata and artifact hygiene."""
 import importlib.util
 import shutil
 import subprocess
@@ -27,6 +27,21 @@ class PublicCutMetadataTests(unittest.TestCase):
     def test_both_packages_declare_cut_and_engine_pins(self):
         failures = self.check.check_metadata()
         self.assertEqual(failures, [])
+
+    def test_new_version_is_supported_but_alias_and_pins_must_match(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            preferred = root / "preferred.toml"
+            compat = root / "compat.toml"
+            preferred.write_text(self.check.PREFERRED_PYPROJECT.read_text().replace("0.1.50", "0.2.0+candidate.1"))
+            compat.write_text(self.check.COMPAT_PYPROJECT.read_text().replace("0.1.50", "0.2.0+candidate.1"))
+            self.check.PREFERRED_PYPROJECT = preferred
+            self.check.COMPAT_PYPROJECT = compat
+            self.assertEqual(self.check.check_metadata(), [])
+            compat.write_text(compat.read_text().replace("protocolcity-worklane==0.1.9", "protocolcity-worklane>=0.1.9"))
+            self.assertTrue(self.check.check_metadata())
+            compat.write_text(compat.read_text().replace("0.2.0+candidate.1", "0.2.1"))
+            self.assertTrue(any("versions differ" in failure for failure in self.check.check_metadata()))
 
     def test_release_notes_have_no_secrets_or_host_paths(self):
         self.assertEqual(self.check.scan_release_notes(), [])

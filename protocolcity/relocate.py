@@ -1,6 +1,6 @@
 """Relocate a founded workspace after folder rename/move (GH #7 · pc-622 · pc-959).
 
-BluePrint must not depend on a fixed folder name (Developer, OneSeo, …).
+BluePrint must not depend on a fixed workspace folder name.
 Absolute paths still land in:
 
 * ``~/.protocolcity/service.json`` + suite LaunchAgent
