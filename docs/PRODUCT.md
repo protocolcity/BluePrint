@@ -37,7 +37,7 @@ Navigation and supported actions are specified in
 
 | Capability | Current contract |
 |---|---|
-| Selected-workspace records and supported WorkLane actions | Implemented; validate the installed engine/store and record version |
+| Selected-workspace records, display-only from WorkLane | Implemented; Work list and reader show status/priority/assignment/gate without in-page write controls — people and chat AIs file and manage work through WorkLane (`wl`) |
 | Configured local agent dispatch | Implemented through WorkForce; registration does not establish authentication or quota |
 | Codex, Claude, Cursor, Grok | Configurable provider adapters; qualify exact model, tools and host access before execution |
 | GitHub delivery evidence | Observational; never agent liveness |

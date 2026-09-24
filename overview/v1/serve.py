@@ -285,9 +285,7 @@ class Handler(BaseHTTPRequestHandler):
             import sqlite3
             try:
                 result = prepare_work_order(self.binder_root, query.get("project", ""), query.get("id", ""))
-                from server.work_actions import assignment_options
                 result['reveal_supported'] = sys.platform == 'darwin'
-                result["assignment_options"] = assignment_options(self.binder_root, result["project"])
                 self._send_json(200, result)
             except ValueError as exc:
                 self._send_json(400, {"error": str(exc)})

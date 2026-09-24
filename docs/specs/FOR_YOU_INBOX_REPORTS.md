@@ -22,6 +22,8 @@ reading item when requested or when there is a meaningful actionable result.
 A browser mute hides a card here temporarily; it is distinct from an execution
 embargo and from completing the reading work order through WorkLane.
 
-The current reader offers its supported WorkLane actions and document links.
-Historical SuitePaper iframe/theme behavior is not the current reader contract.
+The current reader is display-only: it shows WorkLane status, assignment, gate
+and document links, with no in-page write path (writes stay in WorkLane `wl`
+tools). Historical SuitePaper iframe/theme behavior is not the current reader
+contract.
 See [the operations interface](OPERATIONS_EVOLUTION_2026_09.md).
