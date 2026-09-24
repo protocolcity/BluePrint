@@ -47,8 +47,8 @@ Exceptions — do not convert these to Markdown: **code**, **databases**,
   open parent) — not only in a `Follow-ups:` prose note. If you changed
   structural truth (process, public install, decision checklists), update
   those papers in the same close-out.
-- **File** through supported WorkLane tools or BP actions. All writes use the
-  owning engine and explicit project/store identity.
+- **File** through supported WorkLane tools. BP's reader is display-only; all
+  writes use the owning engine and explicit project/store identity.
 - **Route** each ready ticket to a hand: label `worker:<id>` (or it stays
   visible as needs routing but no schedule drains it).
 
