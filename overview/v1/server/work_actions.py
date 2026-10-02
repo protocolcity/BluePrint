@@ -169,16 +169,3 @@ def work_action(binder, project, order_id, action, value, expected_updated_at):
         scope = parse_qs(urlparse(str(row.get('queue_url', ''))).query).get('product', [])
         if scope != [project]: raise ValueError('That agent is not assigned to this project store.')
     return _invoke(root, project, order, {'action':action, 'value':value, 'expected_updated_at':expected_updated_at})
-
-
-def assignment_options(binder, project):
-    from .operations import read_json
-    from .local_projectors import resolve_roster_path
-    from urllib.parse import urlparse, parse_qs
-    if not binder: return []
-    root = Path(binder).resolve()
-    workers = (read_json(resolve_roster_path(root), root) or {}).get('workers', {})
-    if not isinstance(workers, dict): return []
-    return [{'id': identity, 'name': str(row.get('name') or identity)}
-        for identity, row in workers.items() if identity != 'demo-worker' and isinstance(row, dict)
-        and parse_qs(urlparse(str(row.get('queue_url', ''))).query).get('product') == [project]]
