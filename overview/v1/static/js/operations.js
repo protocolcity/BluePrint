@@ -2035,8 +2035,13 @@ function renderWorkCalendarDoors() {
   // a Work filter is active, drop cards whose order falls outside the match
   // so the strip never shows a reminder the filtered list itself hides.
   if(workHasMatchingFilter() || selectedProject) {
-    const matchingKeys=new Set(matchingWorkOrders().map(o=>o.project+':'+o.id));
-    items=items.filter(item=>!item.task_id || matchingKeys.has(item.product+':'+item.task_id));
+    // Key on project+id together: order ids are only unique within a project
+    // (an unregistered project with no prefix falls back to a bare numeric
+    // id), so task_id alone can collide across projects when no project is
+    // selected. item.product and o.project are both set from the same
+    // project slug server-side, so pairing them is safe.
+    const matchingIds=new Set(matchingWorkOrders().map(o=>o.project+'::'+o.id));
+    items=items.filter(item=>!item.task_id || matchingIds.has(item.product+'::'+item.task_id));
   }
   items=items.slice(0,4);
   host.hidden=!items.length;
