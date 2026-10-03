@@ -540,6 +540,7 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
   font-variant-numeric: tabular-nums;
   color: var(--ov-fg);
 }
+.bp-work-flow-matching { flex: 1 0 100%; margin: 0 0 2px; font-size: 11px; color: var(--ov-link); }
 .bp-work-flow-strip {
   display: flex;
   flex-wrap: wrap;
@@ -662,10 +663,12 @@ a.bp-face-chip { display: inline-block; text-decoration: none; color: var(--ov-f
   padding: 10px 12px;
 }
 .bp-work-band-seat-backlog h2 .bp-work-count { color: var(--ov-muted); font-weight: 400; }
+.bp-work-band-seat-backlog h2 .bp-work-count:empty::before { content: ''; }
 .bp-work-row { grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; padding: 6px 0; gap: 10px 12px; }
 .bp-work-row .bp-order-link strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; font-size: 13px; }
 .bp-work-row .bp-order-badges { flex-direction: row; align-items: center; }
 .bp-work-row-age { color: var(--ov-muted); font-size: 11px; white-space: nowrap; }
+.bp-work-row-id { display: block; color: var(--ov-muted); font-size: 11px; font-variant-numeric: tabular-nums; margin-top: 1px; }
 .bp-operations .bp-work-row-seat { background: none; border: 1px solid var(--ov-tile-border); padding: 2px 8px; min-height: 0; font-size: 11px; color: var(--ov-muted); }
 .bp-badge[data-kind="face"][data-state="decide"],.bp-badge[data-kind="face"][data-state="read"] { color: var(--ov-focus); }
 .bp-badge[data-kind="face"][data-state="watch"] { color: var(--ov-state-scanning); }
