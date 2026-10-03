@@ -410,6 +410,7 @@ function workBoardRow(order) {
   badges.append(...orderBadges(order));
   const anchor=link('',workUrl(order),'bp-order-link');
   anchor.append(el('strong',order.title));
+  if(order.id) anchor.append(el('span',order.id,'bp-work-row-id'));
   row.append(badges, anchor);
   const seat=seatChipForOrder(order);
   if(seat) row.append(seat);
@@ -1307,13 +1308,15 @@ function workFlowFromOrders() {
   const scoped=(snapshot.orders || []).filter(order=>!selectedProject || order.project===selectedProject);
   const data=buildWorkFlow(scoped, snapshot && snapshot.agents);
   const snapshotFlow=snapshot && snapshot.work_flow && snapshot.work_flow.flow;
-  if(snapshotFlow && !selectedProject && !workHasMatchingFilter()) {
+  const matching=Boolean(selectedProject) || workHasMatchingFilter();
+  if(snapshotFlow && !matching) {
     data.flow=snapshotFlow;
     data.total=typeof snapshot.work_flow.total==='number' ? snapshot.work_flow.total : flowTotal(snapshotFlow);
   } else {
     data.flow=flowFromOrders(matchingWorkOrders());
     data.total=flowTotal(data.flow);
   }
+  data.matching=matching;
   const loadTotal=(data.seats || []).reduce((n,seat)=>n+seat.ready+seat.claimed+seat.stalled,0);
   data.state=(data.total || loadTotal) ? 'healthy' : 'empty';
   return data;
@@ -1364,9 +1367,10 @@ function paintWorkFlow() {
   const flow=data.flow || emptyFlowCounts();
   const stages=flowTotal(flow);
   const peak=FLOW_STAGES.reduce((n,stage)=>Math.max(n, flow[stage] || 0),0);
+  if(data.matching) host.append(el('p','Matching your filters','bp-eyebrow bp-work-flow-matching'));
   if(stages) {
     const strip=el('div',undefined,'bp-work-flow-strip');
-    strip.setAttribute('aria-label','Flow');
+    strip.setAttribute('aria-label', data.matching ? 'Matching your filters' : 'Flow');
     FLOW_STAGES.forEach((stage,index)=>{
       if(index) strip.append(el('span',' → ','bp-work-flow-arrow'));
       const count=flow[stage] || 0;
@@ -1479,6 +1483,7 @@ function work() {
   }
   $('results').textContent=`${orders.length} of ${total} matching work order${orders.length===1?'':'s'}`;
   renderActiveFilters();
+  renderWorkCalendarDoors();
   if($('page-count')) $('page-count').textContent=`Page ${pageIndex+1} of ${pages}`;
   if($('previous')) $('previous').disabled=pageIndex===0;
   if($('next')) $('next').disabled=pageIndex>=pages-1;
@@ -2025,7 +2030,15 @@ function scheduleDoorRow(item) {
 function renderWorkCalendarDoors() {
   const host=$('work-calendar-doors');
   if(!host) return;
-  const items=(calendarDoorsFromSnapshot().items || []).slice(0,4);
+  let items=calendarDoorsFromSnapshot().items || [];
+  // Reminder/due cards are keyed off Calendar, not the Work order list — when
+  // a Work filter is active, drop cards whose order falls outside the match
+  // so the strip never shows a reminder the filtered list itself hides.
+  if(workHasMatchingFilter() || selectedProject) {
+    const matchingKeys=new Set(matchingWorkOrders().map(o=>o.project+':'+o.id));
+    items=items.filter(item=>!item.task_id || matchingKeys.has(item.product+':'+item.task_id));
+  }
+  items=items.slice(0,4);
   host.hidden=!items.length;
   if(!items.length) { host.replaceChildren(); return; }
   reconcileList(host, items, item=>item.key, scheduleDoorRow);
@@ -3108,7 +3121,7 @@ function paint() {
   $('footer-status').textContent=`${snapshot.projects.length} project stores · ${issues.length ? `${issues.length} source notices` : 'Local sources readable'} · Remote details in Delivery`;
   filterOptions();
   if(page==='overview') overview();
-  if(page==='work') { work(); renderWorkCalendarDoors(); }
+  if(page==='work') work();
   if(page==='projects') projects();
   if(page==='agents') agents();
   if(page==='calendar') calendar();
