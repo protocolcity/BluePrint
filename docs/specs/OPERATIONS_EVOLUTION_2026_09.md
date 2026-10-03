@@ -9,8 +9,11 @@ historical references, not current restrictions.
 
 The application presents the explicitly selected workspace's projects, work
 orders, instructions, agents, schedules and sources in one origin. Overview
-prioritizes human attention. Work provides scoped search/filtering and a reader
-with description, comments, evidence and supported actions. Projects groups
+prioritizes human attention. Work provides scoped search/filtering and a
+display-only reader with description, comments and evidence; status, priority,
+assignment and gate are read from WorkLane, not written from the page. BluePrint
+is an ops window: people and chat AIs file and manage work through WorkLane
+(`wl`) outside the UI. Projects groups
 registered projects and papers. Agents separates registration, dispatch, claim
 and observed execution. Delivery and Timeline label their evidence sources.
 Calendar distinguishes scheduled runs, work dates and optional supplied events.
