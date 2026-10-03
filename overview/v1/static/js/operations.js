@@ -1370,7 +1370,7 @@ function paintWorkFlow() {
   if(data.matching) host.append(el('p','Matching your filters','bp-eyebrow bp-work-flow-matching'));
   if(stages) {
     const strip=el('div',undefined,'bp-work-flow-strip');
-    strip.setAttribute('aria-label', data.matching ? 'Matching your filters' : 'Flow');
+    strip.setAttribute('aria-label','Flow');
     FLOW_STAGES.forEach((stage,index)=>{
       if(index) strip.append(el('span',' → ','bp-work-flow-arrow'));
       const count=flow[stage] || 0;

@@ -2287,7 +2287,8 @@ class WorkFlowStripTests(unittest.TestCase):
         self.assertIn('aria-label="Seat load"', work)
         self.assertIn('bp-work-seat-chip', _SRC)
         paint = _SRC.split('function paintWorkFlow()')[1].split('function isUnrouted')[0]
-        self.assertIn("aria-label',data.matching?'Matchingyourfilters':'Flow'", paint.replace(' ', ''))
+        self.assertIn("aria-label','Flow'", paint.replace(' ', ''))
+        self.assertIn('data.matching', paint)
         self.assertNotIn('Held', paint)
 
     def test_strip_does_not_retouch_density_or_neighbor_doors(self):
